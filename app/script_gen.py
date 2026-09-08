@@ -1,0 +1,830 @@
+"""Idea -> outline -> narrated script -> per-slide visual plan."""
+from __future__ import annotations
+
+import concurrent.futures as cf
+import hashlib
+import re
+import threading
+from typing import Any, Callable
+
+from . import research as script_research
+from .config import WORDS_PER_MINUTE
+from .llm import MODEL_SCRIPT, MODEL_UTILITY, complete_json
+from .schema import Project, Slide
+
+Progress = Callable[[str], None]
+
+
+NARRATOR_SYSTEM = """You write narration for long-form informational YouTube videos \
+of the kind a single host reads over archival photographs: measured, specific, and \
+genuinely curious. You are a researcher first and a stylist second.
+
+Hard rules for every line you write:
+- Write for the ear. Short declarative sentences. One idea per sentence.
+- Concrete over abstract: names, dates, places, numbers, physical detail.
+- No YouTube filler. Never write "buckle up", "little did they know", "what \
+happened next will", "in this video", "let's dive in", "stay tuned", "like and \
+subscribe", or rhetorical questions used as transitions.
+- No em-dashes. Use full stops.
+- Never invent facts, quotes, dates or statistics. Where a RESEARCHED FACTS \
+block is given, every specific claim must trace back to something in it — \
+treat it as what you are allowed to say, not a suggestion. A specific detail \
+with nothing there to support it gets hedged or cut, not invented. Where no \
+RESEARCHED FACTS block is given, apply the same discipline to what you \
+already know: if you are not confident a detail is true, write around it or \
+characterise the uncertainty honestly ("accounts differ", "the record is \
+thin here").
+- Do not address the audience as "guys" or "folks". Address them as adults.
+
+You reply with one raw JSON value and nothing else."""
+
+
+def _facts_block(research: dict) -> str:
+    """The research dossier, formatted for a prompt. "" if there is none.
+
+    Every writing prompt gets the whole dossier rather than a slice per
+    section: an 8-22 minute video's worth of facts is a page or two, cheap to
+    hand over in full, and a section written in isolation from the others
+    should still be able to lean on a fact a different beat found.
+    """
+    facts = (research or {}).get("facts") or []
+    if not facts:
+        return ""
+    lines = [
+        f'- {f.get("claim", "")}'
+        + (f' ({f.get("date")})' if f.get("date") else "")
+        + f' — {f.get("source", "unknown source")}'
+        + f' [{f.get("confidence", "medium")} confidence]'
+        for f in facts if f.get("claim")
+    ]
+    block = "RESEARCHED FACTS (ground every specific claim in these):\n" + "\n".join(lines)
+    corrections = research.get("corrections") or []
+    if corrections:
+        block += ("\n\nThe research also found the creator's own idea states "
+                 "something that does not hold up — do not repeat it:\n"
+                 + "\n".join(f"- {c}" for c in corrections))
+    open_qs = research.get("open_questions") or []
+    if open_qs:
+        block += ("\n\nLeft unclear by research (fine to acknowledge as "
+                 "uncertain; do not resolve it with a guess):\n"
+                 + "\n".join(f"- {q}" for q in open_qs))
+    return block
+
+
+# --------------------------------------------------------------------- outline
+def build_outline(project: Project, progress: Progress = lambda m: None) -> dict:
+    total_words = int(project.target_minutes * WORDS_PER_MINUTE)
+    intro_words = int(total_words * 0.11)
+    concl_words = int(total_words * 0.09)
+    main_words = total_words - intro_words - concl_words
+    n_beats = max(4, min(11, round(main_words / 235)))
+
+    progress(f"Outlining ~{total_words} words across {n_beats} main beats")
+
+    facts = _facts_block(project.research)
+    facts_section = f"{facts}\n\n" if facts else ""
+    prompt = f"""Plan an informational YouTube video.
+
+IDEA FROM THE CREATOR:
+\"\"\"{project.idea}\"\"\"
+
+{facts_section}Target runtime: {project.target_minutes} minutes, which is about {total_words} \
+spoken words at {WORDS_PER_MINUTE} wpm.
+Tone: {project.tone}.
+
+First work out what this story actually is: who or what it is about, the span of \
+time it covers, and the single tension or question that makes it worth {project.target_minutes} \
+minutes of someone's attention. Then structure it.
+
+Return JSON with exactly this shape:
+{{
+  "title": "the video title, 4-9 words, specific, no clickbait, no colon-subtitle",
+  "subtitle": "one clause of context, max 8 words",
+  "subject": "the person, event or thing at the centre, named plainly",
+  "era": "the time span covered, e.g. '1887-1961'",
+  "thesis": "one sentence: the argument or question the video answers",
+  "visual_world": "one sentence describing what archival material exists for this \
+subject and what the video will therefore look like on screen",
+  "sections": [
+    {{"kind": "intro", "heading": "short beat name", "summary": "2-3 sentences on \
+what this beat covers and why it opens the video", "words": {intro_words}}},
+    {{"kind": "main", "heading": "...", "summary": "...", "words": <int>}},
+    {{"kind": "conclusion", "heading": "...", "summary": "...", "words": {concl_words}}}
+  ]
+}}
+
+Rules:
+- Exactly one intro section, exactly {n_beats} main sections, exactly one conclusion, in that order.
+- The main sections must move chronologically or causally, never repeat each other, \
+and together spend about {main_words} words. Give each a "words" budget summing to \
+roughly that.
+- Headings are for the creator's outline AND may be reused as on-screen chapter \
+titles, so keep them 2-5 words, evocative but honest.
+- The intro must open on a concrete scene or fact, not a definition or a greeting.
+{"- Structure the sections around what RESEARCHED FACTS actually established, not the shape a generic version of this story would take. Where it flags an open question or a correction, the outline should reflect that rather than smooth over it." if facts else ""}"""
+
+    outline = complete_json(
+        prompt, system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
+        require=lambda v: bool(_find_sections(v)),
+        require_hint="The object must have a top-level \"sections\" array.",
+    )
+    return _normalise_outline(outline, project, n_beats, intro_words, concl_words)
+
+
+def find_records(value: Any, key: str, depth: int = 0) -> list[dict]:
+    """Find the list of dicts carrying `key`, wherever the model buried it.
+
+    Every structured call in this module wants a list of records. Models mostly
+    return it bare, but sometimes wrap it ({"paragraphs": [...]}) or nest it a
+    level deeper. Digging costs nothing; a failed call costs a minute.
+    """
+    if depth > 4:
+        return []
+    if isinstance(value, list):
+        got = [r for r in value if isinstance(r, dict) and r.get(key) not in (None, "")]
+        if got:
+            return got
+        # A list of wrappers: gather across all of them, not just the first,
+        # or a whole section comes back one paragraph long.
+        gathered: list[dict] = []
+        for item in value:
+            gathered.extend(find_records(item, key, depth + 1))
+        return gathered
+    if isinstance(value, dict):
+        if value.get(key) not in (None, ""):     # a single bare record
+            return [value]
+        for inner in value.values():
+            found = find_records(inner, key, depth + 1)
+            if found:
+                return found
+    return []
+
+
+# Keys a model reaches for when it does not use "sections".
+_SECTION_KEYS = ("sections", "beats", "structure", "segments", "chapters",
+                 "parts", "outline", "plan")
+
+
+def _find_sections(value: Any) -> list[dict]:
+    """Dig the section list out of whatever shape came back.
+
+    Models occasionally wrap the payload ({"outline": {...}}) or rename the array.
+    Failing the whole job over that wasted a two-minute call, so we look.
+    """
+    if isinstance(value, list):
+        return [s for s in value if isinstance(s, dict) and s.get("heading")]
+    if not isinstance(value, dict):
+        return []
+    for key in _SECTION_KEYS:
+        got = value.get(key)
+        if isinstance(got, list):
+            found = [s for s in got if isinstance(s, dict) and s.get("heading")]
+            if found:
+                return found
+    # A single wrapper key around the real object.
+    for got in value.values():
+        if isinstance(got, (dict, list)):
+            found = _find_sections(got)
+            if found:
+                return found
+    return []
+
+
+def _normalise_outline(raw: Any, project: Project, n_beats: int,
+                       intro_words: int, concl_words: int) -> dict:
+    """Coerce a plausible reply into the outline shape the writer expects."""
+    sections = _find_sections(raw)
+    if not sections:
+        raise ValueError("The outline came back with no sections in it")
+
+    # Metadata may sit beside the sections, one level up, or not at all.
+    meta: dict = {}
+    def harvest(v: Any) -> None:
+        if isinstance(v, dict):
+            for k in ("title", "subtitle", "subject", "era", "thesis", "visual_world"):
+                if isinstance(v.get(k), str) and k not in meta:
+                    meta[k] = v[k]
+            for inner in v.values():
+                if isinstance(inner, dict):
+                    harvest(inner)
+    harvest(raw)
+
+    clean: list[dict] = []
+    for i, s in enumerate(sections):
+        kind = str(s.get("kind") or "").lower()
+        if kind not in ("intro", "main", "conclusion"):
+            kind = ("intro" if i == 0 else
+                    "conclusion" if i == len(sections) - 1 else "main")
+        try:
+            words = int(s.get("words") or 0)
+        except (TypeError, ValueError):
+            words = 0
+        if words <= 0:
+            words = (intro_words if kind == "intro" else
+                     concl_words if kind == "conclusion" else
+                     max(120, int(project.target_minutes * WORDS_PER_MINUTE * 0.8
+                                  / max(1, n_beats))))
+        clean.append({
+            "kind": kind,
+            "heading": str(s.get("heading") or f"Part {i + 1}")[:60],
+            "summary": str(s.get("summary") or s.get("description") or "")[:900],
+            "words": words,
+        })
+
+    return {
+        "title": meta.get("title") or project.idea[:60],
+        "subtitle": meta.get("subtitle", ""),
+        "subject": meta.get("subject") or project.idea[:80],
+        "era": meta.get("era", ""),
+        "thesis": meta.get("thesis", ""),
+        "visual_world": meta.get("visual_world", ""),
+        "sections": clean,
+    }
+
+
+# ---------------------------------------------------------------------- script
+def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
+    sections = outline["sections"]
+    sec = sections[idx]
+    words = int(sec.get("words") or 220)
+    # ~55 words per paragraph keeps each recorded take to a comfortable breath.
+    n_paras = max(2, round(words / 55))
+
+    before = " | ".join(s.get("heading", "") for s in sections[:idx]) or "(this opens the video)"
+    after = " | ".join(s.get("heading", "") for s in sections[idx + 1 :]) or "(this ends the video)"
+
+    kind_note = {
+        "intro": "This is the opening. Land the viewer inside a specific moment in the "
+                 "first two sentences, then widen out to what the video will explore. "
+                 "Do not summarise the whole story.",
+        "main": "This is a middle beat. Assume the viewer has the earlier beats. Do not "
+                "re-introduce the subject or recap.",
+        "conclusion": "This is the close. Resolve the thesis, state what the subject left "
+                      "behind, and end on a concrete image or fact rather than a moral.",
+    }[sec.get("kind", "main")]
+
+    facts = _facts_block(project.research)
+    facts_section = f"\n{facts}\n" if facts else ""
+    prompt = f"""Write the narration for one section of a video.
+
+VIDEO: {outline.get('title')}
+SUBJECT: {outline.get('subject')} ({outline.get('era')})
+THESIS: {outline.get('thesis')}
+CREATOR'S ORIGINAL IDEA: \"\"\"{project.idea}\"\"\"
+{facts_section}
+SECTIONS BEFORE THIS ONE: {before}
+>>> WRITING NOW: "{sec.get('heading')}" - {sec.get('summary')}
+SECTIONS AFTER THIS ONE: {after}
+
+{kind_note}
+
+Budget: about {words} words, split into {n_paras} paragraphs.
+
+Return JSON: a list of {n_paras} objects, each:
+{{"text": "the paragraph, 40-75 words, spoken aloud verbatim",
+  "visual": "one plain-English sentence describing the single image or clip that \
+should be on screen while this paragraph is read"}}
+
+Rules:
+- Each paragraph is one continuous spoken thought the narrator reads in one take.
+- Paragraphs must flow into each other as continuous prose. Do not start every \
+paragraph with the subject's name.
+- The "visual" must be something that plausibly exists as a photograph, painting, \
+map, document or stock clip. Prefer specific archival material ("Chandrasekhar as a \
+student at Trinity College, 1930s") over abstractions ("a symbol of ambition").
+- Write only spoken words in "text". No stage directions, no headings, no markdown."""
+
+    reply = complete_json(
+        prompt, system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
+        require=lambda v: bool(find_records(v, "text")),
+        require_hint='Each item needs a "text" field holding the spoken words.',
+    )
+    out = []
+    for p in find_records(reply, "text"):
+        text = str(p.get("text") or "").strip()
+        if text:
+            out.append({"text": text, "visual": str(p.get("visual") or "").strip(),
+                        "kind": sec.get("kind", "main"), "beat": sec.get("heading", "")})
+    return out
+
+
+def draft_key(project: Project) -> str:
+    """What a saved draft was written against. Changing any of it invalidates it."""
+    seed = f"{project.idea}|{project.target_minutes}|{project.tone}"
+    return hashlib.md5(seed.encode("utf-8")).hexdigest()[:12]
+
+
+def write_script(project: Project, outline: dict, progress: Progress = lambda m: None,
+                 checkpoint: Callable[[], None] = lambda: None) -> list[Slide]:
+    """Write every section. Sections are independent, so they run in parallel.
+
+    Each finished section is banked on the project before the next one is waited
+    on, and a section that fails does not discard the ones that succeeded
+    alongside it. A run that dies halfway can then be re-run for the half it is
+    missing rather than from the top.
+    """
+    sections = outline["sections"]
+    banked: dict[int, list[dict]] = {
+        int(k): v for k, v in (project.draft.get("sections") or {}).items()
+        if str(k).isdigit() and int(k) < len(sections)
+    }
+    todo = [i for i in range(len(sections)) if i not in banked]
+    if banked:
+        progress(f"Resuming: {len(banked)} of {len(sections)} sections already written")
+    if not todo:
+        progress("Every section was already written")
+    else:
+        progress(f"Writing {len(todo)} section{'s' if len(todo) != 1 else ''}"
+                 + (f" of {len(sections)}" if banked else ""))
+
+    results = dict(banked)
+    guard = threading.Lock()
+    failure: BaseException | None = None
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_write_section, project, outline, i): i for i in todo}
+        done = len(banked)
+        for fut in cf.as_completed(futures):
+            i = futures[fut]
+            try:
+                paragraphs = fut.result()
+            except BaseException as exc:      # noqa: BLE001 - re-raised below
+                # Keep going: the other sections in flight are still worth
+                # banking, and one of them failing does not spoil them.
+                failure = failure or exc
+                progress(f"Section “{sections[i].get('heading')}” failed: {str(exc)[:120]}")
+                continue
+            results[i] = paragraphs
+            done += 1
+            with guard:
+                project.draft.setdefault("sections", {})[str(i)] = paragraphs
+                checkpoint()
+            progress(f"Section {done}/{len(sections)} written "
+                     f"({sections[i].get('heading')})")
+    if failure is not None:
+        raise failure
+
+    slides: list[Slide] = []
+    for i in range(len(sections)):
+        for para in results.get(i, []):
+            slides.append(
+                Slide(
+                    section=para["kind"],
+                    beat=para["beat"],
+                    narration=para["text"],
+                    visual_note=para["visual"],
+                    queries=[],
+                    prefer_kind="image",
+                    title="",
+                )
+            )
+    return slides
+
+
+# ------------------------------------------------------------- visual planning
+# The writer reasons in scope words, not raw tile-zoom integers — it has no
+# real feel for what "14" means, but "a specific building" vs "a whole
+# country" is something it can judge from the narration. These map straight
+# onto Slide.map_zoom, same convention the click-to-locate picker's zoom
+# slider (the widget itself, there) already writes into that field.
+_MAP_SCOPE_ZOOM = {"close": 16, "regional": 11, "wide": 6}
+
+
+def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lambda m: None) -> None:
+    """Fill in search queries, media kind and on-screen titles, in place."""
+    if not slides:
+        return
+    outline = project.outline
+    chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
+    progress(f"Planning visuals for {len(slides)} slides")
+
+    def run(args: tuple[int, list[Slide]]) -> tuple[int, list[dict]]:
+        ci, chunk = args
+        listing = "\n".join(
+            f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
+            + (f"\n   creator note: {s.visual_note}" if s.visual_note else "")
+            for n, s in enumerate(chunk, 1)
+        )
+        prompt = f"""For each narration paragraph below, plan the visual.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject')} ({outline.get('era', '')})
+AVAILABLE VISUAL WORLD: {outline.get('visual_world', '')}
+
+PARAGRAPHS:
+{listing}
+
+Return a JSON list of {len(chunk)} objects in the same order:
+{{"n": <the number>,
+  "queries": ["2 to 3 stock/archive search queries, most specific first"],
+  "kind": "image", "video" or "map",
+  "place": "" unless kind is \"map\", then the place name to show, as you would type it into a map search",
+  "map_style": "" unless kind is \"map\", then one of "still", "establishing", "reveal", "pan",
+  "map_type": "" unless kind is \"map\", then one of "satellite", "hybrid", "terrain", "street",
+  "map_scope": "" unless kind is \"map\", then one of "close", "regional", "wide",
+  "title": "" or a 1-4 word on-screen chapter title}}
+
+Query rules:
+- These queries hit Wikimedia Commons, open museum archives and stock libraries. \
+Write them the way a picture researcher would: proper nouns, places, years, object \
+names. "Ernest Shackleton Endurance 1915" not "polar exploration hardship".
+- The first query should be the most specific thing that could plausibly have a \
+photograph. Later queries should widen out as fallbacks (a place, an era, an object).
+- No quotes, no boolean operators, 2-6 words each.
+- Fill "queries" even when "kind" is "map" — a real photo is still allowed to win \
+the slot if one turns out to exist.
+
+Kind rules:
+- "image" for anything historical, archival or specific to a named person or event.
+- "video" only where generic modern motion genuinely helps: landscapes, weather, \
+cityscapes, machinery, nature, abstract textures.
+- "map" only when the paragraph is fundamentally about geography rather than a \
+documentable subject — a route between places, a border, a distance, how isolated \
+somewhere is, where one place sits relative to another. Use it sparingly and only \
+where a photograph genuinely could not show what the sentence is about; most \
+paragraphs, even ones that name a place, still want "image".
+
+Map rules (only when kind is "map"):
+- place: always disambiguate. The geocoder that resolves this is a single \
+best-guess text match with no other context — "Alexandria" alone resolves to a \
+small town in Italy, not Egypt; "Santiago" alone resolves to Costa Rica, not \
+Chile. Always write it as "specific place, country" (or ", region, country" for \
+anywhere less famous than a capital) using the SUBJECT/era above to supply the \
+country — never a bare town, site or landmark name on its own.
+- map_style: "still" for a plain establishing beat that just needs orientation; \
+"establishing" for a location the narration is building toward or dwelling on — a \
+smooth push in toward the site; "reveal" when the point is that somewhere small sits \
+inside something much bigger (a pull back from the site to its wider context — good \
+for "isolated", "remote", "a single X in all of Y"); "pan" for a lighter beat that \
+doesn't carry that much weight.
+- map_type: "satellite" as the default for real imagery; "hybrid" (satellite with \
+place names/borders) when the paragraph itself is naming the surrounding places or a \
+border; "terrain" when the narration is about physical geography — mountains, \
+isolation, terrain difficulty, a natural barrier; "street" only for dense city detail \
+at a very close scope.
+- map_scope: "close" for a specific site, building or short stretch of coastline; \
+"regional" for a city, small country or named area (the usual choice); "wide" for a \
+whole country, a sea crossing, or a "how isolated is this" beat.
+
+Title rules:
+- Titles appear in the lower left as a chapter marker. Use them sparingly: only on \
+the FIRST paragraph of a new beat, or at a hard turn in the story. At most {max(1, len(chunk) // 4)} \
+of these {len(chunk)} paragraphs should get one. Everything else gets "".
+- A title is a label, not a sentence. No end punctuation."""
+        return ci, complete_json(
+            prompt, model=MODEL_UTILITY, timeout=600,
+            require=lambda v: bool(find_records(v, "queries")),
+            require_hint='Each item needs "n" and a "queries" array.')
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for ci, plan in pool.map(run, list(enumerate(chunks))):
+            chunk = chunks[ci]
+            records = find_records(plan, "queries")
+            by_n = {}
+            for pos, item in enumerate(records, 1):
+                try:
+                    n = int(item.get("n", pos))
+                except (TypeError, ValueError):
+                    n = pos
+                by_n[n] = item
+            for n, slide in enumerate(chunk, 1):
+                item = by_n.get(n, {})
+                queries = [q for q in (item.get("queries") or []) if isinstance(q, str) and q.strip()]
+                slide.queries = queries[:3] or [outline.get("subject", project.idea)[:60]]
+                kind = item.get("kind")
+                place = (item.get("place") or "").strip()[:80]
+                if kind == "map" and place:
+                    slide.prefer_kind = "map"
+                    slide.map_place = place
+                    style = item.get("map_style")
+                    slide.map_style = style if style in ("still", "establishing", "reveal", "pan") else "still"
+                    map_type = item.get("map_type")
+                    slide.map_kind = map_type if map_type in ("satellite", "hybrid", "terrain", "street") else "satellite"
+                    scope = item.get("map_scope")
+                    slide.map_zoom = _MAP_SCOPE_ZOOM.get(scope, _MAP_SCOPE_ZOOM["regional"])
+                else:
+                    slide.prefer_kind = "video" if kind == "video" else "image"
+                title = (item.get("title") or "").strip().strip(".")
+                slide.title = title if 0 < len(title) <= 40 else ""
+            progress(f"Visuals planned for chunk {ci + 1}/{len(chunks)}")
+
+
+# --------------------------------------------------------------- fact-check
+def verify_script(project: Project, progress: Progress = lambda m: None) -> list[dict]:
+    """Flag any paragraph asserting something the research dossier doesn't
+    support. Grounding the writer doesn't guarantee it stayed grounded — this
+    is the check on the output, not the input, and it's cheap because it is
+    checking against a dossier already gathered rather than researching again.
+
+    [] (not skipped) when there is no dossier to check against — nothing to
+    flag against nothing, which is different from "everything's fine".
+    """
+    facts = _facts_block(project.research)
+    slides = project.slides
+    if not facts or not slides:
+        return []
+
+    chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
+    progress(f"Checking {len(slides)} paragraph(s) against the research")
+
+    def run(args: tuple[int, list[Slide]]) -> list[dict]:
+        _ci, chunk = args
+        listing = "\n".join(f"{n}. {s.narration}" for n, s in enumerate(chunk, 1))
+        prompt = f"""{facts}
+
+NARRATION PARAGRAPHS TO CHECK:
+{listing}
+
+For each paragraph, does it assert anything specific (a date, a name, a
+number, a quote, a claim of cause or outcome) that the RESEARCHED FACTS above
+does not support or actively contradicts? Ignore scene-setting, transitions
+and anything already covered by a fact above. Most paragraphs will have
+nothing wrong with them — only report the ones that do.
+
+Return JSON: a list of objects, one per paragraph that has a problem:
+{{"n": <the paragraph number above>, "claim": "the unsupported or
+  contradicted part, quoted or closely paraphrased", "issue": "one sentence
+  on what's wrong", "severity": "high" or "low"}}"""
+        out = complete_json(prompt, model=MODEL_UTILITY, timeout=400,
+                            require=lambda v: isinstance(v, list))
+        flags = []
+        for item in out if isinstance(out, list) else []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                n = int(item.get("n", 0))
+            except (TypeError, ValueError):
+                continue
+            if not 1 <= n <= len(chunk):
+                continue
+            flags.append({
+                "slide_id": chunk[n - 1].id,
+                "claim": str(item.get("claim") or "")[:300],
+                "issue": str(item.get("issue") or "")[:300],
+                "severity": "high" if item.get("severity") == "high" else "low",
+            })
+        return flags
+
+    all_flags: list[dict] = []
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for flags in pool.map(run, list(enumerate(chunks))):
+            all_flags.extend(flags)
+    progress(f"Fact check: {len(all_flags)} paragraph(s) flagged")
+    return all_flags
+
+
+# ------------------------------------------------------------------ full build
+def generate(project: Project, progress: Progress = lambda m: None,
+             checkpoint: Callable[[], None] = lambda: None,
+             fresh: bool = False) -> Project:
+    """Write the script. Picks up an unfinished run unless `fresh` is asked for.
+
+    `checkpoint` persists the project mid-run; without one this still works, it
+    just has nothing to come back to.
+    """
+    key = draft_key(project)
+    if fresh or project.draft.get("key") != key:
+        # No draft, or one written against a different idea, length or tone.
+        project.draft = {"key": key}
+
+    research = project.draft.get("research")
+    if research is not None:
+        if research:
+            progress(f"Picking up research already gathered "
+                     f"({len(research.get('facts', []))} fact(s))")
+    else:
+        research = script_research.gather(project.idea, progress)
+        project.draft["research"] = research      # {} is a valid, banked result
+        checkpoint()
+    project.research = research
+
+    outline = project.draft.get("outline")
+    if outline:
+        # The saved sections were written to *these* headings. Re-outlining here
+        # would produce different ones and strand every one of them.
+        progress(f"Picking up the outline this run already settled on "
+                 f"({len(outline.get('sections', []))} sections)")
+    else:
+        outline = build_outline(project, progress)
+        project.draft["outline"] = outline
+        project.draft["sections"] = {}
+        checkpoint()
+    project.outline = outline
+    project.title = outline.get("title", project.idea[:60])
+    project.subtitle = outline.get("subtitle", "")
+
+    slides = write_script(project, outline, progress, checkpoint)
+    if not slides:
+        raise ValueError("Script generation produced no paragraphs")
+
+    plan_visuals(project, slides, progress)
+    project.slides = slides
+    project.status = "scripted"
+    project.draft = {}          # the run finished; nothing left to come back to
+
+    if project.research.get("facts"):
+        project.research["flags"] = verify_script(project, progress)
+
+    words = sum(s.word_count for s in slides)
+    progress(f"Script done: {len(slides)} paragraphs, {words} words, "
+             f"~{project.est_seconds() / 60:.1f} min")
+    return project
+
+
+# ------------------------------------------------------------- script import
+# Furniture that appears in pasted newsletter posts and cannot be read aloud.
+_BOILERPLATE = re.compile(
+    r"^\s*(subscribe|subscribed|share this post|share|leave a comment|comments?|"
+    r"thanks for reading.*|if you enjoyed.*|please share.*|read more|"
+    r"discussion about this post|previous|next|\d+ likes?|\d+ comments?|"
+    r"upgrade to paid|pledge your support|listen now|watch now|"
+    r"type your email.*|sign up|log in|continue reading)\s*$",
+    re.I,
+)
+
+
+def clean_pasted(raw: str) -> str:
+    """Strip a pasted article down to text a narrator could actually read."""
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)          # images
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)      # links -> label
+    text = re.sub(r"<[^>]+>", "", text)                       # stray html
+    text = re.sub(r"https?://\S+", "", text)                  # bare urls
+    text = re.sub(r"[*_`]{1,3}(.+?)[*_`]{1,3}", r"\1", text)  # emphasis marks
+
+    lines = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if _BOILERPLATE.match(stripped):
+            continue
+        # Keep headings as text; they become beat names downstream.
+        lines.append(re.sub(r"^#{1,6}\s*", "", line).rstrip())
+    text = "\n".join(lines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _chunk_paragraphs(text: str, target_words: int = 650) -> list[str]:
+    """Group the article's own paragraphs into chunks the model can hold at once."""
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    chunks, current, count = [], [], 0
+    for para in paras:
+        words = len(para.split())
+        if current and count + words > target_words:
+            chunks.append("\n\n".join(current))
+            current, count = [], 0
+        current.append(para)
+        count += words
+    if current:
+        chunks.append("\n\n".join(current))
+    return chunks
+
+
+FAITHFUL_RULES = """You are preparing the creator's OWN article to be read aloud. \
+Their words are the point. You may:
+- split a long sentence at a natural breath point,
+- merge two very short sentences,
+- drop text that cannot be spoken: image captions, link labels, subscribe \
+prompts, "click here", stray navigation,
+- fix outright spelling and typing errors ("Atleast" -> "At least", "tip's" -> \
+"tips", a missing full stop).
+You may NOT rewrite their phrasing, swap their vocabulary for your own, add \
+transitions they did not write, add or remove facts, or change their opinions. \
+If a sentence is awkward but readable, leave it alone."""
+
+ADAPTED_RULES = """You are adapting the creator's article for the ear. Keep every \
+fact, every opinion and the running order exactly as they are, but you may \
+smooth written-only constructions into speakable ones: unpack parentheses, \
+break up long clauses, replace "as I wrote above" style cross-references, and \
+fix errors. Stay recognisably in the author's voice and never add new claims."""
+
+
+def import_script(project: Project, raw_text: str, fidelity: str = "faithful",
+                  progress: Progress = lambda m: None) -> Project:
+    """Turn a pasted article into a narrated, illustrated video."""
+    text = clean_pasted(raw_text)
+    words = len(text.split())
+    if words < 120:
+        raise ValueError("That script is too short to build a video from.")
+    progress(f"Cleaned script: {words} words (~{words / WORDS_PER_MINUTE:.1f} min read)")
+
+    rules = ADAPTED_RULES if fidelity == "adapted" else FAITHFUL_RULES
+
+    # 1. Metadata, from the head of the article.
+    head = text[:6000]
+    meta = complete_json(
+        f"""Read the opening of an article that is about to become a narrated video.
+
+\"\"\"{head}\"\"\"
+
+Return JSON:
+{{"title": "the video title, 4-9 words; reuse the author's own title if it works \
+spoken, otherwise tighten it. No clickbait, no colon-subtitle",
+  "subtitle": "one clause of context, max 8 words",
+  "subject": "what this is about, named plainly in 2-6 words",
+  "era": "the time period, or 'present day'",
+  "thesis": "one sentence: the argument the article makes",
+  "visual_world": "one sentence on what should be on screen through this video, \
+given what photographs and footage plausibly exist for this subject"}}""",
+        model=MODEL_UTILITY, timeout=400,
+        require=lambda v: isinstance(v, dict) and bool(v.get("title")),
+        require_hint='The object needs a top-level "title".')
+
+    project.outline = meta | {"sections": [], "imported": True}
+    project.title = meta.get("title") or project.title or "Untitled"
+    project.subtitle = meta.get("subtitle", "")
+    project.target_minutes = max(3, min(40, round(words / WORDS_PER_MINUTE)))
+
+    # 2. Segment, chunk by chunk, preserving order.
+    chunks = _chunk_paragraphs(text)
+    progress(f"Segmenting {len(chunks)} chunk(s) into narration paragraphs")
+
+    def segment(args: tuple[int, str]) -> tuple[int, list[dict]]:
+        ci, chunk = args
+        where = ("the opening of the article" if ci == 0 else
+                 "the end of the article" if ci == len(chunks) - 1 else
+                 f"the middle of the article (part {ci + 1} of {len(chunks)})")
+        out = complete_json(
+            f"""Split part of an article into narration paragraphs for a video.
+
+ARTICLE TITLE: {project.title}
+THIS IS {where.upper()}.
+
+{rules}
+
+TEXT:
+\"\"\"{chunk}\"\"\"
+
+Return a JSON list. One object per narration paragraph, in the original order:
+{{"text": "the words to be spoken, 40-75 words",
+  "beat": "2-5 word name for the section this paragraph belongs to; reuse the \
+same beat name for consecutive paragraphs on the same point",
+  "visual": "one plain sentence describing the single image or clip that should \
+be on screen while this is read"}}
+
+Cover the whole text. Do not summarise it and do not skip paragraphs.
+If the text opens with the article's own headline and standfirst, skip both: they \
+are already the video's title and are shown on screen, so reading them aloud is a \
+duplicate. Begin at the first real body sentence.
+Expand anything that does not read aloud: "&" becomes "and", "e.g." becomes "for \
+example", a numeral stays a numeral only if you would say it that way.""",
+            system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
+            require=lambda v: bool(find_records(v, "text")),
+            require_hint='Each item needs a "text" field holding the spoken words.')
+        return ci, find_records(out, "text")
+
+    results: dict[int, list[dict]] = {}
+    with cf.ThreadPoolExecutor(max_workers=3) as pool:
+        done = 0
+        for ci, paras in pool.map(segment, list(enumerate(chunks))):
+            results[ci] = paras
+            done += 1
+            progress(f"Chunk {done}/{len(chunks)} segmented ({len(paras)} paragraphs)")
+
+    slides: list[Slide] = []
+    for ci in range(len(chunks)):
+        for para in results.get(ci, []):
+            slides.append(Slide(
+                section="main",
+                beat=(para.get("beat") or "").strip()[:40],
+                narration=para["text"].strip(),
+                visual_note=(para.get("visual") or "").strip(),
+            ))
+    if not slides:
+        raise ValueError("Segmentation produced no paragraphs")
+
+    # Mark the ends so the visual planner treats them as an opening and a close.
+    slides[0].section = "intro"
+    slides[-1].section = "conclusion"
+
+    plan_visuals(project, slides, progress)
+    project.slides = slides
+    project.status = "scripted"
+    kept = sum(s.word_count for s in slides)
+    progress(f"Imported {len(slides)} paragraphs, {kept} words "
+             f"({kept / max(1, words) * 100:.0f}% of the source), "
+             f"~{project.est_seconds() / 60:.1f} min")
+    return project
+
+
+def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:
+    """Rewrite one paragraph against a creator instruction, keeping the flow."""
+    idx = project.slides.index(slide)
+    prev = project.slides[idx - 1].narration if idx > 0 else "(start of video)"
+    nxt = project.slides[idx + 1].narration if idx + 1 < len(project.slides) else "(end of video)"
+    prompt = f"""Rewrite one paragraph of narration.
+
+VIDEO: {project.outline.get('title')} - {project.outline.get('thesis', '')}
+
+PARAGRAPH BEFORE: "{prev}"
+PARAGRAPH TO REWRITE: "{slide.narration}"
+PARAGRAPH AFTER: "{nxt}"
+
+CREATOR'S INSTRUCTION: {instruction or "tighten it and make it more concrete"}
+
+It must still read continuously between the paragraphs either side, stay within
+40-75 words, and follow every narration rule you have been given.
+
+Return JSON: {{"text": "the rewritten paragraph"}}"""
+    out = complete_json(prompt, system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=600)
+    text = (out.get("text") if isinstance(out, dict) else str(out)) or ""
+    return text.strip()

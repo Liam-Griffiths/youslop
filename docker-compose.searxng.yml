@@ -1,0 +1,18 @@
+# A local search engine for the research step (see README: "Research and
+# accuracy"). Bound to loopback only — this is infrastructure for this
+# machine's own instance of the tool, not a public search box.
+#
+#   docker compose -f docker-compose.searxng.yml up -d
+#
+# Then set SEARXNG_URL=http://127.0.0.1:8888 in .env.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: youslop-searxng
+    ports:
+      - "127.0.0.1:8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://127.0.0.1:8888/
+    restart: unless-stopped

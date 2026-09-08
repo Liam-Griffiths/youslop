@@ -1,0 +1,17 @@
+.venv/
+.cache/
+projects/
+channels/
+.env
+.token
+.certs/
+__pycache__/
+*.pyc
+.DS_Store
+assets/music/*
+!assets/music/README.md
+# Kokoro's weights are a 337MB one-off download, not source.
+assets/tts/*
+!assets/tts/README.md
+# Your own downloaded stock, not source.
+assets/library/*

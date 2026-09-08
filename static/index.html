@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Youslop</title>
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🪣</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" onclick="go('#/')" title="Fresh AI slop, daily">
+    <span class="mark">🪣<span class="drip"></span></span>
+    <span class="wordmark">You<em>slop</em></span>
+  </div>
+  <nav class="topbar-nav">
+    <a onclick="go('#/library')">Library</a>
+  </nav>
+  <div id="topbar-right" class="topbar-right"></div>
+</header>
+
+<main id="view"></main>
+
+<div id="toast" class="toast"></div>
+
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

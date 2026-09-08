@@ -1,0 +1,16 @@
+# Overrides on top of SearXNG's own defaults (`use_default_settings: true`
+# merges this in rather than replacing the whole file). The only reason this
+# instance exists is to give the research step a JSON API to call, which is
+# off by default because a public instance handing out JSON is an easy target
+# for scraping — bound to 127.0.0.1 here, that risk doesn't apply.
+use_default_settings: true
+
+server:
+  secret_key: "8e7b7de79b112fc39357094a29396928c184a20f013fe481e0d80a82cad367be"
+  limiter: false          # the rate limiter is aimed at public instances
+  image_proxy: false
+
+search:
+  formats:
+    - html
+    - json
