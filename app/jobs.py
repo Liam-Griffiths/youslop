@@ -62,3 +62,14 @@ def active_for(project_id: str) -> list[dict]:
     with _LOCK:
         return [dict(j) for j in _JOBS.values()
                 if j["project_id"] == project_id and j["state"] == "running"]
+
+
+def running() -> list[dict]:
+    """Every job still running, across every project.
+
+    What the desktop shell checks before it lets the window close — quitting
+    mid-render kills the ffmpeg process with it, and there is no window-close
+    equivalent of the browser's "leave site?" prompt to catch that by accident.
+    """
+    with _LOCK:
+        return [dict(j) for j in _JOBS.values() if j["state"] == "running"]

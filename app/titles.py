@@ -1,8 +1,9 @@
 """Lower-left slide typography, rendered to transparent PNGs.
 
-This ffmpeg build has no libfreetype, so drawtext is unavailable. Rendering with
-Pillow is the better path anyway: real letter-spacing, a soft shadow and a
-gradient scrim so white type survives a bright archival photograph.
+Rendering with Pillow rather than ffmpeg's drawtext: real letter-spacing, a
+soft shadow and a gradient scrim so white type survives a bright archival
+photograph — and no dependency on whether the ffmpeg in front of us happens to
+have been built with libfreetype, which not all of them are.
 """
 from __future__ import annotations
 
@@ -11,16 +12,36 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from .config import HEIGHT, WIDTH
+from .config import FONTS_DIR, HEIGHT, WIDTH
 
 # Preferred faces, best first. Each entry is (path, ttc index).
+#
+# The bundled face comes first in every stack, and the macOS system faces stay
+# behind it as flavour. That order is the whole of what makes this run on
+# someone else's computer: all of these stacks used to start at
+# /System/Library/Fonts, and on Windows or Linux every one of them fell through
+# to `ImageFont.load_default` — one bitmap face, no weights, no TTC indices,
+# and layout code that measures text to fit it producing nonsense everywhere.
+# One of them (iA Writer Mono) was a font bought and installed by hand, so it
+# was not even reliable on another Mac.
+#
+# The system faces are kept because where they do exist they are what every
+# video made before this looked like, and because a creator who prefers them
+# can delete the bundled file. Nothing here is required: the last resort is
+# still Pillow's own face, now reached only if the install is broken.
+def _bundled(name: str) -> tuple[str, int]:
+    return (str(FONTS_DIR / name), 0)
+
+
 FONT_STACK = [
+    _bundled("Inter-SemiBold.ttf"),
     ("/System/Library/Fonts/Avenir Next.ttc", 2),          # Demi Bold
     ("/System/Library/Fonts/Supplemental/GillSans.ttc", 4),  # SemiBold
     ("/System/Library/Fonts/Supplemental/Futura.ttc", 0),
     ("/System/Library/Fonts/Helvetica.ttc", 1),
 ]
 KICKER_STACK = [
+    _bundled("Inter-Medium.ttf"),
     ("/System/Library/Fonts/Avenir Next.ttc", 5),          # Medium
     ("/System/Library/Fonts/Supplemental/GillSans.ttc", 0),
     ("/System/Library/Fonts/Helvetica.ttc", 0),
@@ -30,17 +51,20 @@ KICKER_STACK = [
 # a documentary. Fixed advance also means a per-character reveal never reflows.
 _HOME = str(Path.home())
 MONO_STACK = [
+    _bundled("JetBrainsMono-Bold.ttf"),
     (f"{_HOME}/Library/Fonts/iAWriterMonoS-Bold.ttf", 0),
     ("/System/Library/Fonts/Menlo.ttc", 1),
     ("/System/Library/Fonts/Supplemental/Courier New Bold.ttf", 0),
     ("/System/Library/Fonts/Courier.ttc", 1),
 ]
 MONO_LIGHT_STACK = [
+    _bundled("JetBrainsMono-Regular.ttf"),
     (f"{_HOME}/Library/Fonts/iAWriterMonoS-Regular.ttf", 0),
     ("/System/Library/Fonts/Menlo.ttc", 0),
     ("/System/Library/Fonts/Courier.ttc", 0),
 ]
 CONDENSED_STACK = [
+    _bundled("ArchivoNarrow-Bold.ttf"),
     ("/System/Library/Fonts/Avenir Next Condensed.ttc", 0),   # Bold
     ("/System/Library/Fonts/Supplemental/Futura.ttc", 4),
     ("/System/Library/Fonts/Helvetica.ttc", 1),
@@ -49,6 +73,7 @@ CONDENSED_STACK = [
 # Book faces, for the slate that is set as a printed title page. Baskerville is
 # the house choice; the fallbacks step through the other transitionals on macOS.
 SERIF_STACK = [
+    _bundled("EBGaramond-Regular.ttf"),
     ("/System/Library/Fonts/Supplemental/Baskerville.ttc", 0),      # Regular
     ("/System/Library/Fonts/Supplemental/Hoefler Text.ttc", 0),
     ("/System/Library/Fonts/Supplemental/Didot.ttc", 0),
@@ -56,6 +81,7 @@ SERIF_STACK = [
     ("/System/Library/Fonts/Supplemental/Times New Roman.ttf", 0),
 ]
 SERIF_ITALIC_STACK = [
+    _bundled("EBGaramond-Italic.ttf"),
     ("/System/Library/Fonts/Supplemental/Baskerville.ttc", 2),      # Italic
     ("/System/Library/Fonts/Supplemental/Hoefler Text.ttc", 2),
     ("/System/Library/Fonts/Supplemental/Didot.ttc", 1),
@@ -63,6 +89,7 @@ SERIF_ITALIC_STACK = [
     ("/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf", 0),
 ]
 SMALLCAPS_STACK = [
+    _bundled("CormorantSC-SemiBold.ttf"),
     ("/System/Library/Fonts/Supplemental/Bodoni 72 Smallcaps Book.ttf", 0),
     ("/System/Library/Fonts/Supplemental/Baskerville.ttc", 0),
     ("/System/Library/Fonts/Supplemental/Georgia.ttf", 0),
@@ -71,6 +98,7 @@ SMALLCAPS_STACK = [
 # Heavy display face for slates that need to hit. SF Compact Black is slightly
 # condensed and reads as broadcast technical rather than editorial.
 DISPLAY_STACK = [
+    _bundled("ArchivoBlack-Regular.ttf"),
     ("/System/Library/Fonts/SFCompact.ttf", 0),               # Black
     ("/System/Library/Fonts/Supplemental/Futura.ttc", 4),     # Condensed ExtraBold
     ("/System/Library/Fonts/Avenir Next Condensed.ttc", 0),

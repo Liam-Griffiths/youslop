@@ -16,16 +16,15 @@ from __future__ import annotations
 import hashlib
 import math
 import random
-import subprocess
 import uuid
 from pathlib import Path
 from typing import Callable, Iterable
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
-from . import motifs, themes, titles
+from . import ffutil, motifs, themes, titles
 from .channels import channel_dir
-from .config import FFMPEG, FPS, HEIGHT, WIDTH
+from .config import FPS, HEIGHT, WIDTH
 from .llm import MODEL_UTILITY, complete_json
 from .schema import Channel
 
@@ -207,7 +206,8 @@ def portrait_options(subject: str, limit: int = 12) -> list[dict]:
     """Portraits that could stand in for one cast member, best first."""
     from . import media
 
-    found = media.search([subject, f"{subject} portrait"], "image", limit=limit)
+    found = media.search([subject, f"{subject} portrait"], "image", limit=limit,
+                         allow_stock=False)
     # Same preference the casting pass uses: a face reads best in a tall frame.
     found.sort(key=lambda c: (c.score + (0.6 if c.height >= c.width else 0)),
                reverse=True)
@@ -279,7 +279,8 @@ def resolve_images(channel: Channel, progress: Progress = lambda m: None) -> lis
     credits: list[dict] = []
     for n, subject in enumerate(subjects, 1):
         progress(f"Casting {n}/{len(subjects)}: {subject}")
-        found = media.search([subject, f"{subject} portrait"], "image", limit=8)
+        found = media.search([subject, f"{subject} portrait"], "image", limit=8,
+                             allow_stock=False)
         # A face works best in a tall column, so prefer the tallest usable frame.
         found.sort(key=lambda c: (c.score + (0.6 if c.height >= c.width else 0)),
                    reverse=True)
@@ -345,25 +346,8 @@ def _squeeze(duration: float, start: float, span: float, tail: float = 0.3) -> f
 def _encode(out_path: Path, frames: Iterable[Image.Image],
             what: str = "the intro") -> None:
     """Pipe RGB frames through ffmpeg into an h264 file."""
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.Popen(
-        [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}",
-         "-r", str(FPS), "-i", "-",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
-         "-pix_fmt", "yuv420p", "-an", str(out_path)],
-        stdin=subprocess.PIPE,
-    )
-    try:
-        for frame in frames:
-            proc.stdin.write(frame.tobytes())
-        proc.stdin.close()
-    except BrokenPipeError:
-        pass
-    finally:
-        code = proc.wait()
-    if code != 0:
-        raise RuntimeError(f"ffmpeg failed encoding {what} (exit {code})")
+    if not ffutil.encode_frames(frames, out_path):
+        raise RuntimeError(f"ffmpeg failed encoding {what}")
 
 
 def _cast_files(channel: Channel) -> tuple[list[Path], list[list[float] | None]]:
@@ -655,14 +639,7 @@ def _render_signal(channel: Channel, video_title: str, out_path: Path,
     sub_in = settled + 0.30
     bar_w = max(8, size // 16)
 
-    proc = subprocess.Popen(
-        [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}",
-         "-r", str(FPS), "-i", "-",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
-         "-pix_fmt", "yuv420p", "-an", str(out_path)],
-        stdin=subprocess.PIPE,
-    )
+    proc = ffutil.frame_pipe(out_path)
 
     try:
         for f in range(n_frames):
@@ -1725,14 +1702,7 @@ def _render_columns(channel: Channel, video_title: str, out_path: Path,
     settled: Image.Image | None = None    # cached once every column has landed
     settled_scrimmed: Image.Image | None = None
 
-    proc = subprocess.Popen(
-        [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}",
-         "-r", str(FPS), "-i", "-",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
-         "-pix_fmt", "yuv420p", "-an", str(out_path)],
-        stdin=subprocess.PIPE,
-    )
+    proc = ffutil.frame_pipe(out_path)
 
     try:
         for f in range(n_frames):
@@ -2817,8 +2787,7 @@ def mux_sting(channel: Channel, video: Path, slate_len: float,
     lufs = float(channel.voice.target_lufs)
     chain = sting_chain(channel.intro, slate_len, fmt, lufs, makeup=-14.0 - lufs)
     tmp = video.with_suffix(".sting.mp4")
-    args = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(video), "-i", str(src),
+    args = ["-i", str(video), "-i", str(src),
             "-filter_complex",
             f"[0:v]tpad=stop_mode=clone:stop_duration={tail:.3f}[v];"
             f"[1:a]{chain}[a]",
@@ -2827,13 +2796,12 @@ def mux_sting(channel: Channel, video: Path, slate_len: float,
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
             "-shortest", str(tmp)]
     try:
-        subprocess.run(args, check=True, capture_output=True, timeout=300)
+        ffutil.run(args, timeout=300)
         tmp.replace(video)
     except Exception as exc:
         tmp.unlink(missing_ok=True)
-        detail = getattr(exc, "stderr", b"")
         progress("Could not lay the sting over the preview "
-                 f"({(detail.decode(errors='replace')[-120:] if detail else str(exc)[:120]).strip()})")
+                 f"({str(exc).strip()[-120:]})")
         return False
     progress(f"Sting over the preview: {channel.intro.music_filename or src.name}"
              f", from {start:.1f}s for {span:.1f}s")

@@ -164,6 +164,36 @@ def _chosen(project: Project, slide: Slide) -> tuple[Path | None, str, list[floa
     return (p if p.exists() else None), cand.get("kind", "image"), (cand.get("focal") or [])
 
 
+def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
+                         seg_len: float, out: Path) -> Path | None:
+    """Stage one held paragraph in the video's saved slide style.
+
+    The spec drawn here is the one `script_gen.plan_custom_slides` already
+    filled for this paragraph and left on the slide, so rendering is only
+    drawing — no model call, no archive fetch, on what may be the thirtieth
+    segment of a long render. Returns None when there is nothing to draw, which
+    is the caller's signal to fall back to the documentary cut.
+    """
+    from . import custom_slide, slide_styles
+
+    slide = group[0][0]
+    spec = slide.custom or {}
+    if not spec.get("elements"):
+        style = slide_styles.get(slide_styles.id_from_format(project.style.format))
+        if not style:
+            return None
+        spec = style.spec            # unfilled: the style's own placeholders
+    try:
+        frames = custom_slide.frames(
+            spec, seg_len, hand=getattr(project.style, "board_hand", "marker"),
+            media_root=project_dir(project.id) / "media")
+        if not ffutil.encode_frames(frames, out):
+            return None
+    except (ValueError, TypeError, OSError):
+        return None
+    return out
+
+
 # ------------------------------------------------------------------- segments
 def _clip_source(src: Path, seg_len: float, crop: str) -> tuple[list[str], str]:
     """Inputs and a filtergraph that make a clip fill `seg_len` seconds.
@@ -300,9 +330,23 @@ def _render_segment(
 
     `style.format` decides how that picture is staged: the documentary cut
     fills the frame and drifts across it, the essay cut sets the whole picture
-    inside a bordered slide and puts the narration on screen underneath.
+    inside a bordered slide and puts the narration on screen underneath, and
+    the board cut hands the whole segment to `app/board.py`, which draws it
+    rather than photographing it.
     """
     style = project.style
+    if style.format.startswith("custom:"):
+        rendered = _render_custom_style(project, group, seg_len, out)
+        if rendered is not None:
+            return rendered
+        # The style was deleted, or this paragraph has no filled spec yet:
+        # fall through to the documentary cut rather than abort the render.
+    if style.format == "board":
+        from . import board as board_mod
+        return board_mod.render_segment(
+            project, group, seg_len, out, channel=channel,
+            cache=project_dir(project.id) / "board",
+            image_for=lambda s: _chosen(project, s)[0])
     essay = style.format == "essay"
     slide = group[0][0]
     src, kind, focal = _chosen(project, slide)

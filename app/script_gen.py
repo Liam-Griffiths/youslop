@@ -1,6 +1,7 @@
 """Idea -> outline -> narrated script -> per-slide visual plan."""
 from __future__ import annotations
 
+import copy
 import concurrent.futures as cf
 import hashlib
 import re
@@ -9,7 +10,7 @@ from typing import Any, Callable
 
 from . import research as script_research
 from .config import WORDS_PER_MINUTE
-from .llm import MODEL_SCRIPT, MODEL_UTILITY, complete_json
+from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
 from .schema import Project, Slide
 
 Progress = Callable[[str], None]
@@ -508,6 +509,110 @@ of these {len(chunk)} paragraphs should get one. Everything else gets "".
             progress(f"Visuals planned for chunk {ci + 1}/{len(chunks)}")
 
 
+# --------------------------------------------------------------- the board
+def plan_boards(project: Project, slides: list[Slide],
+                progress: Progress = lambda m: None) -> None:
+    """Write what the handwritten format puts on screen, in place.
+
+    Only run for a video in board format, and only ever *additive*: a slide
+    whose board somebody has already written by hand is left alone, and a
+    slide this pass skips still gets a board, because `board.content` derives
+    one from the narration. See app/board.py and app/diagram.py.
+    """
+    if not slides:
+        return
+    from . import board as board_mod
+    from . import diagram as diagram_mod
+
+    targets = [s for s in slides
+               if not (s.board_lead or s.board_points or s.diagram)]
+    if not targets:
+        return
+    outline = project.outline
+    chunks = [targets[i : i + 10] for i in range(0, len(targets), 10)]
+    progress(f"Writing boards for {len(targets)} slides")
+    menu = "\n".join(f'- "{t["key"]}": {t["blurb"]}' for t in board_mod.TEMPLATES)
+
+    def run(args: tuple[int, list[Slide]]) -> tuple[int, Any]:
+        ci, chunk = args
+        listing = "\n".join(f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
+                             for n, s in enumerate(chunk, 1))
+        prompt = f"""Write what goes on screen for each paragraph below.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject')}
+
+The format is a handwritten board: white marker on a grey-blue slide that
+fills up as the narrator talks. The writing on it is the STRUCTURE of the
+point, never a transcript of the voice. Short, blunt, lettered by hand.
+
+TEMPLATES:
+{menu}
+
+PARAGRAPHS:
+{listing}
+
+Return a JSON list of {len(chunk)} objects in the same order:
+{{"n": <the number>,
+  "template": "auto" or one of the template keys above,
+  "lead": "the line the slide is about — 2-7 words, no end punctuation",
+  "points": ["0 to 5 lines under it, 2-6 words each"],
+  "note": "" or one short footnote, source or attribution,
+  "diagram": null, or a diagram spec when the paragraph is about a shape}}
+
+Rules:
+- Short. A point longer than six words cannot be lettered by hand and read at
+  a glance. Cut articles and verbs before you cut the noun.
+- Never restate the narration. If the voice says it in a sentence, the board
+  says it in three words, or says the thing the sentence is evidence for.
+- Prefix a point with * to pick it out in the accent colour. At most one per
+  slide, and not on every slide.
+- "auto" is the right answer most of the time: it picks from what you wrote.
+  Name a template only when the content genuinely is a quote, a number, a
+  comparison, a sequence or code.
+- Vary it. Five bulleted boards in a row is a slide deck, not a video.
+- A paragraph with nothing worth writing down gets {{"lead": "", "points": []}}
+  and will be given a line from its own narration.
+
+{diagram_mod.SPEC_DOC}
+
+Only give a paragraph a diagram when it is genuinely about a shape — an order,
+a hierarchy, an overlap, a loop. At most {max(1, len(chunk) // 4)} of these
+{len(chunk)} paragraphs should have one. Everything else gets null."""
+        return ci, complete_json(
+            prompt, model=MODEL_UTILITY, timeout=600,
+            require=lambda v: bool(find_records(v, "lead")),
+            require_hint='Each item needs "n" and a "lead".')
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for ci, plan in pool.map(run, list(enumerate(chunks))):
+            chunk = chunks[ci]
+            by_n = {}
+            for pos, item in enumerate(find_records(plan, "lead"), 1):
+                try:
+                    n = int(item.get("n", pos))
+                except (TypeError, ValueError):
+                    n = pos
+                by_n[n] = item
+            for n, slide in enumerate(chunk, 1):
+                item = by_n.get(n, {})
+                slide.board_lead = str(item.get("lead") or "").strip()[:160]
+                points = item.get("points") or []
+                slide.board_points = [str(p).strip()[:120] for p in points
+                                      if str(p).strip()][:6]
+                slide.board_note = str(item.get("note") or "").strip()[:160]
+                key = str(item.get("template") or "auto")
+                slide.board_template = key if key in board_mod.TEMPLATE_KEYS else "auto"
+                spec = item.get("diagram")
+                if spec:
+                    try:
+                        slide.diagram = diagram_mod.normalise(spec)
+                        slide.prefer_kind = "diagram"
+                    except (ValueError, TypeError):
+                        slide.diagram = {}
+            progress(f"Boards written for chunk {ci + 1}/{len(chunks)}")
+
+
 # --------------------------------------------------------------- fact-check
 def verify_script(project: Project, progress: Progress = lambda m: None) -> list[dict]:
     """Flag any paragraph asserting something the research dossier doesn't
@@ -617,6 +722,9 @@ def generate(project: Project, progress: Progress = lambda m: None,
         raise ValueError("Script generation produced no paragraphs")
 
     plan_visuals(project, slides, progress)
+    if project.style.format == "board":
+        plan_boards(project, slides, progress)
+    _plan_style_slides(project, slides, progress)
     project.slides = slides
     project.status = "scripted"
     project.draft = {}          # the run finished; nothing left to come back to
@@ -797,6 +905,9 @@ example", a numeral stays a numeral only if you would say it that way.""",
     slides[-1].section = "conclusion"
 
     plan_visuals(project, slides, progress)
+    if project.style.format == "board":
+        plan_boards(project, slides, progress)
+    _plan_style_slides(project, slides, progress)
     project.slides = slides
     project.status = "scripted"
     kept = sum(s.word_count for s in slides)
@@ -804,6 +915,255 @@ example", a numeral stays a numeral only if you would say it that way.""",
              f"({kept / max(1, words) * 100:.0f}% of the source), "
              f"~{project.est_seconds() / 60:.1f} min")
     return project
+
+
+def generate_diagram(project: Project, slide: Slide, instruction: str = "") -> dict:
+    """Ask Claude for a diagram spec for one slide — the "ask Claude" button
+    on the diagram editor. Same authoring rules `plan_boards` already writes
+    against (`diagram.SPEC_DOC`), aimed at one paragraph instead of a batch,
+    and steerable: a blank instruction lets the model pick the shape itself
+    from the narration; a creator's own words narrow it down ("as a cycle",
+    "put the regulator in the middle").
+
+    Returns a normalised spec — never raises on a malformed reply, since
+    `diagram.normalise` already tolerates a model that used "from"/"to" as
+    labels instead of ids, left `kind` off, and so on; what this adds on top
+    is the JSON-shape retry `complete_json` already does for every other
+    writer call.
+    """
+    from . import diagram as diagram_mod
+
+    outline = project.outline
+    idx = project.slides.index(slide)
+    prev = project.slides[idx - 1].narration if idx > 0 else ""
+    prompt = f"""Draw a diagram for this paragraph of a video's narration.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject', project.idea)}
+
+{f'PREVIOUS PARAGRAPH (for context only): "{prev}"' if prev else ''}
+THIS PARAGRAPH: "{slide.narration}"
+
+{f'THE CREATOR ASKED FOR: {instruction}' if instruction.strip() else
+  'The creator has not specified a layout — pick whichever of the shapes '
+  'below actually matches what this paragraph describes.'}
+
+{diagram_mod.SPEC_DOC}
+
+Return exactly one spec, matching the paragraph's own content — never a
+generic illustration of the video's subject as a whole."""
+
+    out = complete_json(
+        prompt, model=MODEL_UTILITY, timeout=180,
+        require=lambda v: isinstance(v, dict) and bool(v.get("nodes")),
+        require_hint='Return one JSON object with a "kind" and a "nodes" array.')
+    try:
+        return diagram_mod.normalise(out)
+    except (ValueError, TypeError):
+        raise LLMError("Claude's diagram didn't come back in a shape I could draw.")
+
+
+def design_slide_style(description: str, accent: str = "#E8C36A") -> dict:
+    """Design a reusable slide style from a description, with no video yet.
+
+    The sibling of `generate_custom_slide` for someone standing on the home
+    page who wants a look before they have a script: there is no paragraph to
+    read, so the brief is the whole input. What comes back is a *template* —
+    its text is placeholder standing in for the slot, chosen to show the
+    length that layout can carry, because `plan_custom_slides` will replace
+    every slot per paragraph later.
+    """
+    from . import custom_slide as custom_mod
+
+    brief = (description or "").strip()
+    prompt = f"""Design a reusable slide style for a narrated documentary video.
+
+THE CREATOR ASKED FOR: {brief or
+  'a clean, striking slide style — pick something with a strong idea to it.'}
+ACCENT COLOUR: {accent}
+
+This design will be reused for EVERY paragraph of a video, with its words and
+pictures swapped out each time. So you are designing a *template*:
+
+- Every text element's text is a PLACEHOLDER showing what belongs there and
+  roughly how long it can be — "1,910", "the night the dam held", not lorem
+  ipsum and not anything specific to one subject.
+- Every image element's query is a placeholder search in the same spirit.
+- The layout, colours, fonts, opacities and entrances ARE the style. Those are
+  what get reused, so they are what you are really deciding.
+- Keep it to 2-5 elements. A template with eight slots is a form to fill in,
+  and it will be filled in thirty times.
+
+{custom_mod.SPEC_DOC}
+
+Return exactly one spec. Use the accent colour above for whatever carries the
+emphasis, so the style suits the channel it will be used in."""
+
+    out = complete_json(
+        prompt, model=MODEL_UTILITY, timeout=180,
+        require=lambda v: isinstance(v, dict) and bool(v.get("elements")),
+        require_hint='Return one JSON object with an "elements" array.')
+    try:
+        return custom_mod.normalise(out)
+    except (ValueError, TypeError):
+        raise LLMError("Claude's style didn't come back in a shape I could draw.")
+
+
+def _plan_style_slides(project: Project, slides: list[Slide],
+                       progress: Progress = lambda m: None) -> None:
+    """Fill the video's saved slide style, if it is staged in one."""
+    from . import slide_styles
+
+    style_id = slide_styles.id_from_format(project.style.format)
+    if not style_id:
+        return
+    style = slide_styles.get(style_id)
+    if style:
+        plan_custom_slides(project, slides, style.spec, progress)
+
+
+def plan_custom_slides(project: Project, slides: list[Slide], style_spec: dict,
+                       progress: Progress = lambda m: None) -> None:
+    """Fill a saved slide style with each paragraph's own words, in place.
+
+    The style supplies the layout, the palette and the entrances; this supplies
+    only what goes *in* the slots — the text of each text element, the query of
+    each image element. Keeping the design fixed is the whole point of a style:
+    thirty paragraphs staged the same way read as one video, where thirty
+    separately designed slides read as thirty.
+
+    Additive, the same as `plan_boards`: a paragraph someone has already
+    designed by hand is left alone.
+    """
+    if not slides:
+        return
+    from . import custom_slide as custom_mod
+
+    try:
+        style_spec = custom_mod.normalise(style_spec)
+    except (ValueError, TypeError):
+        return
+    slots = [(i, el) for i, el in enumerate(style_spec["elements"])
+             if el["type"] in ("text", "image")]
+    if not slots:
+        return
+    targets = [s for s in slides if not (s.custom or {}).get("elements")]
+    if not targets:
+        return
+
+    outline = project.outline
+    slot_doc = "\n".join(
+        f'  {n}. {el["type"]} — '
+        + (f'currently "{el.get("text", "")}"' if el["type"] == "text"
+           else f'an archive photo, currently searched as "{el.get("query", "")}"')
+        for n, (_, el) in enumerate(slots, 1))
+    chunks = [targets[i : i + 10] for i in range(0, len(targets), 10)]
+    progress(f"Fitting {len(targets)} paragraphs to the slide style")
+
+    def run(args: tuple[int, list[Slide]]) -> tuple[int, Any]:
+        ci, chunk = args
+        listing = "\n".join(f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
+                            for n, s in enumerate(chunk, 1))
+        prompt = f"""Fill one fixed slide design with each paragraph's own content.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject')}
+
+Every paragraph in this video is staged in the SAME design. You are not
+redesigning it — you are only writing what goes in its {len(slots)} slots:
+
+{slot_doc}
+
+PARAGRAPHS:
+{listing}
+
+Return a JSON list of {len(chunk)} objects in the same order:
+{{"n": <the number>,
+  "slots": ["the content for slot 1", "slot 2", …]}}
+
+Rules:
+- One entry per slot, in order, always {len(slots)} of them.
+- A text slot takes words that fit where they sit — the example text above
+  shows the length that works. Shorter is better; it is set large.
+- An image slot takes an archive SEARCH, written like a photo caption and
+  specific enough to find the right thing ("Apollo 11 launch pad 1969", not
+  "rocket"). Never a sentence about the paragraph.
+- Never restate the narration. The slide carries the label, the number, the
+  name; the voice carries the argument.
+- A paragraph with nothing worth putting in a slot gets "" for it."""
+        return ci, complete_json(
+            prompt, model=MODEL_UTILITY, timeout=600,
+            require=lambda v: bool(find_records(v, "slots")),
+            require_hint='Each item needs "n" and a "slots" array.')
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for ci, plan in pool.map(run, list(enumerate(chunks))):
+            chunk = chunks[ci]
+            by_n = {}
+            for pos, item in enumerate(find_records(plan, "slots"), 1):
+                try:
+                    n = int(item.get("n", pos))
+                except (TypeError, ValueError):
+                    n = pos
+                by_n[n] = item
+            for n, slide in enumerate(chunk, 1):
+                filled = by_n.get(n, {}).get("slots") or []
+                spec = copy.deepcopy(style_spec)
+                for pos, (idx, _) in enumerate(slots):
+                    value = str(filled[pos]).strip() if pos < len(filled) else ""
+                    if not value:
+                        continue
+                    el = spec["elements"][idx]
+                    if el["type"] == "text":
+                        el["text"] = value[:200]
+                    else:
+                        el["query"] = value[:140]
+                        el["local_path"] = ""   # a new query needs a new fetch
+                slide.custom = spec
+
+
+def generate_custom_slide(project: Project, slide: Slide,
+                          instruction: str = "") -> dict:
+    """Ask Claude to design a slide from scratch for one paragraph.
+
+    The open-ended sibling of `generate_diagram`: where that one picks from
+    nine shapes, this one places elements wherever it likes, so a paragraph
+    that wants a pull-quote over a photo or one enormous number gets a
+    layout rather than the nearest template. A blank instruction lets the
+    model read the paragraph and decide; the creator's own words steer it.
+    """
+    from . import custom_slide as custom_mod
+
+    outline = project.outline
+    idx = project.slides.index(slide)
+    prev = project.slides[idx - 1].narration if idx > 0 else ""
+    prompt = f"""Design a slide for this paragraph of a video's narration.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject', project.idea)}
+ACCENT COLOUR: {project.style.accent}
+
+{f'PREVIOUS PARAGRAPH (for context only): "{prev}"' if prev else ''}
+THIS PARAGRAPH: "{slide.narration}"
+
+{f'THE CREATOR ASKED FOR: {instruction}' if instruction.strip() else
+  'The creator has not described a layout — read the paragraph and design '
+  'whatever actually serves it.'}
+
+{custom_mod.SPEC_DOC}
+
+Return exactly one spec, designed around this paragraph's own content. Use
+the accent colour above for anything meant to stand out, so the slide looks
+like it belongs to this channel."""
+
+    out = complete_json(
+        prompt, model=MODEL_UTILITY, timeout=180,
+        require=lambda v: isinstance(v, dict) and bool(v.get("elements")),
+        require_hint='Return one JSON object with an "elements" array.')
+    try:
+        return custom_mod.normalise(out)
+    except (ValueError, TypeError):
+        raise LLMError("Claude's slide didn't come back in a shape I could draw.")
 
 
 def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:

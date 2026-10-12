@@ -4,6 +4,7 @@ projects/
 channels/
 .env
 .token
+settings.json
 .certs/
 __pycache__/
 *.pyc
@@ -15,3 +16,15 @@ assets/tts/*
 !assets/tts/README.md
 # Your own downloaded stock, not source.
 assets/library/*
+
+# Written by the app at startup.
+logs/
+
+# Fetched by scripts/fetch_ffmpeg.py at build time, not committed.
+resources/bin/*
+!resources/bin/MANIFEST.json
+
+# PyInstaller build output — generated, not source.
+build/
+dist/
+.idea/

@@ -30,14 +30,14 @@ import concurrent.futures as cf
 import hashlib
 import io
 import math
-import subprocess
 import uuid
 from pathlib import Path
 from typing import Literal
 
 from PIL import Image, ImageDraw
 
-from .config import FFMPEG, FPS, HEIGHT, WIDTH
+from . import ffutil
+from .config import FPS, HEIGHT, WIDTH
 from .media.base import client, throttle
 from .schema import MediaCandidate
 
@@ -261,31 +261,11 @@ def _candidate(place: str, kind: Kind, local_path: str, media_kind: str,
 
 
 def _encode(frames, dest: Path, stem: str) -> tuple[Path, int] | None:
-    """Pipes Pillow frames straight into ffmpeg — the same trick
-    `app/intro.py` uses for its slate animations. `frames` is any iterable
-    of same-size RGB images; streamed, never buffered as a whole clip."""
+    """Pillow frames straight into ffmpeg. `frames` is any iterable of
+    same-size RGB images; streamed, never buffered as a whole clip."""
     out_path = dest / f"{stem}.mp4"
-    proc = subprocess.Popen(
-        [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}",
-         "-r", str(FPS), "-i", "-",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
-         "-pix_fmt", "yuv420p", "-an", str(out_path)],
-        stdin=subprocess.PIPE,
-    )
-    n = 0
-    try:
-        for frame in frames:
-            proc.stdin.write(frame.tobytes())
-            n += 1
-        proc.stdin.close()
-    except BrokenPipeError:
-        pass
-    finally:
-        code = proc.wait()
-    if code != 0 or n == 0:
-        return None
-    return out_path, n
+    n = ffutil.encode_frames(frames, out_path)
+    return (out_path, n) if n else None
 
 
 # ---------------------------------------------------------------------- still

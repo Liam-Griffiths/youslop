@@ -87,5 +87,8 @@ if [ "$HOST" != "127.0.0.1" ] && [ -n "$IP" ]; then
   [ "$SCHEME" = "http" ] && echo "   (plain http: that machine's browser will refuse the microphone — use HTTPS=1)"
   [ "$SCHEME" = "https" ] && echo "   (self-signed: accept the certificate warning once)"
 fi
-exec ./.venv/bin/uvicorn app.main:app --host "$HOST" --port "$PORT" \
+# `python -m uvicorn`, not ./.venv/bin/uvicorn: a venv's console scripts carry
+# an absolute shebang, so renaming or moving the checkout breaks every one of
+# them. The module is found by import, which does not care where the tree is.
+exec ./.venv/bin/python -m uvicorn app.main:app --host "$HOST" --port "$PORT" \
   ${ARGS[@]+"${ARGS[@]}"} "$@"

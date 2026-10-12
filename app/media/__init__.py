@@ -30,8 +30,28 @@ def provider_status() -> list[dict]:
     ]
 
 
-def _active(kind: str) -> list:
-    return [p for p in ALL_PROVIDERS if p.available() and kind in p.kinds]
+# Pexels and Pixabay are modern stock-photo libraries with essentially no
+# historical content, matched by tags rather than anything resembling a
+# caption. `relevant()` catches a candidate sharing too few words with the
+# query, but it cannot catch the opposite failure — a query like "Tesla Bot
+# announcement Palo Alto 2021" coincidentally sharing "palo"+"alto" with a
+# generic Stanford-campus stock photo, or "1939 World's Fair" matching a tag
+# for an entirely different fair. Shared place names and category words pass
+# a token-overlap gate without the photo being of the right thing. So rather
+# than chase every such coincidence with a sharper heuristic, these two are
+# simply never offered for a genuinely *image* search — the one
+# `plan_visuals()` already reserves for "historical, archival or specific to
+# a named person/event" (see script_gen.py). They stay fully available for
+# "video" b-roll, which is the generic-modern-motion case they actually suit,
+# and for the image-of-a-video-slide fallback inside `_jobs_for` below.
+STOCK_PHOTO_PROVIDERS = {"pexels", "pixabay"}
+
+
+def _active(kind: str, allow_stock: bool = True) -> list:
+    pool = [p for p in ALL_PROVIDERS if p.available() and kind in p.kinds]
+    if not allow_stock:
+        pool = [p for p in pool if p.name not in STOCK_PHOTO_PROVIDERS]
+    return pool
 
 
 _CACHE: dict[tuple, list[MediaCandidate]] = {}
@@ -78,10 +98,13 @@ def _run(jobs: list[tuple], kind: str) -> list[MediaCandidate]:
     return [replace(c) for c in found if relevant(c, c.query)]
 
 
-def _jobs_for(queries: list[str], kind: str, providers=None) -> list[tuple]:
-    providers = providers if providers is not None else _active(kind)
+def _jobs_for(queries: list[str], kind: str, providers=None,
+             allow_stock: bool = True) -> list[tuple]:
+    providers = providers if providers is not None else _active(kind, allow_stock)
     jobs = [(p, q, kind) for q in queries for p in providers]
-    # Photos are the fallback for a video slide when the stock libraries are dry.
+    # Stills are the fallback for a video slide when the stock libraries are
+    # dry — always stock-eligible, since a video slide already wants generic
+    # motion-adjacent content and this is exactly the case stock suits.
     if kind == "video":
         jobs += [(p, q, "image") for q in queries[:2] for p in _active("image")]
     return jobs
@@ -99,8 +122,25 @@ def _ladder(queries: list[str]) -> list[str]:
     return out
 
 
+# Which providers get tried first, before anyone else is even asked — see
+# `search()`. This used to be one fixed tuple regardless of `kind`, which
+# meant an *image* search's first pass was library + wikimedia + pexels +
+# storyblocks: two paid stock-video services ranked ahead of the Library of
+# Congress, the Met and NYPL, the three sources `PROVIDER_WEIGHT` itself
+# already rates above storyblocks. Second-tier "rest" only gets searched when
+# the first pass comes up thin, so those three were routinely never asked at
+# all for a slide the first pass already half-filled with stock. Now kind
+# decides the tier the way the weights already imply it should: an image
+# search leads with the real archives, a video search leads with the sources
+# that actually have motion footage.
+LEAD_PROVIDERS = {
+    "image": {"library", "wikimedia", "loc", "nypl", "met"},
+    "video": {"library", "pexels", "storyblocks"},
+}
+
+
 def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
-           fallback: str = "") -> list[MediaCandidate]:
+           fallback: str = "", allow_stock: bool = True) -> list[MediaCandidate]:
     """Find visuals for one slide, spending as few archive requests as possible.
 
     A picture-research query like "Endurance Grytviken whaling station 1914" is
@@ -109,9 +149,10 @@ def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
     a 24-slide project from firing hundreds of requests at Wikimedia and getting
     itself rate limited into returning nothing at all.
     """
-    lead = [p for p in _active(kind)
-            if p.name in ("library", "wikimedia", "pexels", "storyblocks")]
-    rest = [p for p in _active(kind) if p not in lead]
+    pool = _active(kind, allow_stock)
+    lead_names = LEAD_PROVIDERS.get(kind, LEAD_PROVIDERS["image"])
+    lead = [p for p in pool if p.name in lead_names]
+    rest = [p for p in pool if p not in lead]
     found: list[MediaCandidate] = []
 
     def enough(n: int) -> bool:
@@ -194,6 +235,55 @@ def _slide_map(project: Project, slide: Slide) -> dict | None:
         return None
 
 
+def _slide_diagram(project: Project, slide: Slide) -> dict | None:
+    """The drawn diagram a "diagram" slide asked for, or None if it won't draw.
+
+    Same contract as `_slide_map`: never raises. A spec a model wrote badly
+    enough that `diagram.normalise` rejects it leaves the slide with its
+    ordinary archive search, which is no worse off than before.
+    """
+    from .. import diagram as diagram_mod
+    spec = getattr(slide, "diagram", None)
+    if not spec:
+        return None
+    try:
+        return diagram_mod.candidate(
+            spec, project_dir(project.id) / "media", project.style.accent,
+            motion="reveal", hand=getattr(project.style, "board_hand", "marker"))
+    except Exception:
+        return None
+
+
+def _drawn_noun(slide: Slide) -> str:
+    if slide.prefer_kind == "diagram":
+        return "diagram"
+    if slide.prefer_kind == "map":
+        return "map"
+    return "designed slide"
+
+
+def _slide_custom(project: Project, slide: Slide) -> dict | None:
+    """Draw the slide's filled style, and fetch any photos it asked for.
+
+    Same contract as `_slide_diagram` — never raises. Rendered as a *still*
+    rather than the animated clip: this is the preview the Media tab shows,
+    and `render._render_custom_style` redraws it animated at the paragraph's
+    exact length anyway, so encoding thirty videos here would be thrown away.
+    The point of doing it inside gather is the archive fetch, which belongs
+    where every other archive fetch already happens.
+    """
+    from .. import custom_slide as custom_mod
+    spec = getattr(slide, "custom", None)
+    if not spec or not spec.get("elements"):
+        return None
+    try:
+        return custom_mod.candidate(
+            spec, project_dir(project.id) / "media", motion="still",
+            hand=getattr(project.style, "board_hand", "marker"))
+    except Exception:
+        return None
+
+
 def subject_query(project: Project) -> str:
     """A short, searchable stand-in for the whole video.
 
@@ -237,25 +327,36 @@ def gather(project: Project, progress: Progress = lambda m: None,
     # Fetch the subject pool once, up front. Every slide can draw on it, so a
     # slide whose specific shot does not exist is never left with a blank frame,
     # and we spend exactly one set of requests on it instead of one per slide.
-    subject_pool = search([fallback], "image", limit=24) if fallback else []
+    subject_pool = search([fallback], "image", limit=24, allow_stock=False) if fallback else []
     progress(f"Subject pool: {len(subject_pool)} general images for “{fallback}”")
 
     def work(slide: Slide) -> tuple[Slide, list[MediaCandidate], dict | None]:
         # A slide the writer marked as wanting a map still gets its normal
         # archive search too — a real photograph, if one turns out to exist,
         # is allowed to win the slot on its own merits.
-        kind = "image" if slide.prefer_kind == "map" else slide.prefer_kind
-        cands = search(slide.queries or [project.title], kind)
-        map_cand = _slide_map(project, slide) if slide.prefer_kind == "map" else None
-        return slide, cands, map_cand
+        kind = slide.prefer_kind if slide.prefer_kind == "video" else "image"
+        cands = search(slide.queries or [project.title], kind, allow_stock=kind != "image")
+        if slide.prefer_kind == "map":
+            drawn = _slide_map(project, slide)
+        elif slide.prefer_kind == "diagram":
+            drawn = _slide_diagram(project, slide)
+        elif (slide.custom or {}).get("elements"):
+            drawn = _slide_custom(project, slide)
+        else:
+            drawn = None
+        return slide, cands, drawn
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for slide, cands, map_cand in pool.map(work, targets):
+        for slide, cands, drawn in pool.map(work, targets):
             slide.candidates = [c.to_dict() for c in cands]
-            if map_cand:
-                slide.candidates.insert(0, map_cand)
+            if drawn:
+                slide.candidates.insert(0, drawn)
+                # The spec comes back with its photo fetches resolved; keeping
+                # it is what stops the render re-fetching them one by one.
+                if drawn.get("custom"):
+                    slide.custom = drawn["custom"]
             done += 1
-            note = " (+ a map)" if map_cand else ""
+            note = (f" (+ a {_drawn_noun(slide)})" if drawn else "")
             progress(f"Media {done}/{len(targets)}: {len(cands)} option(s){note} for "
                      f"“{(slide.title or slide.narration)[:42]}…”")
 

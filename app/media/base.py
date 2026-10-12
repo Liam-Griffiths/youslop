@@ -41,6 +41,7 @@ _LIMITS = {
     "openverse": (2, 0.20),
     "pexels": (3, 0.05),
     "pixabay": (3, 0.05),
+    "giphy": (3, 0.08),
     "storyblocks": (2, 0.10),
     # Nominatim's own usage policy states this limit explicitly: at most one
     # request a second. The tile servers are more permissive, but a mosaic
@@ -139,8 +140,14 @@ def is_junk(title: str, url: str) -> bool:
 
 # These providers match loosely across all their metadata, so they always return
 # *something*. Without a relevance gate the Met will happily answer an Antarctic
-# query with a Renaissance altarpiece.
-LOOSE_PROVIDERS = {"met", "openverse"}
+# query with a Renaissance altarpiece. Pixabay and Pexels belong here for the
+# same reason, just a different flavour of it: both are modern stock-photo
+# libraries with essentially no historical content, searched by matching a
+# query against user-submitted tags — so a query this app actually sends
+# ("Ernest Shackleton Endurance 1915") comes back with whatever generic "ship"
+# or "ice" stock shot tagged closest, not a rejection. That is precisely what
+# this gate exists to catch; they were just never added to it.
+LOOSE_PROVIDERS = {"met", "openverse", "pixabay", "pexels"}
 
 
 def relevant(cand: MediaCandidate, query: str) -> bool:
@@ -148,6 +155,15 @@ def relevant(cand: MediaCandidate, query: str) -> bool:
 
     One shared word is not enough: "Endurance ship night flashlight 1915" and the
     Met's "Night-Shining White" share "night" and nothing else that matters.
+
+    The percentage branch exists for long queries, where getting half the
+    words right is a real signal. It stops being one on a short query: a
+    two-word search like "humanoid robot" — exactly what script_gen writes
+    for modern b-roll — already clears 50% overlap by sharing the single word
+    "robot" with any generically-tagged stock photo, which is precisely the
+    kind of match this function exists to catch. Short queries require both
+    words shared; the percentage allowance only kicks in once there are
+    enough words for "most of them" to mean something.
     """
     if cand.provider not in LOOSE_PROVIDERS:
         return True
@@ -155,6 +171,8 @@ def relevant(cand: MediaCandidate, query: str) -> bool:
     if not q:
         return True
     hit = q & tokens(cand.title)
+    if len(q) <= 3:
+        return len(hit) >= 2
     return len(hit) >= 2 or len(hit) / len(q) >= 0.5
 
 

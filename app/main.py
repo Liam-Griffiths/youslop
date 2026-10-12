@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import io
+import json
 import mimetypes
 import os
 import re
@@ -16,16 +17,28 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from . import audio as audio_mod
+from . import reactions
+from . import llm as llm_mod
+from . import settings as settings_mod
 from . import channels, ffutil, jobs, library, media, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import intro as intro_mod
 from . import outro as outro_mod
 from . import themes as themes_mod
 from . import maps as maps_mod
+from . import board as board_mod
+from . import custom_slide as custom_mod
+from . import diagram as diagram_mod
+from . import slide_styles
 from . import youtube as youtube_mod
-from .config import CACHE_DIR, MUSIC_DIR, STATIC_DIR
+from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
 from .schema import VOICE_PRESETS, Presenter, Slide, Voice, new_channel, new_project
 from .store import project_dir
+
+# The data folders, before anything can want one. `app/__main__.py` does this
+# too; it is here as well so that importing this module directly — which is
+# what `run.sh` and any uvicorn invocation do — is enough on its own.
+ensure_dirs()
 
 app = FastAPI(title="Youslop")
 
@@ -159,7 +172,19 @@ def _ranged(path: Path, request: Request) -> Response:
 # ---------------------------------------------------------------------- pages
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+    """The shell page, with its own assets stamped by their mtime.
+
+    Without the stamp a browser that already has `app.js` in memory will keep
+    serving it after an update — which in a desktop app means a new version
+    running last version's front end, with no reload button to rescue it.
+    """
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    for asset in ("app.js", "styles.css"):
+        path = STATIC_DIR / asset
+        if path.exists():
+            html = html.replace(f"/static/{asset}",
+                                f"/static/{asset}?v={int(path.stat().st_mtime)}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 # ------------------------------------------------------------------- channels
@@ -714,6 +739,14 @@ def create_project(payload: dict = Body(...)) -> dict:
     if script:
         project.has_source = True
         project.fidelity = "adapted" if payload.get("fidelity") == "adapted" else "faithful"
+    # The two look-and-feel choices worth making before a script exists rather
+    # than after: how the pictures are staged, and how often they change. Both
+    # already have defaults from the channel (or Style()'s own), so this only
+    # overrides them when the creator actually touched the control.
+    if payload.get("format") in ("kenburns", "essay", "board"):
+        project.style.format = payload["format"]
+    if payload.get("picture_every"):
+        project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
     store.save(project)
     if script:
         (project_dir(project.id) / "source.txt").write_text(script, encoding="utf-8")
@@ -911,7 +944,31 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         if "queries" in payload:
             s.queries = [q for q in payload["queries"] if str(q).strip()][:4]
         if "prefer_kind" in payload:
-            s.prefer_kind = "video" if payload["prefer_kind"] == "video" else "image"
+            kind = str(payload["prefer_kind"])
+            s.prefer_kind = (kind if kind in ("video", "map", "diagram", "custom")
+                             else "image")
+        if "board_template" in payload:
+            key = str(payload["board_template"] or "auto")
+            if key != "auto" and key not in board_mod.TEMPLATE_KEYS:
+                raise HTTPException(400, f"No such board template: {key}")
+            s.board_template = key
+        for key in ("board_lead", "board_note"):
+            if key in payload:
+                setattr(s, key, str(payload[key]).strip()[:160])
+        if "board_points" in payload:
+            raw = payload["board_points"]
+            if isinstance(raw, str):
+                raw = raw.split("\n")
+            s.board_points = [str(p).strip()[:120] for p in raw if str(p).strip()][:6]
+        if "diagram" in payload:
+            spec = payload["diagram"]
+            if not spec:
+                s.diagram = {}
+            else:
+                try:
+                    s.diagram = diagram_mod.normalise(spec)
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    raise HTTPException(400, f"That diagram spec won't draw: {exc}")
         if "picture_mode" in payload:
             mode = str(payload["picture_mode"])
             if mode not in ("auto", "hold", "new"):
@@ -984,6 +1041,56 @@ def rewrite(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     return {"job": jobs.start("rewrite", pid, work)}
 
 
+@app.post("/api/projects/{pid}/slides/{sid}/diagram/generate")
+def generate_slide_diagram(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
+    """Ask Claude to draw a diagram for this slide — the editor's "ask Claude"
+    button. Returns the spec for the editor to preview; it is not written to
+    the slide until the creator actually picks "use it" there, same as a
+    hand-written spec gets the same review before it commits to anything.
+    """
+    p = _load(pid)
+    s = _slide(p, sid)
+
+    def work(progress):
+        progress("Asking Claude to draw this")
+        spec = script_gen.generate_diagram(p, s, payload.get("instruction", ""))
+        progress("Drawn")
+        return {"spec": spec}
+
+    return {"job": jobs.start("diagram", pid, work)}
+
+
+# ------------------------------------------------------------------- settings
+@app.get("/api/settings")
+def get_settings() -> dict:
+    """Everything the Settings page needs: every field, its current value
+    (redacted if secret), and whether a real environment variable has already
+    locked it — see app/settings.py:status()."""
+    return {"fields": settings_mod.status(), "data_dir": str(DATA)}
+
+
+@app.post("/api/settings")
+def save_settings(payload: dict = Body(...)) -> dict:
+    """Write a batch of settings. Takes effect on next launch — everything in
+    `config.py` is read once at import, same as `.env` always was."""
+    try:
+        settings_mod.save_file(payload)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"fields": settings_mod.status(), "restart_required": True}
+
+
+# ------------------------------------------------------------------------ llm
+@app.get("/api/llm/status")
+def llm_status() -> dict:
+    """Which backend script-writing will use, and why.
+
+    Read by the first-run flow and Settings — "what would run" rather than
+    "does it work", so it needs no network call or subprocess to answer.
+    """
+    return llm_mod.backend_status()
+
+
 # ---------------------------------------------------------------------- media
 @app.get("/api/providers")
 def providers() -> list[dict]:
@@ -1011,8 +1118,11 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     query = (payload.get("query") or "").strip()
     if not query:
         raise HTTPException(400, "Give me something to search for.")
-    kind = "video" if payload.get("kind") == "video" else "image"
-    found = media.search([query], kind)
+    kind = payload.get("kind") if payload.get("kind") in ("video", "reaction") else "image"
+    if kind == "reaction" and not reactions.available():
+        raise HTTPException(400, "No Giphy key configured — add one in Settings "
+                            "to search reaction GIFs.")
+    found = reactions.search(query) if kind == "reaction" else media.search([query], kind)
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)
@@ -1108,6 +1218,295 @@ def slide_map(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         s.locked_media = True
         store.save(p)
     return {"slide": s.to_dict()}
+
+
+# -------------------------------------------------------------------- board
+@app.get("/api/board/templates")
+def board_templates() -> dict:
+    """The handwritten format's ten slide templates, and the hands it writes in."""
+    return {"templates": board_mod.TEMPLATES, "hands": diagram_mod.HANDS}
+
+
+@app.post("/api/projects/{pid}/board/plan")
+def plan_boards(pid: str, payload: dict = Body(default={})) -> dict:
+    """Write the on-screen content for every slide that has none.
+
+    Additive: a board you wrote by hand is never overwritten. Pass
+    {"redo": true} to clear what is there first and have the lot rewritten.
+    """
+    _load(pid)
+    redo = bool(payload.get("redo"))
+    only = payload.get("slide_ids")
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            slides = [s for s in p.slides if only is None or s.id in only]
+            if redo:
+                for s in slides:
+                    s.board_lead, s.board_note = "", ""
+                    s.board_points, s.diagram = [], {}
+                    s.board_template = "auto"
+            script_gen.plan_boards(p, slides, progress)
+            store.save(p)
+            return {"slides": len(slides)}
+
+    return {"job": jobs.start("boards", pid, work)}
+
+
+@app.get("/api/projects/{pid}/slides/{sid}/board.png")
+def board_preview(pid: str, sid: str, t: float = 1.0) -> Response:
+    """The board this slide would draw, finished — what the editor shows.
+
+    `t` under 1 renders it part-drawn, which is how the editor previews the
+    reveal without encoding a clip for it.
+    """
+    p = _load(pid)
+    s = _slide(p, sid)
+    ch = channels.load_or_none(p.channel_id)
+    src, _, _ = render._chosen(p, s)
+    out = project_dir(pid) / "board" / f"{sid}.png"
+    try:
+        board_mod.still(p, s, out, channel=ch, image=src,
+                        at=max(0.05, min(1.0, float(t))))
+    except Exception as exc:
+        raise HTTPException(500, f"Could not draw that board: {str(exc)[:160]}")
+    return FileResponse(out, media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------------ diagrams
+@app.get("/api/diagram/kinds")
+def diagram_kinds() -> dict:
+    """The diagram layouts and how to write a spec for one.
+
+    Served rather than only documented because this is the half of the tool an
+    agent drives: read this, write a spec, POST it at a slide.
+    """
+    return {"kinds": diagram_mod.KINDS, "hands": diagram_mod.HANDS,
+            "spec": diagram_mod.SPEC_DOC, "default": diagram_mod.DEFAULT_KIND}
+
+
+@app.post("/api/diagram/preview")
+def diagram_preview(payload: dict = Body(...)) -> Response:
+    """Draw a spec and hand back the PNG, without touching any project.
+
+    The editor redraws on every keystroke that parses, so this writes nothing
+    to disk — the image comes back in the response body.
+    """
+    try:
+        spec = diagram_mod.normalise(payload.get("spec") or payload)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That spec won't draw: {exc}")
+    accent = str(payload.get("accent") or "#E8C36A")
+    hand = str(payload.get("hand") or diagram_mod.DEFAULT_HAND)
+    buf = io.BytesIO()
+    diagram_mod.render_still(spec, accent, hand=hand).save(buf, "PNG")
+    return Response(buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/diagram")
+def slide_diagram(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Draw a diagram for one slide and put it on the front of its candidates.
+
+    The manual — and agent-facing — half of the diagram tool, the same deal
+    the map picker gets: it works whatever the writer decided this slide's
+    kind should be, and the spec is kept on the slide so it can be edited
+    later rather than redrawn from scratch. `motion` is "reveal" for the
+    drawn-in clip (the default) or "still" for one flat frame.
+    """
+    try:
+        spec = diagram_mod.normalise(payload.get("spec") or payload.get("diagram") or {})
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That spec won't draw: {exc}")
+    motion = "still" if payload.get("motion") == "still" else "reveal"
+    seconds = float(payload.get("seconds") or diagram_mod.DEFAULT_SECONDS)
+
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = _slide(p, sid)
+        cand = diagram_mod.candidate(
+            spec, project_dir(pid) / "media", p.style.accent, motion=motion,
+            seconds=seconds, hand=getattr(p.style, "board_hand", "marker"))
+        if not cand:
+            raise HTTPException(500, "Could not draw that diagram.")
+        s.candidates.insert(0, cand)
+        s.chosen_id = cand["id"]
+        s.diagram = spec
+        s.prefer_kind = "diagram"
+        s.locked_media = True
+        store.save(p)
+    return {"slide": s.to_dict()}
+
+
+# -------------------------------------------------------------- custom slides
+@app.get("/api/custom/spec")
+def custom_spec() -> dict:
+    """How to write a custom slide spec, and the entrances available.
+
+    Served for the same reason the diagram kinds are: this is the half of the
+    tool an agent drives — read this, write a spec, POST it at a slide.
+    """
+    return {"spec": custom_mod.SPEC_DOC, "anims": custom_mod.ANIMS,
+            "sizes": list(custom_mod.SIZE_PX), "fonts": sorted(custom_mod.FONT_KEYS),
+            "types": sorted(custom_mod.TYPE_KEYS)}
+
+
+@app.post("/api/custom/preview")
+def custom_preview(payload: dict = Body(...)) -> Response:
+    """Draw a spec and hand back the PNG, without touching any project.
+
+    Image elements are only drawn if they already carry a `local_path` — a
+    preview must not fire archive searches on every keystroke.
+    """
+    try:
+        spec = custom_mod.normalise(payload.get("spec") or payload)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That spec won't draw: {exc}")
+    hand = str(payload.get("hand") or custom_mod.DEFAULT_HAND)
+    root = None
+    pid = str(payload.get("project_id") or "").strip()
+    if pid:
+        root = project_dir(pid) / "media"
+    buf = io.BytesIO()
+    custom_mod.render_still(spec, hand=hand, media_root=root).save(buf, "PNG")
+    return Response(buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/custom/generate")
+def generate_slide_custom(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
+    """Ask Claude to design a slide for this paragraph — the editor's
+    "ask Claude" button, and the open-ended sibling of the diagram one."""
+    p = _load(pid)
+    s = _slide(p, sid)
+
+    def work(progress):
+        progress("Asking Claude to design this slide")
+        spec = script_gen.generate_custom_slide(p, s, payload.get("instruction", ""))
+        progress("Designed")
+        return {"spec": spec}
+
+    return {"job": jobs.start("custom", pid, work)}
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/custom")
+def slide_custom(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Render a custom slide for one slide and put it in front of its
+    candidates — the same deal the diagram and map pickers get.
+
+    Any image elements are searched for and downloaded here, and the
+    resolved spec is what gets saved, so editing it later never re-fetches.
+    Runs as a job because those fetches hit the archives.
+    """
+    try:
+        spec = custom_mod.normalise(payload.get("spec") or payload.get("custom") or {})
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That spec won't draw: {exc}")
+    motion = "still" if payload.get("motion") == "still" else "reveal"
+    seconds = float(payload.get("seconds") or custom_mod.DEFAULT_SECONDS)
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = _load(pid)
+            s = _slide(p, sid)
+            progress("Finding any pictures this slide asked for")
+            cand = custom_mod.candidate(
+                spec, project_dir(pid) / "media", motion=motion, seconds=seconds,
+                hand=getattr(p.style, "board_hand", "marker"))
+            if not cand:
+                raise RuntimeError("Could not draw that slide.")
+            progress("Drawn")
+            s.candidates.insert(0, cand)
+            s.chosen_id = cand["id"]
+            s.custom = cand["custom"]
+            s.prefer_kind = "custom"
+            s.locked_media = True
+            store.save(p)
+            return {"slide": s.to_dict()}
+
+    return {"job": jobs.start("custom", pid, work)}
+
+
+# ------------------------------------------------------------- slide styles
+@app.get("/api/slide-styles")
+def list_slide_styles() -> list[dict]:
+    """The saved slide designs, as they appear in the Video style picker."""
+    return slide_styles.list_styles()
+
+
+@app.post("/api/slide-styles/design")
+def design_slide_style(payload: dict = Body(default={})) -> dict:
+    """Ask Claude for a slide style from a description, before any video exists.
+
+    The home page's way in: there is no project and no paragraph here, so the
+    brief is the whole input. Runs as a job because it is a model call, and
+    is not tied to a project, so it is parked under the styles collection.
+    """
+    def work(progress):
+        progress("Asking Claude to design a style")
+        spec = script_gen.design_slide_style(
+            str(payload.get("description") or ""),
+            str(payload.get("accent") or "#E8C36A"))
+        progress("Designed")
+        return {"spec": spec}
+
+    return {"job": jobs.start("style", "", work)}
+
+
+@app.post("/api/slide-styles")
+def create_slide_style(payload: dict = Body(...)) -> dict:
+    """Keep a design from the slide editor as a reusable named style."""
+    try:
+        spec = custom_mod.normalise(payload.get("spec") or {})
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That spec won't draw: {exc}")
+    return slide_styles.save(payload.get("name", ""), spec,
+                             hand=str(payload.get("hand") or custom_mod.DEFAULT_HAND))
+
+
+@app.get("/api/slide-styles/{style_id}/export")
+def export_slide_style(style_id: str) -> Response:
+    """A style as one portable JSON file — name and spec, nothing local."""
+    bundle = slide_styles.export_bundle(style_id)
+    if not bundle:
+        raise HTTPException(404, "No such style.")
+    slug = re.sub(r"[^a-z0-9]+", "-", bundle["name"].lower()).strip("-") or "style"
+    body = json.dumps(bundle, indent=2, ensure_ascii=False)
+    return Response(body, media_type="application/json", headers={
+        "Content-Disposition": f'attachment; filename="{slug}.youslop-style.json"'})
+
+
+@app.post("/api/slide-styles/import")
+def import_slide_style(payload: dict = Body(...)) -> dict:
+    """Read a style bundle someone exported and add it to this library."""
+    try:
+        return slide_styles.import_bundle(payload)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"That doesn't look like a slide style: {exc}")
+
+
+@app.get("/api/slide-styles/{style_id}/thumb.jpg")
+def slide_style_thumb(style_id: str) -> FileResponse:
+    path = slide_styles.thumb_path(style_id)
+    if not path.is_file():
+        raise HTTPException(404, "No thumbnail for that style.")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.patch("/api/slide-styles/{style_id}")
+def rename_slide_style(style_id: str, payload: dict = Body(...)) -> dict:
+    if not slide_styles.rename(style_id, payload.get("name", "")):
+        raise HTTPException(404, "No such style.")
+    return {"ok": True}
+
+
+@app.delete("/api/slide-styles/{style_id}")
+def delete_slide_style(style_id: str) -> dict:
+    if not slide_styles.remove(style_id):
+        raise HTTPException(404, "No such style.")
+    return {"deleted": style_id}
 
 
 # ------------------------------------------------------------------ thumbnail
@@ -1747,6 +2146,61 @@ def delete_library_asset(asset_id: str) -> dict:
     if not library.remove(asset_id):
         raise HTTPException(404, "No such asset")
     return {"deleted": asset_id}
+
+
+# --------------------------------------------------------------- folders
+@app.get("/api/library/folders")
+def list_library_folders() -> list[dict]:
+    return library.list_folders()
+
+
+@app.post("/api/library/folders")
+def add_library_folder(payload: dict = Body(...)) -> dict:
+    """Start tracking a folder. Scanning it is a separate step — see below —
+    so a slow walk of a large folder shows progress instead of this call
+    hanging until it's done."""
+    path = (payload.get("path") or "").strip()
+    if not path:
+        raise HTTPException(400, "Give me a folder path.")
+    try:
+        return library.add_folder(path, label=(payload.get("label") or "").strip())
+    except NotADirectoryError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/library/folders/{folder_id}/scan")
+def scan_library_folder(folder_id: str) -> dict:
+    def work(progress):
+        return library.scan_folder(folder_id, progress)
+
+    return {"job": jobs.start("library-scan", "", work)}
+
+
+@app.delete("/api/library/folders/{folder_id}")
+def remove_library_folder(folder_id: str) -> dict:
+    dropped = library.remove_folder(folder_id)
+    return {"deleted": folder_id, "assets_dropped": dropped}
+
+
+# Set by app/desktop.py, in the same process, when a native folder dialog is
+# actually available — pywebview's, not this server's. A plain browser tab
+# (dev mode, or the Record-tab fallback over a LAN) cannot hand a real
+# filesystem path back from any file input for security reasons, and has no
+# business doing so for a server it may not even be running on the same
+# machine as; this stays None there, and the UI falls back to a text field.
+FOLDER_DIALOG: "Callable[[], str] | None" = None
+
+
+@app.post("/api/pick-folder")
+def pick_folder_dialog() -> dict:
+    """Ask the native folder picker for a path, when one is available."""
+    if FOLDER_DIALOG is None:
+        raise HTTPException(501, "No native folder picker in this context — "
+                             "type or paste the path instead.")
+    path = FOLDER_DIALOG()
+    if not path:
+        raise HTTPException(409, "No folder chosen.")
+    return {"path": path}
 
 
 @app.get("/api/library/file/{asset_id}")

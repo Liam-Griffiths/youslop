@@ -2,6 +2,9 @@ fastapi>=0.115
 uvicorn[standard]>=0.32
 pillow>=11.0
 httpx>=0.27
+# The second way to reach Claude: a direct API key, for a machine that
+# was never going to have the Claude Code CLI installed. See app/llm.py.
+anthropic>=1.0
 python-multipart>=0.0.12
 
 # The local narrator. Optional: everything else works without it,

@@ -69,13 +69,85 @@ button, input, textarea, select { font: inherit; color: inherit; }
   font-weight: 800; font-size: 18px; letter-spacing: -.01em;
 }
 .wordmark em { font-style: normal; color: var(--accent); }
-.topbar-nav { display: flex; align-items: center; gap: 16px; font-size: 13.5px; }
-.topbar-nav a { color: var(--ink-dim); cursor: pointer; text-decoration: none; }
-.topbar-nav a:hover { color: var(--ink); }
 .topbar-right { display: flex; align-items: center; gap: 10px; font-size: 13px;
   color: var(--ink-dim); margin-left: auto; }
 
-main { max-width: 1180px; margin: 0 auto; padding: 28px 22px 120px; }
+/* The hamburger only ever appears once CSS hides the sidebar at narrow
+   widths — see the media query at the bottom of this section. */
+.sidebar-toggle {
+  display: none; flex-direction: column; justify-content: center; gap: 3px;
+  width: 30px; height: 30px; background: none; border: none; cursor: pointer;
+  padding: 0; margin-right: 2px;
+}
+.sidebar-toggle span { display: block; width: 16px; height: 1.5px; background: var(--ink-dim); }
+
+/* --------------------------------------------------------------- app shell
+   A sidebar for standing navigation (new video, library, channels, settings)
+   beside a main pane that keeps doing exactly what it always did — route()
+   still just swaps #view's innerHTML. The topbar above it stays for brand
+   and whatever contextual status a page wants to show on the right. */
+.app-shell { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
+
+/* Sticky, not stretched: the page itself scrolls (main's content is often
+   several screens tall), and a sidebar that stretched to match it would put
+   its own footer — Settings — far below the fold. Pinning it to the viewport
+   with its own internal scroll is what "sidebar" means in every app this is
+   trying to feel like. */
+.sidebar {
+  flex: 0 0 222px; width: 222px; display: flex; flex-direction: column;
+  padding: 18px 12px; gap: 4px;
+  border-right: 1px solid var(--line-soft);
+  background: rgba(255,255,255,.012);
+  position: sticky; top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 7px;
+  color: var(--ink-dim); text-decoration: none; cursor: pointer;
+  font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background .12s, color .12s;
+}
+.sidebar-link:hover { background: var(--panel-2); color: var(--ink); }
+.sidebar-link.active { background: var(--panel-2); color: var(--ink); }
+.sidebar-link.active .sidebar-icon { color: var(--accent); }
+.sidebar-icon { width: 16px; text-align: center; flex: none; color: var(--ink-faint); font-size: 13px; }
+.sidebar-link.new { color: var(--accent); font-weight: 600; }
+.sidebar-link.new .sidebar-icon { color: var(--accent); }
+
+.sidebar-section { margin-top: 16px; }
+.sidebar-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px; margin-bottom: 4px;
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sidebar-add {
+  background: none; border: none; color: var(--ink-faint); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.sidebar-add:hover { color: var(--ink); background: var(--panel-2); }
+
+.sidebar-spacer { flex: 1; }
+.sidebar-footer { border-top: 1px solid var(--line-soft); padding-top: 10px; margin-top: 8px; }
+
+main {
+  flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto;
+  padding: 28px 22px 120px;
+}
+
+@media (max-width: 860px) {
+  .sidebar-toggle { display: flex; }
+  .app-shell { position: relative; }
+  .sidebar {
+    position: fixed; top: 56px; bottom: 0; left: 0; z-index: 50;
+    background: var(--bg); transform: translateX(-100%);
+    transition: transform .18s ease; box-shadow: 2px 0 20px rgba(0,0,0,.4);
+  }
+  .sidebar.open { transform: translateX(0); }
+}
 
 /* ------------------------------------------------------------------- type */
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
@@ -108,7 +180,8 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 .btn.rec.armed { animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .72 } }
 
-input[type=text], input[type=number], textarea, select {
+input[type=text], input[type=number], input[type=password], input[type=email],
+input[type=url], textarea, select {
   width: 100%; background: #0f1116; border: 1px solid var(--line);
   border-radius: 8px; padding: 9px 12px; outline: none; resize: vertical;
 }

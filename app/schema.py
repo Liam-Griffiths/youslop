@@ -87,6 +87,23 @@ class Slide:
     # auto = follow the channel's picture_every rule; hold = keep the picture
     # already on screen; new = always start a fresh picture here.
     picture_mode: str = "auto"            # auto | hold | new
+    # What the handwritten board format draws for this paragraph. All of it is
+    # optional: a slide with none of it set gets a lead and some points derived
+    # from its own narration, and "auto" picks the template that fits whatever
+    # it has. Ignored entirely by the other two formats. See app/board.py.
+    board_template: str = "auto"          # auto | a key from board.TEMPLATES
+    board_lead: str = ""                  # the line the slide is about
+    board_points: list[str] = field(default_factory=list)   # the lines under it
+    board_note: str = ""                  # footnote, caption or attribution
+    # A diagram spec — the thing app/diagram.py draws. Set by the diagram
+    # editor, by the writer, or by an agent calling the diagram endpoint.
+    # Rendered as a media candidate like any picture, and drawn full-frame by
+    # the board format's "diagram" template.
+    diagram: dict = field(default_factory=dict)
+    # A custom slide spec — positioned text, shapes and archive photos, each
+    # on its own reveal beat. What the diagram spec is for a shape, this is
+    # for a layout no template anticipated. See app/custom_slide.py.
+    custom: dict = field(default_factory=dict)
 
     @property
     def word_count(self) -> int:
@@ -127,8 +144,10 @@ class Style:
     # How the pictures are staged. "kenburns" is the documentary cut: the
     # picture fills the frame and drifts. "essay" is the video-essay cut: the
     # whole picture sits inside a bordered slide over a blurred version of
-    # itself, and the narration is set on screen as captions. See render.py.
-    format: str = "kenburns"        # kenburns | essay
+    # itself, and the narration is set on screen as captions. "board" is the
+    # handwritten cut: white ink on a grey-blue slide that fills up as you
+    # talk, pictures taped onto it rather than filling it. See render.py.
+    format: str = "kenburns"        # kenburns | essay | board
     vignette: float = 0.34          # 0 = off, 1 = heavy
     ken_burns: bool = True
     ken_burns_amount: float = 0.10  # fractional zoom over a slide
@@ -151,6 +170,15 @@ class Style:
     # Base silence after each paragraph. The actual pause varies around this with
     # how the paragraph ended — see audio.paragraph_gaps.
     paragraph_gap: float = 0.42
+    # The board format's four knobs, ignored by the other two. `board_hand` is
+    # which handwriting it is lettered in (see diagram.HANDS), `board_ground`
+    # the colour of the board itself, `board_grain` how much tooth the surface
+    # has, and `board_settle` how long one element takes to arrive once its
+    # turn comes.
+    board_hand: str = "marker"      # marker | bradley | chalk | casual
+    board_ground: str = "#3A4552"
+    board_grain: float = 0.5
+    board_settle: float = 0.5
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
