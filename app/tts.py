@@ -103,10 +103,11 @@ def status() -> dict:
         "default_voice": DEFAULT_VOICE,
         "detail": (
             "" if installed and weights
-            else "The kokoro-onnx package is not installed. "
-                 "`pip install kokoro-onnx soundfile`" if not installed
-            else f"The model files are missing from {KOKORO_MODEL.parent}. "
-                 "See the README for the two downloads."
+            else (
+                "pip install kokoro-onnx soundfile"
+                if not installed
+                else f"Model files missing from {KOKORO_MODEL.parent}"
+            )
         ),
     }
 

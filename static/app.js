@@ -52,6 +52,143 @@ function fmtTime(sec) {
 
 function go(hash) { location.hash = hash; }
 
+// ------------------------------------------------------------------ sidebar
+// The channel list is fetched once and kept in state.channels — every page
+// that already loads channels (home, a project, a channel) refreshes it, and
+// paintSidebar() just reads whatever is there, so the sidebar never needs a
+// request of its own and never goes stale by more than one navigation.
+function toggleSidebar() {
+  $('#sidebar').classList.toggle('open');
+}
+
+function paintSidebar() {
+  const hash = location.hash || '#/';
+  const chanId = (hash.match(/^#\/c\/([^/]+)/) || [])[1];
+  const onLibrary = hash === '#/library';
+  const onSettings = hash === '#/settings';
+
+  $('.sidebar-link[data-route="library"]')?.classList.toggle('active', onLibrary);
+  $('.sidebar-link[data-route="settings"]')?.classList.toggle('active', onSettings);
+
+  const box = $('#sidebar-channels');
+  if (!box) return;
+  const chans = state.channels || [];
+  box.innerHTML = chans.length
+    ? chans.map((c) => `
+        <a class="sidebar-link ${c.id === chanId ? 'active' : ''}"
+           onclick="go('#/c/${c.id}')" title="${esc(c.name)}">
+          <span class="sidebar-icon">◆</span>${esc(c.name)}</a>`).join('')
+    : `<span class="sidebar-link" style="color:var(--ink-faint);cursor:default">
+         no channels yet</span>`;
+
+  // A narrow-viewport sidebar is an overlay the user opened on purpose;
+  // close it once they've actually gone somewhere.
+  if (window.innerWidth <= 860) $('#sidebar').classList.remove('open');
+}
+
+// Channels change rarely enough that one fetch per route is wasted work —
+// cached here and refreshed only when a page already needed the list anyway
+// (home, or after creating/renaming one) or it has never been loaded.
+async function ensureChannelsLoaded() {
+  if (!state.channels) {
+    try { state.channels = await api('/api/channels'); }
+    catch { state.channels = []; }
+  }
+  paintSidebar();
+}
+
+// ----------------------------------------------------------------- settings
+// Replaces hand-editing .env: everything app/settings.py knows how to
+// configure, grouped and labelled. A secret field never carries its real
+// value back from the server — only whether one is set — so saving must only
+// ever send fields the user actually touched this session, tracked here by
+// id; resending the whole form on every save would blank out every secret
+// the user didn't mean to change.
+const settingsDirty = new Set();
+
+function settingsFieldRow(f) {
+  const id = `set_${f.key}`;
+  const placeholder = f.secret
+    ? (f.set ? '•••••••••••••• (set — leave blank to keep)' : 'not set')
+    : '';
+  const value = f.secret ? '' : esc(f.value || '');
+  const badge = f.locked
+    ? `<span class="pill warn" style="margin-left:6px" title="A real environment variable (${esc(f.env)}) is set outside Youslop and overrides this">locked by environment</span>`
+    : f.set ? `<span class="pill on" style="margin-left:6px">set</span>` : '';
+  // A field with a fixed, correct set of answers gets a <select> instead of
+  // free text — which model, which backend, how hard it thinks are all
+  // typo-prone as text and every wrong value fails the same way: a rejected
+  // API call three steps later with no hint why.
+  // An unset select shows what it would actually resolve to (f.default),
+  // not just whichever option happens to be listed first.
+  const effective = f.value || f.default;
+  const control = f.options.length
+    ? `<select id="${id}" ${f.locked ? 'disabled' : ''}
+         onchange="settingsDirty.add('${f.key}')">
+         ${f.options.map((o) => `<option value="${esc(o.value)}"
+           ${o.value === effective ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+       </select>`
+    : `<input id="${id}" type="${f.secret ? 'password' : 'text'}"
+         value="${value}" placeholder="${esc(placeholder)}"
+         ${f.locked ? 'disabled' : ''}
+         oninput="settingsDirty.add('${f.key}')">`;
+  return `
+    <label class="field">
+      <span>${esc(f.label)} ${badge}</span>
+      ${control}
+      ${f.help ? `<div class="mono" style="color:var(--ink-faint);margin-top:5px;font-size:12px">${esc(f.help)}</div>` : ''}
+    </label>`;
+}
+
+async function renderSettings() {
+  view.innerHTML = `<div class="empty-note">${slopLine()}</div>`;
+  let data;
+  try { data = await api('/api/settings'); }
+  catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
+  settingsDirty.clear();
+
+  const groups = [];
+  for (const f of data.fields) {
+    let g = groups.find((x) => x.name === f.group);
+    if (!g) { g = { name: f.group, fields: [] }; groups.push(g); }
+    g.fields.push(f);
+  }
+
+  view.innerHTML = `
+    <h1>Settings</h1>
+    <p class="sub">What used to live in a <span class="mono">.env</span> file you hand-edited.
+      Changes take effect the next time Youslop starts.</p>
+    <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">
+      Data folder: ${esc(data.data_dir)}</p>
+
+    <div id="settings-groups">
+      ${groups.map((g) => `
+        <h2 style="font-size:15px;margin:26px 0 10px">${esc(g.name)}</h2>
+        <div class="panel">
+          ${g.fields.map(settingsFieldRow).join('')}
+        </div>`).join('')}
+    </div>
+
+    <div class="row" style="margin-top:22px;position:sticky;bottom:18px">
+      <button class="btn primary" onclick="saveSettingsForm()">save</button>
+      <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
+    </div>`;
+}
+
+async function saveSettingsForm() {
+  const payload = {};
+  for (const key of settingsDirty) {
+    const el = $(`#set_${key}`);
+    if (el) payload[key] = el.value;
+  }
+  if (!Object.keys(payload).length) return toast('Nothing changed');
+  try {
+    await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+    toast('Saved — takes effect next launch');
+    await renderSettings();
+  } catch (e) { toast(e.message, true); }
+}
+
 // One of these per loading spinner, not per repaint — picked once when a wait
 // starts and held steady, so it reads as a little personality rather than a
 // flicker. Kept to kitchen metaphors (the good half of "slop"): a process word,
@@ -132,11 +269,20 @@ function jobPanel() {
 async function route() {
   const hash = location.hash || '#/';
   const proj = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?/);
-  const chan = hash.match(/^#\/c\/([^/]+)/);
+  const chan = hash.match(/^#\/c\/([^/]+)(?:\/(\w+))?/);
   const lib = hash === '#/library';
+  const settingsPage = hash === '#/settings';
   stopStream();
+  // Every format picker (home, channel, project) paints from this, so it is
+  // loaded once here rather than awaited in three places.
+  await ensureSlideStyles();
 
-  if (lib) {
+  if (settingsPage) {
+    state.project = null;
+    state.channel = null;
+    state.job = null;
+    await renderSettings();
+  } else if (lib) {
     state.project = null;
     state.channel = null;
     state.job = null;
@@ -147,6 +293,15 @@ async function route() {
     if (!state.thumbStyles) {
       try { state.thumbStyles = await api('/api/thumbs/templates'); }
       catch { state.thumbStyles = []; }
+    }
+    if (!state.boardTemplates) {
+      try {
+        const b = await api('/api/board/templates');
+        state.boardTemplates = b.templates;
+        state.boardHands = b.hands;
+      } catch { state.boardTemplates = []; }
+      try { state.diagramKinds = (await api('/api/diagram/kinds')).kinds; }
+      catch { state.diagramKinds = []; }
     }
     if (!state.project || state.project.id !== proj[1]) {
       state.project = null;
@@ -159,6 +314,7 @@ async function route() {
     render();
   } else if (chan) {
     state.project = null;
+    state.channelTab = chan[2] === 'setup' ? 'setup' : 'videos';
     if (!state.templates) {
       try { state.templates = await api('/api/intro/templates'); }
       catch { state.templates = []; }
@@ -190,6 +346,7 @@ async function route() {
     state.job = null;
     await renderHome();
   }
+  await ensureChannelsLoaded();
 }
 
 window.addEventListener('hashchange', route);
@@ -243,7 +400,7 @@ async function renderHome() {
           <span>Channel</span>
           <select id="chan" onchange="channelPicked()">
             <option value="">— standalone video —</option>
-            ${chans.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+            ${chans.map((c) => `<option value="${c.id}" ${c.id === state.presetChannel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
           </select>
         </label>
         ${state.mode === 'script' ? `
@@ -267,6 +424,20 @@ async function renderHome() {
           </select>
         </label>
       </div>
+
+      <label class="field"><span>Video style</span></label>
+      ${formatPicker(state.newFormat || 'kenburns', '#E8C36A', 'pickNewFormat')}
+
+      <label class="field">
+        <span id="everyLabel">${pictureEveryLabel(state.newPictureEvery || 1)}</span>
+        <input type="range" id="every" min="1" max="6" value="${state.newPictureEvery || 1}"
+               oninput="state.newPictureEvery=+this.value;
+                 document.getElementById('everyLabel').textContent=pictureEveryLabel(+this.value);"></label>
+      <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
+        1 is a new picture every paragraph. Raise it when the archives for this
+        subject are likely to be thin — fewer pictures to find, each held
+        longer. Changeable later on the Media tab.</div>
+
       <div class="row">
         <button class="btn primary" onclick="createProject()">
           ${state.mode === 'script' ? 'Break it into a video' : 'Write the script'}</button>
@@ -302,6 +473,10 @@ async function renderHome() {
     ${loose.length === 0 ? '<div class="empty-note">Bucket\'s empty. Go make some slop.</div>'
       : loose.map(projRow).join('')}
   `;
+  if (state.presetChannel) {
+    state.presetChannel = null;
+    channelPicked();
+  }
 }
 
 function projRow(p) {
@@ -329,14 +504,47 @@ function projRow(p) {
 state.library = { items: [], q: '', kind: '', file: null };
 
 async function renderLibrary() {
-  state.library.items = await api('/api/library');
+  const [items, folders] = await Promise.all([
+    api('/api/library'), api('/api/library/folders'),
+  ]);
+  state.library.items = items;
+  state.library.folders = folders;
   view.innerHTML = `
     <h1>Library</h1>
     <p class="sub">Your own royalty-free stock — downloaded by hand, tagged here,
       and searched alongside the archives for every slide in every project.</p>
 
+    ${jobPanel()}
+
     <div class="card" style="margin-bottom:22px">
-      <h3>Add to the library</h3>
+      <h3>Linked folders</h3>
+      <p class="mono" style="color:var(--ink-faint);margin:-4px 0 14px">
+        Point this at a folder of your own photos or footage and it is indexed
+        in place — nothing is copied, only a small thumbnail per file. Rescan
+        any time to pick up what changed.</p>
+      ${folders.map((f) => `
+        <div class="row" style="margin-bottom:8px;padding:9px 12px;background:#0f1116;
+             border:1px solid var(--line-soft);border-radius:8px">
+          <div style="flex:1;min-width:0">
+            <strong>${esc(f.label || f.path.split('/').pop())}</strong>
+            ${f.exists ? '' : '<span class="pill warn" style="margin-left:6px">missing</span>'}
+            <div class="mono" style="color:var(--ink-faint);font-size:12px;
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.path)}</div>
+          </div>
+          <span class="mono" style="color:var(--ink-faint)">${f.asset_count} asset${f.asset_count === 1 ? '' : 's'}</span>
+          <button class="btn sm ghost" onclick="rescanLibraryFolder('${f.id}')">rescan</button>
+          <button class="btn sm ghost" onclick="removeLibraryFolder('${f.id}')">remove</button>
+        </div>`).join('') || `<div class="empty-note" style="padding:14px">no folders linked yet</div>`}
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="libfolderpath" placeholder="/path/to/your/photos"
+          style="flex:1;min-width:220px">
+        <button class="btn sm ghost" id="libfolderbrowse" onclick="browseForLibraryFolder()">browse…</button>
+        <button class="btn sm primary" onclick="addLibraryFolder()">add folder</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:22px">
+      <h3>Add a single file</h3>
       <div class="row" style="margin-bottom:10px">
         <label class="btn sm" style="cursor:pointer">choose a file
           <input type="file" id="libfile" accept="image/*,video/*" hidden
@@ -369,6 +577,46 @@ async function renderLibrary() {
     <div class="lib-grid" id="libgrid"></div>
   `;
   paintLibraryGrid();
+}
+
+// --------------------------------------------------------------- folders
+async function browseForLibraryFolder() {
+  try {
+    const r = await api('/api/pick-folder', { method: 'POST' });
+    $('#libfolderpath').value = r.path;
+  } catch (e) {
+    // 501 here just means "not running inside the desktop app" — the text
+    // field below is the fallback, not an error worth a toast over.
+    if (!String(e.message).includes('501')) toast(e.message, true);
+  }
+}
+
+async function addLibraryFolder() {
+  const path = $('#libfolderpath').value.trim();
+  if (!path) return toast('Enter a folder path first.', true);
+  try {
+    const f = await api('/api/library/folders', {
+      method: 'POST', body: JSON.stringify({ path }),
+    });
+    toast('Folder added — scanning…');
+    await renderLibrary();
+    await rescanLibraryFolder(f.id);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function rescanLibraryFolder(folderId) {
+  const r = await api(`/api/library/folders/${folderId}/scan`, { method: 'POST' });
+  watchJob(r.job, 'library scan', async () => { await renderLibrary(); });
+  await renderLibrary();   // paints the now-set state.job so ticks have
+                            // #joblog/#jobstate to update in place
+}
+
+async function removeLibraryFolder(folderId) {
+  if (!confirm('Stop tracking this folder? Its entries leave the library — ' +
+               'the files on disk are never touched.')) return;
+  await api(`/api/library/folders/${folderId}`, { method: 'DELETE' });
+  toast('Folder removed from the library.');
+  await renderLibrary();
 }
 
 function pickLibraryFile(file) {
@@ -492,13 +740,28 @@ async function deleteLibraryAsset(id) {
 
 function channelPicked() {
   const c = (state.channels || []).find((x) => x.id === $('#chan').value);
-  if (!c) return;
-  toast(`New videos will use “${c.name}”’s look and opening slate.`);
+  // Standalone again: back to this form's own defaults rather than whatever
+  // the last-picked channel left behind.
+  state.newFormat = c ? c.format : 'kenburns';
+  state.newPictureEvery = c ? (c.picture_every || 1) : 1;
+  const strip = $('#fmtpicker');
+  if (strip) strip.querySelectorAll('.tpl').forEach((el) =>
+    el.classList.toggle('sel', el.dataset.fmt === state.newFormat));
+  const every = $('#every'), label = $('#everyLabel');
+  if (every) every.value = state.newPictureEvery;
+  if (label) label.textContent = pictureEveryLabel(state.newPictureEvery);
+  if (c) toast(`New videos will use “${c.name}”’s look and opening slate.`);
+}
+
+function pictureEveryLabel(n) {
+  return `New picture every — ${n} ${n === 1 ? 'paragraph' : 'paragraphs'}`;
 }
 
 async function createProject() {
   const scripting = state.mode === 'script';
-  const body = { tone: $('#tone').value, channel_id: $('#chan').value || '' };
+  const body = { tone: $('#tone').value, channel_id: $('#chan').value || '',
+                 format: state.newFormat || 'kenburns',
+                 picture_every: state.newPictureEvery || 1 };
 
   if (scripting) {
     const script = $('#script').value.trim();
@@ -531,6 +794,7 @@ async function newChannel() {
     '') || '';
   try {
     const c = await api('/api/channels', { method: 'POST', body: JSON.stringify({ name, concept }) });
+    state.channels = null;   // the sidebar's cache — force it to pick up the new one
     go(`#/c/${c.id}`);
     await route();
   } catch (e) { toast(e.message, true); }
@@ -639,6 +903,166 @@ function setCastFocal(i) {
 async function refreshChannel() {
   state.channel = await api(`/api/channels/${state.channel.id}`);
   paintChannel();
+}
+
+// A 140×78 sketch of the three ways a picture can sit on screen — "I need to
+// be able to select templates for videos, with a basic preview" — matching
+// the same illustrative-icon pattern tplArt/thumbArt already use elsewhere,
+// so this is one more instance of a pattern rather than a new one.
+function formatArt(key, accent) {
+  const a = esc(accent);
+  const svg = {
+    kenburns: `<rect width="140" height="78" fill="#1c222c"/>
+      <rect x="-6" y="-4" width="152" height="90" fill="#2a3444"/>
+      <circle cx="96" cy="26" r="30" fill="#374254" opacity=".6"/>
+      <rect x="0" y="54" width="140" height="24" fill="#000" opacity=".38"/>
+      <rect x="10" y="60" width="5" height="12" fill="${a}"/>
+      <rect x="20" y="61" width="52" height="4" fill="#fff"/>
+      <rect x="20" y="68" width="34" height="3" fill="#9aa0b0"/>`,
+    essay: `<rect width="140" height="78" fill="#15171c"/>
+      <rect x="0" y="0" width="140" height="78" fill="#1e222b"/>
+      <rect x="30" y="8" width="80" height="46" fill="#2a3444"/>
+      <rect x="30" y="8" width="80" height="46" fill="none" stroke="${a}" stroke-width="3"/>
+      <rect x="18" y="60" width="104" height="7" fill="#fff" opacity=".92"/>
+      <rect x="30" y="70" width="80" height="5" fill="#fff" opacity=".55"/>`,
+    board: `<rect width="140" height="78" fill="#3A4552"/>
+      <path d="M12 20h46" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M12 24h30" stroke="${a}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M14 38h10M14 50h10M14 62h10" stroke="#aab0bc" stroke-width="2" stroke-linecap="round"/>
+      <path d="M30 38h58M30 50h46M30 62h50" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".9"/>`,
+  }[key] || '<rect width="140" height="78" fill="#14151a"/>';
+  return `<svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">${svg}</svg>`;
+}
+
+const FORMAT_INFO = [
+  { key: 'kenburns', label: 'Documentary', blurb: 'The picture fills the frame and drifts.' },
+  { key: 'essay', label: 'Video essay', blurb: 'The picture sits in a slide, narration on screen.' },
+  { key: 'board', label: 'Handwritten board', blurb: 'White marker on slate, written as you talk.' },
+];
+
+// Saved slide styles sit in this same picker — a design kept from the slide
+// editor is a way to stage a video, exactly like the three built-in formats,
+// so it belongs beside them rather than in a list of its own. Loaded once and
+// cached on `state`; `ensureSlideStyles()` is what route handlers await before
+// painting a picker.
+async function ensureSlideStyles() {
+  if (!state.slideStyles) {
+    try { state.slideStyles = await api('/api/slide-styles'); }
+    catch { state.slideStyles = []; }
+  }
+  return state.slideStyles;
+}
+
+// `onPick(key)` is called with the chosen key; the caller decides whether
+// that means an immediate save-and-repaint (an existing project or channel)
+// or just remembering the choice for a form that hasn't been submitted yet
+// (the home page, before a project exists to save it to).
+function formatPicker(current, accent, onPickName) {
+  current = current || 'kenburns';
+  const saved = state.slideStyles || [];
+  return `<div class="tpl-strip" id="fmtpicker">
+    ${FORMAT_INFO.map((f) => `
+      <div class="tpl ${f.key === current ? 'sel' : ''}" data-fmt="${f.key}"
+           onclick="${onPickName}('${f.key}')">
+        ${formatArt(f.key, accent)}
+        <div class="tpl-name">${esc(f.label)}</div>
+        <div class="tpl-cast">${esc(f.blurb)}</div>
+      </div>`).join('')}
+    ${saved.map((s) => {
+      const key = `custom:${s.id}`;
+      return `<div class="tpl ${key === current ? 'sel' : ''}" data-fmt="${esc(key)}"
+           onclick="${onPickName}('${esc(key)}')">
+        <img class="tpl-art" src="/api/slide-styles/${s.id}/thumb.jpg"
+             style="object-fit:cover" loading="lazy">
+        <div class="tpl-name">${esc(s.name)}</div>
+        <div class="tpl-cast">your style · ${s.slots} slot${s.slots === 1 ? '' : 's'}
+          <button class="btn xs ghost" style="margin-left:6px" title="export this style as a file"
+            onclick="event.stopPropagation();exportSlideStyle('${s.id}','${esc(s.name).replace(/'/g, "\\'")}')">↓</button>
+          <button class="btn xs ghost danger" style="margin-left:4px"
+            onclick="event.stopPropagation();deleteSlideStyle('${s.id}')">×</button></div>
+      </div>`;
+    }).join('')}
+    <div class="tpl" id="newstyletile" onclick="openStyleDesigner()"
+         title="describe a look and have Claude design it">
+      <svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">
+        <rect width="140" height="78" fill="#13151c"/>
+        <rect x="8" y="8" width="124" height="62" fill="none" stroke="${esc(accent)}"
+              stroke-width="2" stroke-dasharray="6 5" opacity=".75"/>
+        <path d="M70 28v22M59 39h22" stroke="${esc(accent)}" stroke-width="3"
+              stroke-linecap="round"/>
+      </svg>
+      <div class="tpl-name">Design a style…</div>
+      <div class="tpl-cast">describe a look, Claude draws it</div>
+    </div>
+    <label class="tpl" id="importstyletile" style="cursor:pointer"
+           title="add a style someone exported">
+      <svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">
+        <rect width="140" height="78" fill="#13151c"/>
+        <rect x="8" y="8" width="124" height="62" fill="none" stroke="#565c6c"
+              stroke-width="2" stroke-dasharray="6 5" opacity=".75"/>
+        <path d="M70 24v20M62 34l8 10 8-10M58 56h24" fill="none" stroke="#9aa0b0"
+              stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="tpl-name">Import a style…</div>
+      <div class="tpl-cast">add a style file someone shared</div>
+      <input type="file" accept=".json,application/json" hidden
+             onchange="importSlideStyle(this.files[0]);this.value=''">
+    </label>
+  </div>`;
+}
+
+async function exportSlideStyle(id, name) {
+  try {
+    const res = await fetch(`/api/slide-styles/${id}/export`);
+    if (!res.ok) throw new Error((await res.json()).detail || 'export failed');
+    const blob = await res.blob();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'style';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${slug}.youslop-style.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function importSlideStyle(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { throw new Error('that file is not valid JSON'); }
+    const r = await api('/api/slide-styles/import',
+      { method: 'POST', body: JSON.stringify(data) });
+    state.slideStyles = null;
+    await ensureSlideStyles();
+    toast(`imported — “${r.name}” is now a video style`);
+    route();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteSlideStyle(id) {
+  if (!confirm('Delete this slide style? Videos already using it keep their look '
+    + 'until you pick another.')) return;
+  try {
+    await api(`/api/slide-styles/${id}`, { method: 'DELETE' });
+    state.slideStyles = null;
+    await ensureSlideStyles();
+    toast('style deleted');
+    route();
+  } catch (e) { toast(e.message, true); }
+}
+
+// The home form's own picker: nothing exists to save to yet, so a pick just
+// updates state and repaints the strip in place — the surrounding idea/script
+// textarea must not be touched, or a half-typed idea would vanish under the
+// user's cursor.
+function pickNewFormat(key) {
+  state.newFormat = key;
+  const strip = $('#fmtpicker');
+  if (!strip) return;
+  strip.querySelectorAll('.tpl').forEach((el) =>
+    el.classList.toggle('sel', el.dataset.fmt === key));
 }
 
 // A 140×78 sketch of each slate, so the picker shows the shape of the thing
@@ -1153,6 +1577,49 @@ async function disconnectYoutube() {
 function paintChannel() {
   const c = state.channel;
   if (!c) return;
+  if (state.channelTab === 'setup') paintChannelSetup();
+  else paintChannelOverview();
+}
+
+// The landing page for a channel — what it's hard to find today, buried
+// under the whole setup form. Just the videos, front and centre; setup is
+// one click away rather than something you scroll past every time.
+function paintChannelOverview() {
+  const c = state.channel;
+  const st = c.style;
+  $('#topbar-right').innerHTML =
+    `<span class="swatch" style="background:${esc(st.accent)}"></span>`;
+
+  view.innerHTML = `
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <h1>${esc(c.name)}</h1>
+        <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
+      </div>
+      <button class="btn ghost sm" onclick="go('#/c/${c.id}/setup')">channel setup</button>
+      <button class="btn ghost sm" onclick="go('#/')">all channels</button>
+    </div>
+    ${jobPanel()}
+
+    <div class="row" style="margin:20px 0 14px;align-items:baseline">
+      <h2 style="margin:0">Videos in this channel</h2>
+      <div class="spacer"></div>
+      <button class="btn sm primary" onclick="newVideoInChannel('${c.id}')">+ new video</button>
+    </div>
+    ${(c.videos || []).length === 0
+      ? '<div class="empty-note">None yet — pour one in above.</div>'
+      : c.videos.map(projRow).join('')}
+  `;
+  paintJob();
+}
+
+function newVideoInChannel(chanId) {
+  state.presetChannel = chanId;
+  go('#/');
+}
+
+function paintChannelSetup() {
+  const c = state.channel;
   const st = c.style, intro = c.intro;
   const cast = intro.subjects || [];
   const templates = state.templates || [];
@@ -1167,10 +1634,10 @@ function paintChannel() {
   view.innerHTML = `
     <div class="row" style="align-items:flex-start">
       <div style="flex:1;min-width:0">
-        <h1>${esc(c.name)}</h1>
+        <h1>${esc(c.name)} <span class="sub">— setup</span></h1>
         <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
       </div>
-      <button class="btn ghost sm" onclick="go('#/')">all channels</button>
+      <button class="btn ghost sm" onclick="go('#/c/${c.id}')">← videos</button>
     </div>
     ${jobPanel()}
     ${themePanel(c)}
@@ -1202,13 +1669,9 @@ function paintChannel() {
         <h3>House look</h3>
         <p class="mono" style="color:var(--ink-faint);margin-top:-4px">
           New videos in this channel start from these.</p>
-        <label class="field"><span>Video style</span>
-          <select onchange="saveChannelStyle({format:this.value})">
-            <option value="kenburns" ${(st.format || 'kenburns') === 'kenburns' ? 'selected' : ''}>
-              Documentary — the picture fills the frame and drifts</option>
-            <option value="essay" ${st.format === 'essay' ? 'selected' : ''}>
-              Video essay — the picture sits in a slide, narration on screen</option>
-          </select></label>
+        <label class="field"><span>Video style</span></label>
+        ${formatPicker(st.format || 'kenburns', st.accent, 'pickChannelFormat')}
+        ${st.format === 'board' ? boardKnobs(st, 'saveChannelStyle') : ''}
         <label class="field"><span>Accent — rules, separators, titles</span>
           <input type="text" value="${esc(st.accent)}" onchange="saveChannelStyle({accent:this.value})"></label>
         <label class="field"><span>Second colour — patterns, shadows, the loud half</span>
@@ -1372,11 +1835,6 @@ function paintChannel() {
 
     ${youtubePanel(c)}
 
-    <h2>Videos in this channel</h2>
-    ${(c.videos || []).length === 0
-      ? '<div class="empty-note">None yet — go pour one from the home page.</div>'
-      : c.videos.map(projRow).join('')}
-
     <div class="row" style="margin-top:30px">
       <div class="spacer"></div>
       <button class="btn sm ghost danger" onclick="delChannel()">delete channel</button>
@@ -1401,6 +1859,7 @@ async function saveChannel(patch) {
 }
 
 const saveChannelStyle = (patch) => saveChannel({ style: patch });
+const pickChannelFormat = (key) => saveChannelStyle({ format: key });
 const saveIntro = (patch) => saveChannel({ intro: patch });
 const saveOutro = (patch) => saveChannel({ outro: patch });
 const saveAvatar = (patch) => saveChannel({ avatar: patch });
@@ -1798,6 +2257,7 @@ async function saveSlide(sid, patch) {
       { method: 'PATCH', body: JSON.stringify(patch) });
     Object.assign(state.project.slides.find((x) => x.id === sid), s);
     toast('saved');
+    return s;
   } catch (e) { toast(e.message, true); }
 }
 
@@ -1928,6 +2388,9 @@ function paintMedia() {
   const perPicture = leads.length
     ? (p.est_seconds || 0) / leads.length : 0;
   const every = p.style.picture_every || 1;
+  // In the handwritten format the slide is drawn, not photographed: every
+  // paragraph gets its own board whether or not it also gets a picture.
+  const board = (p.style.format || 'kenburns') === 'board';
 
   let html = `<div class="row" style="margin-bottom:16px">
     <span class="mono" style="color:var(--ink-faint)">
@@ -1942,7 +2405,14 @@ function paintMedia() {
       </select>
     </label>
     <button class="btn sm" onclick="gatherMedia()">re-search everything</button>
-  </div>`;
+    ${board ? `<button class="btn sm primary" onclick="planBoards(false)">
+        write the boards</button>
+      <button class="btn sm ghost" onclick="planBoards(true)" title="including the ones you wrote">
+        rewrite them all</button>` : ''}
+  </div>
+  ${board ? `<div class="mono" style="color:var(--ink-faint);margin:-8px 0 16px">
+      Every paragraph is a board. One with nothing written for it still draws
+      one, from a line of its own narration.</div>` : ''}`;
 
   p.slides.forEach((s, i) => {
     const isLead = leadOf[s.id] === i + 1;
@@ -1956,6 +2426,8 @@ function paintMedia() {
                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
             ${esc(s.narration.slice(0, 90))}</span>
           <div class="spacer"></div>
+          ${board ? `<button class="btn sm ghost" onclick="openBoardEditor('${s.id}')">
+            edit its board…</button>` : ''}
           <button class="btn sm ghost" onclick="setPictureMode('${s.id}','new')">
             give this one its own picture</button>
         </div>
@@ -1966,7 +2438,15 @@ function paintMedia() {
     html += `<div class="card">
       <div class="media-row">
         <div>
-          ${chosen
+          ${board
+            ? `<img class="chosen" src="${boardUrl(s.id)}" loading="lazy"
+                    style="object-fit:contain;background:#2f3843;cursor:pointer"
+                    onclick="openBoardEditor('${s.id}')">
+               <div class="mono" style="color:var(--ink-faint);margin-top:6px">
+                 ${esc(s.board_template === 'auto' || !s.board_template
+                       ? 'template picked from what it says' : s.board_template)}
+                 ${chosen ? ' · the picture below is taped onto it' : ''}</div>`
+            : chosen
             ? `<div class="chosen-wrap">
                  <img class="chosen" src="${thumbUrl(chosen)}" loading="lazy"
                       style="object-position:${((chosen.focal || [])[0] ?? 0.5) * 100}% ${((chosen.focal || [])[1] ?? 0.5) * 100}%">
@@ -2012,6 +2492,12 @@ function paintMedia() {
             <button class="btn sm" onclick="openMediaSearch('${s.id}')">search for a picture…</button>
             <button class="btn sm" onclick="toggleKind('${s.id}')">want ${s.prefer_kind === 'image' ? 'a clip' : 'a photo'}</button>
             <button class="btn sm ghost" onclick="openMapPicker('${s.id}')">get a map…</button>
+            ${board ? `<button class="btn sm" onclick="openBoardEditor('${s.id}')">
+              edit the board…</button>` : ''}
+            <button class="btn sm ghost" onclick="openDiagramEditor('${s.id}')">
+              ${Object.keys(s.diagram || {}).length ? 'edit the diagram…' : 'draw a diagram…'}</button>
+            <button class="btn sm ghost" onclick="openCustomEditor('${s.id}')">
+              ${Object.keys(s.custom || {}).length ? 'edit the slide design…' : '✨ design a slide…'}</button>
             ${i > 0 ? `<button class="btn sm ghost" title="use the picture already on screen"
               onclick="setPictureMode('${s.id}','${s.picture_mode === 'new' ? 'auto' : 'hold'}')">
               ${s.picture_mode === 'new' ? 'always its own' : 'hold the last picture'}</button>` : ''}
@@ -2083,6 +2569,7 @@ function openMediaSearch(sid) {
         <select id="pkind" style="width:auto">
           <option value="image" ${s.prefer_kind === 'video' ? '' : 'selected'}>photos</option>
           <option value="video" ${s.prefer_kind === 'video' ? 'selected' : ''}>clips</option>
+          <option value="reaction">reaction gif 😄</option>
         </select>
         <button class="btn sm primary" id="pgo">search</button>
       </div>
@@ -2133,7 +2620,7 @@ function openMediaSearch(sid) {
       paint(hits, `${hits.length} for “${query}” · ${r.added} new to this slide`);
     } catch (e) {
       toast(e.message, true);
-      note.textContent = 'that search failed';
+      note.textContent = e.message || 'that search failed';
     }
     go.disabled = q.disabled = false;
     q.focus();
@@ -2146,7 +2633,12 @@ function openMediaSearch(sid) {
   wrap.onclick = (e) => { if (e.target === wrap) close(); };
   go.onclick = run;
   q.onkeydown = (e) => { if (e.key === 'Enter') run(); };
-  kind.onchange = run;
+  kind.onchange = () => {
+    q.placeholder = kind.value === 'reaction'
+      ? 'the reaction, not the subject — e.g. "mind blown", "facepalm", "slow clap"'
+      : 'search the archives — e.g. "Grytviken whaling station 1914"';
+    run();
+  };
 
   paint(s.candidates, s.candidates.length
     ? `${s.candidates.length} options already gathered — or search for something else`
@@ -2311,6 +2803,710 @@ function openMapPicker(sid) {
   // isn't done laying out yet on that first tick, so the tile grid renders
   // wrong until this nudges it once the box has its real size.
   setTimeout(() => map.invalidateSize(), 0);
+}
+
+// ------------------------------------------------------------------- board
+// The handwritten format. Everything here is drawn server-side by Pillow and
+// shown as a flat png, the same deal the thumbnail gets: one implementation of
+// the layout, and what the editor shows is literally a frame of the render.
+function boardKnobs(st, saver) {
+  const hand = st.board_hand || 'marker';
+  // The hands come from the server — it owns which faces are bundled, and a
+  // second list here would go stale the first time one changed.
+  const hands = state.boardHands || [{ key: 'marker', label: 'Marker', blurb: '' }];
+  return `
+    <label class="field"><span>Handwriting</span>
+      <select onchange="${saver}({board_hand:this.value})">
+        ${hands.map((h) => `<option value="${h.key}" ${h.key === hand ? 'selected' : ''}
+          >${esc(h.label)}${h.blurb ? ' — ' + esc(h.blurb.split('.')[0].toLowerCase()) : ''}</option>`).join('')}
+      </select></label>
+    <label class="field"><span>The board</span>
+      <input type="text" value="${esc(st.board_ground || '#3A4552')}"
+        onchange="${saver}({board_ground:this.value})"></label>
+    <label class="field"><span>Surface tooth — <b>${(st.board_grain ?? 0.5).toFixed(2)}</b></span>
+      <input type="range" min="0" max="1" step="0.05" value="${st.board_grain ?? 0.5}"
+        onchange="${saver}({board_grain:+this.value})"></label>
+    <label class="field"><span>How fast a line lands — <b>${(st.board_settle ?? 0.5).toFixed(2)}s</b></span>
+      <input type="range" min="0.18" max="1.2" step="0.02" value="${st.board_settle ?? 0.5}"
+        onchange="${saver}({board_settle:+this.value})"></label>`;
+}
+
+function boardUrl(sid) {
+  return `/api/projects/${state.project.id}/slides/${sid}/board.png?v=${state.boardV || 0}`;
+}
+
+function bumpBoards() {
+  state.boardV = (state.boardV || 0) + 1;
+}
+
+async function planBoards(redo) {
+  if (redo && !confirm('Rewrite every board, including the ones you wrote yourself?')) return;
+  const r = await api(`/api/projects/${state.project.id}/board/plan`,
+    { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
+  watchJob(r.job, 'media');
+  render();
+}
+
+// The board editor: the four fields a template draws from, and the finished
+// board redrawn after every change so you are editing the thing itself.
+function openBoardEditor(sid) {
+  const s = state.project.slides.find((x) => x.id === sid);
+  if (!s) return;
+  const tpls = state.boardTemplates || [];
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box">
+      <div class="row" style="margin-bottom:12px">
+        <strong>What this slide writes</strong>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="bclose">close</button>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label class="field"><span>Template</span>
+            <select id="btpl">
+              <option value="auto">auto — pick from what I write</option>
+              ${tpls.map((t) => `<option value="${t.key}"
+                ${t.key === s.board_template ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+            </select></label>
+          <div class="mono" id="bblurb" style="color:var(--ink-faint);margin:-8px 0 12px"></div>
+          <label class="field"><span>The line it is about</span>
+            <input type="text" id="blead" value="${esc(s.board_lead || '')}"
+              placeholder="2-7 words, no full stop"></label>
+          <label class="field"><span>Lines under it — one per line</span>
+            <textarea id="bpoints" rows="6" placeholder="two to six words each
+* a line starting with a star is picked out in the accent
+this | that pairs up the two columns of a versus board
+> a line starting with a chevron is the called-out line of code"
+>${esc((s.board_points || []).join('\n'))}</textarea></label>
+          <label class="field"><span>Footnote, caption or attribution</span>
+            <input type="text" id="bnote" value="${esc(s.board_note || '')}"></label>
+          <div class="row">
+            <button class="btn sm primary" id="bsave">save</button>
+            <button class="btn sm ghost" id="bdiagram">draw a diagram…</button>
+            <div class="spacer"></div>
+            <button class="btn sm ghost" id="bclear" title="go back to lines pulled out of the narration">
+              clear</button>
+          </div>
+          <div class="mono" style="color:var(--ink-faint);margin-top:10px">
+            ${esc(s.narration.slice(0, 220))}</div>
+        </div>
+        <div>
+          <img id="bprev" src="${boardUrl(sid)}"
+            style="width:100%;border-radius:8px;background:#2f3843">
+          <div class="mono" id="bstate" style="color:var(--ink-faint);margin-top:8px">
+            the finished board — it arrives element by element as you talk</div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); paintMedia(); };
+  wrap.querySelector('#bclose').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+
+  const tpl = wrap.querySelector('#btpl');
+  const blurb = wrap.querySelector('#bblurb');
+  const showBlurb = () => {
+    const t = tpls.find((x) => x.key === tpl.value);
+    blurb.textContent = t ? t.blurb : 'Picks the template that fits what you write, '
+      + 'and avoids repeating the slide before it.';
+  };
+  tpl.onchange = () => { showBlurb(); save(); };
+  showBlurb();
+
+  async function save() {
+    const body = {
+      board_template: tpl.value,
+      board_lead: wrap.querySelector('#blead').value,
+      board_points: wrap.querySelector('#bpoints').value.split('\n'),
+      board_note: wrap.querySelector('#bnote').value,
+    };
+    wrap.querySelector('#bstate').textContent = 'drawing…';
+    const updated = await saveSlide(sid, body);
+    Object.assign(s, updated);
+    bumpBoards();
+    wrap.querySelector('#bprev').src = boardUrl(sid);
+    wrap.querySelector('#bstate').textContent = 'saved';
+  }
+  wrap.querySelector('#bsave').onclick = save;
+  wrap.querySelector('#bclear').onclick = async () => {
+    wrap.querySelector('#blead').value = '';
+    wrap.querySelector('#bpoints').value = '';
+    wrap.querySelector('#bnote').value = '';
+    tpl.value = 'auto';
+    await save();
+  };
+  wrap.querySelector('#bdiagram').onclick = () => { close(); openDiagramEditor(sid); };
+}
+
+// ----------------------------------------------------------------- diagrams
+// A spec in, a drawing out. The left half is the spec as lines, because typing
+// JSON by hand is miserable; the JSON itself is one click away, because that
+// is the shape an agent writes and the shape you paste back in.
+function diagramToLines(spec) {
+  const nodes = (spec.nodes || []).map((n) =>
+    `${n.accent ? '*' : ''}${n.label}${n.note ? ' | ' + n.note : ''}${n.group ? ' @' + n.group : ''}`);
+  const edges = (spec.edges || []).map((e) =>
+    `${e.from} > ${e.to}${e.label ? ' : ' + e.label : ''}${e.dashed ? ' ~' : ''}`);
+  return { nodes: nodes.join('\n'), edges: edges.join('\n') };
+}
+
+function linesToSpec(kind, title, nodeText, edgeText, note, reveal) {
+  const nodes = nodeText.split('\n').map((raw) => raw.trim()).filter(Boolean).map((raw) => {
+    const accent = raw.startsWith('*');
+    let rest = accent ? raw.slice(1).trim() : raw;
+    let group = '';
+    const at = rest.lastIndexOf(' @');
+    if (at > 0) { group = rest.slice(at + 2).trim(); rest = rest.slice(0, at); }
+    const [label, ...note2] = rest.split('|');
+    return { id: label.trim(), label: label.trim(), note: note2.join('|').trim(),
+             group, accent };
+  });
+  const edges = edgeText.split('\n').map((raw) => raw.trim()).filter(Boolean).map((raw) => {
+    const dashed = raw.endsWith('~');
+    let rest = dashed ? raw.slice(0, -1).trim() : raw;
+    const [pair, ...label] = rest.split(':');
+    const [from, to] = pair.split('>').map((x) => x.trim());
+    return { from, to, label: label.join(':').trim(), dashed };
+  }).filter((e) => e.from && e.to);
+  return { kind, title, nodes, edges, note, reveal };
+}
+
+function openDiagramEditor(sid) {
+  const s = state.project.slides.find((x) => x.id === sid);
+  if (!s) return;
+  const kinds = state.diagramKinds || [];
+  const spec = Object.keys(s.diagram || {}).length ? s.diagram
+    : { kind: 'flow', title: s.board_lead || s.title || '', nodes: [], edges: [],
+        note: '', reveal: 'sequence' };
+  const lines = diagramToLines(spec);
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box wide">
+      <div class="row" style="margin-bottom:12px">
+        <strong>Draw a diagram</strong>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="djson">show the spec</button>
+        <button class="btn sm ghost" id="dclose">close</button>
+      </div>
+      <div class="grid-2">
+        <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
+          <div class="panel" style="background:#13151c;margin:0 0 16px;padding:14px">
+            <div class="row" style="margin-bottom:8px">
+              <span style="font-size:13px">✨ Ask Claude to draw this</span>
+            </div>
+            <textarea id="daskwhat" rows="2" style="margin-bottom:8px"
+              placeholder="Leave blank to let Claude read the paragraph and pick a shape, or steer it — “as a cycle”, “put the database in the middle”…"></textarea>
+            <button class="btn sm primary" id="dask">draw it for me</button>
+            <span class="mono" id="daskstate" style="color:var(--ink-faint);margin-left:8px"></span>
+          </div>
+          <label class="field"><span>Layout</span>
+            <select id="dkind">
+              ${kinds.map((k) => `<option value="${k.key}"
+                ${k.key === spec.kind ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
+            </select></label>
+          <div class="mono" id="dblurb" style="color:var(--ink-faint);margin:-8px 0 12px"></div>
+          <label class="field"><span>Heading</span>
+            <input type="text" id="dtitle" value="${esc(spec.title || '')}"></label>
+          <label class="field"><span>Boxes — one per line</span>
+            <textarea id="dnodes" rows="6" placeholder="Browser
+Edge cache | 40ms
+*Your server | the slow bit
+a star picks one out, | adds a note, @ puts it in a column"
+>${esc(lines.nodes)}</textarea></label>
+          <label class="field"><span>Arrows — “from &gt; to : label”, ~ for dashed (flow only)</span>
+            <textarea id="dedges" rows="3" placeholder="Browser > Edge cache : GET /
+Edge cache > Your server : miss ~"
+>${esc(lines.edges)}</textarea></label>
+          <label class="field"><span>Footnote</span>
+            <input type="text" id="dnote" value="${esc(spec.note || '')}"></label>
+          <div class="row">
+            <button class="btn sm primary" id="duse">use it on this slide</button>
+            <button class="btn sm ghost" id="dstill">as a still, not a drawing</button>
+          </div>
+          <div class="mono" id="dstate" style="color:var(--ink-faint);margin-top:10px"></div>
+        </div>
+        <div style="align-self:start">
+          <img id="dprev" style="width:100%;border-radius:8px;background:#2f3843">
+          <textarea id="dspec" rows="12" class="mono" style="display:none;margin-top:10px"
+            placeholder="paste a spec here"></textarea>
+          <div class="row" style="margin-top:8px;display:none" id="dspecrow">
+            <button class="btn sm ghost" id="dspecload">load that spec</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const q = (id) => wrap.querySelector(id);
+  const close = () => { wrap.remove(); paintMedia(); };
+  q('#dclose').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+
+  const showBlurb = () => {
+    const k = kinds.find((x) => x.key === q('#dkind').value);
+    q('#dblurb').textContent = k ? `${k.blurb} (${k.wants})` : '';
+  };
+  const current = () => linesToSpec(
+    q('#dkind').value, q('#dtitle').value, q('#dnodes').value, q('#dedges').value,
+    q('#dnote').value, spec.reveal || 'sequence');
+
+  let timer = null;
+  async function redraw() {
+    const body = { spec: current(), accent: state.project.style.accent,
+                   hand: state.project.style.board_hand || 'marker' };
+    q('#dspec').value = JSON.stringify(body.spec, null, 2);
+    try {
+      const res = await fetch('/api/diagram/preview',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).detail || 'no');
+      const blob = await res.blob();
+      const old = q('#dprev').src;
+      q('#dprev').src = URL.createObjectURL(blob);
+      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+      q('#dstate').textContent = '';
+    } catch (e) {
+      q('#dstate').textContent = e.message;
+    }
+  }
+  const nudge = () => { clearTimeout(timer); timer = setTimeout(redraw, 260); };
+  ['#dkind', '#dtitle', '#dnodes', '#dedges', '#dnote'].forEach((id) => {
+    q(id).oninput = nudge;
+    q(id).onchange = () => { showBlurb(); nudge(); };
+  });
+  showBlurb();
+  redraw();
+
+  q('#djson').onclick = () => {
+    const box = q('#dspec'), row = q('#dspecrow');
+    const on = box.style.display === 'none';
+    box.style.display = row.style.display = on ? '' : 'none';
+    q('#djson').textContent = on ? 'hide the spec' : 'show the spec';
+  };
+  q('#dspecload').onclick = () => {
+    let loaded;
+    try { loaded = JSON.parse(q('#dspec').value); }
+    catch (e) { return (q('#dstate').textContent = 'that is not valid JSON'); }
+    q('#dkind').value = loaded.kind || 'flow';
+    q('#dtitle').value = loaded.title || '';
+    q('#dnote').value = loaded.note || '';
+    const l = diagramToLines(loaded);
+    q('#dnodes').value = l.nodes;
+    q('#dedges').value = l.edges;
+    showBlurb();
+    redraw();
+  };
+
+  async function use(motion) {
+    q('#dstate').textContent = 'drawing…';
+    try {
+      const r = await api(`/api/projects/${state.project.id}/slides/${sid}/diagram`,
+        { method: 'POST', body: JSON.stringify({ spec: current(), motion }) });
+      Object.assign(s, r.slide);
+      bumpBoards();
+      toast(motion === 'still' ? 'drawn' : 'drawn — it inks in on screen');
+      close();
+    } catch (e) {
+      q('#dstate').textContent = e.message;
+    }
+  }
+  q('#duse').onclick = () => use('reveal');
+  q('#dstill').onclick = () => use('still');
+
+  q('#dask').onclick = async () => {
+    const btn = q('#dask');
+    btn.disabled = true;
+    q('#daskstate').textContent = 'thinking…';
+    try {
+      const r = await api(`/api/projects/${state.project.id}/slides/${sid}/diagram/generate`,
+        { method: 'POST', body: JSON.stringify({ instruction: q('#daskwhat').value.trim() }) });
+      let j;
+      for (;;) {
+        j = await api(`/api/jobs/${r.job}`);
+        if (j.state !== 'running') break;
+        await new Promise((res) => setTimeout(res, 900));
+      }
+      if (j.state === 'error') throw new Error(j.error || 'Claude could not draw this one.');
+      const loaded = j.result.spec;
+      q('#dkind').value = loaded.kind || 'flow';
+      q('#dtitle').value = loaded.title || '';
+      q('#dnote').value = loaded.note || '';
+      const l = diagramToLines(loaded);
+      q('#dnodes').value = l.nodes;
+      q('#dedges').value = l.edges;
+      showBlurb();
+      redraw();
+      q('#daskstate').textContent = 'drawn from the narration — tweak anything, then use it';
+    } catch (e) {
+      q('#daskstate').textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
+// ------------------------------------------------------- custom slide design
+// The open-ended sibling of the diagram editor: no fixed layout, just
+// elements on a canvas. Describing what you want in words is the main way in
+// — Claude writes the spec — and every element stays editable afterwards, so
+// a design you half-like is a starting point rather than a take-it-or-leave-it.
+const CUSTOM_ANIMS = ['fade', 'rise', 'fly-left', 'fly-right', 'pop', 'none'];
+const CUSTOM_FONTS = ['hand', 'sans', 'serif', 'mono', 'display'];
+const CUSTOM_SIZES = ['sm', 'md', 'lg', 'xl', 'xxl'];
+
+// A spec can legitimately carry a value this build doesn't know about — a
+// newer size, an animation added server-side. Keeping it as an option means
+// editing some other field can't silently rewrite it to the first one.
+function customOptions(list, current) {
+  const all = list.includes(current) || !current ? list : [...list, current];
+  return all.map((v) => `<option ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
+}
+
+function blankCustomElement(type) {
+  const base = { type, x: 0.1, y: 0.1, w: 0.4, h: 0.2, order: 0, anim: 'fade', opacity: 1 };
+  if (type === 'text') {
+    return { ...base, text: 'new text', size: 'lg', align: 'left',
+             color: '#ffffff', font: 'hand' };
+  }
+  if (type === 'image') return { ...base, query: '', fit: 'cover' };
+  return { ...base, color: '#E8C36A', fill: true, stroke: 4 };
+}
+
+// Opened against one paragraph (from the Media tab) or against nothing at all
+// (the Video style picker's "Design a style…"). The editor is the same either
+// way; what changes is where Claude's brief comes from — a paragraph to read,
+// or only the words you type — and whether the result lands on a slide or in
+// the style library.
+function openCustomEditor(sid) {
+  const s = state.project.slides.find((x) => x.id === sid);
+  if (!s) return;
+  openCustomDesigner({
+    sid,
+    slide: s,
+    projectId: state.project.id,
+    accent: state.project.style.accent,
+    hand: state.project.style.board_hand || 'marker',
+    spec: Object.keys(s.custom || {}).length
+      ? JSON.parse(JSON.stringify(s.custom))
+      : { background: '', reveal: 'sequence', elements: [] },
+  });
+}
+
+// No project needed: this is how a style gets made from the home page, before
+// there is a video to design it against.
+function openStyleDesigner() {
+  openCustomDesigner({
+    styleMode: true,
+    projectId: '',
+    accent: (state.project && state.project.style.accent) || '#E8C36A',
+    hand: (state.project && state.project.style.board_hand) || 'marker',
+    spec: { background: '', reveal: 'sequence', elements: [] },
+  });
+}
+
+function openCustomDesigner(opts) {
+  const styleMode = !!opts.styleMode;
+  const s = opts.slide;
+  const sid = opts.sid;
+  let spec = opts.spec;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box wide">
+      <div class="row" style="margin-bottom:12px">
+        <strong>${styleMode ? 'Design a video style' : 'Design a slide'}</strong>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="cjson">show the spec</button>
+        <button class="btn sm ghost" id="cclose">close</button>
+      </div>
+      <div class="grid-2">
+        <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
+          <div class="panel" style="background:#13151c;margin:0 0 16px;padding:14px">
+            <div class="row" style="margin-bottom:8px">
+              <span style="font-size:13px">✨ ${styleMode
+                ? 'Describe the look you want' : 'Ask Claude to design this slide'}</span>
+            </div>
+            <textarea id="caskwhat" rows="2" style="margin-bottom:8px"
+              placeholder="${styleMode
+                ? 'e.g. “one huge number on near-black with a thin accent rule”, “a full-bleed photo with a quote over a dark scrim”, “three cards across the middle”…'
+                : 'Leave blank to let Claude read the paragraph and design something, or steer it — “one huge number over a photo”, “three cards across the middle”, “a quote, big, on black”…'}"></textarea>
+            <button class="btn sm primary" id="cask">design it for me</button>
+            <span class="mono" id="caskstate" style="color:var(--ink-faint);margin-left:8px"></span>
+          </div>
+          ${styleMode ? `<div class="mono" style="color:var(--ink-faint);margin-bottom:12px">
+            Every paragraph of the video gets this design, with its own words and
+            pictures swapped into it. So write the text here as a placeholder
+            showing what belongs in each slot, not as anything about one subject.</div>` : ''}
+          <div class="row" style="margin-bottom:10px">
+            <label class="field" style="flex:1;margin:0"><span>Background</span>
+              <input type="text" id="cbg" placeholder="blank = the usual board"
+                value="${esc(spec.background || '')}"></label>
+          </div>
+          <div id="cels"></div>
+          <div class="row" style="margin:12px 0">
+            <span class="mono" style="color:var(--ink-faint)">add:</span>
+            <button class="btn xs ghost" data-add="text">text</button>
+            <button class="btn xs ghost" data-add="rect">rect</button>
+            <button class="btn xs ghost" data-add="circle">circle</button>
+            <button class="btn xs ghost" data-add="line">line</button>
+            <button class="btn xs ghost" data-add="image">image</button>
+          </div>
+          <div class="row">
+            ${styleMode ? '' : `
+              <button class="btn sm primary" id="cuse">use it on this slide</button>
+              <button class="btn sm ghost" id="cstill">as a still, not animated</button>`}
+            <button class="btn sm ${styleMode ? 'primary' : 'ghost'}" id="csave"
+              title="keep this design as a reusable video style">
+              ${styleMode ? 'save this style' : 'save as a style…'}</button>
+          </div>
+          <div class="mono" id="cstate" style="color:var(--ink-faint);margin-top:10px"></div>
+        </div>
+        <div style="align-self:start">
+          <img id="cprev" style="width:100%;border-radius:8px;background:#2f3843">
+          <div class="mono" style="color:var(--ink-faint);margin-top:6px">
+            ${styleMode
+              ? 'Image slots stay empty here — each paragraph fetches its own picture when the video is written.'
+              : 'Image elements only show here once they’ve been fetched — press “use it on this slide” to pull them from the archives.'}</div>
+          <textarea id="cspec" rows="14" class="mono" style="display:none;margin-top:10px"></textarea>
+          <div class="row" style="margin-top:8px;display:none" id="cspecrow">
+            <button class="btn sm ghost" id="cspecload">load that spec</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const q = (id) => wrap.querySelector(id);
+  // In style mode there is no Media tab behind this modal to repaint.
+  const close = () => { wrap.remove(); if (!styleMode) paintMedia(); };
+  q('#cclose').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+
+  const num = (v) => Math.round((+v || 0) * 100) / 100;
+
+  function paintElements() {
+    q('#cels').innerHTML = spec.elements.map((el, i) => `
+      <div class="panel" style="background:#13151c;margin:0 0 10px;padding:12px">
+        <div class="row" style="margin-bottom:8px">
+          <strong style="font-size:13px">${i + 1}. ${esc(el.type)}</strong>
+          <div class="spacer"></div>
+          <button class="btn xs ghost" data-up="${i}" ${i ? '' : 'disabled'}>↑</button>
+          <button class="btn xs ghost danger" data-del="${i}">remove</button>
+        </div>
+        ${el.type === 'text' ? `
+          <textarea rows="2" data-f="text" data-i="${i}"
+            style="margin-bottom:8px">${esc(el.text || '')}</textarea>
+          <div class="row" style="gap:6px;margin-bottom:8px">
+            <select data-f="size" data-i="${i}" style="width:auto">
+              ${customOptions(CUSTOM_SIZES, el.size)}
+            </select>
+            <select data-f="font" data-i="${i}" style="width:auto">
+              ${customOptions(CUSTOM_FONTS, el.font)}
+            </select>
+            <select data-f="align" data-i="${i}" style="width:auto">
+              ${customOptions(['left', 'center', 'right'], el.align)}
+            </select>
+            <input type="text" data-f="color" data-i="${i}" value="${esc(el.color || '#ffffff')}"
+              style="width:90px">
+          </div>` : ''}
+        ${el.type === 'image' ? `
+          <input type="text" data-f="query" data-i="${i}" placeholder="what to search the archives for"
+            value="${esc(el.query || '')}" style="margin-bottom:8px">
+          <div class="row" style="gap:6px;margin-bottom:8px">
+            <select data-f="fit" data-i="${i}" style="width:auto">
+              ${customOptions(['cover', 'contain'], el.fit)}
+            </select>
+            <span class="mono" style="color:var(--ink-faint)">
+              ${el.local_path ? 'fetched' : 'not fetched yet'}</span>
+          </div>` : ''}
+        ${['rect', 'circle', 'line'].includes(el.type) ? `
+          <div class="row" style="gap:6px;margin-bottom:8px">
+            <input type="text" data-f="color" data-i="${i}" value="${esc(el.color || '#E8C36A')}"
+              style="width:90px">
+            <label class="row" style="gap:4px;cursor:pointer">
+              <input type="checkbox" data-f="fill" data-i="${i}" style="width:auto"
+                ${el.fill ? 'checked' : ''}><span class="mono">filled</span></label>
+            <input type="number" data-f="stroke" data-i="${i}" value="${el.stroke || 4}"
+              min="1" max="20" style="width:70px" title="stroke width">
+          </div>` : ''}
+        <div class="row" style="gap:6px">
+          ${['x', 'y', 'w', 'h'].map((f) => `
+            <label class="mono" style="color:var(--ink-faint)">${f}
+              <input type="number" data-f="${f}" data-i="${i}" value="${num(el[f])}"
+                step="0.01" min="0" max="1" style="width:74px"></label>`).join('')}
+        </div>
+        <div class="row" style="gap:6px;margin-top:8px">
+          <label class="mono" style="color:var(--ink-faint)">order
+            <input type="number" data-f="order" data-i="${i}" value="${el.order || 0}"
+              min="0" max="20" style="width:66px"></label>
+          <select data-f="anim" data-i="${i}" style="width:auto">
+            ${customOptions(CUSTOM_ANIMS, el.anim)}
+          </select>
+          <label class="mono" style="color:var(--ink-faint)">opacity
+            <input type="number" data-f="opacity" data-i="${i}"
+              value="${el.opacity === undefined ? 1 : el.opacity}"
+              step="0.05" min="0" max="1" style="width:74px"></label>
+        </div>
+      </div>`).join('') || '<div class="empty-note">No elements yet — ask Claude, or add one below.</div>';
+
+    q('#cels').querySelectorAll('[data-f]').forEach((input) => {
+      const i = +input.dataset.i, f = input.dataset.f;
+      const handler = () => {
+        const el = spec.elements[i];
+        if (input.type === 'checkbox') el[f] = input.checked;
+        else if (input.type === 'number') el[f] = +input.value;
+        else el[f] = input.value;
+        if (['fill', 'size', 'font', 'align', 'fit', 'anim'].includes(f)) paintElements();
+        nudge();
+      };
+      input.oninput = handler;
+      input.onchange = handler;
+    });
+    q('#cels').querySelectorAll('[data-del]').forEach((b) => {
+      b.onclick = () => { spec.elements.splice(+b.dataset.del, 1); paintElements(); nudge(); };
+    });
+    q('#cels').querySelectorAll('[data-up]').forEach((b) => {
+      b.onclick = () => {
+        const i = +b.dataset.up;
+        [spec.elements[i - 1], spec.elements[i]] = [spec.elements[i], spec.elements[i - 1]];
+        paintElements();
+        nudge();
+      };
+    });
+  }
+
+  wrap.querySelectorAll('[data-add]').forEach((b) => {
+    b.onclick = () => {
+      spec.elements.push(blankCustomElement(b.dataset.add));
+      paintElements();
+      nudge();
+    };
+  });
+  q('#cbg').oninput = () => { spec.background = q('#cbg').value; nudge(); };
+
+  let timer = null;
+  async function redraw() {
+    q('#cspec').value = JSON.stringify(spec, null, 2);
+    if (!spec.elements.length) { q('#cstate').textContent = ''; return; }
+    try {
+      const res = await fetch('/api/custom/preview',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spec, project_id: opts.projectId || '',
+                                 hand: opts.hand }) });
+      if (!res.ok) throw new Error((await res.json()).detail || 'no');
+      const blob = await res.blob();
+      const old = q('#cprev').src;
+      q('#cprev').src = URL.createObjectURL(blob);
+      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+      q('#cstate').textContent = '';
+    } catch (e) {
+      q('#cstate').textContent = e.message;
+    }
+  }
+  const nudge = () => { clearTimeout(timer); timer = setTimeout(redraw, 300); };
+
+  q('#cjson').onclick = () => {
+    const box = q('#cspec'), row = q('#cspecrow');
+    const on = box.style.display === 'none';
+    box.style.display = row.style.display = on ? '' : 'none';
+    q('#cjson').textContent = on ? 'hide the spec' : 'show the spec';
+  };
+  q('#cspecload').onclick = () => {
+    let loaded;
+    try { loaded = JSON.parse(q('#cspec').value); }
+    catch { return (q('#cstate').textContent = 'that is not valid JSON'); }
+    spec = loaded;
+    q('#cbg').value = spec.background || '';
+    paintElements();
+    redraw();
+  };
+
+  async function use(motion) {
+    if (!spec.elements.length) return (q('#cstate').textContent = 'nothing to draw yet');
+    q('#cstate').textContent = 'drawing…';
+    try {
+      const r = await api(`/api/projects/${opts.projectId}/slides/${sid}/custom`,
+        { method: 'POST', body: JSON.stringify({ spec, motion }) });
+      let j;
+      for (;;) {
+        j = await api(`/api/jobs/${r.job}`);
+        if (j.state !== 'running') break;
+        q('#cstate').textContent = j.message || 'drawing…';
+        await new Promise((res) => setTimeout(res, 900));
+      }
+      if (j.state === 'error') throw new Error(j.error || 'Could not draw that slide.');
+      Object.assign(s, j.result.slide);
+      bumpBoards();
+      toast(motion === 'still' ? 'designed' : 'designed — it builds on screen');
+      close();
+    } catch (e) {
+      q('#cstate').textContent = e.message;
+    }
+  }
+  if (!styleMode) {
+    q('#cuse').onclick = () => use('reveal');
+    q('#cstill').onclick = () => use('still');
+  }
+
+  q('#csave').onclick = async () => {
+    if (!spec.elements.length) return (q('#cstate').textContent = 'nothing to save yet');
+    const name = prompt('Name this style\n(it joins Documentary, Video essay and '
+      + 'Handwritten board in the Video style picker)', 'My slide style');
+    if (!name) return;
+    q('#cstate').textContent = 'saving…';
+    try {
+      await api('/api/slide-styles', { method: 'POST',
+        body: JSON.stringify({ spec, name, hand: opts.hand }) });
+      state.slideStyles = null;
+      await ensureSlideStyles();
+      toast(`saved — “${name}” is now a video style`);
+      q('#cstate').textContent = '';
+      // Made from the picker: close back onto it so the new tile is right there.
+      if (styleMode) { close(); route(); }
+    } catch (e) {
+      q('#cstate').textContent = e.message;
+    }
+  };
+
+  q('#cask').onclick = async () => {
+    const btn = q('#cask');
+    btn.disabled = true;
+    q('#caskstate').textContent = 'designing…';
+    try {
+      const brief = q('#caskwhat').value.trim();
+      // With no project there is no paragraph to read, so the brief is the
+      // whole input and a different endpoint answers it.
+      const r = styleMode
+        ? await api('/api/slide-styles/design',
+            { method: 'POST', body: JSON.stringify({ description: brief,
+                                                     accent: opts.accent }) })
+        : await api(`/api/projects/${opts.projectId}/slides/${sid}/custom/generate`,
+            { method: 'POST', body: JSON.stringify({ instruction: brief }) });
+      let j;
+      for (;;) {
+        j = await api(`/api/jobs/${r.job}`);
+        if (j.state !== 'running') break;
+        await new Promise((res) => setTimeout(res, 900));
+      }
+      if (j.state === 'error') throw new Error(j.error || 'Claude could not design this one.');
+      spec = j.result.spec;
+      q('#cbg').value = spec.background || '';
+      paintElements();
+      redraw();
+      q('#caskstate').textContent = styleMode
+        ? 'drawn — tweak anything, then save it as a style'
+        : 'designed from the narration — tweak anything, then use it';
+    } catch (e) {
+      q('#caskstate').textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  paintElements();
+  redraw();
 }
 
 async function gatherMedia() {
@@ -2670,7 +3866,7 @@ function openThumbPicker() {
       const r = await api(`/api/projects/${p.id}/thumb/search`,
         { method: 'POST', body: JSON.stringify({ query }) });
       paint(r.results || [], `${(r.results || []).length} from the archives`);
-    } catch (e) { toast(e.message, true); note.textContent = 'that search failed'; }
+    } catch (e) { toast(e.message, true); note.textContent = e.message || 'that search failed'; }
     go.disabled = q.disabled = false;
   };
 
@@ -2815,6 +4011,37 @@ function paintRecord() {
 
 // ------------------------------------------------------------- the AI reader
 // Loaded once: whether the local model is installed, and the voices it offers.
+function showCommand(platform) {
+  const cmdText = $('code#cmd-text');
+  const noteEl = $('#cmd-note');
+  if (!cmdText) return;
+
+  cmdText.textContent = 'pip install kokoro-onnx soundfile';
+
+  let note = '';
+  if (platform === 'windows') {
+    note = 'Run in PowerShell or Command Prompt. If using the Youslop desktop app, run this in your system terminal (not within the app).';
+  } else {
+    note = 'Run in your terminal (bash, zsh, etc.). If using the Youslop desktop app, run this in your system terminal (not within the app).';
+  }
+
+  if (noteEl && note) {
+    noteEl.textContent = note;
+    noteEl.style.display = 'block';
+  }
+}
+
+function copyInstallCommand() {
+  const cmdText = $('code#cmd-text');
+  if (!cmdText) return;
+  const text = cmdText.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    toast('Copied to clipboard');
+  }).catch(() => {
+    toast('Failed to copy', true);
+  });
+}
+
 async function loadTTS() {
   if (state.tts) return state.tts;
   state.tts = await api('/api/tts').catch(() => ({ ready: false, voices: [],
@@ -2832,9 +4059,37 @@ function aiVoicePanel(p, slide) {
   if (!t) { loadTTS().then(() => { if (state.tab === 'record') paintRecord(); });
             return '<div class="panel" style="margin-top:14px">Checking the voice engine…</div>'; }
   if (!t.ready) {
+    const isMissing = t.detail && t.detail.includes('missing');
+    let setupGuide = '';
+    if (t.detail && t.detail.includes('pip install')) {
+      setupGuide = `
+        <div style="margin-top:10px">
+          <strong style="font-size:13px">Installation:</strong>
+          <div style="margin-top:6px;font-size:12px;color:var(--ink-faint)">Copy the command for your system:</div>
+          <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">
+            <label style="flex:1;min-width:160px">
+              <input type="radio" name="platform" value="linux-mac" checked onchange="showCommand(this.value)">
+              Linux / macOS
+            </label>
+            <label style="flex:1;min-width:160px">
+              <input type="radio" name="platform" value="windows" onchange="showCommand(this.value)">
+              Windows (PowerShell)
+            </label>
+          </div>
+          <div id="install-cmd" style="margin-top:8px;background:#1a1a1a;border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
+            <code style="color:#4af626;font-size:12px;font-family:monospace;display:block;overflow-x:auto;padding-right:50px" id="cmd-text">pip install kokoro-onnx soundfile</code>
+            <button class="btn xs ghost" onclick="copyInstallCommand()" style="position:absolute;top:4px;right:4px">copy</button>
+          </div>
+          <div id="cmd-note" style="margin-top:6px;font-size:12px;color:var(--ink-faint);display:none"></div>
+          <script>showCommand('linux-mac')</script>
+        </div>
+      `;
+    } else if (isMissing) {
+      setupGuide = `<div style="margin-top:10px;color:var(--ink-faint);font-size:12px">See the README for model file downloads.</div>`;
+    }
     return `<div class="panel warn-panel" style="margin-top:14px">
       <strong>The local voice model is not ready.</strong>
-      <div class="mono" style="margin-top:6px;color:var(--ink-dim)">${esc(t.detail || '')}</div>
+      ${setupGuide}
     </div>`;
   }
   const n = p.narrator || {};
@@ -3750,17 +5005,18 @@ async function paintRender() {
     <div class="grid-2">
       <div class="panel">
         <h3>Look</h3>
-        <label class="field"><span>Video style</span>
-          <select onchange="saveStyle({format:this.value})">
-            <option value="kenburns" ${(st.format || 'kenburns') === 'kenburns' ? 'selected' : ''}>
-              Documentary — picture fills the frame, drifts</option>
-            <option value="essay" ${st.format === 'essay' ? 'selected' : ''}>
-              Video essay — picture in a slide, narration on screen</option>
-          </select></label>
+        <label class="field"><span>Video style</span></label>
+        ${formatPicker(st.format || 'kenburns', st.accent, 'pickProjectFormat')}
+        ${st.format === 'board' ? boardKnobs(st, 'saveStyle') : ''}
         <label class="field"><span>Vignette — <b>${st.vignette.toFixed(2)}</b></span>
           <input type="range" min="0" max="0.8" step="0.02" value="${st.vignette}"
             onchange="saveStyle({vignette:+this.value})"></label>
-        ${st.format === 'essay' ? `
+        ${st.format === 'board' ? `
+          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
+            The board cut draws every slide itself and ignores the drift, the
+            grade and the chapter titles below. Write the boards on the
+            pictures tab.</div>`
+        : st.format === 'essay' ? `
           <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
             The essay cut sets the narration on screen in phrases and ignores the
             drift and the chapter titles below.</div>`
@@ -4087,6 +5343,7 @@ async function saveStyle(patch) {
     { method: 'PATCH', body: JSON.stringify({ style: patch }) });
   render();
 }
+const pickProjectFormat = (key) => saveStyle({ format: key });
 
 async function saveProject(patch) {
   state.project = await api(`/api/projects/${state.project.id}`,
