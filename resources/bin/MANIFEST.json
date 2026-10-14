@@ -5,5 +5,12 @@
       "ffprobe": "bb2db6f5d8cef919da12fbf592119a987202a8c060a886f3cab091f9cab90b64"
     },
     "source": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz"
+  },
+  "linux-arm64": {
+    "files": {
+      "ffmpeg": "b831b9470c0cd79f77f20a2fb6f0371a8922269af159db0a066d67f97b9c416e",
+      "ffprobe": "83984f764729f4e43dff79a1f591d5009dda4172df384c566123c030aae0bfaf"
+    },
+    "source": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
   }
 }

@@ -63,8 +63,107 @@ A few things worth knowing once you're in:
   a single file, so you can share one or move it between installs.
 - **Diagrams and custom slides** let Claude draw a shape or a whole slide
   layout for a paragraph that has no real photograph to illustrate it.
+- **Project files** move a video between computers: **save project file…**
+  on a video's page, **open project file…** on the New video page. The file
+  carries the script, pictures, recordings and settings, but not the finished
+  render.
 - Settings (gear icon, bottom of the sidebar) is where API keys, the model,
   and the data folder live.
+
+## Building it yourself
+
+If there's no release for your platform, or you'd rather build your own, it
+takes about five minutes. You need **Python 3.12 or newer** and **git**. The
+build is for the machine you build on: a Mac makes a Mac app, an ARM Linux
+machine makes an ARM Linux app, and so on.
+
+### macOS
+
+```sh
+git clone https://github.com/Liam-Griffiths/youslop.git
+cd youslop
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt pyinstaller pywebview
+.venv/bin/python scripts/fetch_ffmpeg.py
+.venv/bin/pyinstaller --noconfirm youslop.spec
+open dist/Youslop.app
+```
+
+Drag `dist/Youslop.app` into Applications to keep it. If macOS says it "can't
+be opened", right-click it → **Open** once; it isn't signed.
+
+### Linux
+
+First install the system libraries the window needs. The GStreamer plugins
+are what the window plays sound through; without them, playing a take or a
+voice preview crashes the page.
+
+```sh
+# Debian / Ubuntu
+sudo apt install python3-venv python3-dev pkg-config libcairo2-dev \
+  libgirepository-2.0-dev gir1.2-webkit2-4.1 gstreamer1.0-plugins-good
+# Fedora
+sudo dnf install python3-devel pkg-config cairo-gobject-devel \
+  gobject-introspection-devel webkit2gtk4.1 gstreamer1-plugins-good
+# Arch
+sudo pacman -S python pkgconf cairo gobject-introspection webkit2gtk-4.1 \
+  gst-plugins-good
+```
+
+Running a downloaded Linux release instead of building it? You still need
+WebKitGTK and the GStreamer plugins: the `webkit2gtk-4.1`/`webkit2gtk4.1`
+and plugins packages from the line for your distro above.
+
+Then:
+
+```sh
+git clone https://github.com/Liam-Griffiths/youslop.git
+cd youslop
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt pyinstaller pywebview pygobject
+.venv/bin/python scripts/fetch_ffmpeg.py
+.venv/bin/pyinstaller --noconfirm youslop.spec
+./dist/Youslop/Youslop
+```
+
+The app is the whole `dist/Youslop/` folder. Move it anywhere you like, but
+keep the folder together.
+
+### Windows
+
+In PowerShell:
+
+```powershell
+git clone https://github.com/Liam-Griffiths/youslop.git
+cd youslop
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt pyinstaller pywebview
+.venv\Scripts\python scripts\fetch_ffmpeg.py
+.venv\Scripts\pyinstaller --noconfirm youslop.spec
+.\dist\Youslop\Youslop.exe
+```
+
+The app is the whole `dist\Youslop\` folder; keep it together.
+
+### The AI narrator's voice files
+
+The narrator is built into the app, but its two voice files (~337MB) are a
+separate download. The first time you open the Record tab, it shows the
+exact folder they belong in and a command you can copy to fetch them. The
+folder is:
+
+| | |
+|---|---|
+| macOS | `~/Library/Application Support/Youslop/assets/tts/` |
+| Linux | `~/.local/share/youslop/assets/tts/` |
+| Windows | `%LOCALAPPDATA%\Youslop\assets\tts\` |
+
+Download both files into that folder, then restart Youslop:
+
+- [kokoro-v1.0.onnx](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx)
+- [voices-v1.0.bin](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin)
+
+You don't need these if you record your own voice.
 
 ## Licence
 

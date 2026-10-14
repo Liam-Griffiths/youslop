@@ -255,6 +255,17 @@ def _install_folder_dialog(window) -> None:
 
     main_mod.FOLDER_DIALOG = pick
 
+    # Saving a project file: a download from inside the webview has nowhere to
+    # go (pywebview turns downloads off), so the server writes the file itself
+    # to wherever the person picks.
+    def save_as(suggested: str) -> str:
+        result = window.create_file_dialog(wv.FileDialog.SAVE, save_filename=suggested)
+        if not result:
+            return ""
+        return result if isinstance(result, str) else result[0]
+
+    main_mod.SAVE_DIALOG = save_as
+
 
 def main(open_in_browser: bool = False) -> None:
     """Start the server and open the window. Blocks until the window closes."""

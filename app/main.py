@@ -8,6 +8,8 @@ import json
 import mimetypes
 import os
 import re
+import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,6 +33,7 @@ from . import custom_slide as custom_mod
 from . import diagram as diagram_mod
 from . import slide_styles
 from . import youtube as youtube_mod
+from . import transfer
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
 from .schema import VOICE_PRESETS, Presenter, Slide, Voice, new_channel, new_project
 from .store import project_dir
@@ -2201,6 +2204,61 @@ def pick_folder_dialog() -> dict:
     if not path:
         raise HTTPException(409, "No folder chosen.")
     return {"path": path}
+
+
+# ------------------------------------------------------ project files
+# The native "save as" dialog, set by app.desktop exactly like FOLDER_DIALOG
+# above: given a suggested file name, returns the path chosen, or "".
+SAVE_DIALOG: "Callable[[str], str] | None" = None
+
+
+@app.post("/api/projects/{pid}/export")
+def export_project_to(pid: str) -> dict:
+    """Save a project file wherever the native dialog says. 501 outside the
+    desktop app, where the page downloads it from the GET below instead."""
+    p = _load(pid)
+    if SAVE_DIALOG is None:
+        raise HTTPException(501, "No native save dialog in this context.")
+    chosen = SAVE_DIALOG(transfer.filename_for(p) + transfer.EXTENSION)
+    if not chosen:
+        raise HTTPException(409, "Not saved.")
+    dest = Path(chosen)
+    if dest.suffix != transfer.EXTENSION:
+        dest = dest.with_name(dest.name + transfer.EXTENSION)
+    return transfer.export(pid, dest)
+
+
+@app.get("/api/projects/{pid}/export")
+def export_project_download(pid: str) -> Response:
+    """The same file as a download, for a browser tab."""
+    from starlette.background import BackgroundTask
+    p = _load(pid)
+    name = transfer.filename_for(p) + transfer.EXTENSION
+    tmp = Path(tempfile.mkdtemp(prefix="export-", dir=CACHE_DIR)) / name
+    transfer.export(pid, tmp)
+    return FileResponse(tmp, filename=name, media_type="application/zip",
+                        background=BackgroundTask(shutil.rmtree, tmp.parent, True))
+
+
+@app.post("/api/projects/import")
+def import_project(file: UploadFile, on_conflict: str = Form("")) -> dict:
+    """Open a project file. A 409 means the project is already here; the page
+    asks, then sends it again with on_conflict "replace" or "copy"."""
+    if on_conflict not in ("", "replace", "copy"):
+        raise HTTPException(400, "on_conflict must be replace or copy")
+    with tempfile.NamedTemporaryFile(dir=CACHE_DIR, suffix=transfer.EXTENSION,
+                                     delete=False) as fh:
+        shutil.copyfileobj(file.file, fh)
+        tmp = Path(fh.name)
+    try:
+        return transfer.import_(tmp, on_conflict)
+    except transfer.AlreadyHere as exc:
+        raise HTTPException(409, {"message": str(exc), "already_here": True,
+                                  "id": exc.pid, "title": exc.title})
+    except transfer.TransferError as exc:
+        raise HTTPException(400, str(exc))
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 @app.get("/api/library/file/{asset_id}")

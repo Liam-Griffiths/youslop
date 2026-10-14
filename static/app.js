@@ -28,7 +28,14 @@ async function api(path, opts = {}) {
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
-  if (!res.ok) throw new Error((data && data.detail) || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = data && data.detail;
+    const err = new Error((typeof detail === 'string' ? detail : detail && detail.message)
+      || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.detail = detail;
+    throw err;
+  }
   return data;
 }
 
@@ -66,7 +73,9 @@ function paintSidebar() {
   const chanId = (hash.match(/^#\/c\/([^/]+)/) || [])[1];
   const onLibrary = hash === '#/library';
   const onSettings = hash === '#/settings';
+  const onGuide = hash === '#/guide';
 
+  $('.sidebar-link[data-route="guide"]')?.classList.toggle('active', onGuide);
   $('.sidebar-link[data-route="library"]')?.classList.toggle('active', onLibrary);
   $('.sidebar-link[data-route="settings"]')?.classList.toggle('active', onSettings);
 
@@ -272,12 +281,18 @@ async function route() {
   const chan = hash.match(/^#\/c\/([^/]+)(?:\/(\w+))?/);
   const lib = hash === '#/library';
   const settingsPage = hash === '#/settings';
+  const guidePage = hash === '#/guide';
   stopStream();
   // Every format picker (home, channel, project) paints from this, so it is
   // loaded once here rather than awaited in three places.
   await ensureSlideStyles();
 
-  if (settingsPage) {
+  if (guidePage) {
+    state.project = null;
+    state.channel = null;
+    state.job = null;
+    renderGuide();
+  } else if (settingsPage) {
     state.project = null;
     state.channel = null;
     state.job = null;
@@ -351,6 +366,132 @@ async function route() {
 
 window.addEventListener('hashchange', route);
 
+// ------------------------------------------------------------------- guide
+// The whole flow on one page, for someone who has never made a video here.
+// Static on purpose: it names the buttons as they are labelled elsewhere in
+// this file, so a renamed button wants its mention here renamed too.
+function renderGuide() {
+  $('#topbar-right').innerHTML = '';
+  const step = (n, title, body) => `
+    <div class="guide-step">
+      <div class="guide-num">${n}</div>
+      <div class="guide-body"><h3>${title}</h3>${body}</div>
+    </div>`;
+
+  view.innerHTML = `
+    <h1>How it works</h1>
+    <p class="sub">From an idea to a finished video in five tabs. Claude writes it, the
+      archives supply the pictures, you (or the AI narrator) read it, and Youslop cuts it.</p>
+
+    <div class="panel guide-before">
+      <h3>Before you start</h3>
+      <p>Youslop needs Claude to write scripts. Either have the
+        <a href="https://claude.com/claude-code" target="_blank">Claude Code CLI</a> installed
+        and signed in, or add an Anthropic API key in
+        <a href="#/settings">Settings</a>.</p>
+      <p>To have the script read for you instead of recording it yourself, the AI narrator
+        needs two voice files. The Record tab tells you where to put them the first time you
+        open it.</p>
+    </div>
+
+    <div class="guide-steps">
+      ${step(1, 'Start a video', `
+        <p>Open <a href="#/">New video</a> and choose how to begin:</p>
+        <ul>
+          <li><b>Start from an idea</b>: describe the story in a sentence or two. The more
+            specific, the better the script.</li>
+          <li><b>Paste a script</b>: bring your own words. <i>Faithful</i> keeps them as they
+            are; <i>Adapted</i> smooths written prose into something that reads aloud well.</li>
+        </ul>
+        <p>Pick a target length, a tone and a video style, then press <b>Write the script</b>
+          (or <b>Break it into a video</b>). It takes a few minutes: Claude writes the script,
+          and the archives are searched for a picture for each paragraph.</p>`)}
+
+      ${step(2, 'Read the script', `
+        <p>The <b>Script</b> tab shows the video one paragraph at a time. Each paragraph
+          becomes one recording and, by default, one picture.</p>
+        <ul>
+          <li><b>rewrite</b> a paragraph with an instruction, or <b>split</b> or
+            <b>delete</b> it.</li>
+          <li><b>check facts</b> checks the script against the research Claude did while
+            writing it, and flags anything it doesn't support. Worth running after you
+            edit.</li>
+          <li><b>rewrite whole script</b> starts the writing over. For a pasted script,
+            <b>re-split</b> breaks it into paragraphs again instead.</li>
+        </ul>`)}
+
+      ${step(3, 'Choose the pictures', `
+        <p>The <b>Media</b> tab shows the picture chosen for each paragraph and the
+          alternatives found. Click an alternative to use it instead.</p>
+        <ul>
+          <li><b>search for a picture…</b> to look for something else, or
+            <b>get a map…</b> for a place.</li>
+          <li>For a paragraph with no good photograph, have Claude draw a diagram or a
+            custom slide instead.</li>
+          <li><b>picture every</b> holds each picture across several paragraphs. Useful when
+            the archives are thin on a subject.</li>
+        </ul>`)}
+
+      ${step(4, 'Record the narration', `
+        <p>On the <b>Record</b> tab, choose who reads it:</p>
+        <ul>
+          <li><b>read it yourself</b>: press <b>● Record</b>, read the paragraph on screen,
+            press stop. <kbd>space</kbd> records and stops, <kbd>→</kbd> moves to the next
+            paragraph, <kbd>p</kbd> plays the take back, <kbd>r</kbd> discards it.
+            <b>check the microphone</b> first to hear how your room sounds.</li>
+          <li><b>AI voice</b>: pick a voice and a pace, then press <b>read the whole
+            script</b>, or <b>read this paragraph</b> for just one. It runs on your computer;
+            nothing is sent anywhere.</li>
+        </ul>
+        <p>The strip of squares at the bottom shows which paragraphs are done.
+          <b>jump to next blank</b> takes you to the first one that isn't.</p>`)}
+
+      ${step(5, 'Make a thumbnail', `
+        <p>On the <b>Thumbnail</b> tab, <b>choose a picture…</b> for the background and
+          type a short headline (a few words, not the title again), or press
+          <b>write me some</b> for suggestions.</p>`)}
+
+      ${step(6, 'Render', `
+        <p>On the <b>Render</b> tab, adjust the look (style, drift, crossfade, colour grade)
+          and the sound (music and how loud it sits under the voice).</p>
+        <ul>
+          <li><b>Preview cut (no voice)</b> is a quick check of the pictures and timing.</li>
+          <li><b>Render the video</b> makes the finished file.</li>
+          <li><b>credits for the description</b> lists where every picture came from, ready
+            to paste into YouTube.</li>
+        </ul>
+        <p>If the video belongs to a channel connected to YouTube, you can upload it from
+          here too.</p>`)}
+    </div>
+
+    <h2>Channels</h2>
+    <div class="panel guide-before">
+      <p>A channel is a series. Every video in it shares the same
+        opening slate, colours and defaults, so they look like they belong together.</p>
+      <p>Make one with <b>new channel</b> on the New video page or the <b>＋</b> in the
+        sidebar, then open it to set up its slate, music and the faces in its opening
+        titles. Pick the channel when starting a video and it picks up all of that.</p>
+      <p>A video doesn't need a channel. Leave it as a
+        <i>standalone video</i> to just make one.</p>
+    </div>
+
+    <h2>Taking a video to another computer</h2>
+    <div class="panel guide-before">
+      <p>On the video's page, <b>save project file…</b> puts the whole video in one
+        <span class="mono">.youslop</span> file: script, chosen pictures, recordings,
+        settings, and its channel, music and style if it has them.</p>
+      <p>On the other computer, press <b>open project file…</b> at the top of the
+        <a href="#/">New video</a> page and pick that file. If the video is already there,
+        you can replace it or keep both.</p>
+      <p>The finished video isn't included, to keep the file small. Render again on the
+        other computer.</p>
+    </div>
+
+    <div class="row" style="margin-top:26px">
+      <button class="btn primary" onclick="go('#/')">Make a video</button>
+    </div>`;
+}
+
 // -------------------------------------------------------------------- home
 async function renderHome() {
   const [projects, providers, chans] = await Promise.all([
@@ -365,9 +506,15 @@ async function renderHome() {
   const loose = byChannel('');
 
   view.innerHTML = `
-    <h1>Build a video</h1>
+    <div class="row" style="align-items:flex-start">
+      <h1 style="flex:1;min-width:0">Build a video</h1>
+      <button class="btn ghost sm" onclick="$('#projfile').click()"
+        title="a .youslop file saved from this or another computer">open project file…</button>
+      <input type="file" id="projfile" accept=".youslop" style="display:none"
+        onchange="openProjectFile(this.files[0]); this.value=''">
+    </div>
     <p class="sub">Describe the story. Claude writes the script, the archives supply the pictures,
-      you supply the voice.</p>
+      you supply the voice. <a href="#/guide">New here? See how it works.</a></p>
 
     <div class="panel">
       <div class="tabs" style="margin:0 0 18px">
@@ -392,7 +539,7 @@ async function renderHome() {
       ` : `
         <label class="field">
           <span>The idea</span>
-          <textarea id="idea" rows="4" placeholder="The life of Subrahmanyan Chandrasekhar — the 19-year-old who worked out how stars die on a boat to England, and spent decades being told he was wrong."></textarea>
+          <textarea id="idea" rows="4" placeholder="The history of YouTube slop — from Elsagate's knock-off cartoons and robot-voiced Top 10 lists to faceless AI channels uploading a video an hour, and why the algorithm kept rewarding them."></textarea>
         </label>
       `}
       <div class="grid-3">
@@ -476,6 +623,48 @@ async function renderHome() {
   if (state.presetChannel) {
     state.presetChannel = null;
     channelPicked();
+  }
+}
+
+// ------------------------------------------------------------ project files
+// One file per video, to carry it to another computer: see app/transfer.py.
+async function saveProjectFile() {
+  const p = state.project;
+  toast('Saving the project file…');
+  try {
+    // Inside the desktop app the server writes it via a native save dialog;
+    // a browser tab gets a 501 and downloads it instead.
+    const r = await api(`/api/projects/${p.id}/export`, { method: 'POST' });
+    toast(`Saved, ${r.size_mb} MB: ${r.path}`);
+  } catch (e) {
+    if (e.status === 501) location.href = `/api/projects/${p.id}/export`;
+    else if (e.status !== 409) toast(e.message, true);
+  }
+}
+
+async function openProjectFile(file, onConflict = '') {
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('on_conflict', onConflict);
+  toast(`Opening ${file.name}…`);
+  try {
+    const r = await api('/api/projects/import', { method: 'POST', body: form });
+    const extras = [r.channel && 'its channel', r.style && `the “${r.style}” style`,
+      r.music.length && `${r.music.length} music track${r.music.length === 1 ? '' : 's'}`]
+      .filter(Boolean);
+    toast(`Opened “${r.title}”${extras.length ? `, with ${extras.join(' and ')}` : ''}.`);
+    state.channels = null;
+    state.project = null;
+    go(`#/p/${r.id}`);
+  } catch (e) {
+    if (e.status === 409 && e.detail && e.detail.already_here) {
+      const replace = confirm(`“${e.detail.title}” is already on this computer.\n\n`
+        + 'OK replaces it with the version in this file.\n'
+        + 'Cancel keeps both, opening the file as a copy.');
+      return openProjectFile(file, replace ? 'replace' : 'copy');
+    }
+    toast(e.message, true);
   }
 }
 
@@ -788,7 +977,7 @@ async function createProject() {
 }
 
 async function newChannel() {
-  const name = prompt('Channel name\n(this is the title on the opening slate)', 'Who were they?');
+  const name = prompt('Channel name\n(this is the title on the opening slate)', 'Your channel name');
   if (!name) return;
   const concept = prompt('What does this channel cover?\nThis steers the scripts and who appears in the opening titles.',
     '') || '';
@@ -2116,6 +2305,8 @@ function render() {
         <h1>${esc(p.title || p.idea.slice(0, 60))}</h1>
         <p class="sub">${esc(p.subtitle || p.outline.thesis || '')}</p>
       </div>
+      <button class="btn ghost sm" onclick="saveProjectFile()"
+        title="everything in this video as one file, to open on another computer">save project file…</button>
       <button class="btn ghost sm" onclick="go('#/')">all videos</button>
     </div>
     <div class="tabs">
@@ -4085,7 +4276,33 @@ function aiVoicePanel(p, slide) {
         </div>
       `;
     } else if (isMissing) {
-      setupGuide = `<div style="margin-top:10px;color:var(--ink-faint);font-size:12px">See the README for model file downloads.</div>`;
+      // The folder is the per-user data folder in a packaged app, not the
+      // source checkout's assets/tts, so it is spelled out rather than left
+      // to the README.
+      const dir = t.model_path.replace(/[\\/][^\\/]+$/, '');
+      const base = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0';
+      const q = (s) => `"${s}"`;
+      // In PowerShell `curl` is Invoke-WebRequest and `mkdir -p` is not a
+      // thing; curl.exe ships with Windows 10 and later.
+      const win = t.model_path.includes('\\');
+      const cmd = [
+        win ? `New-Item -ItemType Directory -Force -Path ${q(dir)}` : `mkdir -p ${q(dir)}`,
+        `${win ? 'curl.exe' : 'curl'} -L -o ${q(t.model_path)} ${base}/kokoro-v1.0.onnx`,
+        `${win ? 'curl.exe' : 'curl'} -L -o ${q(t.voices_path)} ${base}/voices-v1.0.bin`,
+      ].join('\n');
+      setupGuide = `
+        <div style="margin-top:10px;font-size:12px;color:var(--ink-faint)">
+          Two model files (~337MB) need to be downloaded into
+          <code class="mono" style="user-select:all">${esc(dir)}</code>
+        </div>
+        <div style="margin-top:8px;background:#1a1a1a;border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
+          <pre style="margin:0;color:#4af626;font-size:12px;font-family:monospace;overflow-x:auto;padding-right:50px" id="weights-cmd">${esc(cmd)}</pre>
+          <button class="btn xs ghost" style="position:absolute;top:4px;right:4px"
+            onclick="navigator.clipboard.writeText($('#weights-cmd').textContent).then(() => toast('Copied to clipboard'), () => toast('Failed to copy', true))">copy</button>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:var(--ink-faint)">Run in a terminal, then restart Youslop.</div>`;
+    } else if (t.detail) {
+      setupGuide = `<div style="margin-top:10px;font-size:12px;color:var(--ink-faint);user-select:text">${esc(t.detail)}</div>`;
     }
     return `<div class="panel warn-panel" style="margin-top:14px">
       <strong>The local voice model is not ready.</strong>

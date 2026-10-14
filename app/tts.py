@@ -20,6 +20,7 @@ from typing import Callable
 
 from . import ffutil
 from .config import KOKORO_MODEL, KOKORO_VOICES
+from .paths import FROZEN
 from .schema import Voice
 
 Progress = Callable[[str], None]
@@ -78,13 +79,29 @@ VOICE_IDS = {v["id"] for v in VOICES}
 DEFAULT_VOICE = "bm_george"
 
 
+# Why the last import failed, for the status panel. In a packaged app the
+# engine ships inside the bundle, so a failure there is a packaging bug and the
+# exception is the only useful thing to show — "pip install" would put the
+# package into some other Python the app can never see.
+_IMPORT_ERROR = ""
+
+
 def is_installed() -> bool:
     """Whether the package imports. Says nothing about the weights."""
+    global _IMPORT_ERROR
     try:
         import kokoro_onnx  # noqa: F401
-    except Exception:
+    except Exception as exc:
+        _IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
         return False
+    _IMPORT_ERROR = ""
     return True
+
+
+def _not_installed_detail() -> str:
+    if FROZEN:
+        return f"The bundled voice engine failed to load ({_IMPORT_ERROR})"
+    return "pip install kokoro-onnx soundfile"
 
 
 def weights_present() -> bool:
@@ -99,12 +116,14 @@ def status() -> dict:
         "installed": installed,
         "weights": weights,
         "model_path": str(KOKORO_MODEL),
+        "voices_path": str(KOKORO_VOICES),
+        "frozen": FROZEN,
         "voices": VOICES,
         "default_voice": DEFAULT_VOICE,
         "detail": (
             "" if installed and weights
             else (
-                "pip install kokoro-onnx soundfile"
+                _not_installed_detail()
                 if not installed
                 else f"Model files missing from {KOKORO_MODEL.parent}"
             )
@@ -117,7 +136,8 @@ def _model():
     if _MODEL is not None:
         return _MODEL
     if not is_installed():
-        raise TTSError("The kokoro-onnx package is not installed. "
+        raise TTSError(_not_installed_detail() if FROZEN else
+                       "The kokoro-onnx package is not installed. "
                        "Run: pip install kokoro-onnx soundfile")
     if not weights_present():
         raise TTSError(f"Kokoro's model files are not in {KOKORO_MODEL.parent}. "

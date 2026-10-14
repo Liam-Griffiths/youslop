@@ -1,26 +1,28 @@
-To build the macOS app, you need to run PyInstaller with the spec file. Here are the steps:
+# Building Youslop — maintainer notes
 
-# Install PyInstaller if you don't have it
-pip install pyinstaller
+The step-by-step build for macOS, Linux and Windows is in the
+[README](README.md#building-it-yourself). This file covers what's behind it.
 
-# Build the app using the spec file
-pyinstaller youslop.spec
-
-This will:
-1. Create a Youslop.app bundle in the dist/ directory
-2. Bundle all dependencies (ffmpeg, fonts, etc.) into the app package
-3. Exclude TTS/Kokoro to keep the build smaller
-
-Output locations:
-- dist/Youslop.app — The compiled macOS app (ready to run or distribute)
-- build/youslop/ — Build artifacts and intermediate files
-
-To run the app after building:
-open dist/Youslop.app
-
-Notes from the spec:
-- The first build excludes Kokoro/onnxruntime/soundfile to keep it fast and reduce the failure surface
-- It includes bundled ffmpeg (see scripts/fetch_ffmpeg.py)
-- Microphone permissions are handled via macOS-specific code in app/desktop.py
-
-If you need a signed/notarized release build for distribution, there's a packaging plan mentioned in the spec comments you'd need to follow.
+- **One spec, every platform.** `youslop.spec` builds for whatever it runs on.
+  PyInstaller does not cross-compile, so each OS/architecture needs its own
+  build machine (or CI runner).
+- **Output.** macOS: `dist/Youslop.app`. Linux/Windows: the `dist/Youslop/`
+  folder. For a release, archive it:
+  `tar -C dist -czf dist/youslop-<version>-linux-<arch>.tar.gz Youslop`
+  (zip the folder on Windows).
+- **ffmpeg** is fetched by `scripts/fetch_ffmpeg.py` (gitignored, ~250MB) and
+  checked against `resources/bin/MANIFEST.json`. Commit the manifest when a
+  new platform is added.
+- **Linux** bundles GTK and WebKitGTK from the build machine, so target
+  machines need a glibc at least as new as the build machine's. The spec
+  limits the GTK hook to the Adwaita theme. Without that limit it copies every
+  icon theme installed (~400MB).
+- **The voice engine** (kokoro-onnx, onnxruntime, espeak-ng, soundfile) is
+  bundled. A packaged app runs its own private Python, so a `pip install`
+  outside it can never be seen. Only the model weights stay outside, in the
+  per-user data folder (`app/paths.py`); `YOUSLOP_DATA` overrides it.
+- **Tested so far:** macOS (arm64) and Linux (arm64, Arch). The Windows path
+  and microphone permission handling on Linux/Windows (`app/desktop.py`)
+  have not been run on real hardware yet.
+- **Signing/notarisation** for a distributable macOS build is not set up yet;
+  see the packaging plan referenced in the spec comments.
