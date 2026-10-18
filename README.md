@@ -1,32 +1,16 @@
 # Youslop
 
 Youslop turns an idea or a script into a narrated, illustrated video: Claude
-writes it, the archives (Wikimedia, the Library of Congress, the Met, and more)
-supply the pictures, you supply the voice, ffmpeg cuts the final file. It runs
+writes it, it searches for images or you supply them, it generates a voice or you supply the voice yourself, ffmpeg cuts the final file. It runs
 entirely on your own machine — your Claude subscription or API key, your
-microphone, your render.
+microphone, your render. Voila a low effort slop youtube video.
 
 ## Why this exists
 
-The name is honest about what it makes. Youslop turns an idea into a narrated,
-illustrated video with almost no effort — that's slop, by most people's
-definition, and pretending otherwise would be the actual dishonesty.
+YouTube is now overrun with low effort slop content. This janky vibe coded tool aims to make it so easy and lazy to produce low effort slop content that YouTube will be foreced to implement solutions to make slop content unprofitable. Real creators that make quality content are being drowned out in a sea of garbage, and users are forced to wade through that sea of garbage to find the creator we like. This must end.
 
-YouTube is already filling up with this kind of thing: faceless channels
-pumping out cheap, repetitive AI video, because making a video the old way
-took real effort, and a little effort used to be enough to keep the worst of
-it out. That filter is gone. Anyone can prompt their way to a video now,
-whether this tool exists or not.
-
-So rather than pretend to be above it, Youslop leans in: a free, genuinely
-capable local tool that makes slop *easier*, not harder, to produce. The bet
-is that flooding the problem rather than politely ignoring it is what
-actually forces a response — a platform can tolerate a slow trickle of AI
-video indefinitely, but not an ocean of it. At some point the only way to
-protect real creators from being buried is to clamp down on low-effort AI
-content properly, and that point arrives faster the easier slop is to make.
-Youslop is built to help drag that day forward, not to be the exception that
-proves the rule.
+Here is an Example video created with no effort at all:
+https://www.youtube.com/watch?v=YAlnSGxnru4
 
 ## Using it
 
