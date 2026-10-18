@@ -591,6 +591,10 @@ class Project:
     voice_track: str = ""
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, this video
     music: str = ""          # a filename in assets/music, AUTO_MUSIC, or "" = none
+    # The YouTube description and tags, as last written (by the generator or
+    # by hand). Kept on the project so the upload form starts from them.
+    description: str = ""
+    yt_tags: list[str] = field(default_factory=list)
     render: dict = field(default_factory=dict)   # last render result
     log: list[str] = field(default_factory=list)
 
@@ -640,6 +644,8 @@ class Project:
             "narrator": self.narrator.to_dict(),
             "lexicon": self.lexicon,
             "music": self.music,
+            "description": self.description,
+            "yt_tags": self.yt_tags,
             "render": self.render,
             "log": self.log[-200:],
             "picture_runs": self.picture_runs(),

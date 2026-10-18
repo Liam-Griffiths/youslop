@@ -299,4 +299,97 @@ def upload_video(
 
 
 def default_description(project: Project) -> str:
-    return credits_text(project)
+    return project.description or credits_text(project)
+
+
+# ---------------------------------------------------------------- description
+CHAPTER_MIN_GAP = 10.0      # YouTube ignores a chapter list with one shorter
+
+
+def _stamp(seconds: float) -> str:
+    s = int(max(0, seconds))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+
+
+def chapter_points(project: Project) -> tuple[list[dict], bool]:
+    """Where the video's chapters start, from the same timeline the render
+    uses — so the timestamps land where the sections actually begin.
+
+    Marked chapters are used when there are at least two; otherwise the
+    outline's beats stand in, named by the description writer. Returns the
+    points and whether every paragraph is recorded (if not, the times are
+    estimates and will move).
+
+    YouTube only shows chapters when the first is at 0:00, there are at least
+    three, and each runs ten seconds or more, so the list is shaped to that:
+    the opening is pinned to 0:00 and anything closer than ten seconds to the
+    previous point is folded into it.
+    """
+    from . import render
+    tl = render.timeline(project)
+    paras = [p for seg in tl["segments"] if seg["type"] == "picture" for p in seg["paragraphs"]]
+    by_id = {s.id: s for s in project.slides}
+    marked = [p for p in paras if (p.get("chapter") or "").strip()]
+    points: list[dict] = []
+    if len(marked) >= 2:
+        for p in marked:
+            points.append({"t": p["start"], "title": p["chapter"].strip(), "text": p["text"]})
+    else:
+        last_beat = None
+        for p in paras:
+            beat = (by_id[p["id"]].beat or "").strip() if p["id"] in by_id else ""
+            if beat and beat != last_beat:
+                points.append({"t": p["start"], "title": "", "text": p["text"]})
+            last_beat = beat or last_beat
+    if not points or points[0]["t"] > 0.01:
+        first = paras[0]["text"] if paras else ""
+        points.insert(0, {"t": 0.0, "title": "", "text": first})
+    points[0]["t"] = 0.0
+    shaped: list[dict] = []
+    for p in points:
+        if shaped and p["t"] - shaped[-1]["t"] < CHAPTER_MIN_GAP:
+            continue
+        shaped.append(p)
+    for p in shaped:
+        p["start"] = _stamp(p["t"])
+    return shaped, all(s.take for s in project.slides)
+
+
+def build_description(project: Project, progress: Callable[[str], None] = lambda m: None) -> dict:
+    """Write the whole description: Claude's hook and summary, chapters timed
+    off the timeline, hashtags, and the picture credits."""
+    from . import script_gen
+    points, exact = chapter_points(project)
+    progress(f"Writing the description ({len(points)} chapter point(s))")
+    words = script_gen.write_description(project, points)
+    titles = words["chapter_titles"]
+    lines = [words["hook"], ""]
+    if words["summary"]:
+        lines += [words["summary"], ""]
+    if len(points) >= 3:
+        lines.append("Chapters")
+        for n, p in enumerate(points):
+            title = (titles[n] if n < len(titles) and titles[n] else p["title"]) or (
+                "Intro" if n == 0 else f"Part {n + 1}")
+            lines.append(f"{p['start']} {title}")
+        lines.append("")
+    credits = credits_text(project).split("\n")
+    # credits_text opens with the title, which the description doesn't repeat.
+    while credits and not credits[0].lower().startswith(("image", "opening", "music")):
+        credits.pop(0)
+    # The licence reminder at the end is for the creator, not the viewer.
+    credits = [c for c in credits if not c.startswith("Verify every licence")]
+    if [c for c in credits if c.startswith("- ")] == [] and not any(
+            c.startswith("Music:") for c in credits):
+        credits = []          # a heading with nothing under it
+    while credits and not credits[-1].strip():
+        credits.pop()
+    if credits:
+        lines += credits + [""]
+    if words["hashtags"]:
+        lines.append(" ".join(f"#{h}" for h in words["hashtags"]))
+    text = "\n".join(lines).strip()[:5000]
+    return {"description": text, "tags": words["tags"], "chapters": len(points),
+            "exact": exact}

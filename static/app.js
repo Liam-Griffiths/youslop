@@ -477,8 +477,8 @@ function renderGuide() {
         <ul>
           <li><b>Preview cut (no voice)</b> is a quick check of the pictures and timing.</li>
           <li><b>Render the video</b> makes the finished file.</li>
-          <li><b>credits for the description</b> lists where every picture came from, ready
-            to paste into YouTube.</li>
+          <li><b>YouTube description</b> writes the description — hook, chapters with
+            timestamps and picture credits — ready to paste into YouTube.</li>
         </ul>
         <p>If the video belongs to a channel connected to YouTube, you can upload it from
           here too.</p>`)}
@@ -6037,6 +6037,8 @@ async function paintRender() {
 
     ${openingPanel(p)}
 
+    ${descriptionPanel(p)}
+
     ${presenterPanel(p)}
 
     <div class="panel" style="margin-top:18px">
@@ -6068,7 +6070,6 @@ async function paintRender() {
           onclick="revealFile('project','${p.id}','${esc(encodeURIComponent(p.render.output))}')">
           open the folder</button>
         <a class="btn sm" href="/api/projects/${p.id}/download">download</a>
-        <button class="btn sm ghost" onclick="showCredits()">credits for the description</button>
       </div>
       ${await uploadPanel(p)}` : ''}
   `;
@@ -6366,12 +6367,15 @@ async function uploadPanel(p) {
   }
 
   if (!state.upload || state.upload.pid !== p.id) {
-    let description = '';
-    try { description = (await api(`/api/projects/${p.id}/credits`)).text || ''; }
-    catch { /* the field just starts blank */ }
+    // The written description if there is one; the bare credits otherwise.
+    let description = p.description || '';
+    if (!description) {
+      try { description = (await api(`/api/projects/${p.id}/credits`)).text || ''; }
+      catch { /* the field just starts blank */ }
+    }
     state.upload = {
       pid: p.id, title: p.title || p.idea.slice(0, 90), description,
-      tags: '', category_id: '22', privacy: 'private',
+      tags: (p.yt_tags || []).join(', '), category_id: '22', privacy: 'private',
     };
   }
   const u = state.upload;
@@ -6430,6 +6434,68 @@ async function doYoutubeUpload() {
   });
   watchJob(r.job, 'youtube upload');
   render();
+}
+
+// ------------------------------------------------------------ description
+// The YouTube description: Claude writes the hook, the summary and the tags;
+// the chapter timestamps come off the timeline and the credits off the
+// pictures, so neither is guessed. Editable, and kept on the project.
+function descriptionPanel(p) {
+  const text = p.description || '';
+  const chars = text.length;
+  return `
+    <div class="panel" style="margin-top:18px">
+      <div class="row" style="margin-bottom:10px">
+        <strong>YouTube description</strong>
+        <span class="mono" style="color:var(--ink-faint)">hook, summary, chapters with
+          timestamps, credits and tags</span>
+        <div class="spacer"></div>
+        <button class="btn sm ${text ? 'ghost' : 'primary'}" onclick="writeDescription()">
+          ${text ? 'write it again' : 'write it'}</button>
+        ${text ? `<button class="btn sm" onclick="copyDescription()">copy</button>` : ''}
+      </div>
+      ${text ? `
+        <textarea id="desc-text" rows="14" style="width:100%;font-family:var(--mono, monospace);font-size:13px"
+          onchange="saveDescription(this.value)">${esc(text)}</textarea>
+        <div class="row" style="margin-top:6px">
+          <span class="mono" style="color:${chars > 4800 ? 'var(--warn, #e0a050)' : 'var(--ink-faint)'}">
+            ${chars.toLocaleString()} / 5,000 characters</span>
+          <div class="spacer"></div>
+          ${p.recorded_count < p.slides.length ? `<span class="pill warn">${p.slides.length - p.recorded_count}
+            paragraph${p.slides.length - p.recorded_count === 1 ? '' : 's'} not recorded — chapter
+            times are estimates; write it again after recording</span>` : ''}
+        </div>
+        <label class="field" style="margin:10px 0 0"><span>Tags — comma separated</span>
+          <input type="text" value="${esc((p.yt_tags || []).join(', '))}"
+            onchange="saveProject({yt_tags:this.value.split(',').map((t)=>t.trim()).filter(Boolean)})"></label>`
+      : `<div class="mono" style="color:var(--ink-faint)">
+          Chapters use the paragraphs you've marked as chapters (two or more), or the
+          script's outline beats if you haven't. Timestamps are taken from the cut itself.</div>`}
+    </div>`;
+}
+
+async function writeDescription() {
+  const p = state.project;
+  if (p.description && !confirm('Write the description again? Your edits to it will be replaced.')) return;
+  try {
+    const r = await api(`/api/projects/${p.id}/description`, { method: 'POST' });
+    watchJob(r.job, 'description', (j) => {
+      if (j.state === 'done') { state.upload = null; render(); }
+    });
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function saveDescription(text) {
+  await saveProject({ description: text });
+  state.upload = null;      // the upload form starts from the saved one
+}
+
+async function copyDescription() {
+  const el = document.getElementById('desc-text');
+  const text = el ? el.value : (state.project.description || '');
+  try { await navigator.clipboard.writeText(text); toast('description copied'); }
+  catch { if (el) { el.select(); document.execCommand('copy'); toast('description copied'); } }
 }
 
 // -------------------------------------------------------- talking-head clip
@@ -6574,13 +6640,6 @@ async function doRender(preview) {
     { method: 'POST', body: JSON.stringify({ preview }) });
   watchJob(r.job, preview ? 'preview render' : 'render');
   render();
-}
-
-async function showCredits() {
-  const r = await api(`/api/projects/${state.project.id}/credits`);
-  const w = window.open('', '_blank');
-  w.document.write(`<pre style="font:13px ui-monospace,monospace;white-space:pre-wrap;
-    padding:30px;background:#111;color:#ddd">${esc(r.text)}</pre>`);
 }
 
 route();

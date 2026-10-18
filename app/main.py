@@ -886,6 +886,10 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
         for key in ("title", "subtitle", "tone", "music", "idea", "channel_id"):
             if key in payload:
                 setattr(p, key, payload[key])
+        if "description" in payload:
+            p.description = str(payload["description"])[:5000]
+        if isinstance(payload.get("yt_tags"), list):
+            p.yt_tags = [str(t).strip()[:60] for t in payload["yt_tags"] if str(t).strip()][:30]
         if "use_intro" in payload:
             p.use_intro = bool(payload["use_intro"])
         if "use_outro" in payload:
@@ -2520,6 +2524,26 @@ def timeline_mix(pid: str) -> dict:
             return render.build_mix(store.load(pid), progress)
 
     return {"job": jobs.start("timeline sound", pid, work)}
+
+
+@app.post("/api/projects/{pid}/description")
+def write_description(pid: str) -> dict:
+    """Write the YouTube description and tags, and keep them on the project."""
+    _load(pid)
+
+    def work(progress):
+        p = store.load(pid)
+        out = youtube_mod.build_description(p, progress)
+        with store.lock_for(pid):
+            fresh = store.load(pid)
+            fresh.description = out["description"]
+            fresh.yt_tags = out["tags"]
+            store.save(fresh)
+        progress("Description written" + ("" if out["exact"] else
+                 " — some paragraphs aren't recorded yet, so the chapter times are estimates"))
+        return out
+
+    return {"job": jobs.start("description", pid, work)}
 
 
 @app.get("/api/projects/{pid}/credits")

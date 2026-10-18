@@ -1260,3 +1260,60 @@ Return JSON: {{"text": "the rewritten paragraph"}}"""
     out = complete_json(prompt, system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=600)
     text = (out.get("text") if isinstance(out, dict) else str(out)) or ""
     return text.strip()
+
+
+def write_description(project: Project, chapters: list[dict]) -> dict:
+    """The words of a YouTube description: a hook, a summary, tags, and names
+    for any chapters that came without one.
+
+    `chapters` is [{"start": "1:23", "title": "" or a marked title, "text": the
+    paragraph that opens it}]. Timestamps are worked out from the timeline, not
+    by the model; it only names what is unnamed.
+    """
+    outline = project.outline or {}
+    script = "\n\n".join(s.narration.strip() for s in project.slides if s.narration.strip())
+    if len(script) > 14000:
+        script = script[:14000] + " …"
+    marks = "\n".join(f'{i}. at {c["start"]}: title="{c["title"]}" — opens with: '
+                      f'"{c["text"][:220]}"' for i, c in enumerate(chapters))
+    prompt = f"""Write the YouTube description for this video.
+
+TITLE: {project.title or outline.get('title', '')}
+{f'SUBTITLE: {project.subtitle}' if project.subtitle else ''}
+THESIS: {outline.get('thesis', '')}
+TONE: {project.tone}
+
+THE NARRATION:
+{script}
+
+CHAPTERS (already timed — keep the order, name any with an empty title):
+{marks or '(none)'}
+
+Write:
+- "hook": the first one or two sentences of the description, under 150
+  characters in all. This is what shows above "...more" and in search, so it
+  says what the viewer gets, in plain words, with the main search term early.
+  No clickbait, no emoji, no "In this video".
+- "summary": 2-4 sentences expanding on it — what the video covers and why it
+  matters. Only claims the narration makes; no invented facts or figures.
+- "chapter_titles": one title per chapter above, in order, 2-5 words each.
+  Keep a non-empty title as given unless it is unclear.
+- "tags": 8-15 search tags, lowercase, most specific first.
+- "hashtags": exactly 3, without the # sign, single words or CamelCase.
+
+Return JSON: {{"hook": "...", "summary": "...", "chapter_titles": ["..."],
+"tags": ["..."], "hashtags": ["..."]}}"""
+    out = complete_json(
+        prompt, model=MODEL_UTILITY, timeout=300,
+        require=lambda v: isinstance(v, dict) and bool(v.get("hook")),
+        require_hint='Return one JSON object with "hook", "summary", "chapter_titles", '
+                     '"tags" and "hashtags".')
+    titles = [str(t).strip()[:60] for t in (out.get("chapter_titles") or [])]
+    return {
+        "hook": str(out.get("hook") or "").strip(),
+        "summary": str(out.get("summary") or "").strip(),
+        "chapter_titles": titles,
+        "tags": [str(t).strip().lower()[:60] for t in (out.get("tags") or []) if str(t).strip()][:20],
+        "hashtags": [str(t).strip().lstrip("#").replace(" ", "")[:40]
+                     for t in (out.get("hashtags") or []) if str(t).strip()][:3],
+    }

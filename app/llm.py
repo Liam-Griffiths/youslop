@@ -110,6 +110,39 @@ def backend_status() -> dict:
     }
 
 
+def _envelope(stdout: str) -> dict | None:
+    """The CLI's JSON result, found in whatever else landed on stdout.
+
+    A version manager's shim can print its own line first — mise announces
+    "mise ~/.config/mise/config.toml tools: claude@…" before handing over — so
+    the envelope is not always the whole of stdout. It is the last line that
+    parses as a JSON object; failing that, the text from the first "{".
+    """
+    text = stdout.strip()
+    try:
+        whole = json.loads(text)
+        return whole if isinstance(whole, dict) else None
+    except json.JSONDecodeError:
+        pass
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict):
+                return obj
+    at = text.find("{")
+    if at > 0:
+        try:
+            obj = json.loads(text[at:])
+            return obj if isinstance(obj, dict) else None
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def _complete_cli(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
     effort: str = "",
@@ -161,10 +194,9 @@ def _complete_cli(
             raise LLMUnavailable(_readable(said)[:800])
         raise LLMError(f"claude exited {proc.returncode}: {said[:800]}")
 
-    try:
-        payload = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise LLMError(f"Unparseable CLI envelope: {proc.stdout[:400]}") from exc
+    payload = _envelope(proc.stdout)
+    if payload is None:
+        raise LLMError(f"Unparseable CLI envelope: {proc.stdout[:400]}")
 
     if payload.get("is_error"):
         said = str(payload.get("result"))

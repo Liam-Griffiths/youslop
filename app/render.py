@@ -1969,6 +1969,11 @@ def timeline(project: Project) -> dict:
 
 
 # --------------------------------------------------------------- attribution
+def _one_line(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
 def credits_text(project: Project) -> str:
     """An attribution block to paste into the video description."""
     lines = [f"{project.title}", ""]
@@ -1984,9 +1989,13 @@ def credits_text(project: Project) -> str:
         if key in seen:
             continue
         seen.add(key)
-        bits = [cand.get("title") or "Untitled"]
+        # The creator's own uploads need no credit line.
+        if cand.get("license") == "your own file":
+            continue
+        bits = [_one_line(cand.get("title") or "Untitled", 120)]
         if cand.get("author"):
-            bits.append(f"by {cand['author']}")
+            # Archive author fields can be whole paragraphs of wiki markup.
+            bits.append(f"by {_one_line(cand['author'], 80)}")
         if cand.get("license"):
             bits.append(f"({cand['license']})")
         if cand.get("source_page"):
