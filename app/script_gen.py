@@ -767,7 +767,8 @@ def generate(project: Project, progress: Progress = lambda m: None,
             progress(f"Picking up research already gathered "
                      f"({len(research.get('facts', []))} fact(s))")
     else:
-        research = script_research.gather(project.idea, progress)
+        research = script_research.gather(project.idea, progress,
+                                          mode=project.research_mode)
         project.draft["research"] = research      # {} is a valid, banked result
         checkpoint()
     project.research = research

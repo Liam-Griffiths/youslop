@@ -574,6 +574,10 @@ class Project:
     # back — a video written before this existed, or without research
     # configured, just has an empty one.
     research: dict = field(default_factory=dict)
+    # "quick" or "deep" as chosen on the idea form. "" means the app-wide
+    # YOUSLOP_RESEARCH_MODE setting decides — every video made before this
+    # existed, and any made without the choice.
+    research_mode: str = ""
     # Work in progress from a script run that did not finish: the outline it
     # settled on and the sections already written. A run costs real model time,
     # and a usage limit two sections into six used to throw all of it away.
@@ -635,6 +639,7 @@ class Project:
             "updated_at": self.updated_at,
             "outline": self.outline,
             "research": self.research,
+            "research_mode": self.research_mode,
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
             "style": self.style.to_dict(),

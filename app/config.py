@@ -191,6 +191,39 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 # selects it. See app/llm.py:_complete_ollama().
 OLLAMA_URL = os.environ.get("YOUSLOP_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("YOUSLOP_OLLAMA_MODEL", "qwen2.5:7b-instruct")
+# Ollama's context window per call. Its own default is far smaller than a
+# research dossier (up to ~20 sources), and it truncates silently when a prompt
+# overflows, so this is always sent explicitly.
+OLLAMA_CONTEXT = int(os.environ.get("YOUSLOP_OLLAMA_CONTEXT", "32768") or 32768)
+
+# Other chat providers, opt-in only. All three speak the OpenAI chat-completions
+# protocol, so one client serves them (see app/llm.py). The model names are
+# defaults that were not verified against each provider's live model list when
+# written; set the env vars to whatever the account actually has. "script" is
+# what the "opus" alias resolves to and "utility" what "sonnet" resolves to.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "").strip()
+OPENAI_COMPAT = {
+    "openai": {
+        "label": "OpenAI", "base": "https://api.openai.com/v1",
+        "key": OPENAI_API_KEY,
+        "script": os.environ.get("YOUSLOP_OPENAI_MODEL_SCRIPT", "gpt-5.6-sol"),
+        "utility": os.environ.get("YOUSLOP_OPENAI_MODEL_UTILITY", "gpt-5.6-luna"),
+    },
+    "deepseek": {
+        "label": "DeepSeek", "base": "https://api.deepseek.com",
+        "key": DEEPSEEK_API_KEY,
+        "script": os.environ.get("YOUSLOP_DEEPSEEK_MODEL_SCRIPT", "deepseek-reasoner"),
+        "utility": os.environ.get("YOUSLOP_DEEPSEEK_MODEL_UTILITY", "deepseek-chat"),
+    },
+    "grok": {
+        "label": "Grok (xAI)", "base": "https://api.x.ai/v1",
+        "key": XAI_API_KEY,
+        "script": os.environ.get("YOUSLOP_GROK_MODEL_SCRIPT", "grok-4"),
+        "utility": os.environ.get("YOUSLOP_GROK_MODEL_UTILITY", "grok-4-1-fast-non-reasoning"),
+    },
+}
 
 # ---------------------------------------------------------------- api keys
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY", "")
@@ -209,6 +242,16 @@ STORYBLOCKS_SECRET = os.environ.get("STORYBLOCKS_SECRET_KEY", "")
 # metered API. "" disables research grounding — the writer falls back to its
 # own hedging instructions, same as before this existed.
 SEARXNG_URL = os.environ.get("SEARXNG_URL", "").rstrip("/")
+# Where research finds its results: "searxng", "claude" (Claude's own web
+# search, needs ANTHROPIC_API_KEY, no server to run) or "auto" — SearXNG if a
+# URL is set, else Claude's search if a key is. See app/research.py.
+SEARCH_BACKEND = os.environ.get("YOUSLOP_SEARCH_BACKEND", "auto").strip().lower()
+# Brave Search API — free tier, key from brave.com/search/api. Used when set.
+BRAVE_SEARCH_KEY = os.environ.get("BRAVE_SEARCH_API_KEY", "").strip()
+# How far the research step goes. "quick" is one pass of search and synthesis;
+# "deep" is Claude's research mode — rounds of planning, follow-up searches and
+# page reads before it writes. Both need SEARXNG_URL. See app/research.py.
+RESEARCH_MODE = os.environ.get("YOUSLOP_RESEARCH_MODE", "quick").strip().lower()
 
 # A Google Cloud "Desktop app" OAuth client, for publishing a rendered video
 # straight to YouTube. "" disables the feature entirely — the channel page's

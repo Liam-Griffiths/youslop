@@ -594,6 +594,15 @@ async function renderHome() {
         </label>
       </div>
 
+      ${state.mode === 'script' ? '' : `
+        <label class="field">
+          <span>Research</span>
+          <select id="research" onchange="state.newResearch=this.value">
+            <option value="quick" ${(state.newResearch || 'quick') === 'quick' ? 'selected' : ''}>Quick — one search pass</option>
+            <option value="deep" ${state.newResearch === 'deep' ? 'selected' : ''}>Deep — Claude's research mode, several rounds (slower, more Claude calls)</option>
+          </select>
+        </label>`}
+
       <label class="field"><span>Video style</span></label>
       ${formatPicker(state.newFormat || 'kenburns', '#E8C36A', 'pickNewFormat')}
 
@@ -995,6 +1004,7 @@ async function createProject() {
     body.idea = $('#idea').value.trim();
     if (body.idea.length < 8) return toast('Give me a sentence or two to work with.', true);
     body.target_minutes = +$('#mins').value;
+    body.research_mode = $('#research').value;
   }
 
   const btn = event.target;

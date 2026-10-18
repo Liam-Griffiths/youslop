@@ -12,6 +12,7 @@ way, which is the point — `script_gen.py` and `research.py` write "opus" or
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -21,8 +22,10 @@ from typing import Any, Callable
 
 from .config import (
     ANTHROPIC_API_KEY, CLAUDE_BIN, EFFORT, LLM_BACKEND, MODEL_SCRIPT,
-    MODEL_UTILITY, OLLAMA_MODEL, OLLAMA_URL,
+    MODEL_UTILITY, OLLAMA_CONTEXT, OLLAMA_MODEL, OLLAMA_URL, OPENAI_COMPAT,
 )
+
+log = logging.getLogger("youslop.llm")
 
 
 class LLMError(RuntimeError):
@@ -83,7 +86,7 @@ def resolve_backend() -> str:
     is never chosen by auto — see the note on `OLLAMA_URL` in config.py for
     why a fully-local fallback needs to be a decision, not a default.
     """
-    if LLM_BACKEND in ("cli", "api", "ollama"):
+    if LLM_BACKEND in ("cli", "api", "ollama", *OPENAI_COMPAT):
         return LLM_BACKEND
     if shutil.which(CLAUDE_BIN) or Path(CLAUDE_BIN).is_file():
         return "cli"
@@ -102,7 +105,8 @@ def backend_status() -> dict:
     cli_found = bool(shutil.which(CLAUDE_BIN)
                      or Path(CLAUDE_BIN).is_file())
     return {
-        "configured": LLM_BACKEND if LLM_BACKEND in ("cli", "api") else "auto",
+        "configured": LLM_BACKEND if LLM_BACKEND in ("cli", "api", "ollama",
+                                                    *OPENAI_COMPAT) else "auto",
         "resolved": resolve_backend(),
         "cli_found": cli_found,
         "cli_path": CLAUDE_BIN if cli_found else "",
@@ -300,12 +304,19 @@ def _complete_ollama(
     """
     import httpx
 
+    # Roughly four characters to a token for English prose. A prompt that
+    # cannot fit is cut off by Ollama without a word, so say so in the log.
+    approx_tokens = (len(system) + len(prompt)) // 4
+    if approx_tokens > OLLAMA_CONTEXT:
+        log.warning("ollama: prompt is about %d tokens, over the %d-token context "
+                    "(YOUSLOP_OLLAMA_CONTEXT); the model will not see all of it",
+                    approx_tokens, OLLAMA_CONTEXT)
     body = {
         "model": OLLAMA_MODEL,
         "messages": ([{"role": "system", "content": system}] if system else [])
                     + [{"role": "user", "content": prompt}],
         "stream": False,
-        "options": {"temperature": 0.3},
+        "options": {"temperature": 0.3, "num_ctx": OLLAMA_CONTEXT},
     }
     try:
         response = httpx.post(f"{OLLAMA_URL}/api/chat", json=body, timeout=timeout)
@@ -331,6 +342,66 @@ def _complete_ollama(
     return text
 
 
+def _complete_openai_compat(
+    provider: str, prompt: str, system: str, model: str, timeout: int,
+    allow_search: bool, effort: str = "",
+) -> str:
+    """The same prompt, answered by OpenAI, DeepSeek or xAI through their
+    chat-completions endpoint. One client for all three, because they share the
+    protocol; only the base URL, key and model names differ.
+
+    `model` is the alias every caller writes: MODEL_SCRIPT and MODEL_UTILITY map
+    to that provider's script and utility model, and anything else is passed
+    through as a real model id. `allow_search` and `effort` are ignored — these
+    are plain completions here, and research's search runs in app/research.py.
+    """
+    import httpx
+
+    cfg = OPENAI_COMPAT[provider]
+    if not cfg["key"]:
+        raise LLMUnavailable(f"No {cfg['label']} API key configured. Set one in "
+                             "Settings, or choose another way to reach Claude.")
+    if model == MODEL_SCRIPT:
+        model = cfg["script"]
+    elif model == MODEL_UTILITY:
+        model = cfg["utility"]
+
+    messages = ([{"role": "system", "content": system}] if system else []) \
+               + [{"role": "user", "content": prompt}]
+    try:
+        response = httpx.post(
+            f"{cfg['base']}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg['key']}"},
+            json={"model": model, "messages": messages},
+            timeout=timeout,
+        )
+    except httpx.TimeoutException as exc:
+        raise LLMError(f"{cfg['label']} call timed out after {timeout}s") from exc
+    except httpx.HTTPError as exc:
+        raise LLMUnavailable(f"Could not reach {cfg['label']}: {exc}") from exc
+
+    if response.status_code in (401, 403):
+        raise LLMUnavailable(f"The {cfg['label']} API key was rejected "
+                             f"({response.status_code}).")
+    # 429 is "slow down" or "out of credit" — the provider's door is shut for
+    # now, not a problem with this prompt, so the retry loop should not spin.
+    if response.status_code == 429 or response.status_code >= 500:
+        raise LLMUnavailable(f"{cfg['label']} is unavailable right now "
+                             f"({response.status_code}): {response.text[:300]}")
+    if response.status_code != 200:
+        raise LLMError(f"{cfg['label']} error {response.status_code}: "
+                       f"{response.text[:400]}")
+
+    try:
+        text = response.json()["choices"][0]["message"]["content"] or ""
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise LLMError(f"Unexpected {cfg['label']} reply: {response.text[:300]}") from exc
+    text = text.strip()
+    if not text:
+        raise LLMError(f"{cfg['label']} returned an empty response")
+    return text
+
+
 def complete(
     prompt: str,
     system: str = "",
@@ -350,6 +421,9 @@ def complete(
     different level for just this one call can still pass its own.
     """
     backend = resolve_backend()
+    if backend in OPENAI_COMPAT:
+        return _complete_openai_compat(backend, prompt, system, model, timeout,
+                                       allow_search, effort or EFFORT)
     fn = {"api": _complete_api, "ollama": _complete_ollama}.get(backend, _complete_cli)
     return fn(prompt, system, model, timeout, allow_search, effort or EFFORT)
 

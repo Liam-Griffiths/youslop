@@ -753,6 +753,8 @@ def create_project(payload: dict = Body(...)) -> dict:
         project.style.format = payload["format"]
     if payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
+    if payload.get("research_mode") in ("quick", "deep"):
+        project.research_mode = payload["research_mode"]
     store.save(project)
     if script:
         (project_dir(project.id) / "source.txt").write_text(script, encoding="utf-8")

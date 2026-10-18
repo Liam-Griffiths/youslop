@@ -117,3 +117,31 @@ the creator then edits or deletes — would make the feature usable on a
   away on the next run (`shutil.rmtree`). Keeping them, keyed by a hash of what
   they were rendered from, would make a failed or cancelled render cheap to
   pick up — the same idea `draft` already applies to script generation.
+
+## 9. Research missed a death (RJ Mitte run, 18 Oct 2026) — fixed, verify on a real run
+
+**What happened:** a script about RJ Mitte praised his charity and campaign work
+but never mentioned his death, which is documented widely (Bing News and
+Wikipedia both have it, 12–16 Oct 2026). The project's research field was
+empty: research found nothing and wrote without grounding, and nothing recorded
+why.
+
+**Causes found in the app log (`~/Library/Application Support/Youslop/logs/youslop.log`):**
+- DuckDuckGo answered the burst of six queries with HTTP 202 (a bot challenge),
+  which the scrape read as "no results". No retry, no fallback.
+- In the dev checkout, `SEARXNG_URL` was set but the instance returned 403 to
+  JSON requests, and `auto` never tried the next backend, so research silently
+  stopped there too.
+
+**Changes:** per-site pacing (DuckDuckGo 5s, Bing 3s, Wikipedia 1s), retry with
+backoff on 202/429/503, a fallback chain (SearXNG → Brave → free scrape → Claude
+search), DuckDuckGo + Bing News + Wikipedia search together, and the top
+Wikipedia article read in full through its API every run.
+
+**Still open:**
+- Why the local SearXNG container returns 403 for `format=json` even though
+  `searxng/settings.yml` lists `json` (likely the running container's config or
+  its limiter; check after a restart).
+- Failures are only logged to the app log, not to the project. A project whose
+  research came back empty should say so in its own log.
+- Verify on a real full run (script + Sources panel) that the death appears.

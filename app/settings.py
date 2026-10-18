@@ -61,7 +61,29 @@ FIELDS: list[Field] = [
              ("cli", "Claude Code CLI only"),
              ("api", "Anthropic API only"),
              ("ollama", "Local model (Ollama) — opt in deliberately"),
+             ("openai", "OpenAI (ChatGPT) — API key"),
+             ("deepseek", "DeepSeek — API key"),
+             ("grok", "Grok (xAI) — API key"),
          ), default="auto"),
+    Field("openai_api_key", "OPENAI_API_KEY", "OpenAI API key", secret=True,
+         help="For the OpenAI option above. Billed per token to your OpenAI account.",
+         group="Claude"),
+    Field("deepseek_api_key", "DEEPSEEK_API_KEY", "DeepSeek API key", secret=True,
+         help="For the DeepSeek option above. Billed per token to your DeepSeek account.",
+         group="Claude"),
+    Field("xai_api_key", "XAI_API_KEY", "xAI (Grok) API key", secret=True,
+         help="For the Grok option above. Billed per token to your xAI account.",
+         group="Claude"),
+    Field("ollama_context", "YOUSLOP_OLLAMA_CONTEXT", "Local model context window",
+         "How much text the local model can read in one call. Research on a big "
+         "subject can send tens of thousands of tokens of sources; anything past "
+         "this is silently cut off. Larger needs more memory.", group="Claude",
+         options=(
+             ("8192", "8k tokens"),
+             ("16384", "16k tokens"),
+             ("32768", "32k tokens — default"),
+             ("65536", "64k tokens — needs a lot of memory"),
+         ), default="32768"),
     Field("anthropic_api_key", "ANTHROPIC_API_KEY", "Anthropic API key", secret=True,
          help="Only needed if Claude Code isn't installed. Billed per token.",
          group="Claude"),
@@ -126,6 +148,29 @@ FIELDS: list[Field] = [
     Field("searxng_url", "SEARXNG_URL", "SearXNG URL",
          "A local instance the script writer searches before writing a word. "
          "Blank skips research grounding.", group="Research"),
+    Field("brave_search_api_key", "BRAVE_SEARCH_API_KEY", "Brave Search API key",
+         "Free key from brave.com/search/api (the Data for Search plan). Used "
+         "for research when set, ahead of the no-key scrape.",
+         secret=True, group="Research"),
+    Field("search_backend", "YOUSLOP_SEARCH_BACKEND", "Where research searches",
+         "Auto takes the first of these that is set up: your SearXNG URL, a "
+         "Brave key, your Anthropic key (Claude's own search, billed per search), "
+         "or otherwise a plain scrape of DuckDuckGo that needs no key.",
+         group="Research", options=(
+             ("auto", "Auto — the best one that is set up"),
+             ("searxng", "SearXNG — your own instance"),
+             ("brave", "Brave Search — needs a Brave key"),
+             ("claude", "Claude's web search — needs an Anthropic API key"),
+             ("scrape", "DuckDuckGo scrape — no key, no setup"),
+         ), default="auto"),
+    Field("research_mode", "YOUSLOP_RESEARCH_MODE", "Research depth",
+         "Quick is one search pass, then the script is written. Deep is "
+         "Claude's research mode: it plans, runs follow-up searches and reads "
+         "pages over several rounds before writing. Deep takes longer and makes "
+         "more Claude calls.", group="Research", options=(
+             ("quick", "Quick — one search pass"),
+             ("deep", "Deep — Claude's research mode, several rounds"),
+         ), default="quick"),
     Field("google_client_id", "GOOGLE_CLIENT_ID", "Google OAuth client id",
          group="Publishing"),
     Field("google_client_secret", "GOOGLE_CLIENT_SECRET", "Google OAuth client secret",
