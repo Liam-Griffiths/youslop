@@ -142,12 +142,16 @@ def content(slide: Slide) -> dict:
     }
 
 
-def pick(slide: Slide, has_picture: bool, previous: str = "") -> str:
+def pick(slide: Slide, has_picture: bool, previous: str = "", index: int = -1) -> str:
     """Which template a slide on "auto" should get.
 
-    Shape first — a number is a number, code is code — then whatever the slide
-    actually has to draw, and finally a nudge away from whatever the slide
-    before it used, because three bulleted boards in a row is a slide deck.
+    Shape first — a number is a number, code is code — then the picture, on
+    every third board that has one, then whatever the slide actually has to
+    draw, and finally a nudge away from whatever the slide before it used,
+    because three bulleted boards in a row is a slide deck.
+
+    `index` is the slide's place in the video. Without it (-1) a picture is
+    only used when the slide has nothing else to draw.
     """
     chosen = (getattr(slide, "board_template", "") or "auto").strip()
     if chosen in TEMPLATE_KEYS:
@@ -165,6 +169,12 @@ def pick(slide: Slide, has_picture: bool, previous: str = "") -> str:
         return "code"
     if any("|" in p for p in points):
         return "versus"
+    # Pictures as illustration, not as the format: a board that has one shows
+    # it one time in three, alternating taped up and framed beside the
+    # writing, and never twice running.
+    if (has_picture and index >= 0 and index % 3 == 0
+            and previous not in ("split", "taped")):
+        return "split" if points and (index // 3) % 2 else "taped"
     options: list[str] = []
     if len(points) >= 3 and all(len(p.split()) <= 6 for p in points[:3]):
         options.append("steps")
@@ -534,15 +544,18 @@ def _t_taped(c, ctx) -> Sheet:
                            rng=rng)
     photos = [Photo(1, tile, xy)]
     points = c["points"][:3]
+    # Each line goes under the last one's real height: a point that wraps to
+    # two lines used to be overwritten by the one after it.
+    y = BODY.y + h + 64
     for i, point in enumerate(points):
-        pm, _ = dg.text_block(2 + i, point.lstrip("*").strip(), BODY.x,
-                              BODY.y + h + 64 + i * 62, 40, WIDTH * 0.24,
-                              color=accent if point.startswith("*") else INK,
-                              anchor="lt", max_lines=2, hand=hand)
+        pm, ph = dg.text_block(2 + i, point.lstrip("*").strip(), BODY.x, y, 40,
+                               WIDTH * 0.24,
+                               color=accent if point.startswith("*") else INK,
+                               anchor="lt", max_lines=2, hand=hand)
         marks += pm
+        y += ph + 22
     # An arrow out from under the writing, into the side of the print.
-    marks += dg._arrow_marks(2 + len(points),
-                             (BODY.x + 40, BODY.y + h + 110 + len(points) * 62),
+    marks += dg._arrow_marks(2 + len(points), (BODY.x + 40, y + 24),
                              (xy[0] + 56, xy[1] + tile.height * 0.62), rng,
                              color=accent, width=4)
     marks += _note_marks(3 + len(points), c["note"], hand)
@@ -694,12 +707,16 @@ def _ground_for(project: Project, channel=None) -> Image.Image:
 
 def render_segment(project: Project, group: list[tuple[Slide, float]],
                    seg_len: float, out: Path, channel=None,
-                   cache: Path | None = None, image_for=None) -> Path:
+                   cache: Path | None = None, image_for=None,
+                   crf: int = 18, extra: tuple[str, ...] = ()) -> Path:
     """One board per paragraph in `group`, encoded to exactly `seg_len`.
 
     Called from `render._render_segment` when the video is in board format.
     `image_for` hands back the picture chosen for a slide, if any; the two
     templates that use one fall back to a type-only board without it.
+
+    The board is always drawn at 1080p — the layout is in pixels — so `extra`
+    is where the in-app preview puts the scale down to its own frame size.
     """
     style = project.style
     hand = getattr(style, "board_hand", "") or dg.DEFAULT_HAND
@@ -716,7 +733,8 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
         src = image_for(slide) if image_for else None
         if src is not None:
             img = _load_photo(src, cache)
-        key = pick(slide, img is not None, previous)
+        index = next((i for i, s in enumerate(project.slides) if s.id == slide.id), -1)
+        key = pick(slide, img is not None, previous, index)
         previous = key
         # The last board absorbs any rounding so the segment comes out at
         # exactly the length the audio was cut to.
@@ -732,8 +750,8 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
 
     # `-t` so the segment comes out at exactly the length the audio was cut
     # to, whatever rounding the per-board frame counts accumulated.
-    if not ffutil.encode_frames(stream(), out, crf=18,
-                                extra=("-t", f"{seg_len:.3f}")) or not out.exists():
+    if not ffutil.encode_frames(stream(), out, crf=crf,
+                                extra=(*extra, "-t", f"{seg_len:.3f}")) or not out.exists():
         raise RuntimeError("Could not encode the board segment.")
     return out
 
@@ -744,7 +762,8 @@ def still(project: Project, slide: Slide, out: Path, channel=None,
     style = project.style
     hand = getattr(style, "board_hand", "") or dg.DEFAULT_HAND
     img = _load_photo(image, out.parent) if image else None
-    key = pick(slide, img is not None)
+    index = next((i for i, s in enumerate(project.slides) if s.id == slide.id), -1)
+    key = pick(slide, img is not None, index=index)
     sheet = build(slide, key, style.accent, hand, img)
     base = _ground_for(project, channel).convert("RGBA")
     reveal = {o: 1.0 for o in range(sheet.beats)} if at >= 1.0 else dg.reveal_at(

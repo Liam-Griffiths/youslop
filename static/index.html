@@ -26,6 +26,9 @@
     <nav class="sidebar-nav">
       <a class="sidebar-link new" onclick="go('#/')">
         <span class="sidebar-icon">＋</span>New video</a>
+      <a class="sidebar-link" data-route="standalone" onclick="goStandalone()"
+         title="Videos that belong to no channel">
+        <span class="sidebar-icon">▷</span>Standalone videos<span class="count" id="solo-count"></span></a>
       <a class="sidebar-link" data-route="library" onclick="go('#/library')">
         <span class="sidebar-icon">▦</span>Library</a>
     </nav>
@@ -51,5 +54,6 @@
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/timeline.js"></script>
 </body>
 </html>

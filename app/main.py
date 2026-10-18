@@ -24,18 +24,21 @@ from . import llm as llm_mod
 from . import settings as settings_mod
 from . import channels, ffutil, jobs, library, media, render, script_gen, store, thumbs
 from . import tts as tts_mod
+from . import voice_cloud
 from . import intro as intro_mod
 from . import outro as outro_mod
+from . import playback as playback_mod
 from . import themes as themes_mod
 from . import maps as maps_mod
 from . import board as board_mod
+from . import cuts as cuts_mod
 from . import custom_slide as custom_mod
 from . import diagram as diagram_mod
 from . import slide_styles
 from . import youtube as youtube_mod
 from . import transfer
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
-from .schema import VOICE_PRESETS, Presenter, Slide, Voice, new_channel, new_project
+from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, new_project
 from .store import project_dir
 
 # The data folders, before anything can want one. `app/__main__.py` does this
@@ -521,7 +524,7 @@ def preview_intro(cid: str, payload: dict = Body(default={})) -> dict:
         # The preview plays with the slate's own sting, so the level, the window
         # and the fade can be heard rather than guessed at.
         intro_mod.mux_sting(ch, out, length, progress)
-        return {"path": "cache/intro_preview.mp4"}
+        return {"path": "cache/intro_preview.webm"}
 
     return {"job": jobs.start("intro preview", cid, work)}
 
@@ -543,7 +546,7 @@ def preview_outro(cid: str, payload: dict = Body(default={})) -> dict:
             if candidate.exists():
                 backdrop = candidate
         outro_mod.render_outro(ch, sample, out, backdrop, progress)
-        return {"path": "cache/outro_preview.mp4"}
+        return {"path": "cache/outro_preview.webm"}
 
     return {"job": jobs.start("end screen preview", cid, work)}
 
@@ -746,7 +749,7 @@ def create_project(payload: dict = Body(...)) -> dict:
     # than after: how the pictures are staged, and how often they change. Both
     # already have defaults from the channel (or Style()'s own), so this only
     # overrides them when the creator actually touched the control.
-    if payload.get("format") in ("kenburns", "essay", "board"):
+    if payload.get("format") in ("kenburns", "essay", "board", *cuts_mod.KEYS):
         project.style.format = payload["format"]
     if payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
@@ -789,13 +792,91 @@ def _apply_narrator(narrator, patch) -> None:
         return
     if "mode" in patch:
         narrator.mode = "ai" if str(patch["mode"]) == "ai" else "mic"
+    if "engine" in patch:
+        engine = str(patch["engine"])
+        if engine not in (tts_mod.ENGINE, *voice_cloud.KEYS):
+            raise HTTPException(400, f"No such voice engine: {engine}")
+        if engine != getattr(narrator, "engine", tts_mod.ENGINE):
+            # Voice ids mean nothing across engines: start the new one on its
+            # own default rather than on a name it has never heard of.
+            narrator.engine = engine
+            narrator.voice = (tts_mod.DEFAULT_VOICE if engine == tts_mod.ENGINE
+                              else voice_cloud.BY_KEY[engine]["default_voice"])
+            narrator.model = ""
+    engine = getattr(narrator, "engine", tts_mod.ENGINE)
     if "voice" in patch:
         voice = str(patch["voice"])
-        if voice not in tts_mod.VOICE_IDS:
+        ok = (voice in tts_mod.VOICE_IDS if engine == tts_mod.ENGINE
+              else voice_cloud.valid_voice_id(voice))
+        if not ok:
             raise HTTPException(400, f"No such voice: {voice}")
         narrator.voice = voice
+    if "model" in patch:
+        model = str(patch["model"] or "")
+        if model and (engine == tts_mod.ENGINE or model not in
+                      {m["id"] for m in voice_cloud.BY_KEY[engine]["models"]}):
+            raise HTTPException(400, f"No such model: {model}")
+        narrator.model = model
     if "speed" in patch:
         narrator.speed = round(max(0.5, min(1.5, float(patch["speed"]))), 2)
+
+
+def _apply_solo_intro(spec, patch: dict) -> None:
+    """A standalone video's own opening card.
+
+    Only the type-led templates, and only the knobs that mean anything without
+    a channel behind them: no cast, no portraits, no sting. An empty template
+    is how the card is turned off.
+    """
+    for key, value in patch.items():
+        if key == "template":
+            template = str(value or "")
+            if template and template not in intro_mod.SOLO_TEMPLATE_KEYS:
+                raise HTTPException(400, f"No such opening card: {template}")
+            spec.template = template
+        elif key == "duration":
+            spec.duration = max(2.0, min(12.0, float(value)))
+        elif key == "hold":
+            spec.hold = max(0.0, min(4.0, float(value)))
+        elif key == "show_video_title":
+            spec.show_video_title = bool(value)
+        elif key == "music_start":
+            spec.music_start = max(0.0, min(max(0.0, spec.music_duration - 1.0), float(value)))
+        elif key == "music_fade":
+            spec.music_fade = max(0.0, min(8.0, float(value)))
+        elif key == "music_db":
+            spec.music_db = max(-30.0, min(6.0, float(value)))
+        elif key == "music_tail":
+            spec.music_tail = max(0.0, min(4.0, float(value)))
+
+
+def _apply_solo_outro(spec, patch: dict) -> None:
+    """A standalone video's own end screen — the channel card, minus the channel."""
+    for key, value in patch.items():
+        if key == "template":
+            if value not in outro_mod.TEMPLATE_KEYS:
+                raise HTTPException(400, f"No such end screen: {value}")
+            spec.template = str(value)
+        elif key == "slots":
+            spec.slots = max(0, min(outro_mod.max_slots(spec.template), int(value)))
+        elif key == "duration":
+            spec.duration = max(5.0, min(20.0, float(value)))
+        elif key == "backdrop":
+            spec.backdrop = max(0.0, min(1.0, float(value)))
+        elif key == "music_fade":
+            spec.music_fade = max(0.0, min(18.0, float(value)))
+        elif key == "sting_start":
+            spec.sting_start = max(0.0, min(max(0.0, spec.sting_duration - 1.0), float(value)))
+        elif key == "sting_fade":
+            spec.sting_fade = max(0.0, min(8.0, float(value)))
+        elif key == "sting_db":
+            spec.sting_db = max(-30.0, min(6.0, float(value)))
+        elif key in ("cta", "handle"):
+            setattr(spec, key, str(value).strip()[:80])
+        elif key in ("enabled", "subscribe", "countdown", "show_video_title"):
+            setattr(spec, key, bool(value))
+    # Fewer plates than the template allows is fine; more is not.
+    spec.slots = min(spec.slots, outro_mod.max_slots(spec.template))
 
 
 @app.patch("/api/projects/{pid}")
@@ -809,6 +890,11 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
             p.use_intro = bool(payload["use_intro"])
         if "use_outro" in payload:
             p.use_outro = bool(payload["use_outro"])
+        # A video's own opening and close, read only when it has no channel.
+        if isinstance(payload.get("intro"), dict):
+            _apply_solo_intro(p.intro, payload["intro"])
+        if isinstance(payload.get("outro"), dict):
+            _apply_solo_outro(p.outro, payload["outro"])
         _apply_narrator(p.narrator, payload.get("narrator"))
         if "lexicon" in payload:
             p.lexicon = _clean_lexicon(payload["lexicon"])
@@ -944,6 +1030,10 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             s.narration = str(payload["narration"]).strip()
         if "title" in payload:
             s.title = str(payload["title"]).strip()[:40]
+        if "chapter" in payload:
+            # "" clears the mark; a chapter also forces its own picture, which
+            # `schema.group_slides` applies on the way back out.
+            s.chapter = str(payload["chapter"]).strip()[:60]
         if "queries" in payload:
             s.queries = [q for q in payload["queries"] if str(q).strip()][:4]
         if "prefer_kind" in payload:
@@ -977,6 +1067,23 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             if mode not in ("auto", "hold", "new"):
                 raise HTTPException(400, "picture_mode is auto, hold or new")
             s.picture_mode = mode
+        if isinstance(payload.get("cues"), dict):
+            # {"<cut key>": [cues]} — a list replaces that cut's cues, an
+            # empty one clears them back to drawing from the narration.
+            cues = dict(s.cues or {})
+            for key, value in payload["cues"].items():
+                if key not in cuts_mod.BY_KEY:
+                    raise HTTPException(400, f"No such cut: {key}")
+                if value and not isinstance(value, list):
+                    raise HTTPException(400, "Cues are a list of objects.")
+                clean = cuts_mod.normalise(cuts_mod.BY_KEY[key], value or [])
+                if value and not clean:
+                    raise HTTPException(400, "None of those cues are a kind this cut draws.")
+                if clean:
+                    cues[key] = clean
+                else:
+                    cues.pop(key, None)
+            s.cues = cues
         if "chosen_id" in payload:
             s.chosen_id = str(payload["chosen_id"])
             s.locked_media = True
@@ -1018,6 +1125,7 @@ def split_slide(pid: str, sid: str) -> dict:
                      prefer_kind=s.prefer_kind, candidates=list(s.candidates))
         s.narration = " ".join(sentences[:half])
         s.take = None
+        s.takes = {}
         p.slides.insert(p.slides.index(s) + 1, tail)
         store.save(p)
     return p.to_dict()
@@ -1037,6 +1145,7 @@ def rewrite(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             if text:
                 slide.narration = text
                 slide.take = None      # the old take no longer matches the words
+                slide.takes = {}       # ...in any voice
                 store.save(proj)
             progress("Rewritten")
             return {"narration": text}
@@ -1255,6 +1364,60 @@ def plan_boards(pid: str, payload: dict = Body(default={})) -> dict:
             return {"slides": len(slides)}
 
     return {"job": jobs.start("boards", pid, work)}
+
+
+# --------------------------------------------------------------------- cuts
+@app.get("/api/cuts")
+def list_cuts() -> list[dict]:
+    """The drawn cuts: what each is for, its looks and its cue kinds."""
+    return cuts_mod.info()
+
+
+@app.post("/api/projects/{pid}/cues/plan")
+def plan_cues(pid: str, payload: dict = Body(default={})) -> dict:
+    """Write the current cut's cues for every slide that has none.
+
+    Additive, like the boards. {"redo": true} clears this cut's cues first,
+    including any edited by hand; other cuts' cues are never touched.
+    """
+    p = _load(pid)
+    if not cuts_mod.is_cut(p.style.format):
+        raise HTTPException(400, "This video isn't in one of the drawn cuts.")
+    redo = bool(payload.get("redo"))
+    only = payload.get("slide_ids")
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            slides = [s for s in p.slides if only is None or s.id in only]
+            if redo:
+                for s in slides:
+                    s.cues = {k: v for k, v in (s.cues or {}).items()
+                              if k != p.style.format}
+            script_gen.plan_cues(p, slides, progress)
+            store.save(p)
+            return {"slides": len(slides)}
+
+    return {"job": jobs.start("cues", pid, work)}
+
+
+@app.get("/api/projects/{pid}/slides/{sid}/cut.png")
+def cut_preview(pid: str, sid: str, t: float = 0.5) -> Response:
+    """One frame of this paragraph in the video's cut, `t` of the way in."""
+    p = _load(pid)
+    s = _slide(p, sid)
+    if not cuts_mod.is_cut(p.style.format):
+        raise HTTPException(400, "This video isn't in one of the drawn cuts.")
+    out = project_dir(pid) / "cuts" / f"{sid}.png"
+    try:
+        cuts_mod.still(p, s, out, channel=channels.load_or_none(p.channel_id),
+                       image_for=lambda sl: render._chosen(p, sl)[0],
+                       at=max(0.0, min(1.0, float(t))),
+                       cache_dir=project_dir(pid) / "cuts")
+    except Exception as exc:
+        raise HTTPException(500, f"Could not draw that frame: {str(exc)[:160]}")
+    return FileResponse(out, media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/projects/{pid}/slides/{sid}/board.png")
@@ -1680,12 +1843,16 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
         raw.write_bytes(await file.read())
         if raw.stat().st_size < 1024:
             raise HTTPException(400, "That recording is empty.")
-        out = root / "takes" / f"{sid}.wav"
+        # Each voice keeps its own folder, so recording never overwrites a
+        # read in another voice.
+        out = root / "takes" / MIC_TRACK / f"{sid}.wav"
+        out.parent.mkdir(parents=True, exist_ok=True)
         try:
             meta = audio_mod.process_take(raw, out, p.voice)
         except Exception as exc:
             raise HTTPException(400, f"Could not process that take: {exc}")
-        s.take = {"path": f"takes/{sid}.wav", "raw_path": f"raw/{raw.name}", **meta}
+        p.set_take(s, MIC_TRACK, {"path": f"takes/{MIC_TRACK}/{sid}.wav",
+                                  "raw_path": f"raw/{raw.name}", **meta})
         if p.status in ("scripted", "media"):
             p.status = "recording"
         store.save(p)
@@ -1695,17 +1862,90 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
 # --------------------------------------------------------------- ai narration
 @app.get("/api/tts")
 def tts_status() -> dict:
-    """Whether a local read is possible here, and in which voices."""
-    return tts_mod.status()
+    """Whether a local read is possible here, in which voices — and which
+    hosted voice services are set up beside it."""
+    local = tts_mod.status()
+    return {**local, "engines": [
+        {"key": tts_mod.ENGINE, "label": "On this computer", "ready": local["ready"],
+         "metered": False, "detail": local.get("detail", ""),
+         "blurb": "Kokoro, running locally. Free, private, unmetered."},
+        *[voice_cloud.status(k) for k in voice_cloud.KEYS]]}
+
+
+def _engine_ready(engine: str) -> None:
+    """Refuse up front, with the fix, rather than failing paragraph one."""
+    if engine == tts_mod.ENGINE:
+        st = tts_mod.status()
+    elif engine in voice_cloud.BY_KEY:
+        st = voice_cloud.status(engine)
+    else:
+        raise HTTPException(400, f"No such voice engine: {engine}")
+    if not st["ready"]:
+        raise HTTPException(400, st["detail"])
+
+
+@app.get("/api/tts/library")
+def tts_library(q: str = "", gender: str = "", use_case: str = "", accent: str = "",
+                page: int = 0) -> dict:
+    """Search ElevenLabs' shared Voice Library — the voices on their website."""
+    try:
+        res = voice_cloud.library_search(q, gender, use_case, accent, page)
+    except voice_cloud.CloudVoiceError as exc:
+        raise HTTPException(400, str(exc))
+    res["use_cases"] = [{"id": k, "label": v} for k, v in voice_cloud.LIBRARY_USE_CASES]
+    return res
+
+
+@app.post("/api/tts/library/add")
+def tts_library_add(payload: dict = Body(...)) -> dict:
+    """Add a library voice to the ElevenLabs account so it can read a script.
+    It takes one of the account's custom-voice slots, as it does on the site."""
+    try:
+        vid = voice_cloud.library_add(str(payload.get("owner") or ""),
+                                      str(payload.get("id") or ""),
+                                      str(payload.get("name") or ""))
+    except voice_cloud.CloudVoiceError as exc:
+        raise HTTPException(400, str(exc))
+    return {"voice_id": vid}
+
+
+@app.get("/api/tts/voices/{engine}")
+def tts_voices(engine: str, refresh: bool = False) -> list[dict]:
+    """The voices a hosted service offers this account."""
+    if engine not in voice_cloud.BY_KEY:
+        raise HTTPException(404, "No such voice service.")
+    try:
+        return voice_cloud.voices(engine, refresh)
+    except voice_cloud.CloudVoiceError as exc:
+        raise HTTPException(400, str(exc))
 
 
 @app.get("/api/tts/preview/{voice}")
-def tts_preview(voice: str, request: Request) -> Response:
-    """One sample line in a voice, so the picker can be listened through."""
-    if voice not in tts_mod.VOICE_IDS:
-        raise HTTPException(404, "No such voice.")
+def tts_preview(voice: str, request: Request, engine: str = tts_mod.ENGINE,
+                model: str = "") -> Response:
+    """One sample line in a voice, so the picker can be listened through.
+
+    ElevenLabs publishes a free sample of every voice, so that is used when
+    there is one; otherwise a hosted voice reads the sample line once (a
+    small billed request) and it is served from the cache after that.
+    """
+    if engine == tts_mod.ENGINE:
+        if voice not in tts_mod.VOICE_IDS:
+            raise HTTPException(404, "No such voice.")
+    else:
+        _engine_ready(engine)
+        if not voice_cloud.valid_voice_id(voice):
+            raise HTTPException(404, "No such voice.")
+        if engine == "elevenlabs":
+            try:
+                known = {v["id"]: v for v in voice_cloud.voices(engine)}
+            except voice_cloud.CloudVoiceError:
+                known = {}
+            url = (known.get(voice) or {}).get("preview_url")
+            if url:
+                return RedirectResponse(url)
     try:
-        path = tts_mod.preview(voice, CACHE_DIR)
+        path = tts_mod.preview(voice, CACHE_DIR, engine=engine, model=model)
     except tts_mod.TTSError as exc:
         raise HTTPException(400, str(exc))
     return _ranged(path, request)
@@ -1717,25 +1957,57 @@ def _lexicon(p) -> dict:
     The channel's entries come first because the names that recur are the
     series' names; a video that disagrees about one of them wins, which is the
     only reason a per-video list exists at all.
+
+    Phonemes for the local model; for a hosted voice, which takes words, the
+    respellings as text substitutions instead.
     """
     entries = []
     channel = channels.load_or_none(p.channel_id) if p.channel_id else None
     if channel:
         entries += list(channel.lexicon or [])
     entries += list(p.lexicon or [])
+    if _engine(p) != tts_mod.ENGINE:
+        return voice_cloud.aliases(entries)
     lang = tts_mod._lang_for(p.narrator.voice)
     return tts_mod.build_lexicon(entries, lang)
 
 
+def _engine(p) -> str:
+    return getattr(p.narrator, "engine", "") or tts_mod.ENGINE
+
+
+def _wanted_read(p) -> tuple:
+    """What a take must have been read with to count as current."""
+    engine = _engine(p)
+    model = ("" if engine == tts_mod.ENGINE
+             else p.narrator.model or voice_cloud.default_model(engine))
+    speed = (round(float(p.narrator.speed), 2) if engine == tts_mod.ENGINE
+             else voice_cloud.clamp_speed(engine, p.narrator.speed))
+    return (engine, p.narrator.voice, speed, model)
+
+
+def _take_read(take: dict) -> tuple:
+    return (take.get("engine") or tts_mod.ENGINE, take.get("voice"),
+            take.get("speed"), take.get("model") or "")
+
+
 def _voice_one(p, s, root: Path, lexicon: dict | None = None) -> dict:
-    """Synthesise one paragraph into the take slot the recorder would fill."""
-    out = root / "takes" / f"{s.id}.wav"
+    """Synthesise one paragraph in the project's chosen engine, into that
+    engine's own folder — never over a read in another voice."""
+    engine = _engine(p)
+    out = root / "takes" / engine / f"{s.id}.wav"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    at = next((i for i, x in enumerate(p.slides) if x.id == s.id), 0)
+    context = (p.slides[at - 1].narration if at > 0 else "",
+               p.slides[at + 1].narration if at + 1 < len(p.slides) else "")
     meta = tts_mod.speak_to_file(s.narration, out, p.narrator.voice,
                                  p.narrator.speed, p.voice,
-                                 _lexicon(p) if lexicon is None else lexicon)
+                                 _lexicon(p) if lexicon is None else lexicon,
+                                 engine=_engine(p), model=p.narrator.model,
+                                 context=context, style=p.tone or "")
     # No raw_path: there is no recording behind this one, and "reprocess every
     # take from its raw upload" must skip it rather than fail on it.
-    return {"path": f"takes/{s.id}.wav", "raw_path": "", **meta}
+    return {"path": f"takes/{engine}/{s.id}.wav", "raw_path": "", **meta}
 
 
 def _clean_lexicon(raw) -> list[dict]:
@@ -1768,7 +2040,10 @@ def _clean_lexicon(raw) -> list[dict]:
                 {"ipa": item.get("ipa"), "respell": entry["respell"]})
         except Exception:
             entry["ipa"] = ""
-        if not tts_mod.has_phones(entry["ipa"]):
+        # Without the local model there are no phonemes to check against; a
+        # respelling is still exactly what a hosted voice uses (as text).
+        unchecked = bool(entry["respell"]) and not tts_mod.status()["ready"]
+        if not unchecked and not tts_mod.has_phones(entry["ipa"]):
             raise HTTPException(
                 400, f"“{term}” has nothing to say it with. Give it a respelling "
                      "like “ELL-on” (capitals mark the stressed syllable).")
@@ -1801,31 +2076,41 @@ def tts_say(text: str, respell: str = "", ipa: str = "",
 
 @app.post("/api/tts/say-preview")
 def tts_say_preview(payload: dict = Body(...)) -> Response:
-    """Hear one term, either as it reads now or as an entry would have it."""
-    if not tts_mod.status()["ready"]:
-        raise HTTPException(400, tts_mod.status()["detail"])
+    """Hear one term, either as it reads now or as an entry would have it.
+
+    In a hosted voice this is a small billed request each time it is not
+    already in the cache.
+    """
+    engine = str(payload.get("engine") or tts_mod.ENGINE)
+    _engine_ready(engine)
     text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "Give me a word to say.")
     voice = str(payload.get("voice") or tts_mod.DEFAULT_VOICE)
-    if voice not in tts_mod.VOICE_IDS:
+    if engine == tts_mod.ENGINE and voice not in tts_mod.VOICE_IDS:
         voice = tts_mod.DEFAULT_VOICE
+    elif engine != tts_mod.ENGINE and not voice_cloud.valid_voice_id(voice):
+        voice = voice_cloud.BY_KEY[engine]["default_voice"]
     entry = {"term": text, "respell": str(payload.get("respell") or ""),
              "ipa": str(payload.get("ipa") or "")}
-    lexicon = tts_mod.build_lexicon([entry]) if (entry["respell"] or entry["ipa"]) else {}
+    if engine != tts_mod.ENGINE:
+        lexicon = voice_cloud.aliases([entry])
+    else:
+        lexicon = tts_mod.build_lexicon([entry]) if (entry["respell"] or entry["ipa"]) else {}
     # Said inside a carrier sentence: a name on its own is read as a fragment,
     # with a falling tone that makes every pronunciation sound slightly wrong.
     sentence = str(payload.get("carrier") or "").strip() or f"This is {text}."
     # Named for what it contains: two "hear" clicks in quick succession would
     # otherwise be writing the same file while the first one is being read.
     stamp = hashlib.md5(
-        f"{sentence}|{entry['respell']}|{entry['ipa']}|{voice}".encode()
+        f"{sentence}|{entry['respell']}|{entry['ipa']}|{voice}|{engine}".encode()
     ).hexdigest()[:12]
     out = CACHE_DIR / f"say_{stamp}.wav"
     try:
         if not (out.is_file() and out.stat().st_size > 4096):
             tts_mod.speak_to_file(sentence, out, voice,
-                                  float(payload.get("speed") or 1.0), None, lexicon)
+                                  float(payload.get("speed") or 1.0), None, lexicon,
+                                  engine=engine, model=str(payload.get("model") or ""))
     except tts_mod.TTSError as exc:
         raise HTTPException(400, str(exc))
     return Response(out.read_bytes(), media_type="audio/wav",
@@ -1842,35 +2127,55 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
     p0 = _load(pid)
     if not p0.slides:
         raise HTTPException(400, "There is no script to read yet.")
-    if not tts_mod.status()["ready"]:
-        raise HTTPException(400, tts_mod.status()["detail"])
+    _engine_ready(_engine(p0))
     redo = bool(payload.get("redo"))
+
+    def pending(p) -> list:
+        root = project_dir(pid)
+        want = _wanted_read(p)
+        todo = []
+        for s in p.slides:
+            take = s.takes.get(_engine(p)) or {}
+            if (not redo and take.get("synthetic") and _take_read(take) == want
+                    and (root / take.get("path", "")).is_file()):
+                continue
+            if (s.narration or "").strip():
+                todo.append(s)
+        return todo
+
+    if payload.get("dry_run"):
+        # What a hosted voice would be sent, so the creator can see the bill
+        # coming before it is run up.
+        todo = pending(p0)
+        return {"paragraphs": len(todo),
+                "characters": sum(len(s.narration.strip()) for s in todo),
+                "engine": _engine(p0), "metered": _engine(p0) != tts_mod.ENGINE}
 
     def work(progress):
         with store.lock_for(pid):
             p = store.load(pid)
             root = project_dir(pid)
-            want = (p.narrator.voice, round(float(p.narrator.speed), 2))
-            todo = []
-            for s in p.slides:
-                take = s.take or {}
-                current = (take.get("voice"), take.get("speed"))
-                if (not redo and take.get("synthetic") and current == want
-                        and (root / take.get("path", "")).is_file()):
-                    continue
-                todo.append(s)
+            todo = pending(p)
             kept = len(p.slides) - len(todo)
             if kept:
                 progress(f"{kept} paragraph(s) already read in this voice")
-            progress(f"Reading {len(todo)} paragraph(s) as "
-                     f"{p.narrator.voice} at {p.narrator.speed:.2f}x")
+            engine = _engine(p)
+            progress(f"Reading {len(todo)} paragraph(s) as {p.narrator.voice} at "
+                     f"{p.narrator.speed:.2f}x"
+                     + ("" if engine == tts_mod.ENGINE else
+                        f" with {voice_cloud.BY_KEY[engine]['label']} "
+                        f"({sum(len(s.narration) for s in todo):,} characters)"))
             lexicon = _lexicon(p)
             if lexicon:
                 progress(f"Pronunciation guide: {len(lexicon)} entries")
             for n, s in enumerate(todo, 1):
-                if not (s.narration or "").strip():
-                    continue
-                s.take = _voice_one(p, s, root, lexicon)
+                try:
+                    p.set_take(s, engine, _voice_one(p, s, root, lexicon))
+                except tts_mod.TTSError:
+                    # Out of credits halfway through a hosted read: what was
+                    # already read was paid for, so it is kept, not dropped.
+                    store.save(p)
+                    raise
                 if n % 5 == 0 or n == len(todo):
                     # Banked as it goes: a long script is a lot of work to lose.
                     store.save(p)
@@ -1879,7 +2184,8 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
             if p.status in ("scripted", "media"):
                 p.status = "recording"
             store.save(p)
-        return {"read": len(todo), "kept": kept}
+        return {"read": len(todo), "kept": kept, "track": engine,
+                "in_use": p.voice_track == engine}
 
     return {"job": jobs.start("voice-over", pid, work)}
 
@@ -1887,15 +2193,14 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
 @app.post("/api/projects/{pid}/slides/{sid}/voice-over")
 def voice_over_one(pid: str, sid: str) -> dict:
     """Re-read one paragraph, after an edit or a change of mind."""
-    if not tts_mod.status()["ready"]:
-        raise HTTPException(400, tts_mod.status()["detail"])
     with store.lock_for(pid):
         p = _load(pid)
+        _engine_ready(_engine(p))
         s = _slide(p, sid)
         if not (s.narration or "").strip():
             raise HTTPException(400, "That paragraph has no words in it.")
         try:
-            s.take = _voice_one(p, s, project_dir(pid))
+            p.set_take(s, _engine(p), _voice_one(p, s, project_dir(pid)))
         except tts_mod.TTSError as exc:
             raise HTTPException(400, str(exc))
         if p.status in ("scripted", "media"):
@@ -1917,7 +2222,7 @@ def reprocess_takes(pid: str) -> dict:
         root = project_dir(pid)
         done, failed = 0, []
         for n, s in enumerate(p.slides, 1):
-            take = s.take or {}
+            take = s.takes.get(MIC_TRACK) or {}
             if not take.get("raw_path") or not take.get("path"):
                 continue
             try:
@@ -1926,7 +2231,7 @@ def reprocess_takes(pid: str) -> dict:
             except Exception as exc:
                 failed.append(f"paragraph {n}: {exc}")
                 continue
-            s.take = {**take, **meta}
+            p.set_take(s, MIC_TRACK, {**take, **meta})
             done += 1
         store.save(p)
     return {"reprocessed": done, "skipped": len(failed), "failed": failed,
@@ -1934,22 +2239,40 @@ def reprocess_takes(pid: str) -> dict:
 
 
 @app.delete("/api/projects/{pid}/slides/{sid}/take")
-def delete_take(pid: str, sid: str) -> dict:
+def delete_take(pid: str, sid: str, track: str = "") -> dict:
+    """Drop one paragraph's read in one voice — the video's, unless named.
+    The file stays on disk; only the reference goes."""
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)
-        s.take = None
+        p.set_take(s, track or p.voice_track, None)
         store.save(p)
     return {"slide": s.to_dict()}
 
 
 @app.get("/api/projects/{pid}/slides/{sid}/take.wav")
-def get_take(pid: str, sid: str, request: Request) -> Response:
+def get_take(pid: str, sid: str, request: Request, track: str = "") -> Response:
+    """One paragraph's read — in the video's voice, or in `track` to compare."""
     p = _load(pid)
     s = _slide(p, sid)
-    if not s.take:
+    take = s.takes.get(track) if track else s.take
+    if not take:
         raise HTTPException(404, "No take recorded")
-    return _ranged(_safe_join(project_dir(pid), s.take["path"]), request)
+    return _ranged(_safe_join(project_dir(pid), take["path"]), request)
+
+
+@app.post("/api/projects/{pid}/voice-track")
+def set_voice_track(pid: str, payload: dict = Body(...)) -> dict:
+    """Choose the voice for the whole video. Every other voice's reads stay
+    exactly where they are, so switching back costs nothing."""
+    track = str(payload.get("track") or "")
+    if track not in (MIC_TRACK, tts_mod.ENGINE, *voice_cloud.KEYS):
+        raise HTTPException(400, f"Not a voice: {track}")
+    with store.lock_for(pid):
+        p = _load(pid)
+        p.use_track(track)
+        store.save(p)
+    return p.to_dict()
 
 
 # ----------------------------------------------------------------- mic setup
@@ -2095,6 +2418,108 @@ def start_render(pid: str, payload: dict = Body(default={})) -> dict:
         return result
 
     return {"job": jobs.start("render", pid, work)}
+
+
+@app.post("/api/projects/{pid}/preview-opening")
+def preview_opening(pid: str, payload: dict = Body(default={})) -> dict:
+    """Render a standalone video's own opening or end card, to play in app.
+
+    A video in a channel previews those on the channel page, where they are
+    set — previewing them here would suggest they belong to this video.
+    """
+    kind = "outro" if str(payload.get("kind") or "") == "outro" else "intro"
+    p = _load(pid)
+    if p.channel_id:
+        raise HTTPException(400, "This video opens on its channel's slate — "
+                                 "preview it on the channel page.")
+
+    def work(progress):
+        with store.lock_for(pid):
+            return render.preview_opening(store.load(pid), kind, progress)
+
+    return {"job": jobs.start(f"{kind} preview", pid, work)}
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/preview")
+def preview_segment(pid: str, sid: str) -> dict:
+    """Render just the picture this paragraph sits under, small, to play in app.
+
+    A job rather than a response body: it is seconds rather than milliseconds,
+    and it may have to fetch the picture first. The project is saved after
+    because downloading that picture is what fills in its local copy.
+    """
+    _slide(_load(pid), sid)
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            result = render.preview_segment(p, sid, progress)
+            store.save(p)
+        return result
+
+    return {"job": jobs.start("segment preview", pid, work)}
+
+
+# ---------------------------------------------------------------- timeline
+_PROXY_LOCKS: dict[str, "threading.Lock"] = {}
+
+
+@app.get("/api/projects/{pid}/timeline")
+def get_timeline(pid: str) -> dict:
+    """The cut laid out in time, and which pictures already have a proxy to
+    play. Renders nothing."""
+    return render.timeline(_load(pid))
+
+
+@app.post("/api/projects/{pid}/timeline/proxy")
+def timeline_proxy(pid: str, payload: dict = Body(...)) -> dict:
+    """Make the small playable proxy for some of the timeline's entries.
+
+    `refs` are what the timeline lists: "intro", "outro" or a picture's number.
+    Only the ones asked for, one after another, and only those whose cached
+    proxy no longer matches the script: the player asks for the entry under
+    the playhead and the next, never the whole cut.
+    """
+    _load(pid)
+    refs = [str(r) for r in (payload.get("refs") or [])][:16]
+    if not refs or any(r not in ("intro", "outro") and not r.isdigit() for r in refs):
+        raise HTTPException(400, "refs must be intro, outro or picture numbers")
+
+    def work(progress):
+        import threading
+        # Fetching a picture changes the project, so that part holds the lock
+        # and saves; the drawing itself does not, and edits stay possible.
+        with store.lock_for(pid):
+            p = store.load(pid)
+            groups = render._groups_for_preview(p)
+            leads = [groups[int(r)][0][0] for r in refs if r.isdigit() and int(r) < len(groups)]
+            if leads and render.media.download_chosen(p, progress, only=leads):
+                progress("Some pictures could not be downloaded; those play as graded slates")
+            store.save(p)
+        lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())
+        done = []
+        with lock:
+            p = store.load(pid)
+            for r in refs:
+                done.append(render.proxy_ref(p, r, progress, download=False))
+        return {"segments": done}
+
+    return {"job": jobs.start("timeline proxy", pid, work)}
+
+
+@app.post("/api/projects/{pid}/timeline/mix")
+def timeline_mix(pid: str) -> dict:
+    """Mix the whole cut's sound (narration, slate sting, ducked music bed) into
+    one file for the timeline to play. Audio only, so it is quick."""
+    _load(pid)
+
+    def work(progress):
+        import threading
+        lock = _PROXY_LOCKS.setdefault(pid + ":mix", threading.Lock())
+        with lock:
+            return render.build_mix(store.load(pid), progress)
+
+    return {"job": jobs.start("timeline sound", pid, work)}
 
 
 @app.get("/api/projects/{pid}/credits")
@@ -2281,6 +2706,100 @@ def library_thumb(asset_id: str) -> Response:
 @app.get("/api/projects/{pid}/file/{rel:path}")
 def project_file(pid: str, rel: str, request: Request) -> Response:
     return _ranged(_safe_join(project_dir(pid), rel), request)
+
+
+# ------------------------------------------------------------- playback help
+@app.get("/api/playback")
+def playback_status() -> dict:
+    """Whether this machine's own window can play an H.264 render, and the fix."""
+    return playback_mod.status()
+
+
+@app.post("/api/reveal")
+def reveal_file(payload: dict = Body(...)) -> dict:
+    """Show one of this video's (or channel's) files in the file manager.
+
+    The escape hatch behind every player in the app: the file is on disk and
+    is fine, so when the window cannot decode it the creator can still watch
+    it in their own player. Only ever a path inside a project or channel
+    folder — the same join the file routes use, for the same reason.
+    """
+    scope = str(payload.get("scope") or "project")
+    ident = str(payload.get("id") or "")
+    rel = str(payload.get("rel") or "")
+    if scope not in ("project", "channel", "music"):
+        raise HTTPException(400, "scope must be project, channel or music")
+    if scope == "music":
+        # The shared bed folder, so a creator can drop tracks into it.
+        root = MUSIC_DIR
+    else:
+        root = project_dir(ident) if scope == "project" else channels.channel_dir(ident)
+    path = _safe_join(root, rel)
+    try:
+        opened, folder = playback_mod.reveal(path)
+    except playback_mod.RevealError as exc:
+        raise HTTPException(400, str(exc))
+    return {"opened": opened, "folder": folder, "path": str(path)}
+
+
+_STING_TYPES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
+
+
+def _sting_spec(p, role: str):
+    if role not in ("intro", "outro"):
+        raise HTTPException(404, "A sting goes on the intro or the outro")
+    return p.intro if role == "intro" else p.outro
+
+
+@app.post("/api/projects/{pid}/sting/{role}")
+async def upload_project_sting(pid: str, role: str, file: UploadFile) -> dict:
+    """A standalone video's own sting for its title card or its end card."""
+    data = await file.read()
+    with store.lock_for(pid):
+        p = _load(pid)
+        spec = _sting_spec(p, role)
+        suffix = Path(file.filename or "sting.mp3").suffix.lower()
+        if suffix not in _STING_TYPES:
+            raise HTTPException(400, "That is not an audio file I can read.")
+        d = project_dir(pid) / "music"
+        d.mkdir(parents=True, exist_ok=True)
+        for old in d.glob(f"sting_{role}.*"):
+            old.unlink()
+        dest = d / f"sting_{role}{suffix}"
+        dest.write_bytes(data)
+        try:
+            length = ffutil.duration(dest)
+        except Exception as exc:
+            dest.unlink()
+            raise HTTPException(400, f"Could not read that audio: {exc}")
+        if length < 0.5:
+            dest.unlink()
+            raise HTTPException(400, "That sting is too short.")
+        if role == "intro":
+            spec.music, spec.music_filename = f"music/{dest.name}", file.filename or dest.name
+            spec.music_duration, spec.music_start = round(length, 2), 0.0
+        else:
+            spec.sting, spec.sting_filename = f"music/{dest.name}", file.filename or dest.name
+            spec.sting_duration, spec.sting_start = round(length, 2), 0.0
+        store.save(p)
+    return p.to_dict()
+
+
+@app.delete("/api/projects/{pid}/sting/{role}")
+def delete_project_sting(pid: str, role: str) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        spec = _sting_spec(p, role)
+        for old in (project_dir(pid) / "music").glob(f"sting_{role}.*"):
+            old.unlink()
+        if role == "intro":
+            spec.music = spec.music_filename = ""
+            spec.music_duration = spec.music_start = 0.0
+        else:
+            spec.sting = spec.sting_filename = ""
+            spec.sting_duration = spec.sting_start = 0.0
+        store.save(p)
+    return p.to_dict()
 
 
 @app.get("/api/projects/{pid}/download")

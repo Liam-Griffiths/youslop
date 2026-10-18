@@ -97,6 +97,13 @@ FIELDS: list[Field] = [
          "fully local, no-account backend. Noticeably lower script quality "
          "than Claude; opt in deliberately, it is never chosen automatically.",
          group="Claude"),
+    Field("elevenlabs_api_key", "ELEVENLABS_API_KEY", "ElevenLabs API key", secret=True,
+         help="For narration in an ElevenLabs voice, your cloned voices included. "
+         "Billed per character to your ElevenLabs plan. Works as soon as it's "
+         "saved.", group="Voices"),
+    Field("openai_api_key", "OPENAI_API_KEY", "OpenAI API key", secret=True,
+         help="For narration in an OpenAI voice. Billed per character to your "
+         "OpenAI account. Works as soon as it's saved.", group="Voices"),
     Field("pexels_api_key", "PEXELS_API_KEY", "Pexels", secret=True,
          help="Free key — adds stock photos and video clips.", group="Archives"),
     Field("pixabay_api_key", "PIXABAY_API_KEY", "Pixabay", secret=True,
@@ -124,6 +131,16 @@ FIELDS: list[Field] = [
     Field("google_client_secret", "GOOGLE_CLIENT_SECRET", "Google OAuth client secret",
          secret=True, help="A Google Cloud \"Desktop app\" client, for publishing "
          "a render straight to YouTube. Blank hides that panel.", group="Publishing"),
+    Field("video_encoder", "YOUSLOP_ENCODER", "Video encoder",
+         "Where the finished video is encoded. Auto uses the graphics chip "
+         "when it passes a test encode — VA-API on Linux, NVENC on NVIDIA, "
+         "VideoToolbox on a Mac — and the CPU otherwise. Drawing the frames "
+         "is CPU work either way.",
+         group="Rendering", options=(
+             ("auto", "Auto — the GPU if it works, else the CPU"),
+             ("gpu", "GPU — prefer the graphics chip"),
+             ("cpu", "CPU — x264, slower, slightly smaller files"),
+         ), default="auto"),
     Field("user_agent", "VB_USER_AGENT", "Contact string for archive requests",
          "Wikimedia and Nominatim ask automated clients to identify "
          "themselves with a contact — put an email address here.",

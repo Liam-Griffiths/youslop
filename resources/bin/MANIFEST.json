@@ -12,5 +12,12 @@
       "ffprobe": "83984f764729f4e43dff79a1f591d5009dda4172df384c566123c030aae0bfaf"
     },
     "source": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
+  },
+  "linux-x86_64": {
+    "files": {
+      "ffmpeg": "031b15049192438df974e36ac3b51f4ffa751fc7074bdbfcc540d535c6b8179f",
+      "ffprobe": "2bc5388814aa76fe88d54bfeaf3cec88485b30fac8a84b43d9faedde6040aa5b"
+    },
+    "source": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
   }
 }

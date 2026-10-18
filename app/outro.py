@@ -1194,4 +1194,4 @@ def render_outro(channel: Channel, video_title: str, out_path: Path,
 
 
 def preview_path(channel: Channel) -> Path:
-    return channel_dir(channel.id) / "cache" / "outro_preview.mp4"
+    return channel_dir(channel.id) / "cache" / "outro_preview.webm"

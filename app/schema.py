@@ -67,6 +67,11 @@ class Slide:
     section: str = "main"                 # intro | main | conclusion
     beat: str = ""                        # outline beat this paragraph serves
     title: str = ""                       # lower-left typography; "" = no title
+    # A full-frame card announcing the section this paragraph opens, held in
+    # the silence that precedes it. "" = this paragraph opens nothing. The
+    # words are the card's, not the paragraph's: a chapter is usually titled
+    # more broadly than the paragraph that happens to start it.
+    chapter: str = ""
     narration: str = ""
     visual_note: str = ""                 # plain-English description of the shot
     queries: list[str] = field(default_factory=list)
@@ -82,7 +87,15 @@ class Slide:
     map_style: str = "still"              # still | establishing
     candidates: list[dict] = field(default_factory=list)
     chosen_id: str = ""
+    # The take the video uses: this paragraph's entry in `takes` for the
+    # project's chosen voice (`Project.voice_track`). Everything downstream —
+    # the renderer, the timeline, the recorded counts — reads only this.
     take: dict | None = None
+    # Every voice this paragraph has been read in, kept side by side so trying
+    # another voice never costs the one already there: "mic", "kokoro",
+    # "elevenlabs", "openai" -> that read's take. Each lives in its own folder
+    # under takes/. Write through `Project.set_take`, not into this directly.
+    takes: dict = field(default_factory=dict)
     locked_media: bool = False            # user picked; don't auto-overwrite
     # auto = follow the channel's picture_every rule; hold = keep the picture
     # already on screen; new = always start a fresh picture here.
@@ -104,6 +117,11 @@ class Slide:
     # on its own reveal beat. What the diagram spec is for a shape, this is
     # for a layout no template anticipated. See app/custom_slide.py.
     custom: dict = field(default_factory=dict)
+    # What the drawn cuts put on screen, keyed by cut ("flameboat",
+    # "casefile", ...): a list of cues, each landing on the words in its `on`.
+    # Keyed so switching a video between cuts keeps what was written for each.
+    # A cut with nothing here draws from the narration. See app/cuts/.
+    cues: dict = field(default_factory=dict)
 
     @property
     def word_count(self) -> int:
@@ -125,12 +143,18 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
 
     `every` is the default run length. A slide can override it: "hold" joins the
     run in front of it whatever the count says, "new" always starts its own.
+    A paragraph that opens a chapter also starts its own, whatever it asked
+    for: the card announcing it is drawn at the end of the segment before it,
+    so a chapter that began mid-picture would have its card land in the middle
+    of the previous section instead of on the boundary.
     """
     every = max(1, min(8, int(every or 1)))
     runs: list[list["Slide"]] = []
     n = 0
     for slide in slides:
         mode = getattr(slide, "picture_mode", "auto")
+        if (getattr(slide, "chapter", "") or "").strip():
+            mode = "new"
         if not runs or mode == "new" or (mode != "hold" and n >= every):
             runs.append([])
             n = 0
@@ -147,7 +171,9 @@ class Style:
     # itself, and the narration is set on screen as captions. "board" is the
     # handwritten cut: white ink on a grey-blue slide that fills up as you
     # talk, pictures taped onto it rather than filling it. See render.py.
-    format: str = "kenburns"        # kenburns | essay | board
+    # The five drawn cuts in app/cuts/ — flameboat, casefile, loudmouth,
+    # groupchat, ticker — draw every frame themselves and join on hard cuts.
+    format: str = "kenburns"        # kenburns | essay | board | a cut key | custom:<id>
     vignette: float = 0.34          # 0 = off, 1 = heavy
     ken_burns: bool = True
     ken_burns_amount: float = 0.10  # fractional zoom over a slide
@@ -167,6 +193,10 @@ class Style:
     # raise it when the archives are thin, and each picture holds proportionally
     # longer with a correspondingly slower Ken Burns move over the whole hold.
     picture_every: int = 1
+    # Whether a paragraph marked as opening a chapter gets its card on screen.
+    # Off renders the cut straight through, chapter marks and all, which is
+    # what you want for a video that is one continuous argument.
+    chapter_cards: bool = True
     # Base silence after each paragraph. The actual pause varies around this with
     # how the paragraph ended — see audio.paragraph_gaps.
     paragraph_gap: float = 0.42
@@ -179,6 +209,9 @@ class Style:
     board_ground: str = "#3A4552"
     board_grain: float = 0.5
     board_settle: float = 0.5
+    # Which variant of a drawn cut — "paper" for Loudmouth, "light" for Group
+    # Chat, and so on (each cut's LOOKS). Empty is the cut's own default.
+    cut_look: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -252,7 +285,11 @@ class Narrator:
     the chain the finished take is levelled through.
     """
     mode: str = "mic"               # mic | ai
-    voice: str = "bm_george"        # a Kokoro voice id; see tts.VOICES
+    # Which model reads it in "ai" mode: "kokoro" on this machine, or a hosted
+    # service — "elevenlabs" or "openai" (see app/voice_cloud.py).
+    engine: str = "kokoro"
+    voice: str = "bm_george"        # that engine's voice id; tts.VOICES for Kokoro
+    model: str = ""                 # a hosted engine's model; "" is its default
     speed: float = 1.0              # 0.5–1.5, 1.0 is the model's own pace
 
     def to_dict(self) -> dict[str, Any]:
@@ -372,6 +409,15 @@ class OutroSpec:
     # than in Style because it is the end screen that makes it a question: a bed
     # that dies on the first frame of a 20-second card leaves it sitting silent.
     music_fade: float = 6.0
+    # A sting of its own for the card, the closing twin of `IntroSpec.music`:
+    # it starts as the card comes up and runs for as long as the card is on
+    # screen (shorter if the file is). The bed's own fade-out is unchanged.
+    sting: str = ""                 # relative to the owner's folder, "" = none
+    sting_filename: str = ""
+    sting_db: float = -4.0          # relative to the narration's -16 LUFS
+    sting_start: float = 0.0        # seconds into the file the window opens
+    sting_fade: float = 2.0         # fade-out at the end of the window, 0 = cut
+    sting_duration: float = 0.0     # the whole file's length, for the UI
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -496,6 +542,20 @@ class Project:
     channel_id: str = ""
     use_intro: bool = True
     use_outro: bool = True
+    # A standalone video's own opening and close. A video inside a channel
+    # takes both from the channel — that is most of what a channel is for —
+    # so these are read only when `channel_id` is empty, and they let a
+    # one-off video open and close properly without inventing a series to
+    # hang it off. Only the type-led slate templates apply: the cast-led ones
+    # need portraits, which belong to a channel. See render._slate_channel.
+    #
+    # Both are off until asked for — an empty `intro.template` and an
+    # `outro.enabled` of False — rather than following `use_intro`, which has
+    # always defaulted to True and means "use the channel's, if it has one".
+    # Reading that flag as consent for a slate nobody set up would put an
+    # opening card on the front of every standalone video already on disk.
+    intro: IntroSpec = field(default_factory=lambda: IntroSpec(template=""))
+    outro: OutroSpec = field(default_factory=OutroSpec)
     # A pasted article is kept in the project directory as source.txt rather than
     # in this record: it can be thousands of words, and project.json is read and
     # rewritten constantly. Only the flag and the mode live here.
@@ -525,6 +585,10 @@ class Project:
     presenter: Presenter = field(default_factory=Presenter)
     thumb: Thumb = field(default_factory=Thumb)
     narrator: Narrator = field(default_factory=Narrator)
+    # Which voice the whole video uses — a key of `Slide.takes`. One voice for
+    # the whole video, chosen deliberately: a script read half by ElevenLabs
+    # and half by the local model sounds like two narrators.
+    voice_track: str = ""
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, this video
     music: str = ""          # a filename in assets/music, AUTO_MUSIC, or "" = none
     render: dict = field(default_factory=dict)   # last render result
@@ -556,6 +620,8 @@ class Project:
             "channel_id": self.channel_id,
             "use_intro": self.use_intro,
             "use_outro": self.use_outro,
+            "intro": self.intro.to_dict(),
+            "outro": self.outro.to_dict(),
             "has_source": self.has_source,
             "fidelity": self.fidelity,
             "tone": self.tone,
@@ -580,7 +646,62 @@ class Project:
             "est_seconds": self.est_seconds(),
             "recorded_seconds": self.recorded_seconds(),
             "recorded_count": sum(1 for s in self.slides if s.take),
+            "voice_track": self.voice_track,
+            "voice_tracks": self.track_counts(),
         }
+
+    # --------------------------------------------------------------- voices
+    def set_take(self, slide: "Slide", track: str, take: dict | None) -> None:
+        """Store (or clear) one paragraph's read in one voice. It becomes the
+        take the video uses only if that voice is the video's voice — or if
+        the video has no voice yet, in which case this one becomes it."""
+        if take:
+            slide.takes[track] = take
+        else:
+            slide.takes.pop(track, None)
+        if not self.voice_track and take:
+            self.use_track(track)
+        elif track == self.voice_track:
+            slide.take = take
+
+    def use_track(self, track: str) -> None:
+        """Make `track` the voice of the whole video. Nothing is deleted:
+        paragraphs not read in it yet simply have no take until they are."""
+        self.voice_track = track
+        for s in self.slides:
+            s.take = s.takes.get(track)
+
+    def track_counts(self) -> dict[str, int]:
+        """How many paragraphs each voice has read."""
+        out: dict[str, int] = {}
+        for s in self.slides:
+            for track in s.takes:
+                out[track] = out.get(track, 0) + 1
+        return out
+
+    def sync_takes(self) -> None:
+        """Keep `take` and `takes` agreeing.
+
+        On load, a project from before voices were kept apart has only `take`;
+        each one is filed under the voice it was read in, and the voice most of
+        the script was read in becomes the video's. Before a save, the active
+        take is written back to its voice, because a good deal of code adjusts
+        `slide.take` in place (a corrected duration, a re-cleaned recording)."""
+        for s in self.slides:
+            if s.take and not s.takes:
+                s.takes[take_track(s.take)] = s.take
+        if not self.voice_track:
+            counts = self.track_counts()
+            if counts:
+                self.voice_track = max(counts, key=counts.get)
+                for s in self.slides:
+                    s.take = s.takes.get(self.voice_track)
+            return
+        for s in self.slides:
+            if s.take:
+                s.takes[self.voice_track] = s.take
+            else:
+                s.takes.pop(self.voice_track, None)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Project":
@@ -594,10 +715,20 @@ class Project:
                          if k in Thumb.__dataclass_fields__})
         narrator = Narrator(**{k: v for k, v in (d.get("narrator") or {}).items()
                                if k in Narrator.__dataclass_fields__})
+        # A project written before a video could carry its own opening has no
+        # `intro` at all, and must not acquire one by inheriting IntroSpec's
+        # cast-led default — hence the empty template rather than {}.
+        raw_intro = d.get("intro")
+        intro = (IntroSpec(**{k: v for k, v in raw_intro.items()
+                              if k in IntroSpec.__dataclass_fields__})
+                 if isinstance(raw_intro, dict) else IntroSpec(template=""))
+        outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
+                             if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"slides", "style", "voice", "presenter", "thumb", "narrator"})
+                 - {"slides", "style", "voice", "presenter", "thumb", "narrator",
+                    "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
-        return cls(
+        p = cls(
             **base,
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             style=style,
@@ -605,7 +736,48 @@ class Project:
             presenter=presenter,
             thumb=thumb,
             narrator=narrator,
+            intro=intro,
+            outro=outro,
         )
+        p.sync_takes()
+        return p
+
+
+MIC_TRACK = "mic"
+
+
+def take_track(take: dict) -> str:
+    """Which voice a take was read in: the engine for a synthetic read, the
+    microphone otherwise."""
+    if take.get("synthetic"):
+        return str(take.get("engine") or "kokoro")
+    return MIC_TRACK
+
+
+def chapter_title(project: Project, slide: Slide) -> str:
+    """What the card announcing `slide`'s section says, or "" for no card.
+
+    A paragraph opens a chapter when it has been marked as one — `slide.chapter`
+    carries the words. The essay cut keeps its old behaviour as a fallback:
+    with nothing marked anywhere in the video, a paragraph's own title
+    announces the section, which is how every essay video rendered before
+    chapters could be marked by hand. Marking even one turns that off, so the
+    two rules are never both running and the marks alone decide.
+
+    Lives here rather than in the renderer because the narration timing asks
+    the same question — the card needs a hole in the voice to be read in (see
+    `audio.paragraph_gaps`) — and the two must not be able to disagree about
+    where a chapter starts.
+    """
+    if not getattr(project.style, "chapter_cards", True):
+        return ""
+    marked = (slide.chapter or "").strip()
+    if marked:
+        return marked
+    if (project.style.format == "essay" and slide.title
+            and not any((s.chapter or "").strip() for s in project.slides)):
+        return slide.title
+    return ""
 
 
 def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documentary",

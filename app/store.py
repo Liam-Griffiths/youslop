@@ -30,6 +30,7 @@ def project_dir(pid: str) -> Path:
 
 def save(project: Project) -> Project:
     project.updated_at = time.time()
+    project.sync_takes()
     d = project_dir(project.id)
     payload = json.dumps(project.to_dict(), indent=2, ensure_ascii=False)
     # Atomic write so a crash mid-save can never truncate an existing project.

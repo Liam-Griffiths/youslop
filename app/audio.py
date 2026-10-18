@@ -9,7 +9,7 @@ from typing import NamedTuple
 
 from . import ffutil
 from .config import HEAD_PAD, PARAGRAPH_GAP, TAIL_PAD
-from .schema import Project, Voice
+from .schema import Project, Voice, chapter_title
 
 
 # How the pause after a paragraph varies with how that paragraph ended. Speech
@@ -58,7 +58,11 @@ def paragraph_gaps(project: Project) -> list[float]:
                 factor = max(factor, GAP_BEAT)
             if nxt.title or (nxt.section or "") != (s.section or ""):
                 factor = max(factor, GAP_SECTION)
-            if nxt.title and getattr(project.style, "format", "") == "essay":
+            # A card the viewer has to read needs a hole to be read in. Marked
+            # by hand in any format, or — in the essay cut, where it has always
+            # worked this way — by the next paragraph carrying a title.
+            if (nxt.chapter or "").strip() or (
+                    nxt.title and getattr(project.style, "format", "") == "essay"):
                 factor = max(factor, GAP_CHAPTER)
         gaps.append(round(base * factor, 3))
     return gaps
@@ -487,32 +491,60 @@ def slide_durations(project: Project) -> list[tuple[str, float]]:
     return out
 
 
-def build_narration(project: Project, out_path: Path, lead_in: float) -> float:
+def build_narration(project: Project, out_path: Path, lead_in: float,
+                    fill: dict[str, float] | None = None) -> float:
     """Concatenate every take into one continuous narration bed.
 
     `lead_in` is silence before the first word, which lets the opening image and
-    the first crossfade breathe. Returns the total duration.
+    the first crossfade breathe. Returns the total duration. `fill` maps a slide
+    id to the seconds of silence to leave for a paragraph with no take, which is
+    how the timeline preview keeps unrecorded paragraphs in their place.
     """
+    return _concat_takes(project, project.slides, out_path,
+                         head=lead_in + HEAD_PAD, tail=TAIL_PAD, fill=fill)
+
+
+def build_slice(project: Project, slides: list, out_path: Path,
+                head: float) -> float:
+    """The takes for `slides` alone, as one bed starting `head` seconds in.
+
+    What the in-app segment preview plays under one picture. `head` is the
+    whole delay before the first word rather than a lead-in on top of
+    `HEAD_PAD`: a slice lands wherever in the cut its segment starts, which is
+    not the top of the video and so carries none of the opening padding.
+    """
+    return _concat_takes(project, slides, out_path, head=head, tail=0.0)
+
+
+def _concat_takes(project: Project, slides: list, out_path: Path,
+                  head: float, tail: float,
+                  fill: dict[str, float] | None = None) -> float:
     from .store import project_dir
 
     root = project_dir(project.id)
-    takes = [(s, s.take) for s in project.slides if s.take and s.take.get("path")]
+    wanted = {s.id for s in slides}
+    fill = fill or {}
+    takes = [(s, s.take if (s.take and s.take.get("path")) else None) for s in project.slides
+             if s.id in wanted and ((s.take and s.take.get("path")) or s.id in fill)]
     if not takes:
         raise ValueError("Nothing recorded yet.")
 
     inputs: list[str] = []
     filters: list[str] = []
     labels: list[str] = []
-    head = lead_in + HEAD_PAD
     gaps = gap_map(project)
 
     for i, (slide, take) in enumerate(takes):
-        inputs += ["-i", str(root / take["path"])]
+        if take:
+            inputs += ["-i", str(root / take["path"])]
+        else:
+            inputs += ["-f", "lavfi", "-t", f"{max(0.1, fill[slide.id]):.3f}",
+                       "-i", "anullsrc=r=48000:cl=mono"]
         pad_before = head if i == 0 else 0.0
         # The pause after each take is the one the picture timing also uses; the
         # last take additionally carries the music-only outro.
         pad_after = (gaps.get(slide.id, PARAGRAPH_GAP)
-                     + (TAIL_PAD if i == len(takes) - 1 else 0.0))
+                     + (tail if i == len(takes) - 1 else 0.0))
         pre = f"adelay={int(pad_before * 1000)}|{int(pad_before * 1000)}," if pad_before else ""
         filters.append(
             f"[{i}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"

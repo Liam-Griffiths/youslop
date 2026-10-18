@@ -446,23 +446,49 @@ def _finish_chain(voice_spec: Voice | None) -> str:
     )
 
 
+ENGINE = "kokoro"      # this module's own engine, beside voice_cloud.KEYS
+
+
 def speak_to_file(text: str, out_path: Path, voice: str = DEFAULT_VOICE,
                   speed: float = 1.0, voice_spec: Voice | None = None,
-                  lexicon: dict[str, str] | None = None) -> dict:
+                  lexicon: dict[str, str] | None = None, *, engine: str = ENGINE,
+                  model: str = "", context: tuple[str, str] = ("", ""),
+                  style: str = "") -> dict:
     """Synthesise one paragraph into a finished take. Returns take metadata.
+
+    `engine` is "kokoro" (this machine) or a hosted service from
+    `voice_cloud`. For Kokoro `lexicon` is the phoneme guide; for a hosted
+    voice it is the text-alias table (`voice_cloud.aliases`), since those take
+    words, not phonemes. `context` is the paragraphs either side, which a
+    hosted voice uses to keep its delivery continuous across the seam.
 
     Written to a scratch file and moved into place only once it is known good,
     for the same reason a re-record is: a failure must not take the previous
     take down with it.
     """
-    import soundfile as sf
-
-    samples, rate = synthesise(text, voice, speed, lexicon)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     raw = out_path.with_suffix(".raw.wav")
     tmp = out_path.with_suffix(".part.wav")
     try:
-        sf.write(str(raw), samples, rate)
+        if engine == ENGINE:
+            import soundfile as sf
+
+            samples, rate = synthesise(text, voice, speed, lexicon)
+            sf.write(str(raw), samples, rate)
+        else:
+            from . import voice_cloud
+
+            said = voice_cloud.apply_aliases(text.strip(), lexicon or {})
+            if not said:
+                raise TTSError("There is nothing to say in that paragraph.")
+            try:
+                raw = voice_cloud.synthesise(
+                    engine, said, raw, voice, model, speed,
+                    previous_text=context[0], next_text=context[1], style=style)
+            except voice_cloud.CloudVoiceError as exc:
+                raise TTSError(str(exc)) from exc
+            speed = voice_cloud.clamp_speed(engine, speed)
+            model = model or voice_cloud.default_model(engine)
         ffutil.run(["-i", str(raw), "-af", _finish_chain(voice_spec),
                     "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", str(tmp)])
         dur = ffutil.duration(tmp)
@@ -472,12 +498,17 @@ def speak_to_file(text: str, out_path: Path, voice: str = DEFAULT_VOICE,
     finally:
         raw.unlink(missing_ok=True)
         tmp.unlink(missing_ok=True)
-    return {"duration": round(dur, 3), "recorded_at": time.time(),
-            "voice": voice, "speed": round(float(speed), 2), "synthetic": True}
+    meta = {"duration": round(dur, 3), "recorded_at": time.time(),
+            "voice": voice, "speed": round(float(speed), 2), "synthetic": True,
+            "engine": engine}
+    if engine != ENGINE:
+        meta["model"] = model
+    return meta
 
 
-def preview_path(voice: str, cache_dir: Path) -> Path:
-    return cache_dir / f"voice_{voice}.wav"
+def preview_path(voice: str, cache_dir: Path, engine: str = ENGINE) -> Path:
+    prefix = "" if engine == ENGINE else f"{engine}_"
+    return cache_dir / f"voice_{prefix}{voice}.wav"
 
 
 SAMPLE_LINE = ("Two albums, recorded in Detroit, and neither of them sold. "
@@ -485,10 +516,15 @@ SAMPLE_LINE = ("Two albums, recorded in Detroit, and neither of them sold. "
                "world away he had become a legend.")
 
 
-def preview(voice: str, cache_dir: Path, speed: float = 1.0) -> Path:
-    """One line in a voice, cached, so the picker can be listened through."""
-    out = preview_path(voice, cache_dir)
+def preview(voice: str, cache_dir: Path, speed: float = 1.0, engine: str = ENGINE,
+            model: str = "") -> Path:
+    """One line in a voice, cached, so the picker can be listened through.
+
+    For a hosted voice this is a (small) billed request, made once per voice
+    and then served from the cache.
+    """
+    out = preview_path(voice, cache_dir, engine)
     if out.is_file() and out.stat().st_size > 4096:
         return out
-    speak_to_file(SAMPLE_LINE, out, voice, speed)
+    speak_to_file(SAMPLE_LINE, out, voice, speed, engine=engine, model=model)
     return out

@@ -117,6 +117,10 @@ TEMPLATES = [
      "fly_label": "Flip speed"},
 ]
 TEMPLATE_KEYS = [t["key"] for t in TEMPLATES]
+# The templates a video with no channel behind it can use: no cast, no
+# portraits to fetch, nothing but its own title and colours.
+SOLO_TEMPLATE_KEYS = [t["key"] for t in TEMPLATES if not t["needs_images"]]
+SOLO_DEFAULT = SOLO_TEMPLATE_KEYS[0]
 
 
 def needs_images(template: str) -> bool:
@@ -2724,7 +2728,7 @@ def render_intro(channel: Channel, video_title: str, out_path: Path,
 
 
 def preview_path(channel: Channel) -> Path:
-    return channel_dir(channel.id) / "cache" / "intro_preview.mp4"
+    return channel_dir(channel.id) / "cache" / "intro_preview.webm"
 
 
 # --------------------------------------------------------------------- sting
@@ -2786,14 +2790,18 @@ def mux_sting(channel: Channel, video: Path, slate_len: float,
     # itself, or every level below the voice would sound the same here.
     lufs = float(channel.voice.target_lufs)
     chain = sting_chain(channel.intro, slate_len, fmt, lufs, makeup=-14.0 - lufs)
-    tmp = video.with_suffix(".sting.mp4")
+    # Same container the slate was written in, so a preview that was encoded
+    # to play in this app's own window does not come back out of here as an
+    # mp4 the window cannot decode. See ffutil.video_args.
+    tmp = video.with_name(video.stem + ".sting" + video.suffix)
     args = ["-i", str(video), "-i", str(src),
             "-filter_complex",
             f"[0:v]tpad=stop_mode=clone:stop_duration={tail:.3f}[v];"
             f"[1:a]{chain}[a]",
             "-map", "[v]", "-map", "[a]",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "17",
-            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+            *ffutil.video_args(tmp, crf=17),
+            "-pix_fmt", "yuv420p",
+            *ffutil.audio_args(tmp, bitrate="192k"),
             "-shortest", str(tmp)]
     try:
         ffutil.run(args, timeout=300)

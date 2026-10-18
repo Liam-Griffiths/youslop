@@ -571,6 +571,10 @@ Rules:
   Name a template only when the content genuinely is a quote, a number, a
   comparison, a sequence or code.
 - Vary it. Five bulleted boards in a row is a slide deck, not a video.
+- Each paragraph also has a picture. "auto" tapes it up on about one board in
+  three; name "taped" or "split" yourself for a paragraph about a concrete
+  person, place, object or event, where seeing it beats reading about it.
+  Never on two paragraphs running, and never for an abstract point.
 - A paragraph with nothing worth writing down gets {{"lead": "", "points": []}}
   and will be given a line from its own narration.
 
@@ -611,6 +615,72 @@ a hierarchy, an overlap, a loop. At most {max(1, len(chunk) // 4)} of these
                     except (ValueError, TypeError):
                         slide.diagram = {}
             progress(f"Boards written for chunk {ci + 1}/{len(chunks)}")
+
+
+def plan_cues(project: Project, slides: list[Slide],
+              progress: Progress = lambda m: None) -> None:
+    """Write what the video's drawn cut puts on screen, cue by cue, in place.
+
+    The drawn cuts' equivalent of `plan_boards`, and additive the same way:
+    a slide that already has cues for this cut is left alone, and a slide
+    this pass misses is drawn from its own narration (`cuts.cues_for`).
+    Each cue names the words it lands `on`, which is how a fast cut stays on
+    the voice without word timings. See app/cuts/.
+    """
+    from . import cuts
+
+    fmt = project.style.format
+    if not slides or not cuts.is_cut(fmt):
+        return
+    module = cuts.BY_KEY[fmt]
+    targets = [s for s in slides if not (s.cues or {}).get(fmt)]
+    if not targets:
+        return
+    outline = project.outline
+    facts = _facts_block(project.research or {}) if fmt == "ticker" else ""
+    chunks = [targets[i : i + 8] for i in range(0, len(targets), 8)]
+    progress(f"Writing {module.LABEL} cues for {len(targets)} paragraphs")
+
+    def run(args: tuple[int, list[Slide]]) -> tuple[int, Any]:
+        ci, chunk = args
+        listing = "\n".join(f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
+                             for n, s in enumerate(chunk, 1))
+        prompt = f"""Write what goes on screen for each paragraph below.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject', project.idea)}
+{facts}
+{module.PLAN}
+
+Every cue also has "on": the first 3-6 words of the narration, copied
+EXACTLY, at which that cue should appear. The first cue of a paragraph is on
+its opening words. Cues are in the order they are spoken.
+
+PARAGRAPHS:
+{listing}
+
+Return a JSON list of {len(chunk)} objects in the same order:
+{{"n": <the number>, "cues": [ ...cue objects as described above... ]}}"""
+        return ci, complete_json(
+            prompt, model=MODEL_UTILITY, timeout=600,
+            require=lambda v: bool(find_records(v, "cues")),
+            require_hint='Each item needs "n" and a "cues" list.')
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for ci, plan in pool.map(run, list(enumerate(chunks))):
+            chunk = chunks[ci]
+            by_n = {}
+            for pos, item in enumerate(find_records(plan, "cues"), 1):
+                try:
+                    n = int(item.get("n", pos))
+                except (TypeError, ValueError):
+                    n = pos
+                by_n[n] = item
+            for n, slide in enumerate(chunk, 1):
+                cues = cuts.normalise(module, by_n.get(n, {}).get("cues"))
+                if cues:
+                    slide.cues = {**(slide.cues or {}), fmt: cues}
+            progress(f"{module.LABEL} cues written for chunk {ci + 1}/{len(chunks)}")
 
 
 # --------------------------------------------------------------- fact-check
@@ -724,6 +794,7 @@ def generate(project: Project, progress: Progress = lambda m: None,
     plan_visuals(project, slides, progress)
     if project.style.format == "board":
         plan_boards(project, slides, progress)
+    plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
     project.slides = slides
     project.status = "scripted"
@@ -907,6 +978,7 @@ example", a numeral stays a numeral only if you would say it that way.""",
     plan_visuals(project, slides, progress)
     if project.style.format == "board":
         plan_boards(project, slides, progress)
+    plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
     project.slides = slides
     project.status = "scripted"

@@ -59,6 +59,16 @@ function fmtTime(sec) {
 
 function go(hash) { location.hash = hash; }
 
+// The standalone videos live in a section of the home page rather than on a
+// page of their own; from anywhere else this goes there and scrolls to them.
+function goStandalone() {
+  const land = () => requestAnimationFrame(() =>
+    $('#standalone')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  if ((location.hash || '#/') === '#/') { land(); return; }
+  state.afterHome = land;
+  go('#/');
+}
+
 // ------------------------------------------------------------------ sidebar
 // The channel list is fetched once and kept in state.channels — every page
 // that already loads channels (home, a project, a channel) refreshes it, and
@@ -78,6 +88,12 @@ function paintSidebar() {
   $('.sidebar-link[data-route="guide"]')?.classList.toggle('active', onGuide);
   $('.sidebar-link[data-route="library"]')?.classList.toggle('active', onLibrary);
   $('.sidebar-link[data-route="settings"]')?.classList.toggle('active', onSettings);
+
+  // Videos in no channel have no page of their own to link to, so the
+  // sidebar points at their section on the home page. The count comes from
+  // whatever the last projects fetch saw — it is a signpost, not a total.
+  const solo = $('#solo-count');
+  if (solo) solo.textContent = state.soloCount != null ? state.soloCount : '';
 
   const box = $('#sidebar-channels');
   if (!box) return;
@@ -283,6 +299,7 @@ async function route() {
   const settingsPage = hash === '#/settings';
   const guidePage = hash === '#/guide';
   stopStream();
+  if (typeof tlPause === 'function' && !(proj && proj[2] === 'render')) tlPause();
   // Every format picker (home, channel, project) paints from this, so it is
   // loaded once here rather than awaited in three places.
   await ensureSlideStyles();
@@ -317,6 +334,9 @@ async function route() {
       } catch { state.boardTemplates = []; }
       try { state.diagramKinds = (await api('/api/diagram/kinds')).kinds; }
       catch { state.diagramKinds = []; }
+    }
+    if (!state.cuts) {
+      try { state.cuts = await api('/api/cuts'); } catch { state.cuts = []; }
     }
     if (!state.project || state.project.id !== proj[1]) {
       state.project = null;
@@ -504,6 +524,8 @@ async function renderHome() {
 
   const byChannel = (id) => projects.filter((p) => (p.channel_id || '') === id);
   const loose = byChannel('');
+  state.soloCount = loose.length;
+  paintSidebar();
 
   view.innerHTML = `
     <div class="row" style="align-items:flex-start">
@@ -592,6 +614,15 @@ async function renderHome() {
       </div>
     </div>
 
+    <div class="row" id="standalone" style="margin:34px 0 14px;align-items:baseline;
+         scroll-margin-top:16px">
+      <h2 style="margin:0">${chans.length ? 'Standalone videos' : 'Your videos'}</h2>
+      <span class="mono" style="color:var(--ink-faint)">
+        ${loose.length ? `${loose.length} video${loose.length === 1 ? '' : 's'} in no channel` : ''}</span>
+    </div>
+    ${loose.length === 0 ? '<div class="empty-note">Bucket\'s empty. Go make some slop.</div>'
+      : loose.map(projRow).join('')}
+
     <div class="row" style="margin:34px 0 14px;align-items:baseline">
       <h2 style="margin:0">Channels</h2>
       <span class="mono" style="color:var(--ink-faint)">shared look, shared opening slate</span>
@@ -615,14 +646,15 @@ async function renderHome() {
     ${chans.filter((c) => byChannel(c.id).length).map((c) => `
       <h2>${esc(c.name)}</h2>
       ${byChannel(c.id).map(projRow).join('')}`).join('')}
-
-    <h2>${chans.length ? 'Standalone videos' : 'Your videos'}</h2>
-    ${loose.length === 0 ? '<div class="empty-note">Bucket\'s empty. Go make some slop.</div>'
-      : loose.map(projRow).join('')}
   `;
   if (state.presetChannel) {
     state.presetChannel = null;
     channelPicked();
+  }
+  if (state.afterHome) {
+    const run = state.afterHome;
+    state.afterHome = null;
+    run();
   }
 }
 
@@ -1119,6 +1151,43 @@ function formatArt(key, accent) {
       <path d="M12 24h30" stroke="${a}" stroke-width="2" stroke-linecap="round"/>
       <path d="M14 38h10M14 50h10M14 62h10" stroke="#aab0bc" stroke-width="2" stroke-linecap="round"/>
       <path d="M30 38h58M30 50h46M30 62h50" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".9"/>`,
+    flameboat: `<rect width="140" height="78" fill="#0E1014"/>
+      <rect x="22" y="14" width="96" height="50" rx="4" fill="#151922" stroke="#2A3140"/>
+      <circle cx="29" cy="20" r="2" fill="#FF5F57"/><circle cx="35" cy="20" r="2" fill="#FEBC2E"/>
+      <circle cx="41" cy="20" r="2" fill="#28C840"/>
+      <rect x="28" y="30" width="22" height="4" fill="#FF7AB6"/><rect x="53" y="30" width="30" height="4" fill="#5FD4FF"/>
+      <rect x="24" y="39" width="92" height="7" fill="${a}" opacity=".3"/>
+      <rect x="34" y="40" width="44" height="4" fill="#E8EAF0"/>
+      <rect x="28" y="51" width="36" height="4" fill="#A8E07A"/>`,
+    casefile: `<defs><radialGradient id="cfv"><stop offset=".55" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".7"/></radialGradient></defs>
+      <rect width="140" height="78" fill="#5a3a20"/>
+      <rect x="18" y="12" width="34" height="40" fill="#efe9dc" transform="rotate(-5 35 32)"/>
+      <rect x="22" y="15" width="26" height="25" fill="#3b4a5c" transform="rotate(-5 35 32)"/>
+      <rect x="78" y="30" width="44" height="28" fill="#f6f2e6" transform="rotate(4 100 44)"/>
+      <rect x="80" y="38" width="38" height="1.5" fill="#d65c5c" transform="rotate(4 100 44)"/>
+      <circle cx="35" cy="16" r="2.6" fill="#b21c22"/><circle cx="99" cy="31" r="2.6" fill="#b21c22"/>
+      <rect width="140" height="78" fill="url(#cfv)"/>`,
+    loudmouth: `<rect width="140" height="78" fill="#0B0B0D"/>
+      <text x="16" y="24" font-family="sans-serif" font-size="9" font-weight="700" fill="#8D8A84">you are not</text>
+      <text x="14" y="50" font-family="sans-serif" font-size="27" font-weight="900" fill="${a}">behind.</text>
+      <text x="122" y="16" font-family="sans-serif" font-size="13" font-weight="900" fill="#F4F1EA"
+        transform="rotate(90 122 16)">too late</text>
+      <text x="16" y="68" font-family="sans-serif" font-size="13" font-weight="900" fill="#F4F1EA">decide.</text>`,
+    groupchat: `<rect width="140" height="78" fill="#1d2433"/>
+      <rect x="34" y="4" width="72" height="70" rx="8" fill="#0B0B0F"/>
+      <rect x="34" y="4" width="72" height="12" rx="6" fill="#16161C"/>
+      <rect x="40" y="22" width="34" height="9" rx="4.5" fill="#26262E"/>
+      <rect x="62" y="35" width="38" height="9" rx="4.5" fill="#2E7CF6"/>
+      <rect x="40" y="48" width="28" height="9" rx="4.5" fill="#26262E"/>
+      <circle cx="46" cy="64" r="1.6" fill="#8C8C99"/><circle cx="51" cy="64" r="1.6" fill="#8C8C99"/>
+      <circle cx="56" cy="64" r="1.6" fill="#8C8C99"/>`,
+    ticker: `<rect width="140" height="78" fill="#060A12"/>
+      <rect width="140" height="8" fill="#0C1220"/>
+      <path d="M14 56 L34 48 L52 52 L72 34 L92 38 L112 20 L126 24" stroke="#1FD686" stroke-width="2.4" fill="none"/>
+      <path d="M14 56 L34 48 L52 52 L72 34 L92 38 L112 20 L126 24 L126 66 L14 66Z" fill="#1FD686" opacity=".14"/>
+      <circle cx="126" cy="24" r="3" fill="#1FD686"/>
+      <rect x="14" y="12" width="34" height="3" fill="${a}"/>`,
   }[key] || '<rect width="140" height="78" fill="#14151a"/>';
   return `<svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">${svg}</svg>`;
 }
@@ -1127,7 +1196,19 @@ const FORMAT_INFO = [
   { key: 'kenburns', label: 'Documentary', blurb: 'The picture fills the frame and drifts.' },
   { key: 'essay', label: 'Video essay', blurb: 'The picture sits in a slide, narration on screen.' },
   { key: 'board', label: 'Handwritten board', blurb: 'White marker on slate, written as you talk.' },
+  { key: 'flameboat', label: 'Flameboat', blurb: 'Rapid-fire tech explainer: B-roll, code, terminals, memes, hard cuts.' },
+  { key: 'casefile', label: 'Casefile', blurb: 'True crime on a lamp-lit corkboard, pinned up as you talk.' },
+  { key: 'loudmouth', label: 'Loudmouth', blurb: 'Kinetic type: every word slams in as it is said.' },
+  { key: 'groupchat', label: 'Group Chat', blurb: 'Storytime: the message thread, cutting away to the scene and back.' },
+  { key: 'ticker', label: 'Ticker', blurb: 'A markets terminal: rolling figures, drawn charts, bars.' },
 ];
+
+// The drawn cuts (app/cuts/): each paragraph is a run of cues the writer
+// placed on its words, so they get a cue editor where the board gets a board
+// editor, and they join on hard cuts rather than the crossfade.
+const CUT_KEYS = ['flameboat', 'casefile', 'loudmouth', 'groupchat', 'ticker'];
+const isCut = (fmt) => CUT_KEYS.includes(fmt || '');
+const cutInfo = (fmt) => (state.cuts || []).find((c) => c.key === fmt);
 
 // Saved slide styles sit in this same picker — a design kept from the slide
 // editor is a way to stage a video, exactly like the three built-in formats,
@@ -1505,7 +1586,8 @@ function previewStage(c, kind, file, stamp) {
   if (!stamp) return '';
   return `
     <h3 style="margin-top:24px">Preview</h3>
-    <video controls preload="metadata" src="/api/channels/${c.id}/file/${file}?v=${stamp}"></video>`;
+    ${videoTag(`/api/channels/${c.id}/file/${file}?v=${stamp}`,
+               { scope: 'channel', id: c.id, rel: file })}`;
 }
 
 // A theme swatch: the two colours it writes into the channel, its ground, and a
@@ -1661,7 +1743,7 @@ function endScreenPanel(c) {
         <span>Name the video that is ending</span>
       </label>
 
-      ${previewStage(c, 'end screen preview', 'cache/outro_preview.mp4', c.outro_preview_at)}
+      ${previewStage(c, 'end screen preview', 'cache/outro_preview.webm', c.outro_preview_at)}
     </div>`;
 }
 
@@ -1861,6 +1943,7 @@ function paintChannelSetup() {
         <label class="field"><span>Video style</span></label>
         ${formatPicker(st.format || 'kenburns', st.accent, 'pickChannelFormat')}
         ${st.format === 'board' ? boardKnobs(st, 'saveChannelStyle') : ''}
+        ${isCut(st.format) ? cutKnobs(st, 'saveChannelStyle') : ''}
         <label class="field"><span>Accent — rules, separators, titles</span>
           <input type="text" value="${esc(st.accent)}" onchange="saveChannelStyle({accent:this.value})"></label>
         <label class="field"><span>Second colour — patterns, shadows, the loud half</span>
@@ -2015,7 +2098,7 @@ function paintChannelSetup() {
         <button class="btn sm" onclick="addCast(document.getElementById('newcast'))">add</button>
       </div>`}
 
-      ${previewStage(c, 'intro preview', 'cache/intro_preview.mp4', c.preview_at)}
+      ${previewStage(c, 'intro preview', 'cache/intro_preview.webm', c.preview_at)}
     </div>
 
     ${endScreenPanel(c)}
@@ -2319,6 +2402,21 @@ function render() {
   ({ script: paintScript, media: paintMedia, record: paintRecord,
      thumb: paintThumb, render: paintRender }[state.tab] || paintScript)();
   paintJob();
+  if (state.tab !== 'render' && typeof tlPause === 'function') tlPause();
+  focusPendingSlide();
+}
+
+// Arriving from the timeline (or anywhere else) with one paragraph in mind:
+// scroll its card into view and flash it.
+function focusPendingSlide() {
+  const sid = state.focusSlide;
+  if (!sid) return;
+  state.focusSlide = '';
+  const el = document.querySelector(`#tabbody [data-sid="${sid}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1800);
 }
 
 // ------------------------------------------------------------------ script
@@ -2372,7 +2470,14 @@ function paintScript() {
         <strong>${esc(s.beat || '')}</strong></div>`;
     }
     const flag = flagsBySlide[s.id];
-    html += `<div class="card slide-card">
+    html += `${s.chapter ? `<div class="chapter-mark">
+        <span class="kicker">chapter</span>
+        <input type="text" value="${esc(s.chapter)}" aria-label="chapter title"
+          onblur="saveChapter('${s.id}',this.value)">
+        <button class="btn sm ghost" title="drop the chapter card"
+          onclick="saveChapter('${s.id}','')">remove</button>
+      </div>` : ''}
+    <div class="card slide-card" data-sid="${s.id}">
       <div class="slide-num">${String(i + 1).padStart(2, '0')}${s.take ? '<br>●' : ''}</div>
       <div>
         <textarea rows="3" onblur="saveSlide('${s.id}',{narration:this.value})"
@@ -2386,6 +2491,8 @@ function paintScript() {
               <span class="dot"></span>${flag.severity === 'high' ? 'unsupported claim' : 'check this'}</span>` : ''}
           <div class="spacer"></div>
           ${s.take ? '<span class="pill on"><span class="dot"></span>recorded</span>' : ''}
+          ${s.chapter ? '' : `<button class="btn sm ghost" title="a full-frame card before this paragraph"
+            onclick="startChapter('${s.id}')">start a chapter</button>`}
           <button class="btn sm ghost" onclick="rewrite('${s.id}')">rewrite</button>
           <button class="btn sm ghost" onclick="splitSlide('${s.id}')">split</button>
           <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">delete</button>
@@ -2439,6 +2546,27 @@ function sourcesPanel(research) {
 async function runFactcheck() {
   const r = await api(`/api/projects/${state.project.id}/factcheck`, { method: 'POST' });
   watchJob(r.job, 'fact check');
+  render();
+}
+
+// A chapter card: a full frame of type announcing a section, held in the
+// silence before the paragraph that opens it. Marking one also gives that
+// paragraph its own picture (see schema.group_slides), so the card lands on
+// a cut rather than in the middle of the picture before it.
+const chapterCount = (p) => p.slides.filter((s) => (s.chapter || '').trim()).length;
+
+function startChapter(sid) {
+  const s = state.project.slides.find((x) => x.id === sid);
+  saveChapter(sid, s.title || (s.beat || '').slice(0, 60) || 'New chapter');
+}
+
+async function saveChapter(sid, text) {
+  const s = state.project.slides.find((x) => x.id === sid);
+  if ((s.chapter || '') === (text || '')) return;
+  await saveSlide(sid, { chapter: text });
+  // The run grouping and the pauses both move with it, so repaint rather than
+  // leaving the page showing the old shape of the cut.
+  state.project = await api(`/api/projects/${state.project.id}`);
   render();
 }
 
@@ -2524,21 +2652,93 @@ function videoUrl(c) {
   return c.url;
 }
 
-// A quick look at a clip before committing to it — opens over whatever picker
-// or grid it was clicked from, closes on Escape/backdrop-click, and pauses
-// itself on close rather than playing on in a detached element.
-function playClip(c) {
+// ------------------------------------------------------------ playing video
+// Everything the app renders is played back in its own window, and on Linux
+// that window is WebKitGTK decoding through GStreamer — which, on a desktop
+// with only the base and "good" plugin sets, has no H.264 decoder at all. The
+// previews dodge it by being VP9/Opus in WebM, but the finished render is
+// H.264 because YouTube wants it that way, so it can still come up as a
+// broken play button on a perfectly good file. When that happens the player
+// says so, gives the one command that fixes it, and offers the folder.
+async function ensurePlayback() {
+  if (!state.playback) {
+    state.playback = await api('/api/playback').catch(() => ({}));
+  }
+  return state.playback;
+}
+
+// `file` is {scope, id, rel} — what /api/reveal needs to show it on disk.
+function videoTag(src, file, attrs = 'controls preload="metadata"') {
+  return `<video ${attrs} src="${esc(src)}"
+    data-file="${esc(encodeURIComponent(JSON.stringify(file || {})))}"
+    onerror="videoFailed(this)"></video>`;
+}
+
+async function videoFailed(el) {
+  if (el.dataset.helped) return;          // one note per player, not one per retry
+  el.dataset.helped = '1';
+  const pb = await ensurePlayback();
+  let file = {};
+  try { file = JSON.parse(decodeURIComponent(el.dataset.file || '%7B%7D')); } catch { /* none */ }
+  const codec = pb.h264 === false;
+  const mp4 = /\.mp4(\?|$)/.test(el.getAttribute('src') || '');
+  el.insertAdjacentHTML('afterend', `
+    <div class="playback-help">
+      <strong>This window can't play that video.</strong>
+      <div class="mono">${codec && mp4
+        ? `The file is fine — nothing on this machine can decode H.264 inside
+           the app window${pb.distro ? ` (${esc(pb.distro)})` : ''}. The decoders
+           live in GStreamer's libav plugin, which most desktops don't install.`
+        : `The file is on disk and the renderer finished it; the window just
+           won't play it back.`}</div>
+      ${pb.command ? `
+        <div class="row" style="margin-top:10px">
+          <code class="cmd">${esc(pb.command)}</code>
+          <button class="btn sm ghost" onclick="copyText('${esc(encodeURIComponent(pb.command))}')">copy</button>
+        </div>` : ''}
+      ${pb.note ? `<div class="mono" style="color:var(--ink-faint);margin-top:8px">${esc(pb.note)}</div>` : ''}
+      ${file.id ? `
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" onclick="revealFile('${esc(file.scope || 'project')}','${esc(file.id)}','${esc(encodeURIComponent(file.rel || ''))}')">
+            open the folder</button>
+          <span class="mono" style="color:var(--ink-faint)">and play it in your own player</span>
+        </div>` : ''}
+    </div>`);
+}
+
+// Show a file where it lives. The button exists whether or not playback
+// failed — "where did that render go" is a fair question on its own.
+async function revealFile(scope, id, rel) {
+  try {
+    const r = await api('/api/reveal', {
+      method: 'POST',
+      body: JSON.stringify({ scope, id, rel: decodeURIComponent(rel) }),
+    });
+    toast(r.opened ? `Opened ${r.folder}` : r.folder);
+  } catch (e) { toast(e.message, true); }
+}
+
+function copyText(encoded) {
+  const text = decodeURIComponent(encoded);
+  navigator.clipboard.writeText(text)
+    .then(() => toast('Copied to clipboard'))
+    .catch(() => toast('Failed to copy', true));
+}
+
+// The modal both video previews play in — opens over whatever picker or grid
+// it was clicked from, closes on Escape/backdrop-click, and pauses itself on
+// close rather than playing on in a detached element.
+function openVideoModal(head, videoTag) {
   const wrap = document.createElement('div');
   wrap.className = 'modal clip-modal';
   wrap.innerHTML = `
     <div class="modal-box" style="width:min(900px,100%)">
       <div class="row" style="margin-bottom:10px">
-        <strong>${esc(c.title || 'clip')}</strong>
-        <span class="mono" style="color:var(--ink-faint)">${esc(c.provider)}${c.duration ? ` · ${fmtTime(c.duration)}` : ''}</span>
+        ${head}
         <div class="spacer"></div>
         <button class="btn sm ghost" id="vclose">close</button>
       </div>
-      <video src="${esc(videoUrl(c))}" poster="${esc(thumbUrl(c))}" controls autoplay playsinline></video>
+      ${videoTag}
     </div>`;
   document.body.appendChild(wrap);
   const video = wrap.querySelector('video');
@@ -2547,6 +2747,19 @@ function playClip(c) {
   document.addEventListener('keydown', onKey);
   wrap.querySelector('#vclose').onclick = close;
   wrap.onclick = (e) => { if (e.target === wrap) close(); };
+}
+
+// A quick look at a clip before committing to it.
+function playClip(c) {
+  openVideoModal(
+    `<strong>${esc(c.title || 'clip')}</strong>
+     <span class="mono" style="color:var(--ink-faint)">${esc(c.provider)}${c.duration ? ` · ${fmtTime(c.duration)}` : ''}</span>`,
+    videoTag(videoUrl(c),
+             // A candidate still being auditioned may only exist on the
+             // archive's server; there is no folder to open until it is
+             // downloaded, and the note alone is the useful half.
+             c.local_path ? { scope: 'project', id: state.project.id, rel: c.local_path } : {},
+             `controls autoplay playsinline poster="${esc(thumbUrl(c))}"`));
 }
 
 function playClipFor(sid, cid) {
@@ -2563,6 +2776,31 @@ function playBtn(sid, c) {
   if (c.kind !== 'video') return '';
   return `<button class="play-btn" title="preview"
             onclick="event.stopPropagation();playClipFor('${sid}','${c.id}')"></button>`;
+}
+
+// One picture's segment, rendered at half size on demand: the real framing,
+// drift, titles and narration, in seconds rather than the whole-video render
+// it used to take to see any of it.
+async function previewBit(sid) {
+  const r = await api(`/api/projects/${state.project.id}/slides/${sid}/preview`,
+                      { method: 'POST' });
+  watchJob(r.job, 'segment preview', (j) => {
+    if (j.state === 'done' && j.result) playSegmentPreview(j.result);
+  });
+  render();
+}
+
+function playSegmentPreview(seg) {
+  const p = state.project;
+  openVideoModal(
+    `<strong>Picture ${seg.picture} of ${seg.pictures}</strong>
+     <span class="mono" style="color:var(--ink-faint)">
+       ${seg.paragraphs} paragraph${seg.paragraphs > 1 ? 's' : ''} ·
+       ${fmtTime(seg.seconds)} · rough ${seg.width}×${seg.height} at
+       ${seg.fps}fps — the cut itself renders at 1920×1080</span>`,
+    videoTag(`/api/projects/${p.id}/file/${seg.path}?v=${seg.rendered_at}`,
+             { scope: 'project', id: p.id, rel: seg.path },
+             'controls autoplay playsinline'));
 }
 
 function paintMedia() {
@@ -2582,6 +2820,7 @@ function paintMedia() {
   // In the handwritten format the slide is drawn, not photographed: every
   // paragraph gets its own board whether or not it also gets a picture.
   const board = (p.style.format || 'kenburns') === 'board';
+  const cut = isCut(p.style.format);
 
   let html = `<div class="row" style="margin-bottom:16px">
     <span class="mono" style="color:var(--ink-faint)">
@@ -2600,7 +2839,15 @@ function paintMedia() {
         write the boards</button>
       <button class="btn sm ghost" onclick="planBoards(true)" title="including the ones you wrote">
         rewrite them all</button>` : ''}
+    ${cut ? `<button class="btn sm primary" onclick="planCues(false)">
+        write the ${esc((cutInfo(p.style.format) || {}).label || '')} cues</button>
+      <button class="btn sm ghost" onclick="planCues(true)" title="including the ones you edited">
+        rewrite them all</button>` : ''}
   </div>
+  ${cut ? `<div class="mono" style="color:var(--ink-faint);margin:-8px 0 16px">
+      Every paragraph is drawn as a run of cues. One with nothing written for
+      it is drawn from its own narration; the picture below is used where the
+      cut has a place for one.</div>` : ''}
   ${board ? `<div class="mono" style="color:var(--ink-faint);margin:-8px 0 16px">
       Every paragraph is a board. One with nothing written for it still draws
       one, from a line of its own narration.</div>` : ''}`;
@@ -2608,7 +2855,7 @@ function paintMedia() {
   p.slides.forEach((s, i) => {
     const isLead = leadOf[s.id] === i + 1;
     if (!isLead) {
-      html += `<div class="card held">
+      html += `<div class="card held" data-sid="${s.id}">
         <div class="row">
           <span class="slide-num">${String(i + 1).padStart(2, '0')}</span>
           <span class="mono" style="color:var(--ink-faint)">holds the picture from
@@ -2619,6 +2866,8 @@ function paintMedia() {
           <div class="spacer"></div>
           ${board ? `<button class="btn sm ghost" onclick="openBoardEditor('${s.id}')">
             edit its board…</button>` : ''}
+          ${cut ? `<button class="btn sm ghost" onclick="openCueEditor('${s.id}')">
+            edit its cues…</button>` : ''}
           <button class="btn sm ghost" onclick="setPictureMode('${s.id}','new')">
             give this one its own picture</button>
         </div>
@@ -2626,9 +2875,17 @@ function paintMedia() {
       return;
     }
     const chosen = s.candidates.find((c) => c.id === s.chosen_id);
-    html += `<div class="card">
+    html += `<div class="card" data-sid="${s.id}">
       <div class="media-row">
         <div>
+          ${cut ? `<img class="chosen" src="${cutUrl(s.id, 0.5)}" loading="lazy"
+                    style="object-fit:contain;background:#111;cursor:pointer;margin-bottom:8px"
+                    title="edit what this paragraph puts on screen"
+                    onclick="openCueEditor('${s.id}')">
+               <div class="mono" style="color:var(--ink-faint);margin:-2px 0 10px">
+                 ${((s.cues || {})[p.style.format] || []).length
+                   ? `${s.cues[p.style.format].length} cues written` : 'drawn from the narration'}
+                 · <a href="#" onclick="event.preventDefault();openCueEditor('${s.id}')">edit cues…</a></div>` : ''}
           ${board
             ? `<img class="chosen" src="${boardUrl(s.id)}" loading="lazy"
                     style="object-fit:contain;background:#2f3843;cursor:pointer"
@@ -2680,6 +2937,8 @@ function paintMedia() {
                    +${s.candidates.length - 12}<br>more</div>` : ''}
           </div>
           <div class="row" style="margin-top:10px">
+            <button class="btn sm" onclick="previewBit('${s.id}')"
+              title="render this bit small and play it">▶ preview this bit</button>
             <button class="btn sm" onclick="openMediaSearch('${s.id}')">search for a picture…</button>
             <button class="btn sm" onclick="toggleKind('${s.id}')">want ${s.prefer_kind === 'image' ? 'a clip' : 'a photo'}</button>
             <button class="btn sm ghost" onclick="openMapPicker('${s.id}')">get a map…</button>
@@ -3020,6 +3279,108 @@ function boardKnobs(st, saver) {
     <label class="field"><span>How fast a line lands — <b>${(st.board_settle ?? 0.5).toFixed(2)}s</b></span>
       <input type="range" min="0.18" max="1.2" step="0.02" value="${st.board_settle ?? 0.5}"
         onchange="${saver}({board_settle:+this.value})"></label>`;
+}
+
+function cutKnobs(st, saver) {
+  const info = cutInfo(st.format);
+  if (!info) return '';
+  return `
+    <div class="mono" style="color:var(--ink-faint);margin:-4px 0 12px">
+      made for ${esc(info.for.toLowerCase())}</div>
+    <label class="field"><span>Look</span>
+      <select onchange="${saver}({cut_look:this.value})">
+        ${info.looks.map((l) => `<option value="${l.key}" ${l.key === (st.cut_look || '') ? 'selected' : ''}
+          >${esc(l.label)}</option>`).join('')}
+      </select></label>`;
+}
+
+function cutUrl(sid, t = 0.5) {
+  return `/api/projects/${state.project.id}/slides/${sid}/cut.png?t=${t}&v=${state.boardV || 0}`;
+}
+
+async function planCues(redo) {
+  if (redo && !confirm('Rewrite every paragraph\'s cues for this cut, including the ones you edited?')) return;
+  const r = await api(`/api/projects/${state.project.id}/cues/plan`,
+    { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
+  watchJob(r.job, 'media');
+  render();
+}
+
+// The cue editor: the paragraph's cues for this cut as JSON — the same shape
+// the writer produces, which is the honest interface for a list of
+// differently-shaped things — with a scrubbable frame redrawn on every save.
+function openCueEditor(sid) {
+  const p = state.project;
+  const s = p.slides.find((x) => x.id === sid);
+  const fmt = p.style.format;
+  const info = cutInfo(fmt);
+  if (!s || !info) return;
+  const written = (s.cues || {})[fmt] || [];
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box">
+      <div class="row" style="margin-bottom:12px">
+        <strong>What this paragraph puts on screen — ${esc(info.label)}</strong>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="cclose">close</button>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="mono" style="color:var(--ink-faint);margin-bottom:8px">
+            kinds: ${esc(info.kinds)}. Each cue's <b>on</b> is the words it lands on.
+            ${written.length ? '' : '<br>Nothing written yet — this is drawn from the narration.'}</div>
+          <textarea id="ccues" rows="16" spellcheck="false"
+            style="font-family:monospace;font-size:12px"
+            placeholder='[{"kind": "...", "on": "first words it lands on"}]'
+          >${esc(written.length ? JSON.stringify(written, null, 2) : '')}</textarea>
+          <div class="row" style="margin-top:10px">
+            <button class="btn sm primary" id="csave">save</button>
+            <div class="spacer"></div>
+            <button class="btn sm ghost" id="cclear" title="go back to drawing it from the narration">
+              clear</button>
+          </div>
+          <div class="mono" style="color:var(--ink-faint);margin-top:10px">
+            ${esc(s.narration.slice(0, 260))}</div>
+        </div>
+        <div>
+          <img id="cprev" src="${cutUrl(sid, 0.5)}" style="width:100%;border-radius:8px;background:#111">
+          <label class="field" style="margin-top:8px"><span>Scrub through the paragraph</span>
+            <input type="range" id="cscrub" min="0" max="1" step="0.02" value="0.5"></label>
+          <div class="mono" id="cstate" style="color:var(--ink-faint)"></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); paintMedia(); };
+  wrap.querySelector('#cclose').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  const img = wrap.querySelector('#cprev');
+  const scrub = wrap.querySelector('#cscrub');
+  scrub.onchange = () => { img.src = cutUrl(sid, scrub.value); };
+  const status = wrap.querySelector('#cstate');
+
+  async function send(cues) {
+    status.textContent = 'drawing…';
+    try {
+      const updated = await saveSlide(sid, { cues: { [fmt]: cues } });
+      Object.assign(s, updated);
+      state.boardV = (state.boardV || 0) + 1;
+      img.src = cutUrl(sid, scrub.value);
+      status.textContent = 'saved';
+    } catch (e) { status.textContent = String(e.message || e); }
+  }
+  wrap.querySelector('#csave').onclick = () => {
+    let cues;
+    try { cues = JSON.parse(wrap.querySelector('#ccues').value || '[]'); }
+    catch (e) { status.textContent = `That isn't valid JSON: ${e.message}`; return; }
+    if (!Array.isArray(cues)) { status.textContent = 'Cues are a list: [ {...}, {...} ]'; return; }
+    send(cues);
+  };
+  wrap.querySelector('#cclear').onclick = () => {
+    wrap.querySelector('#ccues').value = '';
+    send([]);
+  };
 }
 
 function boardUrl(sid) {
@@ -4081,9 +4442,14 @@ function paintRecord() {
   state.rec.index = i;
   const s = p.slides[i];
   if (!s) { $('#tabbody').innerHTML = '<div class="empty-note">Nothing to read yet — write a script first.</div>'; return; }
-  const done = p.recorded_count;
-
   const ai = (p.narrator || {}).mode === 'ai';
+  // The voice being worked on here — the microphone, or the AI engine picked
+  // below. Its reads are kept apart from every other voice's, and the video
+  // uses whichever one is chosen in the voice bar, which need not be this one.
+  const track = ai ? narratorEngine(p) : 'mic';
+  const tk = (x) => (x.takes || {})[track];
+  const done = p.slides.filter(tk).length;
+  const take = tk(s);
 
   $('#tabbody').innerHTML = `
     <div class="progress-track"><i style="width:${done / p.slides.length * 100}%"></i></div>
@@ -4094,13 +4460,17 @@ function paintRecord() {
       <span>paragraph ${i + 1}</span>
     </div>
 
+    ${voiceBar(p, track)}
+
     <div class="row" style="margin:14px 0 0;gap:6px">
       <button class="btn sm ${ai ? 'ghost' : 'primary'}"
         onclick="setNarrator({mode:'mic'})">read it yourself</button>
       <button class="btn sm ${ai ? 'primary' : 'ghost'}"
         onclick="setNarrator({mode:'ai'})">AI voice</button>
       <span class="mono" style="color:var(--ink-faint)">${ai
-        ? 'A model on this machine reads the script. Nothing leaves the computer.'
+        ? (narratorEngine(p) === 'kokoro'
+            ? 'A model on this machine reads the script. Nothing leaves the computer.'
+            : `${esc(engineInfo(narratorEngine(p)).label || 'A voice service')} reads the script, billed to your account.`)
         : 'You read it into a microphone.'}</span>
     </div>
 
@@ -4135,8 +4505,8 @@ function paintRecord() {
     ${ai ? `
     <div class="rec-bar">
       <button class="btn primary" onclick="voiceOneSlide()">read this paragraph</button>
-      ${s.take ? `<span class="pill on"><span class="dot"></span>${s.take.duration.toFixed(1)}s${
-        s.take.synthetic ? ` · ${esc(voiceLabel(s.take.voice))}` : ' · your voice'}</span>` : ''}
+      ${take ? `<span class="pill on"><span class="dot"></span>${take.duration.toFixed(1)}s${
+        take.synthetic ? ` · ${esc(voiceLabel(take.voice))}` : ' · your voice'}</span>` : ''}
     </div>` : `
     <div class="rec-bar">
       <button class="btn rec ${state.rec.recording ? 'armed' : ''}" id="recbtn"
@@ -4144,7 +4514,7 @@ function paintRecord() {
         ${state.rec.recording ? '■ Stop' : '● Record'}</button>
       <span class="timer ${state.rec.recording ? 'live' : ''}" id="timer">0:00</span>
       <div class="level"><i id="level"></i></div>
-      ${s.take ? `<span class="pill on"><span class="dot"></span>${s.take.duration.toFixed(1)}s</span>` : ''}
+      ${take ? `<span class="pill on"><span class="dot"></span>${take.duration.toFixed(1)}s</span>` : ''}
       ${!state.rec.stream && micAvailable()
         ? `<button class="btn sm ghost" onclick="openMic()">check the microphone</button>` : ''}
       ${state.mic.report && state.mic.report.analysis.ok
@@ -4155,7 +4525,7 @@ function paintRecord() {
     <div class="rec-nav">
       <button class="btn sm" onclick="jumpTake(-1)" ${i === 0 ? 'disabled' : ''}>← previous</button>
       <button class="btn sm" onclick="jumpTake(1)" ${i >= p.slides.length - 1 ? 'disabled' : ''}>next →</button>
-      ${s.take ? `<button class="btn sm ghost" onclick="playTake()">play back</button>
+      ${take ? `<button class="btn sm ghost" onclick="playTake()">play back</button>
                   <button class="btn sm ghost danger" onclick="dropTake()">discard take</button>` : ''}
       <div class="spacer"></div>
       ${done && !ai ? `<button class="btn sm ghost" onclick="recleanTakes()"
@@ -4170,7 +4540,7 @@ function paintRecord() {
     </div>`}
 
     <div class="take-map">
-      ${p.slides.map((x, n) => `<span class="${x.take ? 'done' : ''} ${n === i ? 'cur' : ''}"
+      ${p.slides.map((x, n) => `<span class="${tk(x) ? 'done' : ''} ${n === i ? 'cur' : ''}"
         title="${n + 1}" onclick="state.rec.index=${n};paintRecord()"></span>`).join('')}
     </div>
     <audio id="player" style="display:none"></audio>`;
@@ -4241,14 +4611,256 @@ async function loadTTS() {
 }
 
 function voiceLabel(id) {
-  const v = ((state.tts || {}).voices || []).find((x) => x.id === id);
-  return v ? v.label : (id || 'a voice');
+  const lists = [((state.tts || {}).voices || []),
+    ...Object.values(state.cloudVoices || {}).filter(Array.isArray)];
+  for (const list of lists) {
+    const v = list.find((x) => x.id === id);
+    if (v) return v.label;
+  }
+  return id || 'a voice';
 }
 
+const narratorEngine = (p) => ((p || state.project).narrator || {}).engine || 'kokoro';
+const engineInfo = (key) => (((state.tts || {}).engines) || []).find((e) => e.key === key) || {};
+
+// Which model reads it: this machine, or a hosted voice service. A row of
+// switches above the panel for whichever one is chosen.
 function aiVoicePanel(p, slide) {
   const t = state.tts;
   if (!t) { loadTTS().then(() => { if (state.tab === 'record') paintRecord(); });
             return '<div class="panel" style="margin-top:14px">Checking the voice engine…</div>'; }
+  const engine = narratorEngine(p);
+  const engines = t.engines || [{ key: 'kokoro', label: 'On this computer', ready: t.ready }];
+  const tabs = `<div class="row" style="margin:14px 0 0;gap:6px;flex-wrap:wrap">
+    ${engines.map((e) => `<button class="btn sm ${e.key === engine ? 'primary' : 'ghost'}"
+        onclick="setNarrator({engine:'${e.key}'})"
+        title="${esc(e.blurb || '')}">${esc(e.label)}${e.ready ? '' : ' · not set up'}</button>`).join('')}
+  </div>`;
+  return tabs + (engine === 'kokoro' ? localVoicePanel(p, slide)
+                                      : cloudVoicePanel(p, engineInfo(engine)));
+}
+
+// How far each take is from what the narrator is set to now: read in another
+// engine, voice, pace or model means it needs reading again.
+function staleTakes(p) {
+  const n = p.narrator || {};
+  const engine = narratorEngine(p);
+  const e = engineInfo(engine);
+  const model = engine === 'kokoro' ? '' : (n.model || ((e.models || [])[0] || {}).id || '');
+  const lo = (e.speed || [0.5, 1.5])[0], hi = (e.speed || [0.5, 1.5])[1];
+  const speed = Math.min(hi, Math.max(lo, n.speed));
+  return p.slides.filter((x) => {
+    // Only this engine's own reads: another voice's are kept, not stale.
+    const tk = (x.takes || {})[engine] || {};
+    if (!tk.synthetic) return false;
+    return tk.voice !== n.voice
+      || Math.abs((tk.speed || 1) - speed) > 0.011 || (tk.model || '') !== model;
+  }).length;
+}
+
+function cloudVoicePanel(p, e) {
+  if (!e.ready) {
+    return `<div class="panel warn-panel" style="margin-top:14px">
+      <strong>${esc(e.label)} isn't set up yet.</strong>
+      <div class="mono" style="margin-top:6px;color:var(--ink-dim)">${esc(e.blurb || '')}</div>
+      <div class="row" style="margin-top:10px">
+        <a class="btn sm primary" href="#/settings">add your ${esc(e.label)} API key in Settings</a>
+        <span class="mono" style="color:var(--ink-faint)">it works as soon as it's saved — no restart</span>
+      </div>
+    </div>`;
+  }
+  state.cloudVoices = state.cloudVoices || {};
+  const list = state.cloudVoices[e.key];
+  if (list === undefined) {
+    state.cloudVoices[e.key] = null;
+    api(`/api/tts/voices/${e.key}`)
+      .then((v) => { state.cloudVoices[e.key] = v; })
+      .catch((err) => { state.cloudVoices[e.key] = { error: err.message }; })
+      .then(() => { if (state.tab === 'record') paintRecord(); });
+  }
+  if (!list) return `<div class="panel" style="margin-top:14px">Fetching ${esc(e.label)} voices…</div>`;
+  if (list.error) {
+    return `<div class="panel warn-panel" style="margin-top:14px">
+      <strong>Couldn't list the ${esc(e.label)} voices.</strong>
+      <div class="mono" style="margin-top:6px;user-select:text">${esc(list.error)}</div>
+      <button class="btn sm" style="margin-top:10px"
+        onclick="state.cloudVoices['${e.key}']=undefined;paintRecord()">try again</button>
+    </div>`;
+  }
+  const n = p.narrator || {};
+  const read = p.slides.filter((x) => (x.takes || {})[narratorEngine(p)]).length;
+  const stale = staleTakes(p);
+  const chars = p.slides.reduce((a, x) => a + (x.narration || '').trim().length, 0);
+  const groups = {};
+  list.forEach((v) => { (groups[v.accent || 'Voices'] = groups[v.accent || 'Voices'] || []).push(v); });
+  const [lo, hi] = e.speed || [0.7, 1.2];
+  const speed = Math.min(hi, Math.max(lo, n.speed));
+  const known = list.some((v) => v.id === n.voice);
+
+  return `<div class="panel" style="margin-top:14px">
+    <div class="row" style="margin-bottom:10px">
+      <strong>The voice</strong>
+      <div class="spacer"></div>
+      <span class="mono" style="color:var(--ink-faint)">${read} of ${p.slides.length} read${
+        stale ? ` · ${stale} in another voice or setting` : ''}</span>
+    </div>
+    ${known ? '' : `<div class="mono" style="color:var(--ink-faint);margin-bottom:8px">
+      Reading as <b>${esc(n.voice)}</b>, which isn't in this account's list — pick one below.</div>`}
+    ${e.key === 'elevenlabs' ? `
+      <div class="row" style="gap:10px;margin-bottom:10px">
+        <button class="btn sm" onclick="openVoiceLibrary()">browse the ElevenLabs voice library…</button>
+        <span class="mono" style="color:var(--ink-faint)">the thousands of voices on their
+          website — hear any of them, then add one to your account to read with</span>
+      </div>` : ''}
+    <div style="max-height:420px;overflow:auto">
+    ${Object.entries(groups).map(([group, vs]) => `
+      <div class="mono" style="color:var(--ink-faint);margin:8px 0 6px">${esc(group)}</div>
+      <div class="voice-grid">
+        ${vs.map((v) => `
+          <div class="voice-card ${v.id === n.voice ? 'sel' : ''}"
+               onclick="setNarrator({voice:'${esc(v.id)}'})">
+            <div class="row" style="gap:6px">
+              <strong>${esc(v.label)}</strong>
+              <div class="spacer"></div>
+              <button class="btn xs ghost" onclick="event.stopPropagation();hearVoice('${esc(v.id)}')"
+                >hear</button>
+            </div>
+            <div class="mono voice-note">${esc(v.note || v.sex || '')}</div>
+          </div>`).join('')}
+      </div>`).join('')}
+    </div>
+
+    <div class="grid-2" style="margin-top:14px">
+      <label class="field"><span>Model</span>
+        <select onchange="setNarrator({model:this.value})">
+          ${(e.models || []).map((m, i) => `<option value="${esc(m.id)}"
+            ${(n.model || (e.models[0] || {}).id) === m.id ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+        </select></label>
+      <label class="field"><span>Pace — <b>${speed.toFixed(2)}×</b></span>
+        <input type="range" min="${lo}" max="${hi}" step="0.01" value="${speed}"
+          onchange="setNarrator({speed:+this.value})"></label>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" onclick="voiceWholeScript()">
+        ${read ? (stale ? `re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
+                        : 'read anything still blank') : 'read the whole script'}</button>
+      ${read ? `<button class="btn sm ghost" onclick="voiceWholeScript(true)"
+        title="re-read every paragraph, including ones already done">read it all again</button>` : ''}
+      <div class="spacer"></div>
+      <span class="mono" style="color:var(--ink-faint)">the whole script is
+        ${chars.toLocaleString()} characters, billed to your ${esc(e.label)} account</span>
+    </div>
+    <audio id="voiceplayer" style="display:none"></audio>
+  </div>
+
+  ${pronunciationPanel(p)}`;
+}
+
+// ElevenLabs' shared Voice Library, searched from here. A library voice has to
+// be added to the account before the API will read with it, so "use" adds it
+// and then picks it — the same thing "Add to my voices" does on their site.
+function openVoiceLibrary() {
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box" style="width:min(980px,100%)">
+      <div class="row" style="margin-bottom:12px">
+        <strong>ElevenLabs voice library</strong>
+        <span class="mono" style="color:var(--ink-faint)">English voices, most popular first</span>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="vlclose">close</button>
+      </div>
+      <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <input type="text" id="vlq" placeholder="deep, documentary, british, calm…" style="flex:1;min-width:200px">
+        <select id="vlgender"><option value="">any voice</option><option value="male">male</option>
+          <option value="female">female</option><option value="neutral">neutral</option></select>
+        <select id="vluse"><option value="narrative_story">Narration &amp; story</option></select>
+        <input type="text" id="vlaccent" placeholder="accent (american, british…)" style="width:190px">
+        <button class="btn sm primary" id="vlgo">search</button>
+      </div>
+      <div id="vlresults" class="voice-grid" style="max-height:60vh;overflow:auto">
+        <div class="empty-note" style="grid-column:1/-1">Looking…</div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm ghost" id="vlmore" style="display:none">more</button>
+        <div class="spacer"></div>
+        <span class="mono" style="color:var(--ink-faint)">Adding a voice uses one of your
+          ElevenLabs plan's custom voice slots, as it does on their site.</span>
+      </div>
+      <audio id="vlplayer" style="display:none"></audio>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => { const el = wrap.querySelector('#vlplayer'); if (el) el.pause(); wrap.remove(); };
+  wrap.querySelector('#vlclose').onclick = close;
+  wrap.addEventListener('click', (ev) => { if (ev.target === wrap) close(); });
+  const results = wrap.querySelector('#vlresults');
+  const more = wrap.querySelector('#vlmore');
+  let page = 0;
+  let found = [];
+
+  const card = (v, n) => `
+    <div class="voice-card">
+      <div class="row" style="gap:6px">
+        <strong>${esc(v.label)}</strong>
+        <div class="spacer"></div>
+        ${v.preview_url ? `<button class="btn xs ghost" data-hear="${n}">hear</button>` : ''}
+        <button class="btn xs" data-use="${n}">use</button>
+      </div>
+      <div class="mono voice-note">${esc([v.sex, v.age, v.accent, v.use_case].filter(Boolean).join(' · '))}</div>
+      ${v.note ? `<div class="mono voice-note" style="margin-top:4px">${esc(v.note)}</div>` : ''}
+    </div>`;
+
+  const run = async (append) => {
+    if (!append) { page = 0; found = []; results.innerHTML = '<div class="empty-note" style="grid-column:1/-1">Looking…</div>'; }
+    const q = new URLSearchParams({
+      q: wrap.querySelector('#vlq').value, gender: wrap.querySelector('#vlgender').value,
+      use_case: wrap.querySelector('#vluse').value, accent: wrap.querySelector('#vlaccent').value,
+      page: String(page) });
+    try {
+      const r = await api(`/api/tts/library?${q}`);
+      const sel = wrap.querySelector('#vluse');
+      if (sel.options.length < 2 && r.use_cases) {
+        const cur = sel.value;
+        sel.innerHTML = r.use_cases.map((u) => `<option value="${esc(u.id)}"
+          ${u.id === cur ? 'selected' : ''}>${esc(u.label)}</option>`).join('');
+      }
+      found = found.concat(r.voices);
+      results.innerHTML = found.length ? found.map(card).join('')
+        : '<div class="empty-note" style="grid-column:1/-1">Nothing matched. Try fewer words.</div>';
+      more.style.display = r.has_more ? '' : 'none';
+    } catch (err) {
+      results.innerHTML = `<div class="empty-note" style="grid-column:1/-1;user-select:text">${esc(err.message)}</div>`;
+    }
+  };
+  results.addEventListener('click', async (ev) => {
+    const hear = ev.target.closest('[data-hear]');
+    const use = ev.target.closest('[data-use]');
+    if (hear) {
+      const el = wrap.querySelector('#vlplayer');
+      el.src = found[+hear.dataset.hear].preview_url;
+      el.play().catch(() => toast('Could not play that preview.', true));
+    } else if (use) {
+      const v = found[+use.dataset.use];
+      use.disabled = true; use.textContent = 'adding…';
+      try {
+        const r = await api('/api/tts/library/add', { method: 'POST',
+          body: JSON.stringify({ owner: v.owner, id: v.id, name: v.label }) });
+        state.cloudVoices.elevenlabs = undefined;     // the account's list changed
+        close();
+        await setNarrator({ voice: r.voice_id });
+        toast(`${v.label} added to your ElevenLabs voices and picked`);
+      } catch (err) { toast(err.message, true); use.disabled = false; use.textContent = 'use'; }
+    }
+  });
+  wrap.querySelector('#vlgo').onclick = () => run(false);
+  wrap.querySelector('#vlq').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') run(false); });
+  more.onclick = () => { page += 1; run(true); };
+  run(false);
+}
+
+function localVoicePanel(p, slide) {
+  const t = state.tts;
   if (!t.ready) {
     const isMissing = t.detail && t.detail.includes('missing');
     let setupGuide = '';
@@ -4310,9 +4922,8 @@ function aiVoicePanel(p, slide) {
     </div>`;
   }
   const n = p.narrator || {};
-  const read = p.slides.filter((x) => (x.take || {}).synthetic).length;
-  const stale = p.slides.filter((x) => (x.take || {}).synthetic
-    && (x.take.voice !== n.voice || Math.abs((x.take.speed || 1) - n.speed) > 0.01)).length;
+  const read = p.slides.filter((x) => (x.takes || {})[narratorEngine(p)]).length;
+  const stale = staleTakes(p);
   const byAccent = {};
   t.voices.forEach((v) => { (byAccent[v.accent] = byAccent[v.accent] || []).push(v); });
 
@@ -4378,6 +4989,9 @@ function pronunciationPanel(p) {
       Write the respelling in syllables and put the stressed one in CAPITALS —
       <b>ELL-on</b>, <b>rod-REE-gess</b>. Hear it before and after; the guide
       applies to every paragraph when the script is read.
+      ${narratorEngine(p) === 'kokoro' ? '' : `<br>${esc(engineInfo(narratorEngine(p)).label)}
+        reads words, not phonemes, so it is handed the respelling as a word
+        (<b>ELL-on</b> → <b>Ellon</b>). Each “hear” is a small billed request.`}
     </div>
 
     ${lex.length ? `<div class="say-list">
@@ -4448,7 +5062,8 @@ async function saySample(text, respell, ipa) {
     const r = await fetch(`/api/tts/say-preview`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, respell: respell || '', ipa: ipa || '',
-                             voice: sayVoice() }),
+                             voice: sayVoice(), engine: narratorEngine(),
+                             model: (state.project.narrator || {}).model || '' }),
     });
     if (!r.ok) throw new Error((await r.json()).detail || 'could not say that');
     el.src = URL.createObjectURL(await r.blob());
@@ -4477,7 +5092,8 @@ function watchSayDraft() {
     const t = term.value.trim();
     const out = document.getElementById('saypreview');
     const cmp = document.getElementById('saycompare');
-    if (!t) { out.textContent = ''; cmp.textContent = ''; return; }
+    // The phoneme comparison is the local model's; a hosted voice has none.
+    if (!t || narratorEngine() !== 'kokoro') { out.textContent = ''; cmp.textContent = ''; return; }
     try {
       const j = await api(`/api/tts/say?text=${encodeURIComponent(t)}`
         + `&respell=${encodeURIComponent(respell.value.trim())}`
@@ -4505,13 +5121,30 @@ async function setNarrator(patch) {
 function hearVoice(id) {
   const el = document.getElementById('voiceplayer');
   if (!el) return;
-  el.src = `/api/tts/preview/${id}`;
+  const engine = narratorEngine();
+  const model = (state.project.narrator || {}).model || '';
+  el.src = engine === 'kokoro' ? `/api/tts/preview/${id}`
+    : `/api/tts/preview/${encodeURIComponent(id)}?engine=${engine}&model=${encodeURIComponent(model)}`;
   el.play().catch(() => toast('Could not play that sample.', true));
 }
 
 async function voiceWholeScript(redo) {
   const p = state.project;
-  if (redo && !confirm('Read every paragraph again, replacing the takes already made?')) return;
+  if (redo && !confirm(`Read every paragraph again in ${trackLabel(narratorEngine(p))}, `
+      + 'replacing the reads already made in that voice? Your other voices are not touched.')) return;
+  if (narratorEngine(p) !== 'kokoro') {
+    // A hosted voice is billed by the character: say how many first.
+    let est;
+    try {
+      est = await api(`/api/projects/${p.id}/voice-over`,
+        { method: 'POST', body: JSON.stringify({ redo: !!redo, dry_run: true }) });
+    } catch (e) { return toast(e.message, true); }
+    if (!est.paragraphs) return toast('Everything is already read in this voice.');
+    const label = engineInfo(narratorEngine(p)).label || 'the voice service';
+    if (!confirm(`Send ${est.paragraphs} paragraph${est.paragraphs === 1 ? '' : 's'} `
+      + `(${est.characters.toLocaleString()} characters) to ${label}? `
+      + 'It is billed to your account.')) return;
+  }
   const r = await api(`/api/projects/${p.id}/voice-over`,
     { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
   watchJob(r.job, 'voice-over');
@@ -4525,7 +5158,7 @@ async function voiceOneSlide() {
     const r = await api(`/api/projects/${p.id}/slides/${s.id}/voice-over`, { method: 'POST' });
     p.slides[state.rec.index] = r.slide;
     p.recorded_seconds = r.recorded_seconds;
-    p.recorded_count = p.slides.filter((x) => x.take).length;
+    syncVoiceCounts();
     paintRecord();
     playTake();
   } catch (e) { toast(e.message, true); }
@@ -4731,20 +5364,110 @@ async function uploadTake(blob) {
     const res = await api(`/api/projects/${state.project.id}/slides/${slide.id}/take`,
       { method: 'POST', body: fd });
     Object.assign(slide, res.slide);
-    state.project.recorded_count = state.project.slides.filter((s) => s.take).length;
+    syncVoiceCounts();
     state.project.recorded_seconds = res.recorded_seconds;
-    toast(`take saved · ${res.slide.take.duration.toFixed(1)}s`);
+    toast(`take saved · ${res.slide.takes.mic.duration.toFixed(1)}s`);
     if (r.index < state.project.slides.length - 1) r.index += 1;
     paintRecord();
   } catch (e) { toast(e.message, true); paintRecord(); }
 }
 
-function playTake() {
+// The voice the record tab is working in: the mic, or the AI engine.
+function recTrack() {
+  const p = state.project;
+  return (p.narrator || {}).mode === 'ai' ? narratorEngine(p) : 'mic';
+}
+
+function playTake(track) {
+  track = track || recTrack();
   const slide = state.project.slides[state.rec.index];
-  if (!slide.take) return;
+  if (!(slide.takes || {})[track]) return;
   const el = document.getElementById('player');
-  el.src = `/api/projects/${state.project.id}/slides/${slide.id}/take.wav?cb=${Date.now()}`;
+  el.src = `/api/projects/${state.project.id}/slides/${slide.id}/take.wav`
+    + `?track=${encodeURIComponent(track)}&cb=${Date.now()}`;
   el.play();
+}
+
+// Counts the server would send, worked out here after a single-take change
+// rather than reloading the project.
+function syncVoiceCounts() {
+  const p = state.project;
+  const counts = {};
+  for (const s of p.slides) for (const k of Object.keys(s.takes || {})) counts[k] = (counts[k] || 0) + 1;
+  p.voice_tracks = counts;
+  if (!p.voice_track) {
+    const first = Object.keys(counts)[0];
+    if (first) p.voice_track = first;
+  }
+  for (const s of p.slides) s.take = (s.takes || {})[p.voice_track] || null;
+  p.recorded_count = p.slides.filter((s) => s.take).length;
+}
+
+const TRACK_ORDER = ['mic', 'kokoro', 'elevenlabs', 'openai'];
+const trackLabel = (t) => ({ mic: 'Your mic', kokoro: 'Local voice',
+  elevenlabs: 'ElevenLabs', openai: 'OpenAI' })[t] || t;
+
+// Which voice the whole video uses, and every voice there are reads in. Each
+// voice's reads are kept side by side, so trying one never loses another;
+// the video uses exactly one, chosen here.
+function voiceBar(p, working) {
+  const counts = p.voice_tracks || {};
+  const n = p.slides.length;
+  const used = p.voice_track;
+  const keys = TRACK_ORDER.filter((t) => counts[t] || t === working || t === used)
+    .concat(Object.keys(counts).filter((t) => !TRACK_ORDER.includes(t)));
+  const s = p.slides[state.rec.index] || {};
+  const usedCount = counts[used] || 0;
+  return `
+    <div class="panel voice-bar" style="margin-top:14px;padding:12px 14px">
+      <div class="row" style="gap:8px;margin-bottom:8px">
+        <strong>Voice for this video</strong>
+        <span class="mono" style="color:var(--ink-faint)">${used
+          ? `${esc(trackLabel(used))} — what the render and the timeline use`
+          : 'nothing read yet'}</span>
+      </div>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        ${keys.map((t) => {
+          const c = counts[t] || 0;
+          const here = !!(s.takes || {})[t];
+          return `
+            <div class="voice-chip ${t === used ? 'sel' : ''}">
+              <b>${esc(trackLabel(t))}</b>
+              <span class="mono">${c} of ${n}</span>
+              ${here ? `<button class="btn sm ghost" title="paragraph ${state.rec.index + 1} in this voice"
+                onclick="playTake('${t}')">▸ hear ¶${state.rec.index + 1}</button>` : ''}
+              ${t === used
+                ? '<span class="pill on">in use</span>'
+                : `<button class="btn sm" ${c ? '' : 'disabled'}
+                    onclick="useVoiceTrack('${t}')">use for the video</button>`}
+            </div>`;
+        }).join('')}
+      </div>
+      ${used && working !== used ? `
+        <div class="mono" style="color:var(--ink-faint);margin-top:8px">
+          You're working in ${esc(trackLabel(working))} here. The video still uses
+          ${esc(trackLabel(used))}, and none of its reads are touched — switch above
+          once you've heard enough.</div>` : ''}
+      ${used && usedCount < n ? `
+        <div class="mono" style="color:var(--warn, #e0a050);margin-top:8px">
+          ${n - usedCount} paragraph${n - usedCount === 1 ? ' has' : 's have'} no read in
+          ${esc(trackLabel(used))} yet and will be silent in the render.</div>` : ''}
+    </div>`;
+}
+
+async function useVoiceTrack(track) {
+  const p = state.project;
+  const n = p.slides.length;
+  const c = (p.voice_tracks || {})[track] || 0;
+  if (c < n && !confirm(`Only ${c} of ${n} paragraphs are read in ${trackLabel(track)}. `
+      + 'The rest will be silent until they are. Use it for the video anyway?\n\n'
+      + 'Nothing is deleted — you can switch back at any time.')) return;
+  try {
+    state.project = await api(`/api/projects/${p.id}/voice-track`,
+      { method: 'POST', body: JSON.stringify({ track }) });
+    toast(`the video now uses ${trackLabel(track)}`);
+    render();
+  } catch (e) { toast(e.message, true); }
 }
 
 // The takes on disk were cleaned by whichever voice chain was current when they
@@ -4767,11 +5490,10 @@ async function recleanTakes() {
 
 async function dropTake() {
   const slide = state.project.slides[state.rec.index];
-  const res = await api(`/api/projects/${state.project.id}/slides/${slide.id}/take`,
-    { method: 'DELETE' });
+  const res = await api(`/api/projects/${state.project.id}/slides/${slide.id}/take`
+    + `?track=${encodeURIComponent(recTrack())}`, { method: 'DELETE' });
   Object.assign(slide, res.slide);
-  slide.take = null;
-  state.project.recorded_count = state.project.slides.filter((s) => s.take).length;
+  syncVoiceCounts();
   paintRecord();
 }
 
@@ -5213,18 +5935,29 @@ async function paintRender() {
   const missingMedia = p.slides.filter((s) => !s.chosen_id).length;
   const missingTakes = p.slides.length - p.recorded_count;
   const music = await api('/api/music').catch(() => []);
+  await ensureChannelsLoaded();          // the panel below files it in one
+  // Only a standalone video picks its own slate and end card here; inside a
+  // channel those live on the channel page and this page never draws them.
+  if (!p.channel_id && !state.templates) {
+    [state.templates, state.endTemplates] = await Promise.all([
+      api('/api/intro/templates').catch(() => []),
+      api('/api/outro/templates').catch(() => []),
+    ]);
+  }
   if (!state.youtubeCategories) {
     state.youtubeCategories = await api('/api/youtube/status')
       .then((r) => r.categories).catch(() => []);
   }
 
   $('#tabbody').innerHTML = `
+    <div class="panel tl" id="tl"></div>
     <div class="grid-2">
       <div class="panel">
         <h3>Look</h3>
         <label class="field"><span>Video style</span></label>
         ${formatPicker(st.format || 'kenburns', st.accent, 'pickProjectFormat')}
         ${st.format === 'board' ? boardKnobs(st, 'saveStyle') : ''}
+        ${isCut(st.format) ? cutKnobs(st, 'saveStyle') : ''}
         <label class="field"><span>Vignette — <b>${st.vignette.toFixed(2)}</b></span>
           <input type="range" min="0" max="0.8" step="0.02" value="${st.vignette}"
             onchange="saveStyle({vignette:+this.value})"></label>
@@ -5233,6 +5966,11 @@ async function paintRender() {
             The board cut draws every slide itself and ignores the drift, the
             grade and the chapter titles below. Write the boards on the
             pictures tab.</div>`
+        : isCut(st.format) ? `
+          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
+            This cut draws every frame itself, on hard cuts, and ignores the
+            drift, crossfade, grade and chapter titles below. Write its cues
+            on the pictures tab.</div>`
         : st.format === 'essay' ? `
           <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
             The essay cut sets the narration on screen in phrases and ignores the
@@ -5243,6 +5981,15 @@ async function paintRender() {
         <label class="field"><span>Crossfade — <b>${st.transition.toFixed(2)}s</b></span>
           <input type="range" min="0" max="1.6" step="0.05" value="${st.transition}"
             onchange="saveStyle({transition:+this.value})"></label>
+        <label class="row" style="gap:8px;cursor:pointer;margin:-4px 0 14px">
+          <input type="checkbox" ${st.chapter_cards !== false ? 'checked' : ''} style="width:auto"
+            onchange="saveStyle({chapter_cards:this.checked})">
+          <span>chapter cards${chapterCount(p) ? ` — ${chapterCount(p)} marked on the script tab` : ''}</span>
+        </label>
+        ${st.format === 'board' || isCut(st.format) || (st.format || '').startsWith('custom:') ? `
+          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
+            This cut draws its own frames, so a chapter still opens a fresh
+            slide and a longer pause, but no card is laid over it.</div>` : ''}
         <label class="field"><span>Grade</span>
           <select onchange="saveStyle({grade:this.value})">
             ${['warm', 'neutral', 'cool', 'mono'].map((g) =>
@@ -5268,15 +6015,15 @@ async function paintRender() {
               ? (music.length ? 'One of the tracks below, the same one on every re-render.'
                               : 'Nothing in assets/music to pick from yet.')
               : 'Looped if it is shorter than the video, and trimmed to length.'}</div>
-        ${music.length === 0
-          ? `<div class="pill warn" style="margin-bottom:14px">
-               drop mp3s into assets/music to get a bed</div>` : ''}
+        <div class="row" style="gap:10px;margin:0 0 14px">
+          ${music.length === 0
+            ? `<div class="pill warn">drop mp3s into assets/music to get a bed</div>` : ''}
+          <button class="btn sm ghost" onclick="revealFile('music','','')">open the music folder</button>
+          <span class="mono" style="color:var(--ink-faint)">add tracks, then reload this page to pick them</span>
+        </div>
         <label class="field"><span>Music under voice — <b>${st.music_db.toFixed(0)} dB</b></span>
           <input type="range" min="-40" max="-14" step="1" value="${st.music_db}"
             onchange="saveStyle({music_db:+this.value})"></label>
-        <label class="field"><span>Duck under voice — <b>${st.duck_db.toFixed(0)} dB</b></span>
-          <input type="range" min="-24" max="-3" step="1" value="${st.duck_db}"
-            onchange="saveStyle({duck_db:+this.value})"></label>
         <label class="field"><span>Pause between paragraphs — <b>${(st.paragraph_gap ?? 0.42).toFixed(2)}s</b></span>
           <input type="range" min="0.15" max="1.2" step="0.01" value="${st.paragraph_gap ?? 0.42}"
             onchange="saveStyle({paragraph_gap:+this.value})"></label>
@@ -5288,24 +6035,7 @@ async function paintRender() {
       </div>
     </div>
 
-    ${p.channel_id ? `
-      <div class="panel" style="margin-top:18px">
-        <div class="row">
-          <strong>Channel opening and close</strong>
-          <div class="spacer"></div>
-          <label class="row" style="gap:8px;cursor:pointer">
-            <input type="checkbox" ${p.use_intro ? 'checked' : ''} style="width:auto"
-              onchange="saveProject({use_intro:this.checked})">
-            <span>open with the channel slate</span>
-          </label>
-          <label class="row" style="gap:8px;cursor:pointer">
-            <input type="checkbox" ${p.use_outro ? 'checked' : ''} style="width:auto"
-              onchange="saveProject({use_outro:this.checked})">
-            <span>close on the end screen</span>
-          </label>
-          <a class="btn sm ghost" href="#/c/${p.channel_id}">edit them</a>
-        </div>
-      </div>` : ''}
+    ${openingPanel(p)}
 
     ${presenterPanel(p)}
 
@@ -5327,18 +6057,288 @@ async function paintRender() {
 
     ${p.render && p.render.output ? `
       <h2>Last render</h2>
-      <video controls preload="metadata"
-        src="/api/projects/${p.id}/file/${p.render.output}"></video>
+      ${videoTag(`/api/projects/${p.id}/file/${p.render.output}`,
+                 { scope: 'project', id: p.id, rel: p.render.output })}
       <div class="row" style="margin-top:12px">
         <span class="mono" style="color:var(--ink-faint)">
           ${fmtTime(p.render.duration)} · ${p.render.size_mb} MB · ${p.render.slides} slides
           ${p.render.preview ? '· preview' : ''}</span>
         <div class="spacer"></div>
+        <button class="btn sm ghost" title="show the file on disk"
+          onclick="revealFile('project','${p.id}','${esc(encodeURIComponent(p.render.output))}')">
+          open the folder</button>
         <a class="btn sm" href="/api/projects/${p.id}/download">download</a>
         <button class="btn sm ghost" onclick="showCredits()">credits for the description</button>
       </div>
       ${await uploadPanel(p)}` : ''}
   `;
+  tlMount();
+}
+
+// How this video opens and closes. In a channel both come from the channel,
+// which is most of what a channel is for, and this is only the switch for
+// using them. Standalone, the video carries its own: the same slates and end
+// cards, drawn from its own title, subtitle and colours, minus the ones that
+// need a cast of portraits to fill.
+// Where this video is filed. Moving it changes where its opening and close
+// come from and which channel it uploads to; nothing about the script, the
+// pictures or the recordings moves with it.
+function channelPicker(p) {
+  const chans = state.channels || [];
+  return `
+    <label class="row" style="gap:8px">
+      <span class="mono" style="color:var(--ink-faint)">in</span>
+      <select style="width:auto" onchange="saveOpening({channel_id:this.value})">
+        <option value="" ${!p.channel_id ? 'selected' : ''}>— no channel —</option>
+        ${chans.map((c) => `<option value="${c.id}" ${c.id === p.channel_id ? 'selected' : ''}>
+          ${esc(c.name)}</option>`).join('')}
+      </select>
+    </label>`;
+}
+
+function openingPanel(p) {
+  if (p.channel_id) {
+    return `
+      <div class="panel" id="opening-panel" style="margin-top:18px">
+        <div class="row">
+          <strong>Channel opening and close</strong>
+          ${channelPicker(p)}
+          <div class="spacer"></div>
+          <label class="row" style="gap:8px;cursor:pointer">
+            <input type="checkbox" ${p.use_intro ? 'checked' : ''} style="width:auto"
+              onchange="saveProject({use_intro:this.checked})">
+            <span>open with the channel slate</span>
+          </label>
+          <label class="row" style="gap:8px;cursor:pointer">
+            <input type="checkbox" ${p.use_outro ? 'checked' : ''} style="width:auto"
+              onchange="saveProject({use_outro:this.checked})">
+            <span>close on the end screen</span>
+          </label>
+          <a class="btn sm ghost" href="#/c/${p.channel_id}">edit them</a>
+        </div>
+      </div>`;
+  }
+
+  const st = p.style;
+  const intro = p.intro || {};
+  const outro = p.outro || {};
+  const slates = (state.templates || []).filter((t) => !t.needs_images);
+  const ends = state.endTemplates || [];
+  const openOn = !!intro.template;
+  const firstSlate = (slates[0] || {}).key || 'signal';
+  return `
+    <div class="panel" id="opening-panel" style="margin-top:18px">
+      <div class="row">
+        <strong>Opening and close</strong>
+        ${channelPicker(p)}
+        <div class="spacer"></div>
+        <label class="row" style="gap:8px;cursor:pointer">
+          <input type="checkbox" ${openOn ? 'checked' : ''} style="width:auto"
+            onchange="saveOpening({intro:{template:this.checked?'${esc(intro.template || firstSlate)}':''}})">
+          <span>open on a title card</span>
+        </label>
+        <label class="row" style="gap:8px;cursor:pointer">
+          <input type="checkbox" ${outro.enabled ? 'checked' : ''} style="width:auto"
+            onchange="saveOpening({outro:{enabled:this.checked}})">
+          <span>close on an end card</span>
+        </label>
+      </div>
+      ${!openOn && !outro.enabled ? `
+        <div class="mono" style="color:var(--ink-faint);margin-top:10px">
+          A standalone video starts cold and ends on its last picture unless you
+          turn these on. Put it in a channel instead and every video in the
+          series opens the same way.</div>` : ''}
+
+      ${openOn ? `
+        <div class="row" style="margin:14px 0 8px">
+          <span class="mono" style="color:var(--ink-faint);flex:1;min-width:0">
+            The title card. Your video's title is the type on it; the subtitle is
+            the line above. The slates that need a cast of faces belong to a
+            channel and aren't offered here.</span>
+          <button class="btn sm" onclick="previewOpening('intro')">preview it</button>
+        </div>
+        <div class="tpl-strip">
+          ${slates.map((t) => `
+            <div class="tpl ${t.key === intro.template ? 'sel' : ''}"
+                 onclick="saveOpening({intro:{template:'${t.key}'}})">
+              ${tplArt(t.key, st.accent)}
+              <div class="tpl-name">${esc(t.label)}</div>
+            </div>`).join('')}
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>On screen — <b>${(intro.duration || 5).toFixed(1)}s</b></span>
+            <input type="range" min="2" max="12" step="0.5" value="${intro.duration || 5}"
+              onchange="saveProject({intro:{duration:+this.value}})"></label>
+          <label class="field"><span>Beat before the video — <b>${(intro.hold ?? 1).toFixed(1)}s</b></span>
+            <input type="range" min="0" max="4" step="0.1" value="${intro.hold ?? 1}"
+              onchange="saveProject({intro:{hold:+this.value}})"></label>
+        </div>
+        ${stingBlock('intro', intro)}` : ''}
+
+      ${outro.enabled ? `
+        <div class="row" style="margin:14px 0 8px">
+          <span class="mono" style="color:var(--ink-faint);flex:1;min-width:0">
+            The end card. The plates are empty on purpose — they are where you
+            line up YouTube's own end-screen elements in Studio.</span>
+          <button class="btn sm" onclick="previewOpening('outro')">preview it</button>
+        </div>
+        <div class="tpl-strip">
+          ${ends.map((t) => `
+            <div class="tpl ${t.key === outro.template ? 'sel' : ''}"
+                 onclick="saveOpening({outro:{template:'${t.key}'}})">
+              ${endArt(t.key, st.accent)}
+              <div class="tpl-name">${esc(t.label)}</div>
+            </div>`).join('')}
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>The line on it</span>
+            <input type="text" value="${esc(outro.cta || '')}"
+              placeholder="${esc((ends.find((t) => t.key === outro.template) || {}).cta || 'More like this')}"
+              onchange="saveProject({outro:{cta:this.value}})"></label>
+          <label class="field"><span>Your @handle</span>
+            <input type="text" value="${esc(outro.handle || '')}" placeholder="@yourchannel"
+              onchange="saveProject({outro:{handle:this.value}})"></label>
+          <label class="field"><span>On screen — <b>${(outro.duration || 12).toFixed(0)}s</b></span>
+            <input type="range" min="5" max="20" step="1" value="${outro.duration || 12}"
+              onchange="saveProject({outro:{duration:+this.value}})"></label>
+        </div>
+        ${stingBlock('outro', outro)}` : ''}
+    </div>`;
+}
+
+// A standalone video's own sting for its title card or its end card. The two
+// specs name their fields differently (`music_*` on the slate, `sting_*` on
+// the end card), so one table maps either onto the same controls.
+const STING_FIELDS = {
+  intro: { file: 'music', name: 'music_filename', db: 'music_db', start: 'music_start',
+           fade: 'music_fade', dur: 'music_duration' },
+  outro: { file: 'sting', name: 'sting_filename', db: 'sting_db', start: 'sting_start',
+           fade: 'sting_fade', dur: 'sting_duration' },
+};
+
+function stingSpanOf(role, spec) {
+  return role === 'intro' ? (spec.duration || 5) + (spec.music_tail || 0) : (spec.duration || 12);
+}
+
+function stingBlock(role, spec) {
+  const f = STING_FIELDS[role];
+  const p = state.project;
+  const has = !!spec[f.file];
+  const dur = spec[f.dur] || 0;
+  const maxStart = Math.max(0, dur - 1);
+  const start = Math.min(spec[f.start] || 0, maxStart);
+  const span = stingSpanOf(role, spec);
+  const label = role === 'intro' ? 'Opening sting' : 'End card sting';
+  const hint = role === 'intro'
+    ? 'Its own music for the title card. The music bed waits until the card is over.'
+    : 'Plays as the end card comes up and runs while it is on screen.';
+  const set = (k, v) => `saveProject({${role}:{${k}:${v}}})`;
+  return `
+    <div class="panel" style="background:#0f1116;margin:12px 0 4px">
+      <div class="row" style="margin-bottom:${has ? '14px' : '0'}">
+        <div style="flex:1;min-width:200px">
+          <strong>${label}</strong>
+          <div class="mono" style="color:var(--ink-faint);margin-top:4px">
+            ${has ? esc(spec[f.name] || 'sting') : hint}</div>
+        </div>
+        ${has ? `
+          <audio id="sting-${role}" controls style="max-width:280px"
+            src="/api/projects/${p.id}/file/${spec[f.file]}?v=${dur}-${esc(spec[f.name] || '')}"></audio>
+          <button class="btn sm ghost danger" onclick="removeProjectSting('${role}')">remove</button>`
+        : `<label class="btn sm" style="cursor:pointer">choose a sting
+             <input type="file" accept="audio/*" hidden
+               onchange="uploadProjectSting('${role}', this.files[0])">
+           </label>`}
+      </div>
+      ${has ? `
+        <div class="row" style="gap:10px;margin-bottom:12px">
+          <div class="mono" style="flex:1;min-width:200px;color:var(--ink-faint)">
+            ${fmtTime(dur)} long — it takes ${span.toFixed(1)}s, ${fmtTime(start)} to
+            ${fmtTime(start + span)}${start + span > dur + 0.05 ? '. That runs off the end of the track.' : '.'}</div>
+          <button class="btn sm ghost" onclick="auditionProjectSting('${role}')">hear the window</button>
+        </div>
+        <label class="field" style="margin:0 0 12px"><span>Start it — <b>${fmtTime(start)}${
+            start > 0 ? ' into the track' : ' — the very top'}</b></span>
+          <input type="range" min="0" max="${maxStart.toFixed(1)}" step="0.1" value="${start.toFixed(1)}"
+            oninput="scrubProjectSting('${role}', +this.value)"
+            onchange="${set(f.start, '+this.value')}"></label>
+        <div class="grid-3">
+          <label class="field" style="margin:0"><span>Level vs the narration — <b>${(spec[f.db] ?? -4).toFixed(0)} dB</b></span>
+            <input type="range" min="-20" max="4" step="1" value="${spec[f.db] ?? -4}"
+              onchange="${set(f.db, '+this.value')}"></label>
+          ${role === 'intro' ? `
+            <label class="field" style="margin:0"><span>Rings on past the card — <b>${(spec.music_tail ?? 1.1).toFixed(1)}s</b></span>
+              <input type="range" min="0" max="3" step="0.1" value="${spec.music_tail ?? 1.1}"
+                onchange="saveProject({intro:{music_tail:+this.value}})"></label>` : '<div></div>'}
+          <label class="field" style="margin:0"><span>Fade out — <b>${
+              (spec[f.fade] ?? 1.35) < 0.1 ? 'straight cut' : (spec[f.fade] ?? 1.35).toFixed(1) + 's'}</b></span>
+            <input type="range" min="0" max="${role === 'intro' ? 4 : 8}" step="0.1" value="${spec[f.fade] ?? 1.35}"
+              onchange="${set(f.fade, '+this.value')}"></label>
+        </div>` : ''}
+    </div>`;
+}
+
+async function uploadProjectSting(role, file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/sting/${role}`,
+      { method: 'POST', body: fd });
+    toast('sting added');
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function removeProjectSting(role) {
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/sting/${role}`,
+      { method: 'DELETE' });
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+function scrubProjectSting(role, seconds) {
+  const el = document.getElementById(`sting-${role}`);
+  if (el) { try { el.currentTime = seconds; } catch (e) { /* not loaded yet */ } }
+}
+
+// Play exactly the stretch the card will use, and stop where it stops.
+function auditionProjectSting(role) {
+  const el = document.getElementById(`sting-${role}`);
+  const spec = state.project && state.project[role];
+  if (!el || !spec) return;
+  const f = STING_FIELDS[role];
+  clearTimeout(window._stingStop);
+  const from = Math.min(spec[f.start] || 0, Math.max(0, (spec[f.dur] || 0) - 1));
+  el.currentTime = from;
+  el.play().catch(() => {});
+  window._stingStop = setTimeout(() => { el.pause(); el.currentTime = from; },
+                                 stingSpanOf(role, spec) * 1000);
+}
+
+// Saves that change which controls are on screen, so the tab is repainted.
+async function saveOpening(patch) {
+  await saveProject(patch);
+  render();
+}
+
+// The card on its own, full size — a few seconds of frames, so there is
+// nothing to gain from rendering it small the way a segment preview does.
+async function previewOpening(kind) {
+  const r = await api(`/api/projects/${state.project.id}/preview-opening`,
+    { method: 'POST', body: JSON.stringify({ kind }) });
+  watchJob(r.job, `${kind} preview`, (j) => {
+    if (j.state !== 'done' || !j.result) return;
+    const card = j.result;
+    openVideoModal(
+      `<strong>${card.kind === 'outro' ? 'End card' : 'Title card'}</strong>
+       <span class="mono" style="color:var(--ink-faint)">${fmtTime(card.seconds)}</span>`,
+      videoTag(`/api/projects/${state.project.id}/file/${card.path}?v=${card.rendered_at}`,
+               { scope: 'project', id: state.project.id, rel: card.path },
+               'controls autoplay playsinline'));
+  });
+  render();
 }
 
 // Publishing itself: connecting a channel to YouTube lives on the channel
@@ -5470,7 +6470,8 @@ function presenterPanel(p) {
 
     <div class="media-row">
       <div>
-        <video controls preload="metadata" src="${src}" id="presvid"></video>
+        ${videoTag(src, { scope: 'project', id: p.id, rel: pr.path },
+                   'controls preload="metadata" id="presvid"')}
         <div class="mono" style="color:var(--ink-faint);margin-top:6px">
           ${esc(pr.filename)} · ${pr.width}×${pr.height} · ${max.toFixed(1)}s source</div>
       </div>
@@ -5501,7 +6502,7 @@ function presenterPanel(p) {
           <button class="btn sm ghost danger" onclick="removePresenter()">remove</button>
         </div>
         <div class="mono" style="color:var(--ink-faint);margin-top:10px">
-          Your camera audio is levelled to match the narration and the music ducks
+          Your camera audio is levelled to match the narration 
           under it too. It dissolves in and out over ${(p.style.transition).toFixed(2)}s.</div>
       </div>
     </div>
