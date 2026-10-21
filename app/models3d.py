@@ -300,7 +300,15 @@ def add(upload: Path, filename: str) -> dict:
 
 
 _EDITABLE = {"title", "heading", "scale", "size_axis", "measured", "tint", "regions",
-             "confirmed", "parts_labels"}
+             "confirmed", "parts_labels", "analysis", "kind"}
+
+# The five kinds of model (docs/3d-explainer.md, step 3). The browser works one
+# out on intake (`analysis.kind_auto`); `kind` is the creator's word, and wins.
+KINDS = ("object", "interior", "aerial_site", "modelled_site", "set")
+
+
+def kind_of(m: dict) -> str:
+    return m.get("kind") or (m.get("analysis") or {}).get("kind_auto") or "object"
 
 
 def update(mid: str, changes: dict) -> dict:
@@ -331,6 +339,14 @@ def update(mid: str, changes: dict) -> dict:
                 m["regions"] = _clean_regions(value)
             elif key == "confirmed":
                 m["confirmed"] = bool(value)
+            elif key == "analysis":
+                # Measured in the browser (static/stage/intake.js). Kept whole,
+                # but bounded: it is a summary, never the probe's raw pixels.
+                if isinstance(value, dict) and len(json.dumps(value)) < 200_000:
+                    m["analysis"] = value
+                    m["analysed_at"] = time.time()
+            elif key == "kind":
+                m["kind"] = value if value in KINDS else ""
             elif key == "parts_labels" and isinstance(value, dict):
                 for part in m["parts"]:
                     if part["node"] in value:

@@ -535,6 +535,29 @@ Four checkpoints, each meant to take seconds:
 - rendering a 3D explainer stops with a plain "not built yet" message
 - `static/stage/core.js`: the first port of the spike (loading,
   set, framing, motion, occlusion, angle search)
+- **Intake v2** (`static/stage/probe.js`, `static/stage/intake.js`):
+  - **Classification:** each model is classified on first open with the GPU
+    depth probe and its materials. All six test models classify correctly,
+    in under 0.4 s each.
+  - **Measurements:** scan or built, baked or ours, texel density per
+    material, top coverage, and floor, ceiling and the room's own centre for
+    interiors and sets.
+  - **Limit codes:** saved in the manifest's `analysis`, with `kind` as
+    the creator's override.
+  - **The confirm screen** has a "What it is" section: the kind
+    (changeable), the facts, the limits as sentences, and a room-height
+    sanity check with a one-click fix (it caught the loft's 0.5 m units).
+  - **Rooms and sets open from inside,** at eye height: an interior down its
+    long axis, a set from its open side. Thumbnails are taken the same way.
+  - **Re-analysis:** bumping `VERSION` in `intake.js` re-analyses every model
+    on its next open.
+
+  Classification lessons:
+  - **Judge sides at eye level only.** A biplane between its wings has a
+    "floor" and a "ceiling" too, but no wall.
+  - **Probe a room from halfway up,** above the furniture.
+  - **Find a room's middle from where its floor is,** not from its bounding
+    box, which backdrops can stretch onto a wall.
 
 **Proven in the spike only** (scratchpad pages, to be rebuilt in the app):
 
@@ -561,7 +584,10 @@ In order. Each step ends with something you can use or watch.
 
 1. **Commit what exists.** The library, the Cast tab, the doc and the
    vendored three.js.
-2. **Intake v2: classify and measure.** Make the understanding step real:
+2. **Intake v2: classify and measure.** *Mostly done* (see Status). Still
+   to do from this step: the second known feature for sites and objects, the
+   site's extent and ground height, and a holes measure for interiors.
+   The original scope was:
    - the depth probe
    - the kind (the table in step 3)
    - texel density per material

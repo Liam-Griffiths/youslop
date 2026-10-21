@@ -6,6 +6,7 @@
 // app.js is a classic script, so this hands it `window.Stage3D`.
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { THREE, loadModel, applyManifest, sizeMetres, buildSet, points, fit, boxOf } from './core.js';
+import { analyse, limitsFor, KINDS, VERSION } from './intake.js';
 
 const PERSON_M = 1.8;
 
@@ -86,6 +87,40 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
     controls.update();
   }
 
+  // Rooms and sets are understood from inside, at eye height, looking down
+  // the long axis — from outside an interior scan is just a closed box.
+  // Rooms and sets are understood from inside, at eye height. An interior is
+  // seen down its long axis; a set from its open side, looking at the wall
+  // opposite — standing where the missing wall would be.
+  function frameInside(a) {
+    const m = model.userData.manifest, k = m.scale || 1;
+    if (a.floor_y == null) return false;
+    model.updateMatrixWorld(true);
+    const b = boxOf(model), size = b.getSize(new THREE.Vector3());
+    // probe_at was measured with the inner model at its own (centred) position,
+    // i.e. in the scaler's space — not the inner node's.
+    const local = a.room_centre ? [a.room_centre[0], 0, a.room_centre[1]] : a.probe_at;
+    const at = local ? model.userData.scaler.localToWorld(new THREE.Vector3().fromArray(local)) : b.getCenter(new THREE.Vector3());
+    const eyeY = b.min.y + a.floor_y * k + 1.6, span = Math.max(size.x, size.z);
+    const AX = { '+x': [1, 0, 0], '-x': [-1, 0, 0], '+z': [0, 0, 1], '-z': [0, 0, -1] };
+    const open = (a.centre_probe && a.centre_probe.open_sides || [])[0];
+    let look, back;
+    if (open) {                       // a set: back toward the opening, look at the far wall
+      const o = new THREE.Vector3().fromArray(AX[open]).applyQuaternion(model.quaternion);
+      look = o.clone().negate(); back = o.multiplyScalar(span * 0.15);
+    } else {                          // an interior: down the long axis
+      look = size.z >= size.x ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0);
+      back = look.clone().multiplyScalar(-span * 0.3);
+    }
+    cam.position.set(at.x, eyeY, at.z).add(back);
+    controls.target.copy(cam.position).addScaledVector(look, span * 0.3);
+    controls.minDistance = 0.05; controls.maxDistance = span * 3;
+    cam.near = 0.02; cam.far = span * 20; cam.updateProjectionMatrix();
+    helpers.visible = false;
+    controls.update();
+    return true;
+  }
+
   function resize() {
     const w = el.clientWidth || 640, h = el.clientHeight || 360;
     renderer.setSize(w, h, false);
@@ -113,14 +148,22 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
       applyManifest(model, next);
       if (reframe || prev.scale !== next.scale || prev.heading !== next.heading) { layout(); if (reframe || prev.scale !== next.scale) frame(); }
     },
-    view(az, el2) { frame(az, el2); },
+    view(az, el2) { helpers.visible = true; frame(az, el2); },
+    // What kind of model this is and what it limits (static/stage/intake.js).
+    analyse() { const a = analyse(renderer, model.userData.inner); model.updateMatrixWorld(true); return a; },
+    inside(a) { return frameInside(a); },
     // A three-quarter view as a JPEG, without the helpers, for the library card.
-    async snapshot(w = 640, h = 360) {
+    // A room's card is taken from inside (pass its analysis); anything else
+    // from a three-quarter view outside.
+    async snapshot(w = 640, h = 360, inside = null) {
       helpers.visible = false;
       const keep = { pos: cam.position.clone(), target: controls.target.clone(), aspect: cam.aspect };
       renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
-      const pts = points([model], 3000), sph = boxOf(model).getBoundingSphere(new THREE.Sphere());
-      fit(cam, pts, { az: 35, el: 18, fill: 0.78, sceneRadius: sph.radius });   // room for the card's crop
+      if (!(inside && frameInside(inside))) {
+        const pts = points([model], 3000), sph = boxOf(model).getBoundingSphere(new THREE.Sphere());
+        fit(cam, pts, { az: 35, el: 18, fill: 0.78, sceneRadius: sph.radius });   // room for the card's crop
+      }
+      cam.aspect = w / h; cam.updateProjectionMatrix();
       renderer.render(scene, cam);
       const blob = await new Promise((ok) => renderer.domElement.toBlob(ok, 'image/jpeg', 0.86));
       helpers.visible = true;
@@ -141,5 +184,5 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
   };
 }
 
-window.Stage3D = { mount };
+window.Stage3D = { mount, limitsFor, KINDS, VERSION };
 window.dispatchEvent(new Event('stage3d-ready'));

@@ -6691,7 +6691,7 @@ function licencePill(m) {
   if (src.kind === 'CC0') return '<span class="pill">CC0 · no credit needed</span>';
   if (src.kind === 'CC-BY') return '<span class="pill on">CC-BY · credit in description</span>';
   if (src.kind === 'CC-BY-NC') return '<span class="pill warn" title="non-commercial: not for a monetised channel">CC-BY-NC · not for monetised videos</span>';
-  return `<span class="pill warn" title="check the licence before publishing">${esc(src.licence || 'licence unknown')}</span>`;
+  return `<span class="pill warn" title="not a Creative Commons licence: read its terms before publishing">${esc(src.licence || 'licence unknown')} · check the terms</span>`;
 }
 
 function modelCard(m, actions) {
@@ -6828,6 +6828,45 @@ async function removeFromCast(mid) {
   } catch (e) { toast(e.message, true); }
 }
 
+// What each intake limit code means for the shots (static/stage/intake.js).
+const LIMIT_TEXT = {
+  baked_light: 'Its light is baked into the scan\u2019s photos, so the stage will not relight it.',
+  bare_scan: 'No textures: give it a flat colour under Look, or it reads as grey clay.',
+  stand_inside: 'Shots stand inside it, at eye height.',
+  level_camera: 'The camera stays level; a tilted camera makes the walls lean.',
+  holes: 'The scan has holes; they will show as window light, not black.',
+  subject_is_a_part: 'The subject is one part of it, to be marked before shots are planned.',
+  edge: 'It ends at an edge, and shots keep that edge out of frame.',
+  no_low_angles: 'An aerial scan melts near the ground, so the camera always looks down at least 20\u00b0.',
+  one_direction: 'It is built to be seen from one side; shots stand where the missing walls would be.',
+};
+
+function intakeFacts(m, a, kind) {
+  if (!a) return '<p class="mi-p">Measuring\u2026</p>';
+  const k = m.scale || 1, bits = [];
+  bits.push(a.scan ? (a.bare ? 'A scan with no textures' : 'A photogrammetry scan') : 'A built model');
+  bits.push(a.light === 'baked' ? 'light baked in' : 'lit by the stage');
+  bits.push(`${(a.triangles || 0).toLocaleString()} triangles`);
+  const main = (a.materials || []).find((x) => x.tex && !x.tiled);
+  if (main && main.texels_per_unit) {
+    const cm = 100 / (main.texels_per_unit / k);
+    bits.push(`main texture ${cm >= 100 ? (cm / 100).toFixed(1) + ' m' : cm >= 10 ? Math.round(cm) + ' cm' : cm.toFixed(1) + ' cm'} per texel at this size`);
+  }
+  let room = '';
+  if ((kind === 'interior' || kind === 'set') && a.floor_y != null && a.ceiling_y != null) {
+    const h = (a.ceiling_y - a.floor_y) * k;
+    const odd = h < 2.2 || h > 6;
+    room = `<p class="mi-p">Floor to ceiling: <b>${h.toFixed(2)} m</b> at this size.
+      ${odd ? `<span style="color:#d9a05e">Rooms are usually 2.4\u20135 m, so the size is probably off.</span>
+        <button class="btn xs ghost" onclick="miRoomHeight(3.5)">make it 3.5 m</button>` : ''}</p>`;
+  }
+  const limits = (window.Stage3D ? window.Stage3D.limitsFor({ ...a, kind }) : a.limits || [])
+    .map((c) => LIMIT_TEXT[c] ? `<li>${esc(LIMIT_TEXT[c])}${c === 'one_direction' && a.centre_probe && a.centre_probe.open_sides.length
+      ? ` <span class="mono" style="color:var(--ink-faint)">(open: ${esc(a.centre_probe.open_sides.join(', '))})</span>` : ''}</li>` : '').join('');
+  return `<p class="mi-p">${esc(bits.join(' \u00b7 '))}.</p>${room}
+    ${limits ? `<ul class="mi-limits">${limits}</ul>` : '<p class="mi-p">No special limits: shots can circle it freely.</p>'}`;
+}
+
 // ------------------------------------------------------------ intake screen
 // Where a model is understood: turned until its front faces the arrow, sized
 // against the 1.8 m figure, tinted if it is a bare scan. Changes show live in
@@ -6857,7 +6896,9 @@ async function openModelIntake(mid) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
 
   const draft = { title: m.title, heading: m.heading || 0, scale: m.scale || 1,
-                  size_axis: m.size_axis || 'width', tint: m.tint || '' };
+                  size_axis: m.size_axis || 'width', tint: m.tint || '', kind: m.kind || '' };
+  const kindNow = () => draft.kind || (m.analysis && m.analysis.kind_auto) || 'object';
+  const roomAnalysis = () => (m.analysis && (kindNow() === 'interior' || kindNow() === 'set') ? m.analysis : null);
   const live = () => ({ ...m, ...draft });
 
   const paintSide = () => {
@@ -6867,6 +6908,15 @@ async function openModelIntake(mid) {
     $('#mi-side', wrap).innerHTML = `
       <label class="mono mi-k">title</label>
       <input type="text" id="mi-title" value="${esc(draft.title)}">
+
+      <div class="mi-sec">
+        <div class="mi-h">What it is</div>
+        <select id="mi-kind" style="width:100%;margin-bottom:8px">
+          ${Object.entries((window.Stage3D && window.Stage3D.KINDS) || { object: 'Object' }).map(([k, label]) =>
+            `<option value="${k}" ${k === kindNow() ? 'selected' : ''}>${esc(label)}${m.analysis && m.analysis.kind_auto === k ? '  (detected)' : ''}</option>`).join('')}
+        </select>
+        ${intakeFacts(live(), m.analysis, kindNow())}
+      </div>
 
       <div class="mi-sec">
         <div class="mi-h">1 · Front</div>
@@ -6923,6 +6973,11 @@ async function openModelIntake(mid) {
       </div>`;
     $('#mi-title', wrap).oninput = (e) => { draft.title = e.target.value; };
     $('#mi-axis', wrap).onchange = (e) => { draft.size_axis = e.target.value; paintSide(); };
+    $('#mi-kind', wrap).onchange = (e) => {
+      draft.kind = e.target.value === (m.analysis && m.analysis.kind_auto) ? '' : e.target.value;
+      if (ctl && m.analysis && (kindNow() === 'interior' || kindNow() === 'set')) ctl.inside(m.analysis);
+      paintSide();
+    };
     $('#mi-confirm', wrap).onclick = save;
   };
 
@@ -6932,6 +6987,13 @@ async function openModelIntake(mid) {
     $('#mi-tint', wrap).disabled = !on;
     draft.tint = on ? $('#mi-tint', wrap).value : '';
     ctl && ctl.update(live());
+  };
+  // Set the scale from a plausible room height, when the file's units are off.
+  window.miRoomHeight = (metres) => {
+    const a = m.analysis;
+    if (!ctl || !a || a.floor_y == null || a.ceiling_y == null) return;
+    draft.scale = metres / (a.ceiling_y - a.floor_y);
+    ctl.update(live()); ctl.inside(a); paintSide();
   };
   window.miApplySize = () => {
     const want = parseFloat($('#mi-metres', wrap).value);
@@ -6949,7 +7011,8 @@ async function openModelIntake(mid) {
     try {
       m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify({
         ...draft, measured: ctl ? ctl.measured() : m.measured, confirmed: true }) });
-      if (ctl) await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot() });
+
+      if (ctl) await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot(640, 360, roomAnalysis()) });
       toast(`${m.title} confirmed`);
       close();
     } catch (e) { toast(e.message, true); btn.disabled = false; }
@@ -6961,12 +7024,19 @@ async function openModelIntake(mid) {
     if (!document.body.contains(wrap)) return;
     ctl = await S3.mount($('#mi-view', wrap), live(), { accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8C36A' });
     if (!document.body.contains(wrap)) { ctl.dispose(); return; }
-    // First sight of a model: keep its measurement and a thumbnail at once,
-    // so the library card has a picture even before anyone confirms it.
-    if (!m.measured) {
-      m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify({ measured: ctl.measured() }) });
-      await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot() });
-    }
+    // First sight (or an analysis from an older intake): work out what kind of
+    // model this is, keep the measurement and a thumbnail straight away.
+    const stale = !m.analysis || m.analysis.version !== S3.VERSION;
+    if (stale || !m.measured) {
+      paintSide();
+      await new Promise((ok) => setTimeout(ok, 30));          // let "Measuring…" paint
+      const patch = { measured: ctl.measured() };
+      if (stale) patch.analysis = ctl.analyse();
+      m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      if (!document.body.contains(wrap)) return;
+      if (roomAnalysis()) ctl.inside(m.analysis);
+      await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot(640, 360, roomAnalysis()) });
+    } else if (roomAnalysis()) ctl.inside(m.analysis);
     paintSide();
   } catch (e) {
     $('#mi-view', wrap).innerHTML = `<div class="empty-note" style="padding:40px">${esc(e.message || String(e))}</div>`;
