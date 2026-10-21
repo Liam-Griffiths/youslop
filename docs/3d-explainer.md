@@ -552,6 +552,37 @@ Four checkpoints, each meant to take seconds:
   - **Re-analysis:** bumping `VERSION` in `intake.js` re-analyses every model
     on its next open.
 
+- **Identification by Claude** (`static/stage/identify.js`, `app/identify.py`,
+  `POST /api/models/{id}/identify`):
+  - **Pictures chosen for the kind:**
+    - objects: six labelled views
+    - interiors: four views from inside
+    - sets: the same, plus one from outside
+    - sites: a 1280-pixel top view with a labelled grid, plus an oblique view
+  - **Suggestions:** name, front, up to two published or typical sizes, and
+    for sites the subject's box and north. Each is applied only by the
+    creator's click; two sizes that disagree by more than 5% get a warning.
+  - **Images on every backend:** `llm.py` can now send images through all
+    three. The CLI gets them as stream-json input, so it never reads a file.
+  - **Results on the six test models:**
+    - every name is right
+    - both fronts are right
+    - published sizes for the A380 and the Flyer
+    - typical room heights for the hall and the loft
+    - the Abbey and the Eiffel Tower are both placed by their boxes
+    - the disagreements are flagged: the Abbey's length against its tower
+      (9%), and the stylised Eiffel Tower's height against its base (71%)
+
+  Identification lessons:
+  - **Tell Claude what intake already measured** (the kind, scan or built,
+    the named parts). Without it, Claude called the modelled Paris a scan and
+    picked the Tuileries over the file's own `Eiffel_Tower`.
+  - **Locate coarse-to-fine.** The first answer from the whole tile is only
+    roughly right. A second, zoomed, finer-gridded view draws the box tight.
+  - **The measure must match the feature.** "Tower height 69 m" first came
+    back as an x-extent. Heights are now `subject_height`, measured from the
+    model's points inside the subject's box.
+
   Classification lessons:
   - **Judge sides at eye level only.** A biplane between its wings has a
     "floor" and a "ceiling" too, but no wall.
@@ -597,7 +628,9 @@ In order. Each step ends with something you can use or watch.
    - licence handling for non-CC licences ("check the terms")
 
    The confirm screen shows what was found and the limits it implies.
-3. **Identification by Claude, per kind.**
+3. **Identification by Claude, per kind.** *Done* (see Status), except
+   for naming parts from highlighted pictures and drawing region boxes by
+   hand. The original scope was:
    - objects: six views and highlighted parts
    - interiors: views from inside
    - sites: a gridded top view, for the subject's region and north

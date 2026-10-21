@@ -2617,6 +2617,51 @@ def delete_model(mid: str) -> dict:
     return {"deleted": mid}
 
 
+@app.post("/api/models/{mid}/identify")
+async def identify_model(mid: str, views: list[UploadFile], captions: str = Form("[]"),
+                         meta: str = Form("{}"), kind: str = Form("object"),
+                         mode: str = Form("identify")) -> dict:
+    """Ask Claude what this model is, from the pictures the browser rendered
+    for its kind (static/stage/identify.js). Stores the suggestions; changes
+    nothing else — the confirm screen applies them on a click."""
+    m = _model_or_404(mid)
+    if kind not in models3d.KINDS:
+        raise HTTPException(400, f"Unknown kind {kind!r}")
+    images = [await v.read() for v in views[:8]]
+    if not images or any(len(b) > 4 * 1024 * 1024 for b in images):
+        raise HTTPException(400, "Send one to eight pictures, each under 4 MB.")
+    try:
+        caps = [str(c)[:200] for c in json.loads(captions)][:len(images)]
+        info = json.loads(meta) if meta else {}
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(400, f"Bad captions or meta: {exc}")
+    caps += [""] * (len(images) - len(caps))
+    from . import identify as identify_mod
+    from starlette.concurrency import run_in_threadpool
+    if mode == "refine":
+        # The closer look at a site's subject: tighten its box, nothing else.
+        try:
+            box = await run_in_threadpool(identify_mod.refine, m, images[0], caps[0],
+                                          (info or {}).get("grid") or {})
+        except llm_mod.LLMUnavailable as exc:
+            raise HTTPException(503, str(exc))
+        except llm_mod.LLMError as exc:
+            raise HTTPException(502, f"Claude could not place it: {exc}")
+        ident = dict(m.get("identity") or {})
+        if box and ident.get("subject"):
+            ident["subject"] = {**ident["subject"], "box": box, "refined": True}
+        return models3d.update(mid, {"identity": ident})
+    try:
+        # Off the event loop: the Claude call blocks for up to a few minutes.
+        found = await run_in_threadpool(identify_mod.identify, m, kind, images, caps,
+                                        info if isinstance(info, dict) else {})
+    except llm_mod.LLMUnavailable as exc:
+        raise HTTPException(503, str(exc))
+    except llm_mod.LLMError as exc:
+        raise HTTPException(502, f"Claude could not identify it: {exc}")
+    return models3d.update(mid, {"identity": found})
+
+
 @app.get("/api/models/{mid}/model.glb")
 def model_file(mid: str, request: Request) -> Response:
     try:

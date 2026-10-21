@@ -7,6 +7,7 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { THREE, loadModel, applyManifest, sizeMetres, buildSet, points, fit, boxOf } from './core.js';
 import { analyse, limitsFor, KINDS, VERSION } from './intake.js';
+import { renderViews, renderZoom, regionHeight, OBJECT_VIEWS } from './identify.js';
 
 const PERSON_M = 1.8;
 
@@ -152,6 +153,10 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
     // What kind of model this is and what it limits (static/stage/intake.js).
     analyse() { const a = analyse(renderer, model.userData.inner); model.updateMatrixWorld(true); return a; },
     inside(a) { return frameInside(a); },
+    // The pictures Claude identifies it from, chosen for its kind (identify.js).
+    async idViews(kind, a) { const r = await renderViews(renderer, model.userData.inner, a || {}, kind); resize(); return r; },
+    async zoomView(rect) { const r = await renderZoom(renderer, model.userData.inner, rect); resize(); return r; },
+    regionHeight(rect) { return regionHeight(model.userData.inner, rect); },
     // A three-quarter view as a JPEG, without the helpers, for the library card.
     // A room's card is taken from inside (pass its analysis); anything else
     // from a three-quarter view outside.
@@ -184,5 +189,5 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
   };
 }
 
-window.Stage3D = { mount, limitsFor, KINDS, VERSION };
+window.Stage3D = { mount, limitsFor, KINDS, VERSION, OBJECT_VIEWS };
 window.dispatchEvent(new Event('stage3d-ready'));

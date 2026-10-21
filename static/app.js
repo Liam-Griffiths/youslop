@@ -6899,6 +6899,116 @@ async function openModelIntake(mid) {
                   size_axis: m.size_axis || 'width', tint: m.tint || '', kind: m.kind || '' };
   const kindNow = () => draft.kind || (m.analysis && m.analysis.kind_auto) || 'object';
   const roomAnalysis = () => (m.analysis && (kindNow() === 'interior' || kindNow() === 'set') ? m.analysis : null);
+  let asking = false;
+
+  // What one size suggestion implies the scale should be (file units -> metres).
+  const impliedScale = (sz) => {
+    const a = m.analysis || {}, id = m.identity || {};
+    if (sz.measure === 'room_height') return a.floor_y != null && a.ceiling_y != null ? sz.metres / (a.ceiling_y - a.floor_y) : null;
+    if (sz.measure === 'subject_x' || sz.measure === 'subject_z') {
+      const b = id.subject && id.subject.box; if (!b) return null;
+      const units = sz.measure === 'subject_x' ? b[2] - b[0] : b[3] - b[1];
+      return units > 0 ? sz.metres / units : null;
+    }
+    if (sz.measure === 'subject_height') {
+      const b = id.subject && id.subject.box; if (!b || !ctl) return null;
+      const units = ctl.regionHeight(b);
+      return units > 0 ? sz.metres / units : null;
+    }
+    if (!ctl) return null;
+    const now = ctl.size()[sz.measure];
+    return now > 0 ? draft.scale * sz.metres / now : null;
+  };
+
+  // Claude's suggestions, each applied by its own click. Nothing is saved
+  // until "confirm model".
+  const identityBlock = () => {
+    const id = m.identity;
+    if (asking) return '<p class="mi-p">Asking Claude what it is\u2026 (up to a minute)</p>';
+    if (!id) return `<button class="btn sm" onclick="miIdentify()" ${m.analysis ? '' : 'disabled'}>ask Claude what it is</button>`;
+    const rows = [];
+    rows.push(`<p class="mi-p"><b>${esc(id.name || 'not sure')}</b> <span class="mono">(${esc(id.confidence)} confidence)</span>
+      ${id.name && id.name !== draft.title ? `<button class="btn xs ghost" onclick="miUse('title')">use as title</button>` : ''}<br>${esc(id.what || '')}</p>`);
+    if (id.front_view) {
+      const v = (window.Stage3D.OBJECT_VIEWS || []).find((x) => x.id === id.front_view);
+      const want = v ? ((360 - v.az) % 360) : null;
+      if (want != null) rows.push(`<p class="mi-p">Its front faces view ${esc(id.front_view)}.
+        ${want !== draft.heading ? `<button class="btn xs ghost" onclick="miUse('front')">turn it to face the arrow</button>` : '\u2713 facing the arrow'}</p>`);
+    }
+    const scales = [];
+    for (const [i, sz] of (id.sizes || []).entries()) {
+      const k = impliedScale(sz); if (k) scales.push(k);
+      rows.push(`<p class="mi-p">${esc(sz.feature)}: <b>${sz.metres} m</b> <span class="mono">(${esc(sz.how_sure)})</span>
+        ${k ? `<button class="btn xs ghost" onclick="miUse('size', ${i})">set size from this</button>` : ''}</p>`);
+    }
+    if (scales.length === 2) {
+      const off = Math.abs(scales[0] - scales[1]) / Math.min(...scales);
+      if (off > 0.05) rows.push(`<p class="mi-p" style="color:#d9a05e">These two sizes disagree by ${Math.round(off * 100)}%:
+        the model may be stylised, or one figure is off. Pick the one that matters most for your shots.</p>`);
+    }
+    if (id.subject) rows.push(`<p class="mi-p">Subject: <b>${esc(id.subject.name)}</b>${id.subject.refined ? ' <span class="mono">(placed from a closer look)</span>' : ''}${id.north && id.north !== 'unknown' ? ` \u00b7 north is ${esc(id.north)}` : ''}
+      ${(draft.regions || m.regions || []).some((r) => r.label === id.subject.name) ? ' \u2713 marked'
+        : `<button class="btn xs ghost" onclick="miUse('subject')">mark it</button>`}</p>`);
+    const parts = Object.keys(id.parts || {});
+    if (parts.length) rows.push(`<p class="mi-p">${parts.length} part names: ${esc(Object.values(id.parts).slice(0, 6).join(', '))}${parts.length > 6 ? '\u2026' : ''}
+      ${draft.parts_labels ? ' \u2713' : `<button class="btn xs ghost" onclick="miUse('parts')">use them</button>`}</p>`);
+    rows.push(`<button class="btn xs ghost" onclick="miIdentify()">ask again</button>`);
+    return rows.join('');
+  };
+
+  window.miIdentify = async () => {
+    if (!ctl || asking) return;
+    asking = true; paintSide();
+    try {
+      const { views, meta } = await ctl.idViews(kindNow(), m.analysis);
+      const fd = new FormData();
+      views.forEach((v, i) => fd.append('views', v.blob, `view${i}.jpg`));
+      fd.append('captions', JSON.stringify(views.map((v) => v.caption)));
+      fd.append('meta', JSON.stringify(meta));
+      fd.append('kind', kindNow());
+      m = await api(`/api/models/${mid}/identify`, { method: 'POST', body: fd });
+      // A site's subject: a second, closer look draws its box tight (coarse
+      // to fine). The first answer, from the whole tile, is only roughly right.
+      const sub = m.identity && m.identity.subject;
+      if (sub && /site$/.test(kindNow())) {
+        paintSide();
+        const z = await ctl.zoomView(sub.box), f2 = new FormData();
+        f2.append('views', z.blob, 'zoom.jpg');
+        f2.append('captions', JSON.stringify([z.caption]));
+        f2.append('meta', JSON.stringify({ grid: z.grid }));
+        f2.append('kind', kindNow()); f2.append('mode', 'refine');
+        m = await api(`/api/models/${mid}/identify`, { method: 'POST', body: f2 });
+      }
+    } catch (e) { toast(e.message, true); }
+    asking = false; paintSide();
+    if (ctl) { if (roomAnalysis()) ctl.inside(m.analysis); }
+  };
+
+  window.miUse = (what, i) => {
+    const id = m.identity || {};
+    if (what === 'title') draft.title = id.name;
+    if (what === 'front') {
+      const v = window.Stage3D.OBJECT_VIEWS.find((x) => x.id === id.front_view);
+      if (v) { draft.heading = (360 - v.az) % 360; ctl && ctl.update(live()); }
+    }
+    if (what === 'size') {
+      const sz = id.sizes[i], k = impliedScale(sz);
+      if (k) {
+        draft.scale = k;
+        if (['width', 'length', 'height'].includes(sz.measure)) draft.size_axis = sz.measure;
+        ctl && ctl.update(live());
+        if (roomAnalysis()) ctl.inside(m.analysis);
+      }
+    }
+    if (what === 'subject' && id.subject) {
+      const b = id.subject.box, mm = (id.meta && id.meta.min) || [0, 0, 0], su = (id.meta && id.meta.size_units) || [0, 1, 0];
+      draft.regions = [...(draft.regions || m.regions || []).filter((r) => r.label !== id.subject.name),
+        { label: id.subject.name, box: [[b[0], mm[1], b[1]], [b[2], mm[1] + su[1], b[3]]] }];
+      if (id.north && id.north !== 'unknown') draft.north = id.north;
+    }
+    if (what === 'parts') draft.parts_labels = { ...(id.parts || {}) };
+    paintSide();
+  };
   const live = () => ({ ...m, ...draft });
 
   const paintSide = () => {
@@ -6916,6 +7026,7 @@ async function openModelIntake(mid) {
             `<option value="${k}" ${k === kindNow() ? 'selected' : ''}>${esc(label)}${m.analysis && m.analysis.kind_auto === k ? '  (detected)' : ''}</option>`).join('')}
         </select>
         ${intakeFacts(live(), m.analysis, kindNow())}
+        <div id="mi-identity">${identityBlock()}</div>
       </div>
 
       <div class="mi-sec">

@@ -292,7 +292,7 @@ def add(upload: Path, filename: str) -> dict:
             "size_axis": "width",    # which dimension `size_m` was entered for
             "measured": None,        # [x, y, z] in file units, upright, before scale/heading
             "tint": "",              # flat colour for untextured scans, "" = none
-            "regions": [],           # [{label, box: [[x,y,z],[x,y,z]]}] in model metres
+            "regions": [],           # [{label, box: [[x,y,z],[x,y,z]]}] in file units (the intake space)
             "confirmed": False,
         }
         _write(manifest)
@@ -300,7 +300,7 @@ def add(upload: Path, filename: str) -> dict:
 
 
 _EDITABLE = {"title", "heading", "scale", "size_axis", "measured", "tint", "regions",
-             "confirmed", "parts_labels", "analysis", "kind"}
+             "confirmed", "parts_labels", "analysis", "kind", "identity", "north"}
 
 # The five kinds of model (docs/3d-explainer.md, step 3). The browser works one
 # out on intake (`analysis.kind_auto`); `kind` is the creator's word, and wins.
@@ -347,6 +347,12 @@ def update(mid: str, changes: dict) -> dict:
                     m["analysed_at"] = time.time()
             elif key == "kind":
                 m["kind"] = value if value in KINDS else ""
+            elif key == "identity":
+                # Claude's suggestions (app/identify.py), applied only by the creator.
+                if isinstance(value, dict) and len(json.dumps(value)) < 100_000:
+                    m["identity"] = value
+            elif key == "north":
+                m["north"] = value if value in ("-z", "+z", "-x", "+x") else ""
             elif key == "parts_labels" and isinstance(value, dict):
                 for part in m["parts"]:
                     if part["node"] in value:
