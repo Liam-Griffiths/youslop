@@ -1045,6 +1045,13 @@ def _memory_check(progress: Progress) -> None:
 def render(project: Project, progress: Progress = lambda m: None,
            preview: bool = False) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
+    if project.style.format == "stage":
+        # The 3D explainer has its library and cast but not yet its renderer
+        # (docs/3d-explainer.md, build order step 3). Say so, rather than
+        # falling through to the documentary cut with no pictures.
+        raise ValueError("3D explainer videos cannot be rendered yet: the scene "
+                         "renderer is still being built. Switch the format on the "
+                         "Render tab to render this script another way.")
     _memory_check(progress)
 
     root = project_dir(project.id)

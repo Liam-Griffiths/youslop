@@ -796,8 +796,11 @@ async function renderLibrary() {
       <span class="mono" id="libcount" style="color:var(--ink-faint)"></span>
     </div>
     <div class="lib-grid" id="libgrid"></div>
+
+    <div class="card" style="margin-top:28px" id="models3d"></div>
   `;
   paintLibraryGrid();
+  paintModelLibrary();
 }
 
 // --------------------------------------------------------------- folders
@@ -1188,6 +1191,15 @@ function formatArt(key, accent) {
       <path d="M14 56 L34 48 L52 52 L72 34 L92 38 L112 20 L126 24 L126 66 L14 66Z" fill="#1FD686" opacity=".14"/>
       <circle cx="126" cy="24" r="3" fill="#1FD686"/>
       <rect x="14" y="12" width="34" height="3" fill="${a}"/>`,
+    stage: `<rect width="140" height="78" fill="#1d232a"/>
+      <ellipse cx="70" cy="60" rx="50" ry="9" fill="#313943"/>
+      <path d="M22 36 A50 15 0 0 1 118 36" fill="none" stroke="${a}" stroke-width="1.5"
+            stroke-dasharray="4 4" opacity=".75"/>
+      <circle cx="118" cy="36" r="3" fill="${a}"/>
+      <path d="M38 52 L100 45 L105 48 L42 56 Z" fill="#d9dde6"/>
+      <path d="M64 50 L54 38 L61 38 L76 49 Z" fill="#b9c0cc"/>
+      <path d="M70 52 L84 63 L91 63 L80 51 Z" fill="#c6ccd8"/>
+      <path d="M97 46 L103 35 L107 35 L104 47 Z" fill="${a}"/>`,
   }[key] || '<rect width="140" height="78" fill="#14151a"/>';
   return `<svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">${svg}</svg>`;
 }
@@ -1201,6 +1213,7 @@ const FORMAT_INFO = [
   { key: 'loudmouth', label: 'Loudmouth', blurb: 'Kinetic type: every word slams in as it is said.' },
   { key: 'groupchat', label: 'Group Chat', blurb: 'Storytime: the message thread, cutting away to the scene and back.' },
   { key: 'ticker', label: 'Ticker', blurb: 'A markets terminal: rolling figures, drawn charts, bars.' },
+  { key: 'stage', label: '3D explainer', blurb: 'Narration over 3D models: orbits, close-ups, reveals.' },
 ];
 
 // The drawn cuts (app/cuts/): each paragraph is a run of cues the writer
@@ -2374,8 +2387,14 @@ function render() {
     `<span class="mono">${fmtTime(p.recorded_seconds || p.est_seconds)}</span>
      <span class="pill ${p.status === 'rendered' ? 'on' : ''}">${esc(p.status)}</span>`;
 
+  // A 3D explainer adds a Cast tab — the models it can put on stage — beside
+  // Media, which it still uses for the pictures and slides between 3D shots
+  // (docs/3d-explainer.md). Other formats never see it.
+  const stage = isStage(p.style.format);
+  if (!stage && state.tab === 'cast') state.tab = 'script';
   const tabs = [
     ['script', 'Script', total],
+    ...(stage ? [['cast', 'Cast', (p.cast || []).length]] : []),
     ['media', 'Media', p.slides.filter((s) => s.chosen_id).length],
     ['record', 'Record', `${recorded}/${total}`],
     ['thumb', 'Thumbnail', p.thumb && p.thumb.image ? '✓' : ''],
@@ -2399,7 +2418,7 @@ function render() {
     ${jobPanel()}
     <div id="tabbody"></div>`;
 
-  ({ script: paintScript, media: paintMedia, record: paintRecord,
+  ({ script: paintScript, media: paintMedia, cast: paintCast, record: paintRecord,
      thumb: paintThumb, render: paintRender }[state.tab] || paintScript)();
   paintJob();
   if (state.tab !== 'render' && typeof tlPause === 'function') tlPause();
@@ -6641,5 +6660,318 @@ async function doRender(preview) {
   watchJob(r.job, preview ? 'preview render' : 'render');
   render();
 }
+
+
+// ------------------------------------------------------------- 3D models
+// The 3D explainer's models (docs/3d-explainer.md). The shared library is
+// where a model is *understood* — front, true size, look — once, on the
+// intake screen; a video's Cast is just which of them it can put on stage.
+// three.js is only loaded when one of these screens is opened.
+const isStage = (fmt) => (fmt || '') === 'stage';
+
+async function stage3d() {
+  if (!window.Stage3D) await import('/static/stage/viewer.js');
+  return window.Stage3D;
+}
+
+// Width × height × length in metres, from what the server keeps: the file's
+// own measurement, the confirmed scale, and the heading (a quarter turn swaps
+// width and length).
+function modelSize(m) {
+  if (!m.measured) return null;
+  const [x, y, z] = m.measured, k = m.scale || 1;
+  const side = Math.round((m.heading || 0) / 90) % 2 !== 0;
+  return { width: (side ? z : x) * k, height: y * k, length: (side ? x : z) * k };
+}
+const fmtMetres = (v) => (v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+const sizeText = (sz) => sz ? `${fmtMetres(sz.width)} × ${fmtMetres(sz.height)} × ${fmtMetres(sz.length)} m` : 'not measured yet';
+
+function licencePill(m) {
+  const src = m.source || {};
+  if (src.kind === 'CC0') return '<span class="pill">CC0 · no credit needed</span>';
+  if (src.kind === 'CC-BY') return '<span class="pill on">CC-BY · credit in description</span>';
+  if (src.kind === 'CC-BY-NC') return '<span class="pill warn" title="non-commercial: not for a monetised channel">CC-BY-NC · not for monetised videos</span>';
+  return `<span class="pill warn" title="check the licence before publishing">${esc(src.licence || 'licence unknown')}</span>`;
+}
+
+function modelCard(m, actions) {
+  const sz = modelSize(m);
+  return `<div class="lib-card">
+    <div class="lib-thumb" style="cursor:pointer" onclick="openModelIntake('${m.id}')" title="open">
+      <img src="/api/models/${m.id}/thumb.jpg?v=${Math.round((m.thumb_at || 0))}" loading="lazy"
+           onerror="this.style.opacity=0">
+      <span class="kindtag">${m.confirmed ? '3D · confirmed' : '3D · needs confirming'}</span>
+    </div>
+    <div class="lib-body">
+      <div class="lib-title" title="${esc(m.title)}">${esc(m.title)}</div>
+      <div class="lib-meta">${esc(sizeText(sz))}${m.source && m.source.author ? ' · ' + esc(m.source.author) : ''}</div>
+      <div class="lib-tags">${licencePill(m)}</div>
+      <div class="row">${actions}</div>
+    </div>
+  </div>`;
+}
+
+// ------------------------------------------------------------ the library
+async function paintModelLibrary() {
+  const box = $('#models3d');
+  if (!box) return;
+  let models = [];
+  try { models = await api('/api/models'); } catch (e) { toast(e.message, true); }
+  state.models = models;
+  box.innerHTML = `
+    <h3>3D models</h3>
+    <p class="mono" style="color:var(--ink-faint);margin:-4px 0 14px">
+      For 3D explainers. Each model is understood once here — which way is the
+      front, how big it really is — and every video that uses it inherits that.
+      GLB files only.</p>
+    <div class="row" style="margin-bottom:14px">
+      <label class="btn sm primary" style="cursor:pointer">add a .glb model
+        <input type="file" accept=".glb,model/gltf-binary" hidden
+          onchange="uploadModel(this.files[0], false);this.value=''"></label>
+    </div>
+    <div class="lib-grid">
+      ${models.map((m) => modelCard(m, `
+        <button class="btn xs ghost" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
+        <button class="btn xs ghost danger" onclick="deleteModel('${m.id}')">delete</button>`)).join('')
+        || '<div class="empty-note">No 3D models yet.</div>'}
+    </div>`;
+}
+
+async function uploadModel(file, toCast) {
+  if (!file) return;
+  if (!/\.glb$/i.test(file.name)) return toast('Only .glb files can be added.', true);
+  toast(`Adding ${file.name}…`);
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const m = await api('/api/models', { method: 'POST', body: fd });
+    if (toCast && state.project) {
+      state.project = await api(`/api/projects/${state.project.id}/cast`,
+        { method: 'POST', body: JSON.stringify({ model: m.id }) });
+    }
+    refreshModelViews();
+    openModelIntake(m.id);        // a new model is understood straight away
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteModel(mid) {
+  if (!confirm('Delete this model from the library?')) return;
+  try {
+    await api(`/api/models/${mid}`, { method: 'DELETE' });
+    refreshModelViews();
+  } catch (e) { toast(e.message, true); }
+}
+
+function refreshModelViews() {
+  if ($('#models3d')) paintModelLibrary();
+  if (state.project && state.tab === 'cast') render();
+}
+
+// ---------------------------------------------------------------- the cast
+async function paintCast() {
+  const p = state.project, body = $('#tabbody');
+  let models = [];
+  try { models = await api('/api/models'); } catch (e) { toast(e.message, true); }
+  state.models = models;
+  const byId = Object.fromEntries(models.map((m) => [m.id, m]));
+  const cast = (p.cast || []).map((c) => byId[c.model] || { id: c.model, missing: true });
+  const spare = models.filter((m) => !(p.cast || []).some((c) => c.model === m.id));
+  const unconfirmed = cast.filter((m) => !m.missing && !m.confirmed).length;
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:22px">
+      <h3>Cast</h3>
+      <p class="mono" style="color:var(--ink-faint);margin:-4px 0 14px">
+        The models this video can put on stage. The camera is only as good as
+        what it knows about them, so each is confirmed once — front and true
+        size — before the script is written around it.</p>
+      ${unconfirmed ? `<p class="pill warn" style="display:inline-block;margin-bottom:12px">
+        ${unconfirmed} model${unconfirmed === 1 ? '' : 's'} still to confirm</p>` : ''}
+      <div class="lib-grid">
+        ${cast.map((m) => m.missing
+          ? `<div class="lib-card"><div class="lib-body">
+              <div class="lib-title">missing model</div>
+              <div class="lib-meta">deleted from the library</div>
+              <button class="btn xs ghost danger" onclick="removeFromCast('${esc(m.id)}')">remove</button>
+            </div></div>`
+          : modelCard(m, `
+            <button class="btn xs ${m.confirmed ? 'ghost' : 'primary'}" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
+            <button class="btn xs ghost danger" onclick="removeFromCast('${m.id}')">remove</button>`)).join('')
+          || '<div class="empty-note">No models in this video yet. Add one below.</div>'}
+      </div>
+    </div>
+    <div class="card">
+      <h3>Add a model</h3>
+      <div class="row" style="margin-bottom:14px">
+        <label class="btn sm primary" style="cursor:pointer">upload a .glb
+          <input type="file" accept=".glb,model/gltf-binary" hidden
+            onchange="uploadModel(this.files[0], true);this.value=''"></label>
+        <span class="mono" style="color:var(--ink-faint)">it goes into the library too, for other videos</span>
+      </div>
+      ${spare.length ? `<div class="lib-grid">${spare.map((m) => modelCard(m,
+          `<button class="btn xs" onclick="addToCast('${m.id}')">add to this video</button>`)).join('')}</div>`
+        : '<div class="empty-note">Every model in the library is already in this video.</div>'}
+    </div>`;
+}
+
+async function addToCast(mid) {
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/cast`,
+      { method: 'POST', body: JSON.stringify({ model: mid }) });
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function removeFromCast(mid) {
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/cast/${mid}`, { method: 'DELETE' });
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ------------------------------------------------------------ intake screen
+// Where a model is understood: turned until its front faces the arrow, sized
+// against the 1.8 m figure, tinted if it is a bare scan. Changes show live in
+// the viewer and are saved on "confirm".
+async function openModelIntake(mid) {
+  let m;
+  try { m = await api(`/api/models/${mid}`); } catch (e) { return toast(e.message, true); }
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box wide">
+      <div class="row" style="margin-bottom:12px">
+        <strong>${esc(m.title)}</strong>
+        ${m.confirmed ? '<span class="pill on">confirmed</span>' : '<span class="pill warn">needs confirming</span>'}
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="mi-close">close</button>
+      </div>
+      <div class="model-intake">
+        <div class="model-view" id="mi-view"><div class="empty-note" style="padding:40px">loading the model…</div></div>
+        <div class="model-side" id="mi-side"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  let ctl = null;
+  const close = () => { if (ctl) ctl.dispose(); wrap.remove(); refreshModelViews(); };
+  $('#mi-close', wrap).onclick = close;
+  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
+
+  const draft = { title: m.title, heading: m.heading || 0, scale: m.scale || 1,
+                  size_axis: m.size_axis || 'width', tint: m.tint || '' };
+  const live = () => ({ ...m, ...draft });
+
+  const paintSide = () => {
+    const src = m.source || {}, st = m.stats || {};
+    const sz = ctl ? ctl.size() : modelSize(live());
+    const axis = draft.size_axis;
+    $('#mi-side', wrap).innerHTML = `
+      <label class="mono mi-k">title</label>
+      <input type="text" id="mi-title" value="${esc(draft.title)}">
+
+      <div class="mi-sec">
+        <div class="mi-h">1 · Front</div>
+        <p class="mi-p">The arrow on the floor marks the front. Turn the model
+          until its nose faces the arrow.</p>
+        <div class="row">
+          <button class="btn sm ghost" onclick="miTurn(90)">turn left</button>
+          <button class="btn sm ghost" onclick="miTurn(-90)">turn right</button>
+          <button class="btn sm ghost" onclick="miTurn(180)">about face</button>
+          <span class="mono" style="color:var(--ink-faint)">${draft.heading}°</span>
+        </div>
+      </div>
+
+      <div class="mi-sec">
+        <div class="mi-h">2 · True size</div>
+        <p class="mi-p">Files arrive at any scale. The grey figure is 1.8 m tall.
+          Now: <b>${esc(sizeText(sz))}</b> <span class="mono" style="color:var(--ink-faint)">(width × height × length)</span></p>
+        <div class="row">
+          <select id="mi-axis" style="width:auto">
+            ${['width', 'length', 'height'].map((a) => `<option value="${a}" ${a === axis ? 'selected' : ''}>real ${a}</option>`).join('')}
+          </select>
+          <input type="number" id="mi-metres" min="0.001" step="any" style="width:110px"
+            value="${sz ? +sz[axis].toFixed(3) : ''}">
+          <span class="mono">m</span>
+          <button class="btn sm ghost" onclick="miApplySize()">apply</button>
+        </div>
+        <p class="mi-p" style="margin-top:6px">e.g. a wingspan is the width; a car's length is the length.</p>
+      </div>
+
+      <div class="mi-sec">
+        <div class="mi-h">3 · Look</div>
+        <p class="mi-p">${st.textures ? `${st.textures} texture${st.textures === 1 ? '' : 's'} — the model brings its own colours.`
+          : 'No textures: a bare scan. Give it one flat colour so it does not read as grey clay.'}</p>
+        <div class="row">
+          <label class="row" style="gap:6px"><input type="checkbox" id="mi-tinton" ${draft.tint ? 'checked' : ''}
+            onchange="miTint()"> flat colour</label>
+          <input type="color" id="mi-tint" value="${esc(draft.tint || '#e8dcc2')}" oninput="miTint()"
+            ${draft.tint ? '' : 'disabled'}>
+        </div>
+      </div>
+
+      <div class="mi-sec">
+        <div class="mi-h">Source</div>
+        <p class="mi-p">${esc(src.author || 'author unknown')}${src.url ? ` · <span class="mono">${esc(src.url.replace(/^https?:\/\//, '').slice(0, 48))}</span>` : ''}</p>
+        <div class="row" style="margin-bottom:6px">${licencePill(m)}</div>
+        <p class="mi-p">${(st.triangles || 0).toLocaleString()} triangles ·
+          ${m.parts.length ? `${m.parts.length} named parts: ${esc(m.parts.map((x) => x.label).join(', '))}`
+            : 'no named parts (an unsplit scan) — parts will be marked as regions'}</p>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="mi-confirm">${m.confirmed ? 'save' : 'confirm model'}</button>
+        <span class="mono" style="color:var(--ink-faint)">saves front, size and look</span>
+      </div>`;
+    $('#mi-title', wrap).oninput = (e) => { draft.title = e.target.value; };
+    $('#mi-axis', wrap).onchange = (e) => { draft.size_axis = e.target.value; paintSide(); };
+    $('#mi-confirm', wrap).onclick = save;
+  };
+
+  window.miTurn = (deg) => { draft.heading = ((draft.heading + deg) % 360 + 360) % 360; ctl && ctl.update(live()); paintSide(); };
+  window.miTint = () => {
+    const on = $('#mi-tinton', wrap).checked;
+    $('#mi-tint', wrap).disabled = !on;
+    draft.tint = on ? $('#mi-tint', wrap).value : '';
+    ctl && ctl.update(live());
+  };
+  window.miApplySize = () => {
+    const want = parseFloat($('#mi-metres', wrap).value);
+    if (!ctl || !(want > 0)) return toast('Type the real size in metres.', true);
+    const now = ctl.size()[draft.size_axis];
+    if (!(now > 0)) return toast('That dimension measures zero — try another.', true);
+    draft.scale = draft.scale * (want / now);
+    ctl.update(live());
+    paintSide();
+  };
+
+  async function save() {
+    const btn = $('#mi-confirm', wrap);
+    btn.disabled = true;
+    try {
+      m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify({
+        ...draft, measured: ctl ? ctl.measured() : m.measured, confirmed: true }) });
+      if (ctl) await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot() });
+      toast(`${m.title} confirmed`);
+      close();
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
+  }
+
+  paintSide();
+  try {
+    const S3 = await stage3d();
+    if (!document.body.contains(wrap)) return;
+    ctl = await S3.mount($('#mi-view', wrap), live(), { accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8C36A' });
+    if (!document.body.contains(wrap)) { ctl.dispose(); return; }
+    // First sight of a model: keep its measurement and a thumbnail at once,
+    // so the library card has a picture even before anyone confirms it.
+    if (!m.measured) {
+      m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify({ measured: ctl.measured() }) });
+      await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot() });
+    }
+    paintSide();
+  } catch (e) {
+    $('#mi-view', wrap).innerHTML = `<div class="empty-note" style="padding:40px">${esc(e.message || String(e))}</div>`;
+  }
+}
+
 
 route();

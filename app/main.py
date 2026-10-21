@@ -22,7 +22,7 @@ from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
 from . import settings as settings_mod
-from . import channels, ffutil, jobs, library, media, render, script_gen, store, thumbs
+from . import channels, ffutil, jobs, library, media, models3d, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import voice_cloud
 from . import intro as intro_mod
@@ -749,7 +749,7 @@ def create_project(payload: dict = Body(...)) -> dict:
     # than after: how the pictures are staged, and how often they change. Both
     # already have defaults from the channel (or Style()'s own), so this only
     # overrides them when the creator actually touched the control.
-    if payload.get("format") in ("kenburns", "essay", "board", *cuts_mod.KEYS):
+    if payload.get("format") in ("kenburns", "essay", "board", "stage", *cuts_mod.KEYS):
         project.style.format = payload["format"]
     if payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
@@ -2558,6 +2558,113 @@ def music_list() -> list[dict]:
         for p in sorted(MUSIC_DIR.iterdir())
         if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
     ]
+
+
+# ------------------------------------------------------------- 3D models
+# The shared model library (app/models3d.py) and each 3D explainer's cast.
+def _model_or_404(mid: str) -> dict:
+    try:
+        return models3d.get(mid)
+    except models3d.ModelError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.get("/api/models")
+def list_models() -> list[dict]:
+    return models3d.all_models()
+
+
+@app.post("/api/models")
+async def add_model(file: UploadFile) -> dict:
+    """A GLB into the library. Streamed to a temp file, never held in memory."""
+    if not (file.filename or "").lower().endswith(".glb"):
+        raise HTTPException(400, "Only .glb files are accepted. Most sites offer a "
+                                 "GLB download; Blender exports one as glTF Binary.")
+    fd, tmp_name = tempfile.mkstemp(suffix=".glb", dir=str(CACHE_DIR))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            shutil.copyfileobj(file.file, out, 1024 * 1024)
+        return models3d.add(tmp, file.filename or "model.glb")
+    except models3d.ModelError as exc:
+        raise HTTPException(400, str(exc))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@app.get("/api/models/{mid}")
+def get_model(mid: str) -> dict:
+    return _model_or_404(mid)
+
+
+@app.patch("/api/models/{mid}")
+def edit_model(mid: str, payload: dict = Body(default={})) -> dict:
+    _model_or_404(mid)
+    try:
+        return models3d.update(mid, payload)
+    except (models3d.ModelError, TypeError, ValueError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.delete("/api/models/{mid}")
+def delete_model(mid: str) -> dict:
+    _model_or_404(mid)
+    using = [p["title"] for p in store.list_projects() if mid in p["cast"]]
+    if using:
+        raise HTTPException(409, "Still in the cast of: " + "; ".join(using[:5])
+                            + ". Remove it from those videos first.")
+    models3d.delete(mid)
+    return {"deleted": mid}
+
+
+@app.get("/api/models/{mid}/model.glb")
+def model_file(mid: str, request: Request) -> Response:
+    try:
+        path = models3d.glb_path(mid)
+    except models3d.ModelError as exc:
+        raise HTTPException(404, str(exc))
+    return _ranged(path, request)
+
+
+@app.get("/api/models/{mid}/thumb.jpg")
+def model_thumb(mid: str) -> Response:
+    _model_or_404(mid)
+    path = models3d.thumb_path(mid)
+    if not path.is_file():
+        raise HTTPException(404, "No thumbnail yet")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/models/{mid}/thumb")
+async def set_model_thumb(mid: str, request: Request) -> dict:
+    """The browser renders the thumbnail, since it is the one with WebGL."""
+    _model_or_404(mid)
+    try:
+        models3d.set_thumb(mid, await request.body())
+    except models3d.ModelError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
+@app.post("/api/projects/{pid}/cast")
+def add_to_cast(pid: str, payload: dict = Body(...)) -> dict:
+    mid = str(payload.get("model") or "")
+    _model_or_404(mid)
+    with store.lock_for(pid):
+        p = _load(pid)
+        if not any(c.get("model") == mid for c in p.cast):
+            p.cast.append({"model": mid})
+            store.save(p)
+    return p.to_dict()
+
+
+@app.delete("/api/projects/{pid}/cast/{mid}")
+def remove_from_cast(pid: str, mid: str) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        p.cast = [c for c in p.cast if c.get("model") != mid]
+        store.save(p)
+    return p.to_dict()
 
 
 # ------------------------------------------------------------------- library
