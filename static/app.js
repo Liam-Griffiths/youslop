@@ -6896,10 +6896,29 @@ async function openModelIntake(mid) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
 
   const draft = { title: m.title, heading: m.heading || 0, scale: m.scale || 1,
-                  size_axis: m.size_axis || 'width', tint: m.tint || '', kind: m.kind || '' };
+                  size_axis: m.size_axis || 'width', tint: m.tint || '', kind: m.kind || '',
+                  regions: JSON.parse(JSON.stringify(m.regions || [])) };
+  let regionSel = -1;
   const kindNow = () => draft.kind || (m.analysis && m.analysis.kind_auto) || 'object';
   const roomAnalysis = () => (m.analysis && (kindNow() === 'interior' || kindNow() === 'set') ? m.analysis : null);
   let asking = false;
+
+  const regionsList = () => (draft.regions || []).map((r, i) => `
+    <div class="row" style="gap:6px;margin-bottom:4px">
+      <input type="text" value="${esc(r.label)}" style="flex:1;min-width:0;${i === regionSel ? 'border-color:#ffb347' : ''}"
+        oninput="miRegionLabel(${i}, this.value)" onfocus="miRegionSelect(${i})">
+      <button class="btn xs ghost danger" onclick="miRegionDelete(${i})">\u00d7</button>
+    </div>`).join('') || '<p class="mi-p">No regions yet.</p>';
+  const syncRegions = () => { if (ctl) ctl.setRegions(draft.regions, regionSel); };
+  window.miRegionAdd = () => {
+    if (!ctl) return;
+    draft.regions = [...(draft.regions || []), ctl.newRegion(`region ${(draft.regions || []).length + 1}`)];
+    regionSel = draft.regions.length - 1; syncRegions(); paintSide();
+  };
+  window.miRegionSelect = (i) => { if (regionSel === i) return; regionSel = i; syncRegions(); paintSide(); const el = $('#mi-regions', wrap).querySelectorAll('input')[i]; if (el) el.focus(); };
+  window.miRegionDelete = (i) => { draft.regions.splice(i, 1); regionSel = -1; syncRegions(); paintSide(); };
+  window.miRegionLabel = (i, v) => { if (draft.regions[i]) draft.regions[i].label = v.slice(0, 60); };
+  window.miRegionMode = (mode) => { if (ctl) ctl.regionMode(mode); };
 
   // What one size suggestion implies the scale should be (file units -> metres).
   const impliedScale = (sz) => {
@@ -6930,7 +6949,7 @@ async function openModelIntake(mid) {
     rows.push(`<p class="mi-p"><b>${esc(id.name || 'not sure')}</b> <span class="mono">(${esc(id.confidence)} confidence)</span>
       ${id.name && id.name !== draft.title ? `<button class="btn xs ghost" onclick="miUse('title')">use as title</button>` : ''}<br>${esc(id.what || '')}</p>`);
     if (id.front_view) {
-      const v = (window.Stage3D.OBJECT_VIEWS || []).find((x) => x.id === id.front_view);
+      const v = ((window.Stage3D && window.Stage3D.OBJECT_VIEWS) || []).find((x) => x.id === id.front_view);
       const want = v ? ((360 - v.az) % 360) : null;
       if (want != null) rows.push(`<p class="mi-p">Its front faces view ${esc(id.front_view)}.
         ${want !== draft.heading ? `<button class="btn xs ghost" onclick="miUse('front')">turn it to face the arrow</button>` : '\u2713 facing the arrow'}</p>`);
@@ -6950,7 +6969,7 @@ async function openModelIntake(mid) {
       ${(draft.regions || m.regions || []).some((r) => r.label === id.subject.name) ? ' \u2713 marked'
         : `<button class="btn xs ghost" onclick="miUse('subject')">mark it</button>`}</p>`);
     const parts = Object.keys(id.parts || {});
-    if (parts.length) rows.push(`<p class="mi-p">${parts.length} part names: ${esc(Object.values(id.parts).slice(0, 6).join(', '))}${parts.length > 6 ? '\u2026' : ''}
+    if (parts.length) rows.push(`<p class="mi-p">${parts.length} part names${id.parts_from_pictures ? ' (from pictures)' : ''}: ${esc(Object.values(id.parts).join(', '))}
       ${draft.parts_labels ? ' \u2713' : `<button class="btn xs ghost" onclick="miUse('parts')">use them</button>`}</p>`);
     rows.push(`<button class="btn xs ghost" onclick="miIdentify()">ask again</button>`);
     return rows.join('');
@@ -6979,6 +6998,22 @@ async function openModelIntake(mid) {
         f2.append('kind', kindNow()); f2.append('mode', 'refine');
         m = await api(`/api/models/${mid}/identify`, { method: 'POST', body: f2 });
       }
+      // An object's named parts: highlighted pictures plus where each sits,
+      // measured against the front Claude just found (or the one confirmed).
+      if (kindNow() === 'object' && (m.parts || []).length) {
+        paintSide();
+        const fv = window.Stage3D.OBJECT_VIEWS.find((x) => x.id === (m.identity || {}).front_view);
+        const heading = fv ? (360 - fv.az) % 360 : draft.heading;
+        const { sheets, table } = await ctl.partSheets(m.parts.slice(0, 24).map((p) => p.node), heading);
+        if (sheets.length) {
+          const f3 = new FormData();
+          sheets.forEach((v, i) => f3.append('views', v.blob, `parts${i}.jpg`));
+          f3.append('captions', JSON.stringify(sheets.map((v) => v.caption)));
+          f3.append('meta', JSON.stringify({ table }));
+          f3.append('kind', 'object'); f3.append('mode', 'parts');
+          m = await api(`/api/models/${mid}/identify`, { method: 'POST', body: f3 });
+        }
+      }
     } catch (e) { toast(e.message, true); }
     asking = false; paintSide();
     if (ctl) { if (roomAnalysis()) ctl.inside(m.analysis); }
@@ -7005,6 +7040,7 @@ async function openModelIntake(mid) {
       draft.regions = [...(draft.regions || m.regions || []).filter((r) => r.label !== id.subject.name),
         { label: id.subject.name, box: [[b[0], mm[1], b[1]], [b[2], mm[1] + su[1], b[3]]] }];
       if (id.north && id.north !== 'unknown') draft.north = id.north;
+      regionSel = draft.regions.length - 1; syncRegions();
     }
     if (what === 'parts') draft.parts_labels = { ...(id.parts || {}) };
     paintSide();
@@ -7066,6 +7102,18 @@ async function openModelIntake(mid) {
             onchange="miTint()"> flat colour</label>
           <input type="color" id="mi-tint" value="${esc(draft.tint || '#e8dcc2')}" oninput="miTint()"
             ${draft.tint ? '' : 'disabled'}>
+        </div>
+      </div>
+
+      <div class="mi-sec">
+        <div class="mi-h">4 \u00b7 Regions</div>
+        <p class="mi-p">Boxes around the things a shot can aim at \u2014 an engine, a doorway, a landmark.
+          ${m.parts.length ? '' : 'This model has no named parts, so regions are how its parts exist. '}Select one to move or size it.</p>
+        <div id="mi-regions">${regionsList()}</div>
+        <div class="row" style="margin-top:6px">
+          <button class="btn sm ghost" onclick="miRegionAdd()">add region</button>
+          ${regionSel >= 0 ? `<button class="btn sm ghost" onclick="miRegionMode('move')">move</button>
+            <button class="btn sm ghost" onclick="miRegionMode('size')">size</button>` : ''}
         </div>
       </div>
 
@@ -7148,6 +7196,10 @@ async function openModelIntake(mid) {
       if (roomAnalysis()) ctl.inside(m.analysis);
       await fetch(`/api/models/${mid}/thumb`, { method: 'POST', body: await ctl.snapshot(640, 360, roomAnalysis()) });
     } else if (roomAnalysis()) ctl.inside(m.analysis);
+    ctl.setRegions(draft.regions, regionSel);
+    ctl.onRegions((list) => {          // geometry from the handles, labels from the list
+      draft.regions = list.map((r, i) => ({ ...r, label: (draft.regions[i] || r).label }));
+    });
     paintSide();
   } catch (e) {
     $('#mi-view', wrap).innerHTML = `<div class="empty-note" style="padding:40px">${esc(e.message || String(e))}</div>`;

@@ -2638,6 +2638,20 @@ async def identify_model(mid: str, views: list[UploadFile], captions: str = Form
     caps += [""] * (len(images) - len(caps))
     from . import identify as identify_mod
     from starlette.concurrency import run_in_threadpool
+    if mode == "parts":
+        # Highlighted pictures of the named parts, plus where each sits.
+        table = (info or {}).get("table") or []
+        try:
+            named = await run_in_threadpool(identify_mod.name_parts, m, images, caps, table)
+        except llm_mod.LLMUnavailable as exc:
+            raise HTTPException(503, str(exc))
+        except llm_mod.LLMError as exc:
+            raise HTTPException(502, f"Claude could not name the parts: {exc}")
+        ident = dict(m.get("identity") or {})
+        ident["parts"] = {**(ident.get("parts") or {}), **named}
+        ident["parts_from_pictures"] = True
+        ident["parts_table"] = [t for t in table if isinstance(t, dict)][:24]   # the measured positions, for checking
+        return models3d.update(mid, {"identity": ident})
     if mode == "refine":
         # The closer look at a site's subject: tighten its box, nothing else.
         try:

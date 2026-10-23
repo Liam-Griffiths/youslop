@@ -169,3 +169,70 @@ export async function renderViews(renderer, inner, analysis, kind) {
     inner.updateMatrixWorld(true);
   }
 }
+
+// ------------------------------------------------------------------ parts
+// Each named part highlighted in context, six to a sheet, numbered. Paired
+// with where each part sits — measured here, relative to the model's own
+// front — because a picture alone cannot reliably say which of four engines
+// is the left inboard one, and a name that gets left and right wrong would
+// send a close-up to the wrong engine.
+const TW = 400, TH = 225, PER_SHEET = 6;
+
+export async function renderParts(renderer, inner, nodes, heading = 0) {
+  const parent = inner.parent, scene = new THREE.Scene();
+  scene.add(inner); inner.updateMatrixWorld(true);
+  const keepSize = renderer.getSize(new THREE.Vector2()), keepRatio = renderer.getPixelRatio();
+  const saved = [];
+  inner.traverse((o) => { if (o.isMesh) saved.push([o, o.material]); });
+  const ghost = new THREE.MeshBasicMaterial({ color: 0xb8c0cc, transparent: true, opacity: 0.22, depthWrite: false });
+  const hot = new THREE.MeshBasicMaterial({ color: 0xff6a00 });
+  scene.background = new THREE.Color(0x1d232a);
+  renderer.setPixelRatio(1); renderer.setSize(TW, TH, false);
+  const cam = new THREE.PerspectiveCamera(35, TW / TH, 0.01, 1e6);
+  try {
+    const box = new THREE.Box3().setFromObject(inner), c = box.getCenter(new THREE.Vector3()), half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+    const pts = points([inner], 3000), R = half.length();
+    // the model's own frame: heading turns its front to +z, so its own left is +x
+    const toOwn = (v) => v.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(heading));
+    // the model's half-width and half-length in its own frame, from its points
+    const ownHalf = pts.reduce((h, p) => { const o = toOwn(p.clone().sub(c)); h.x = Math.max(h.x, Math.abs(o.x)); h.z = Math.max(h.z, Math.abs(o.z)); return h; },
+      new THREE.Vector3());
+    const found = nodes.map((n) => ({ node: n, obj: inner.getObjectByName(n) })).filter((x) => x.obj);
+    const table = [], sheets = [];
+    for (let s = 0; s < found.length; s += PER_SHEET) {
+      const cv = document.createElement('canvas'); cv.width = TW * 2; cv.height = TH * 3;
+      const g = cv.getContext('2d'); g.fillStyle = '#1d232a'; g.fillRect(0, 0, cv.width, cv.height);
+      for (let k = 0; k < PER_SHEET && s + k < found.length; k++) {
+        const { node, obj } = found[s + k], num = s + k + 1;
+        const meshes = new Set(); obj.traverse((o) => { if (o.isMesh) meshes.add(o); });
+        saved.forEach(([o]) => { o.material = meshes.has(o) ? hot : ghost; });
+        const pb = new THREE.Box3().setFromObject(obj), pc = pb.getCenter(new THREE.Vector3());
+        const own = toOwn(pc.clone().sub(c));
+        table.push({ num, node,
+          side: +(own.x / (ownHalf.x || 1)).toFixed(2),        // + = the model's own left, - = its right
+          fore: +(own.z / (ownHalf.z || 1)).toFixed(2),        // + = toward its front
+          height: +((pc.y - box.min.y) / ((box.max.y - box.min.y) || 1)).toFixed(2) });
+        // look from the side the part is on, a little above, the whole model in frame
+        const dir = pc.clone().sub(c).setY(0);
+        const az = dir.lengthSq() > 1e-9 ? THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z)) : 35;
+        cam.up.set(0, 1, 0);
+        fit(cam, pts, { az, el: 28, fill: 0.86, sceneRadius: R });
+        renderer.render(scene, cam);
+        const x = (k % 2) * TW, y = Math.floor(k / 2) * TH;
+        g.drawImage(renderer.domElement, x, y, TW, TH);
+        g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(x + 4, y + 4, 34, 26);
+        g.fillStyle = '#fff'; g.font = 'bold 20px sans-serif'; g.fillText(String(num), x + 10, y + 24);
+        g.strokeStyle = '#000'; g.strokeRect(x + 0.5, y + 0.5, TW - 1, TH - 1);
+      }
+      sheets.push({ caption: `Parts ${s + 1}–${Math.min(s + PER_SHEET, found.length)}, each highlighted in orange in its numbered tile`,
+                    blob: await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.85)) });
+    }
+    return { sheets, table };
+  } finally {
+    saved.forEach(([o, m]) => { o.material = m; });
+    ghost.dispose(); hot.dispose();
+    renderer.setPixelRatio(keepRatio); renderer.setSize(keepSize.x, keepSize.y, false);
+    if (parent) parent.add(inner);
+    inner.updateMatrixWorld(true);
+  }
+}

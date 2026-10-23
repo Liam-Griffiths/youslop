@@ -573,6 +573,21 @@ Four checkpoints, each meant to take seconds:
     - the disagreements are flagged: the Abbey's length against its tower
       (9%), and the stylised Eiffel Tower's height against its base (71%)
 
+  - **Part names from pictures.** Each named part is highlighted in a
+    numbered tile, six to a sheet. Where it sits is measured relative to the
+    model's own front (side, fore and aft, height). Claude names parts from
+    both, and takes left and right from the measurement, never from the
+    picture. All eleven A380 parts are right, including the four engines
+    (left and right, inboard and outboard).
+- **Regions by hand.** The confirm screen has a Regions section: add,
+  select, move or size with handles (three.js `TransformControls`, now
+  vendored), rename, delete.
+  - Boxes live in the model's own file units, so they follow its scale and
+    heading.
+  - A site's subject from Claude becomes the same kind of box.
+  - For an unsplit scan, regions are how its parts exist; the Flyer's engine
+    and propellers is one.
+
   Identification lessons:
   - **Tell Claude what intake already measured** (the kind, scan or built,
     the named parts). Without it, Claude called the modelled Paris a scan and
@@ -628,9 +643,10 @@ In order. Each step ends with something you can use or watch.
    - licence handling for non-CC licences ("check the terms")
 
    The confirm screen shows what was found and the limits it implies.
-3. **Identification by Claude, per kind.** *Done* (see Status), except
-   for naming parts from highlighted pictures and drawing region boxes by
-   hand. The original scope was:
+3. **Identification by Claude, per kind.** *Done* (see Status), including
+   part names from highlighted pictures and region boxes by hand. Still
+   open: Claude *proposing* regions for an unsplit scan, rather than only a
+   site's subject. The original scope was:
    - objects: six views and highlighted parts
    - interiors: views from inside
    - sites: a gridded top view, for the subject's region and north

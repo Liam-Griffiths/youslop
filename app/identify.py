@@ -191,3 +191,37 @@ def refine(manifest: dict, image: bytes, caption: str, grid: dict) -> list[float
                                                  and gz[0] - 1e-6 <= box[1] and box[3] <= gz[1] + 1e-6):
         return None
     return box
+
+
+PARTS = """\
+These pictures show {what}, one part highlighted in orange in each numbered
+tile, with the rest of the model ghosted. Where each part sits was measured,
+relative to the model's own front:
+
+{rows}
+
+side: +1 is the model's own far left (as its driver or pilot sees it), -1
+its far right, 0 the centre line. fore: +1 is the very front, -1 the very
+back. height: 0 is the bottom, 1 the top.
+
+Name each part the way a presenter would say it on camera, and use the
+measured side for left and right — never guess it from the picture. Where
+there are several of a kind, tell them apart (e.g. "left inboard engine",
+"right outboard engine"). Leave out any part you cannot recognise.
+
+Return {{"parts": {{"<number>": "plain name", ...}}}}."""
+
+
+def name_parts(manifest: dict, images: list[bytes], captions: list[str], table: list[dict]) -> dict:
+    """Plain names for the file's named parts, from highlighted pictures plus
+    their measured positions. Returns {node name: plain name}."""
+    nodes = {p["node"] for p in manifest.get("parts") or []}
+    rows = "\n".join(
+        f"  {t['num']}. node {t['node']!r}: side {t['side']:+.2f}, fore {t['fore']:+.2f}, height {t['height']:.2f}"
+        for t in table if t.get("node") in nodes)
+    what = ((manifest.get("identity") or {}).get("name")) or manifest.get("title") or "a 3D model"
+    prompt = PARTS.format(what=what, rows=rows) + "\n\n" + "\n".join(f"Picture {i + 1}: {c}" for i, c in enumerate(captions))
+    reply = complete_json(prompt, system=SYSTEM, model=MODEL_UTILITY, timeout=240, images=images,
+                          require=lambda v: isinstance(v, dict) and isinstance(v.get("parts"), dict))
+    by_num = {str(t["num"]): t["node"] for t in table if t.get("node") in nodes}
+    return {by_num[k]: str(v)[:40] for k, v in reply["parts"].items() if k in by_num and v}

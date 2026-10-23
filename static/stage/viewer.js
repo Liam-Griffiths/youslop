@@ -5,9 +5,10 @@
 //
 // app.js is a classic script, so this hands it `window.Stage3D`.
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { THREE, loadModel, applyManifest, sizeMetres, buildSet, points, fit, boxOf } from './core.js';
 import { analyse, limitsFor, KINDS, VERSION } from './intake.js';
-import { renderViews, renderZoom, regionHeight, OBJECT_VIEWS } from './identify.js';
+import { renderViews, renderZoom, regionHeight, renderParts, OBJECT_VIEWS } from './identify.js';
 
 const PERSON_M = 1.8;
 
@@ -131,6 +132,37 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
   const ro = new ResizeObserver(resize); ro.observe(el);
   resize(); layout(); frame();
 
+  // ---- regions: boxes in the model's own file units (children of the scaler,
+  // so they scale and turn with it), moved and sized with handles. For a
+  // scan with no named parts, this is how "the engine" comes to exist.
+  const regionGroup = new THREE.Group(); model.userData.scaler.add(regionGroup);
+  const gizmo = new TransformControls(cam, renderer.domElement);
+  gizmo.setSize(0.8);
+  const gizmoHelper = gizmo.getHelper(); scene.add(gizmoHelper);
+  gizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; if (!e.value && onRegions) onRegions(readRegions()); });
+  let onRegions = null, regionMeshes = [];
+  const regionMat = (sel) => new THREE.MeshBasicMaterial({ color: sel ? 0xffb347 : accent, transparent: true, opacity: sel ? 0.28 : 0.16, depthWrite: false });
+  function readRegions() {
+    return regionMeshes.map((r) => {
+      const c = r.position, h = r.scale.clone().multiplyScalar(0.5);
+      return { label: r.userData.label, box: [[c.x - h.x, c.y - h.y, c.z - h.z], [c.x + h.x, c.y + h.y, c.z + h.z]].map((v) => v.map((n) => +n.toFixed(5))) };
+    });
+  }
+  function setRegions(list, selected = -1) {
+    gizmo.detach();
+    regionMeshes.forEach((r) => { r.geometry.dispose(); r.material.dispose(); regionGroup.remove(r); });
+    regionMeshes = (list || []).map((reg, i) => {
+      const [lo, hi] = reg.box, mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), regionMat(i === selected));
+      mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: i === selected ? 0xffb347 : accent })));
+      mesh.position.set((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+      mesh.scale.set(Math.max(1e-4, hi[0] - lo[0]), Math.max(1e-4, hi[1] - lo[1]), Math.max(1e-4, hi[2] - lo[2]));
+      mesh.userData = { label: reg.label, set: true }; mesh.renderOrder = 2;
+      mesh.traverse((o) => { o.userData.set = true; });
+      regionGroup.add(mesh); return mesh;
+    });
+    if (regionMeshes[selected]) gizmo.attach(regionMeshes[selected]);
+  }
+
   let alive = true;
   (function loop() {
     if (!alive) return;
@@ -157,11 +189,24 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
     async idViews(kind, a) { const r = await renderViews(renderer, model.userData.inner, a || {}, kind); resize(); return r; },
     async zoomView(rect) { const r = await renderZoom(renderer, model.userData.inner, rect); resize(); return r; },
     regionHeight(rect) { return regionHeight(model.userData.inner, rect); },
+    // Regions: show a list, select one for the handles, hear about edits.
+    setRegions(list, selected = -1) { setRegions(list, selected); },
+    regionMode(mode) { gizmo.setMode(mode === 'size' ? 'scale' : 'translate'); },
+    onRegions(fn) { onRegions = fn; },
+    // A starting box: a fifth of the model's size, at its middle (file units).
+    newRegion(label) {
+      const inner = model.userData.inner, b = new THREE.Box3().setFromObject(inner);
+      const inv = new THREE.Matrix4().copy(model.userData.scaler.matrixWorld).invert();
+      b.applyMatrix4(inv);
+      const c = b.getCenter(new THREE.Vector3()), h = b.getSize(new THREE.Vector3()).multiplyScalar(0.1);
+      return { label, box: [[c.x - h.x, c.y - h.y, c.z - h.z], [c.x + h.x, c.y + h.y, c.z + h.z]].map((v) => v.map((n) => +n.toFixed(5))) };
+    },
+    async partSheets(nodes, heading) { const r = await renderParts(renderer, model.userData.inner, nodes, heading); resize(); return r; },
     // A three-quarter view as a JPEG, without the helpers, for the library card.
     // A room's card is taken from inside (pass its analysis); anything else
     // from a three-quarter view outside.
     async snapshot(w = 640, h = 360, inside = null) {
-      helpers.visible = false;
+      helpers.visible = false; regionGroup.visible = false; gizmoHelper.visible = false;
       const keep = { pos: cam.position.clone(), target: controls.target.clone(), aspect: cam.aspect };
       renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
       if (!(inside && frameInside(inside))) {
@@ -171,13 +216,13 @@ async function mount(el, manifest, { accent = '#E8C36A' } = {}) {
       cam.aspect = w / h; cam.updateProjectionMatrix();
       renderer.render(scene, cam);
       const blob = await new Promise((ok) => renderer.domElement.toBlob(ok, 'image/jpeg', 0.86));
-      helpers.visible = true;
+      helpers.visible = true; regionGroup.visible = true; gizmoHelper.visible = true;
       cam.position.copy(keep.pos); controls.target.copy(keep.target);
       resize(); controls.update();
       return blob;
     },
     dispose() {
-      alive = false; ro.disconnect(); controls.dispose();
+      alive = false; ro.disconnect(); controls.dispose(); gizmo.detach(); gizmo.dispose();
       if (set) set.dispose();
       scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
