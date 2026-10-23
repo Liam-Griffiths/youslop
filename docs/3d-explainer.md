@@ -756,14 +756,37 @@ In order. Each step ends with something you can use or watch.
    move on its second candidate (99% of the wing visible; the far side
    correctly fails at 0%), and a loft establishing shot with no holes and
    the window sky told apart (the same shot fails without the window box).
-5. **The six test models become a regression suite.** One command renders
-   each model's reference shots at preview size and records:
-   - the check numbers
-   - a contact sheet
+5. **The six test models become a regression suite.** *Done.*
+   `./.venv/bin/python tests/stage/suite.py` finds the six models in the
+   library (by file name, under `YOUSLOP_DATA` like the app) and runs each
+   one's reference shots (`tests/stage/suite/cases.js`) through the solver
+   in headless Chromium:
+   - A380 orbit and left-wing push
+   - Flyer orbit and push-in
+   - the hall's 360 and a lens-shift dolly
+   - the Abbey move
+   - the Eiffel Tower orbit
+   - the loft establishing shot
 
-   A change that moves a number, or makes a sheet worse, is visible before
-   it ships. This is the 3D equivalent of the SSIM check the 2D renderer
-   already uses.
+   It writes each pick's check numbers and a contact sheet per model (first,
+   middle and last frame) to `<data>/stage-suite/latest/`, and compares
+   them with `baseline/`. A newly failing check, a newly flagged shot, or a
+   frame under 0.9 SSIM is a regression (exit 1); moved numbers and changed
+   picks are listed. `--accept` makes the last run the baseline, `--only`
+   picks models, and `--trace` saves every candidate's checks. All nine
+   shots take about 13 s.
+
+   Building it found three things the port had lost:
+   - **The motion check tracked points behind the lens.** A dolly down
+     the hall read as 20 bounces. Only points in front of the camera for
+     the whole shot are tracked now.
+   - **The detail budget was absolute.** It is priced again: up to
+     `detailMax` (3.5 for the Abbey) is allowed, costs, and is reported
+     as `softer`.
+   - **The Abbey needs the aim slide.** No bearing, lens or framing hid
+     the tile's irregular edge until the aim could slide toward the
+     tile's middle. The pick is a 24° lens, tight, slid 12%: 0.16% edge at
+     2.8 px per texel, candidate 641 of 1,944, in 10 s.
 6. **Renderer integration.**
    - A render page served by the app, which posts frames to a FastAPI
      endpoint and on into `ffutil`'s GPU encode.

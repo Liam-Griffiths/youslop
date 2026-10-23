@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Stage suite</title>
+<style>body { margin: 0; background: #111; }</style>
+<script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.js","three/addons/":"/static/vendor/three/addons/"}}</script>
+<script>
+  // The page reports its own errors: a dead page must not look like a slow one.
+  const post = (p, o) => fetch(p, { method: 'POST', body: typeof o === 'string' ? o : JSON.stringify(o) });
+  const fail = (m) => post('/error', { error: String(m) }).then(() => post('/done', {}));
+  addEventListener('error', (e) => fail(`${e.message} @${e.filename}:${e.lineno}`));
+  addEventListener('unhandledrejection', (e) => fail((e.reason && e.reason.stack) || e.reason));
+</script>
+<script type="module" src="/tests/stage/suite/page.js"></script>

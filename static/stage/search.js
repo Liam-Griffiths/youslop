@@ -78,9 +78,15 @@ export function checkShot(shot, ctx, quick = false) {
   if (!quick) note('motion', C.motion(shot, sub.pts, { fps, aspect }), 100);
   if (L.has('level_camera')) note('level', C.level(shot, { fps }), 100);
   if (L.has('no_low_angles')) note('look_down', C.lookDown(shot, { fps }), 50);
+  // The detail budget is priced, not absolute: up to `detailMax` pixels per
+  // texel is allowed (an aerial scan may need 3.5), but anything over the
+  // ideal costs, and the report says the shot is softer than ideal.
   if (ctx.texels) {
     const d = C.detail(shot, sub.centre, sub.reach || 0, ctx.texels, { fps, outH: ctx.outH || 1080 });
-    note('detail', d, Math.max(0, d.px_per_texel - C.LIMITS.detail_px) * 10);
+    const over = Math.max(0, d.px_per_texel - C.LIMITS.detail_px);
+    d.ok = d.px_per_texel <= (ctx.detailMax ?? C.LIMITS.detail_px);
+    if (d.ok && over) { d.softer = true; score += over * 10; }
+    note('detail', d, 10 + over * 10);
   }
   if (L.has('edge') && !L.has('no_low_angles') && ctx.rect) {
     const h = C.haze(shot, ctx.rect, sub.centre, sub.reach || 0, { allowed: ctx.hazeAllowed ?? 0.1, fps, aspect });

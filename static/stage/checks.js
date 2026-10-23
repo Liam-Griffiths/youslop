@@ -33,17 +33,24 @@ export function reversals(series) {
 // screen, change direction more than once on any axis, and does the view
 // ever turn faster than a viewer can follow? The subject is the shot's own,
 // not the whole scene — a pass over a building should track the building.
+// Only subject points in front of the lens for the whole shot are tracked: a
+// point that passes behind the camera (a room's near wall during a dolly)
+// projects to wild screen positions and reads as a bounce that isn't there.
 export function motion(shot, subjectPts, { fps = FPS, aspect = 16 / 9 } = {}) {
   const cam = camFor(aspect), N = frameCount(shot, fps);
-  const sample = subjectPts.filter((_, i) => i % Math.max(1, Math.floor(subjectPts.length / 200)) === 0);
-  const rows = [], v = new THREE.Vector3();
+  let sample = subjectPts.filter((_, i) => i % Math.max(1, Math.floor(subjectPts.length / 200)) === 0);
+  const views = [], v = new THREE.Vector3();
   for (let i = 0; i < N; i++) {
     applyPose(cam, poseAt(shot, i, fps), { W: 1000 * aspect, H: 1000 });
-    const dir = cam.getWorldDirection(new THREE.Vector3());
-    let sx = 0, sy = 0;
-    for (const p of sample) { v.copy(p).project(cam); sx += v.x; sy += v.y; }
-    rows.push({ pos: cam.position.clone(), dir, sx: sx / (sample.length || 1), sy: sy / (sample.length || 1) });
+    views.push({ pos: cam.position.clone(), dir: cam.getWorldDirection(new THREE.Vector3()),
+                 view: cam.matrixWorldInverse.clone(), proj: cam.projectionMatrix.clone(), near: cam.near });
   }
+  if (shot.kind !== 'turn') sample = sample.filter((p) => views.every((f) => v.copy(p).applyMatrix4(f.view).z < -f.near));
+  const rows = views.map((f) => {
+    let sx = 0, sy = 0;
+    for (const p of sample) { v.copy(p).applyMatrix4(f.view).applyMatrix4(f.proj); sx += v.x; sy += v.y; }
+    return { pos: f.pos, dir: f.dir, sx: sx / (sample.length || 1), sy: sy / (sample.length || 1) };
+  });
   const turn = rows.slice(1).map((r, i) => deg(r.dir.angleTo(rows[i].dir)) * fps);
   const rev = {
     cam_x: reversals(rows.map((r) => r.pos.x)), cam_y: reversals(rows.map((r) => r.pos.y)),

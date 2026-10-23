@@ -122,3 +122,21 @@ test('points samples meshes and skips set dressing', () => {
   const pts = points([g]);
   assert.ok(pts.length > 0 && pts.every((p) => Math.abs(p.x) <= 1.0001));
 });
+
+test('a dolly through a room is not a bounce: points that pass behind the lens are not tracked', () => {
+  // A room 20 m long; the camera dollies 6 m along it, looking down its length.
+  const room = cloud(3000, 12, 4, 20);
+  const shot = { kind: 'path', secs: 8, fov: 48, p0: [0, 1.6, 4], p1: [0, 1.6, -2], a0: [0, 1.6, -20], a1: [0, 1.6, -26] };
+  const m = C.motion(shot, room);
+  assert.ok(m.ok, JSON.stringify(m.reversals));
+});
+
+test('the detail budget is priced: softer than ideal is allowed up to detailMax, and costs', () => {
+  const tpm = 3.5, fov = 35, near = C.nearestFor(fov, tpm, 3);       // 3 px per texel at the closest
+  const shot = { kind: 'still', secs: 2, fov, pos: [0, 0, near], aim: [0, 0, 0] };
+  const ctx = (detailMax) => ({ subject: { pts: [V(0, 0, 0)], centre: V(0, 0, 0), reach: 0, whole: false }, texels: tpm, detailMax });
+  const strict = checkShot(shot, ctx(undefined)), priced = checkShot(shot, ctx(3.5));
+  assert.deepEqual(strict.failed, ['detail']);
+  assert.ok(priced.ok && priced.checks.detail.softer);
+  assert.ok(priced.score > 0, 'softer than ideal still costs');
+});
