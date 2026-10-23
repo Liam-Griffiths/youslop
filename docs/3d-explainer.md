@@ -29,6 +29,76 @@ how big the thing really is, and where its parts are. So the models are
 found and *understood* before a word of the script is written, and the
 writer is told what can be shown.
 
+## Creating a video: the order of operations
+
+**Story, then cast, then words.**
+
+- **The story (outline) is cheap and changeable.** Claude writes it in a
+  minute.
+- **The cast is slow and human.** Finding and confirming models can take
+  days.
+- **The script depends on the cast.** It can only describe what the models
+  can show.
+
+So the cast is chosen from the story, and the script waits for the cast.
+
+**What the creator sees:**
+
+1. **New video:** the idea, **3D explainer**, the length. Optionally pick
+   models already in the library ("make it about these"), or paste a
+   script.
+2. **The brief** (*Plan the story and cast*, about 30 s): research, an
+   outline, and a proposed **cast**. The video opens on the **Cast** tab.
+   - The story is at the top: title, thesis, numbered chapters.
+   - The subjects are below, each with its role (hero, comparison,
+     supporting, cameo), its chapters and why it is there.
+   - Each subject is *ready* (a confirmed model), *needs a model*, or
+     *photos instead*.
+   - Library models are matched to subjects automatically.
+   - Subjects can be added, renamed, removed, or proposed again (subjects
+     that already have a model are kept).
+3. **Gather the cast, in the creator's own time.**
+   - Pick a library model for a subject, or upload a GLB onto it. Intake
+     and *Ask Claude* then run on it and it is confirmed.
+   - The tab shows "2 of 3 ready".
+4. **Write the script.** It can always be pressed; with gaps it warns
+   first.
+   - The writer continues from the saved draft (no new research or
+     outline) and is told each model's real size, parts, regions and
+     limits.
+   - Each paragraph's visual becomes a stage direction:
+     - `3D: <subject> — <whole or a listed part> — <shot>`
+     - or `PHOTO: …` for anything no model carries
+5. **Record**, then **Stage** (shots), **Media** (pictures for the photo
+   beats), **Render**.
+
+The three ways in all end at step 3:
+
+- **Idea first.**
+- **Models first:** the chosen models arrive as heroes, and the brief is
+  built around them.
+- **Script first:** the cast is pulled from the pasted script, and the script
+  is not rewritten.
+
+**Changing the cast later:** a removed or swapped model should flag the
+paragraphs that use it, with a one-click rewrite of just those paragraphs.
+This is not built yet.
+
+**Tested end to end** with *"How did we get from the Wright Flyer to the
+A380?"*, with the Flyer chosen first:
+
+- **The brief (34 s):** six chapters, from "Twelve Seconds, 1903" to "Where
+  Size Stopped". The cast:
+  - the Flyer: the creator's pick
+  - the A380: matched from the library
+  - the DC-3 and the 747: proposed
+- **The script (46 s):** 16 paragraphs.
+  - The 3D beats use only real parts and regions: the Flyer's hand-drawn
+    "engine and propellers" region, the A380's "left wing", and the Flyer
+    under the A380's wing at true scale.
+  - The DC-3 (set to photos), the 747 (no model yet) and subjects never in
+    the cast (the Comet, the Junkers J 1) became `PHOTO:` beats.
+
 ## The pipeline
 
 Worked example: the idea *"From the Wright Flyer to the A380"*.

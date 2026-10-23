@@ -22,6 +22,7 @@ from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
 from . import settings as settings_mod
+from . import cast as cast_mod
 from . import channels, ffutil, jobs, library, media, models3d, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import voice_cloud
@@ -753,6 +754,17 @@ def create_project(payload: dict = Body(...)) -> dict:
         project.style.format = payload["format"]
     if payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
+    # Models first: models the creator picked on the form are in the cast
+    # before the story is planned, and the brief is built around them.
+    if project.style.format == "stage":
+        for mid in (payload.get("models") or [])[:8]:
+            try:
+                m = models3d.get(str(mid))
+            except models3d.ModelError:
+                continue
+            project.cast.append({"id": "s" + m["id"][1:7], "subject": cast_mod.model_name(m),
+                                 "role": "hero", "why": "chosen by the creator", "chapters": [],
+                                 "model": m["id"], "mode": "model"})
     store.save(project)
     if script:
         (project_dir(project.id) / "source.txt").write_text(script, encoding="utf-8")
@@ -761,6 +773,22 @@ def create_project(payload: dict = Body(...)) -> dict:
         with store.lock_for(project.id):
             p = store.load(project.id)
             src = project_dir(p.id) / "source.txt"
+            if p.style.format == "stage":
+                # A 3D explainer is made story, then cast, then words: stop
+                # after the brief. The script is written from the same draft
+                # once the cast is gathered (docs/3d-explainer.md).
+                text = src.read_text(encoding="utf-8") if p.has_source and src.exists() else ""
+                if text:
+                    script_gen.import_script(p, text, p.fidelity, progress)
+                    store.log(p, f"Script imported: {len(p.slides)} paragraphs")
+                else:
+                    script_gen.brief(p, progress, lambda: store.save(p))
+                    store.log(p, f"Brief written: {len((p.outline or {}).get('sections', []))} chapters")
+                store.save(p)
+                p.cast = cast_mod.propose(p, progress, source_text=text)
+                p.status = "casting" if not text else p.status
+                store.save(p)
+                return {"slides": len(p.slides), "cast": len(p.cast)}
             if p.has_source and src.exists():
                 script_gen.import_script(p, src.read_text(encoding="utf-8"),
                                          p.fidelity, progress)
@@ -773,7 +801,8 @@ def create_project(payload: dict = Body(...)) -> dict:
             store.save(p)
         return {"slides": len(p.slides)}
 
-    jid = jobs.start("import" if script else "script", project.id, work)
+    jid = jobs.start("import" if script else ("brief" if project.style.format == "stage" else "script"),
+                     project.id, work)
     return {"project": project.to_dict(), "job": jid}
 
 
@@ -783,6 +812,9 @@ def get_project(pid: str) -> dict:
     d = p.to_dict()
     d["jobs"] = [{"id": j["id"], "kind": j["kind"]} for j in jobs.active_for(pid)]
     d["youtube"] = youtube_mod.status(p.channel_id) if p.channel_id else {"connected": False}
+    if p.style.format == "stage":
+        d["cast"] = cast_mod.subjects(p)
+        d["cast_summary"] = cast_mod.summary(p)
     return d
 
 
@@ -969,8 +1001,9 @@ def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
             # `fresh` throws that away and writes the script from the top.
             script_gen.generate(p, progress, lambda: store.save(p), fresh=fresh)
             store.save(p)
-            media.gather(p, progress)
-            store.save(p)
+            if p.style.format != "stage":      # a 3D explainer's pictures come from its shots
+                media.gather(p, progress)
+                store.save(p)
         return {"slides": len(p.slides)}
 
     return {"job": jobs.start("script", pid, work)}
@@ -2707,23 +2740,75 @@ async def set_model_thumb(mid: str, request: Request) -> dict:
 
 @app.post("/api/projects/{pid}/cast")
 def add_to_cast(pid: str, payload: dict = Body(...)) -> dict:
-    mid = str(payload.get("model") or "")
-    _model_or_404(mid)
+    """Add a subject: {"subject": name}, or {"model": id} for a library model
+    playing itself."""
     with store.lock_for(pid):
         p = _load(pid)
-        if not any(c.get("model") == mid for c in p.cast):
-            p.cast.append({"model": mid})
-            store.save(p)
-    return p.to_dict()
-
-
-@app.delete("/api/projects/{pid}/cast/{mid}")
-def remove_from_cast(pid: str, mid: str) -> dict:
-    with store.lock_for(pid):
-        p = _load(pid)
-        p.cast = [c for c in p.cast if c.get("model") != mid]
+        subs = cast_mod.subjects(p)
+        mid = str(payload.get("model") or "")
+        if mid:
+            m = _model_or_404(mid)
+            if not any(x["model"] == mid for x in subs):
+                subs.append(cast_mod.clean_subject({"subject": cast_mod.model_name(m), "model": mid,
+                                                    "role": "supporting"}, 99))
+        else:
+            new = cast_mod.clean_subject({"subject": payload.get("subject"), "role": payload.get("role")}, 99)
+            if not new:
+                raise HTTPException(400, "Name the subject.")
+            subs.append(new)
+        p.cast = subs
         store.save(p)
-    return p.to_dict()
+    return get_project(pid)
+
+
+@app.patch("/api/projects/{pid}/cast/{sid}")
+def edit_cast(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Rename a subject, change its role, give it a model, or say "photos instead"."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        subs = cast_mod.subjects(p)
+        s = next((x for x in subs if x["id"] == sid), None)
+        if not s:
+            raise HTTPException(404, "No such subject")
+        if "model" in payload:
+            mid = str(payload.get("model") or "")
+            if mid:
+                _model_or_404(mid)
+            s["model"] = mid
+            if mid:
+                s["mode"] = "model"
+        for k in ("subject", "role", "why", "mode"):
+            if k in payload:
+                s[k] = payload[k]
+        sections = len((p.outline or {}).get("sections") or [])
+        p.cast = [cast_mod.clean_subject(x, sections or 99) or x for x in subs]
+        store.save(p)
+    return get_project(pid)
+
+
+@app.delete("/api/projects/{pid}/cast/{sid}")
+def remove_from_cast(pid: str, sid: str) -> dict:
+    """Drop a subject (by its id, or by the model playing it)."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        p.cast = [x for x in cast_mod.subjects(p) if x["id"] != sid and x["model"] != sid]
+        store.save(p)
+    return get_project(pid)
+
+
+@app.post("/api/projects/{pid}/cast/propose")
+def repropose_cast(pid: str) -> dict:
+    """Ask again for the cast; subjects with a model already chosen are kept."""
+    _load(pid)
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            p.cast = cast_mod.propose(p, progress)
+            store.save(p)
+        return {"cast": len(p.cast)}
+
+    return {"job": jobs.start("cast", pid, work)}
 
 
 # ------------------------------------------------------------------- library

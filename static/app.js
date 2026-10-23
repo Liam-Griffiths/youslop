@@ -321,7 +321,7 @@ async function route() {
     await renderLibrary();
   } else if (proj) {
     state.channel = null;
-    state.tab = proj[2] || 'script';
+    state.tab = proj[2] || '';          // render() picks the default: Cast first for a 3D explainer
     if (!state.thumbStyles) {
       try { state.thumbStyles = await api('/api/thumbs/templates'); }
       catch { state.thumbStyles = []; }
@@ -596,6 +596,7 @@ async function renderHome() {
 
       <label class="field"><span>Video style</span></label>
       ${formatPicker(state.newFormat || 'kenburns', '#E8C36A', 'pickNewFormat')}
+      <div id="newmodels">${newModelsPicker()}</div>
 
       <label class="field">
         <span id="everyLabel">${pictureEveryLabel(state.newPictureEvery || 1)}</span>
@@ -609,7 +610,7 @@ async function renderHome() {
 
       <div class="row">
         <button class="btn primary" onclick="createProject()">
-          ${state.mode === 'script' ? 'Break it into a video' : 'Write the script'}</button>
+          ${isStage(state.newFormat) ? 'Plan the story and cast' : state.mode === 'script' ? 'Break it into a video' : 'Write the script'}</button>
         <span class="mono" style="color:var(--ink-faint)">takes 1–3 minutes</span>
       </div>
     </div>
@@ -999,15 +1000,17 @@ async function createProject() {
     if (body.idea.length < 8) return toast('Give me a sentence or two to work with.', true);
     body.target_minutes = +$('#mins').value;
   }
+  if (isStage(body.format)) body.models = state.newModels || [];
 
   const btn = event.target;
   btn.disabled = true;
   try {
     const r = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
     state.project = r.project;
-    go(`#/p/${r.project.id}`);
+    const stage = isStage(body.format);
+    go(`#/p/${r.project.id}${stage ? '/cast' : ''}`);
     await route();
-    watchJob(r.job, scripting ? 'import' : 'script');
+    watchJob(r.job, stage ? 'brief' : scripting ? 'import' : 'script');
   } catch (e) { toast(e.message, true); btn.disabled = false; }
 }
 
@@ -1340,8 +1343,35 @@ async function deleteSlideStyle(id) {
 // updates state and repaints the strip in place — the surrounding idea/script
 // textarea must not be touched, or a half-typed idea would vanish under the
 // user's cursor.
+// A 3D explainer can start from models already in the library ("make it
+// about these"): they join the cast before the story is planned.
+function newModelsPicker() {
+  if (!isStage(state.newFormat)) return '';
+  const models = state.models || [];
+  if (!state.models) {
+    api('/api/models').then((m) => { state.models = m; const el = $('#newmodels'); if (el) el.innerHTML = newModelsPicker(); }).catch(() => {});
+  }
+  const picked = state.newModels || [];
+  return `<label class="field"><span>Start from models you have (optional)</span></label>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin:-4px 0 14px">
+      ${models.map((m) => `<button class="btn xs ${picked.includes(m.id) ? 'primary' : 'ghost'}"
+          onclick="toggleNewModel('${m.id}')">${esc(m.identity && m.identity.name || m.title)}</button>`).join('')
+        || '<span class="mono" style="color:var(--ink-faint)">no models in the library yet</span>'}
+    </div>
+    <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
+      A 3D explainer is made story, then cast, then words: this plans the story
+      and proposes the models it needs. The script is written once they are gathered.</div>`;
+}
+function toggleNewModel(id) {
+  const picked = new Set(state.newModels || []);
+  picked.has(id) ? picked.delete(id) : picked.add(id);
+  state.newModels = [...picked];
+  $('#newmodels').innerHTML = newModelsPicker();
+}
+
 function pickNewFormat(key) {
   state.newFormat = key;
+  const nm = $('#newmodels'); if (nm) nm.innerHTML = newModelsPicker();
   const strip = $('#fmtpicker');
   if (!strip) return;
   strip.querySelectorAll('.tpl').forEach((el) =>
@@ -2391,10 +2421,12 @@ function render() {
   // Media, which it still uses for the pictures and slides between 3D shots
   // (docs/3d-explainer.md). Other formats never see it.
   const stage = isStage(p.style.format);
+  if (!state.tab) state.tab = stage ? 'cast' : 'script';
   if (!stage && state.tab === 'cast') state.tab = 'script';
+  // Story, then cast, then words: a 3D explainer's Cast tab comes first.
   const tabs = [
+    ...(stage ? [['cast', 'Cast', p.cast_summary ? `${p.cast_summary.ready}/${p.cast_summary.subjects - p.cast_summary.photos}` : (p.cast || []).length]] : []),
     ['script', 'Script', total],
-    ...(stage ? [['cast', 'Cast', (p.cast || []).length]] : []),
     ['media', 'Media', p.slides.filter((s) => s.chosen_id).length],
     ['record', 'Record', `${recorded}/${total}`],
     ['thumb', 'Thumbnail', p.thumb && p.thumb.image ? '✓' : ''],
@@ -2446,6 +2478,18 @@ function paintScript() {
     const draft = p.draft || {};
     const written = Object.keys(draft.sections || {}).length;
     const total = (draft.outline && (draft.outline.sections || []).length) || 0;
+    if (isStage(p.style.format) && !written) {
+      // Story, then cast, then words: the script waits for the cast.
+      const outline = p.outline || draft.outline || {};
+      $('#tabbody').innerHTML = `<div class="empty-note">
+          <strong>${esc(outline.title || p.idea.slice(0, 80))}</strong><br>
+          ${(outline.sections || []).map((c, i) => `${i}. ${esc(c.heading || '')}`).join('<br>')}<br><br>
+          The script is written after the cast is gathered, so it only describes what the models can show.<br><br>
+          <button class="btn sm primary" onclick="go('#/p/${p.id}/cast')">gather the cast</button>
+          <button class="btn sm ghost" onclick="castWrite()">write it now</button>
+        </div>`;
+      return;
+    }
     $('#tabbody').innerHTML = written
       ? `<div class="empty-note">
            <strong>An unfinished draft is waiting.</strong><br>
@@ -6762,69 +6806,142 @@ async function deleteModel(mid) {
   } catch (e) { toast(e.message, true); }
 }
 
-function refreshModelViews() {
+async function refreshModelViews() {
   if ($('#models3d')) paintModelLibrary();
-  if (state.project && state.tab === 'cast') render();
+  if (state.project && state.tab === 'cast') {
+    // a model just confirmed changes the cast's "ready" count: fetch it fresh
+    try { state.project = await api(`/api/projects/${state.project.id}`); } catch { /* keep what we have */ }
+    render();
+  }
 }
 
 // ---------------------------------------------------------------- the cast
+// Story, then cast, then words (docs/3d-explainer.md, "Creating a video").
+// The brief proposes the subjects the story needs; here the creator gives
+// each a model — from the library, or uploaded — or says "photos instead",
+// in their own time; then writes the script, which is told what the models
+// can show.
 async function paintCast() {
   const p = state.project, body = $('#tabbody');
   let models = [];
   try { models = await api('/api/models'); } catch (e) { toast(e.message, true); }
   state.models = models;
   const byId = Object.fromEntries(models.map((m) => [m.id, m]));
-  const cast = (p.cast || []).map((c) => byId[c.model] || { id: c.model, missing: true });
-  const spare = models.filter((m) => !(p.cast || []).some((c) => c.model === m.id));
-  const unconfirmed = cast.filter((m) => !m.missing && !m.confirmed).length;
+  const subs = p.cast || [], sum = p.cast_summary || { subjects: 0, ready: 0, photos: 0, needing: [] };
+  const outline = p.outline || (p.draft && p.draft.outline) || {};
+  const chapters = outline.sections || [];
+  const planning = (p.jobs || []).some((j) => j.kind === 'brief' || j.kind === 'cast') && !subs.length;
+  const used = new Set(subs.map((x) => x.model).filter(Boolean));
+  const roleSel = (x) => `<select onchange="castEdit('${x.id}', {role: this.value})" style="width:auto">
+      ${['hero', 'comparison', 'supporting', 'cameo'].map((r) => `<option ${r === x.role ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
+  const slot = (x) => {
+    if (x.mode === 'photos') return `<span class="pill">photos and cards instead</span>
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'model'})">use a model</button>`;
+    const m = x.model && byId[x.model];
+    if (m) return `<img src="/api/models/${m.id}/thumb.jpg?v=${Math.round(m.thumb_at || 0)}" style="width:96px;height:54px;object-fit:cover;border-radius:5px" onerror="this.style.opacity=0">
+      <span>${esc(m.identity && m.identity.name || m.title)}</span>
+      ${m.confirmed ? '<span class="pill on">ready</span>' : '<span class="pill warn">needs confirming</span>'}
+      <button class="btn xs ${m.confirmed ? 'ghost' : 'primary'}" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {model: ''})">unlink</button>`;
+    const spare = models.filter((mm) => !used.has(mm.id));
+    return `<span class="pill warn">needs a model</span>
+      ${spare.length ? `<select onchange="if(this.value) castEdit('${x.id}', {model: this.value})" style="width:auto">
+        <option value="">from the library…</option>${spare.map((mm) => `<option value="${mm.id}">${esc(mm.identity && mm.identity.name || mm.title)}</option>`).join('')}</select>` : ''}
+      <label class="btn xs" style="cursor:pointer">upload .glb
+        <input type="file" accept=".glb,model/gltf-binary" hidden onchange="uploadForSubject('${x.id}', this.files[0]);this.value=''"></label>
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'photos'})">photos instead</button>`;
+  };
+  const gaps = sum.needing.length, unconfirmed = subs.filter((x) => x.mode === 'model' && x.model && byId[x.model] && !byId[x.model].confirmed).length;
   body.innerHTML = `
-    <div class="card" style="margin-bottom:22px">
-      <h3>Cast</h3>
-      <p class="mono" style="color:var(--ink-faint);margin:-4px 0 14px">
-        The models this video can put on stage. The camera is only as good as
-        what it knows about them, so each is confirmed once — front and true
-        size — before the script is written around it.</p>
-      ${unconfirmed ? `<p class="pill warn" style="display:inline-block;margin-bottom:12px">
-        ${unconfirmed} model${unconfirmed === 1 ? '' : 's'} still to confirm</p>` : ''}
-      <div class="lib-grid">
-        ${cast.map((m) => m.missing
-          ? `<div class="lib-card"><div class="lib-body">
-              <div class="lib-title">missing model</div>
-              <div class="lib-meta">deleted from the library</div>
-              <button class="btn xs ghost danger" onclick="removeFromCast('${esc(m.id)}')">remove</button>
-            </div></div>`
-          : modelCard(m, `
-            <button class="btn xs ${m.confirmed ? 'ghost' : 'primary'}" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
-            <button class="btn xs ghost danger" onclick="removeFromCast('${m.id}')">remove</button>`)).join('')
-          || '<div class="empty-note">No models in this video yet. Add one below.</div>'}
+    <div class="card" style="margin-bottom:18px">
+      <h3>${esc(outline.title || p.title || p.idea.slice(0, 80))}</h3>
+      ${outline.thesis ? `<p class="mi-p" style="font-size:13.5px">${esc(outline.thesis)}</p>` : ''}
+      ${chapters.length ? `<ol class="cast-chapters" start="0">${chapters.map((c) => `<li>${esc(c.heading || '')}</li>`).join('')}</ol>`
+        : planning ? '<p class="mi-p">Researching and outlining the story…</p>' : ''}
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="row" style="margin-bottom:6px">
+        <h3 style="margin:0">Cast</h3><div class="spacer"></div>
+        ${subs.length ? `<span class="mono" style="color:var(--ink-faint)">${sum.ready} of ${sum.subjects - sum.photos} ready${sum.photos ? ` · ${sum.photos} photos only` : ''}</span>` : ''}
+      </div>
+      <p class="mono" style="color:var(--ink-faint);margin:0 0 12px">
+        The subjects this story needs as 3D models. Give each one a model, in
+        your own time, or say photos instead. The script is written once
+        they are gathered, and only describes what the models can show.</p>
+      ${planning ? '<div class="empty-note">Planning the cast…</div>' : subs.map((x) => `
+        <div class="cast-row">
+          <div class="cast-head">
+            <input type="text" value="${esc(x.subject)}" onchange="castEdit('${x.id}', {subject: this.value})">
+            ${roleSel(x)}
+            ${(x.chapters || []).map((c) => `<span class="pill" title="${esc((chapters[c] || {}).heading || '')}">ch ${c}</span>`).join('')}
+            <div class="spacer"></div>
+            <button class="btn xs ghost danger" onclick="castRemove('${x.id}')">×</button>
+          </div>
+          ${x.why ? `<div class="mi-p">${esc(x.why)}</div>` : ''}
+          <div class="row cast-slot">${slot(x)}</div>
+        </div>`).join('') || '<div class="empty-note">No subjects yet.</div>'}
+      <div class="row" style="margin-top:12px">
+        <input type="text" id="newsubject" placeholder="add a subject, e.g. Concorde" style="flex:1;min-width:200px"
+          onkeydown="if(event.key==='Enter') castAdd()">
+        <button class="btn sm ghost" onclick="castAdd()">add</button>
+        <button class="btn sm ghost" onclick="castPropose()" title="ask again; subjects with a model are kept">propose again</button>
       </div>
     </div>
     <div class="card">
-      <h3>Add a model</h3>
-      <div class="row" style="margin-bottom:14px">
-        <label class="btn sm primary" style="cursor:pointer">upload a .glb
-          <input type="file" accept=".glb,model/gltf-binary" hidden
-            onchange="uploadModel(this.files[0], true);this.value=''"></label>
-        <span class="mono" style="color:var(--ink-faint)">it goes into the library too, for other videos</span>
-      </div>
-      ${spare.length ? `<div class="lib-grid">${spare.map((m) => modelCard(m,
-          `<button class="btn xs" onclick="addToCast('${m.id}')">add to this video</button>`)).join('')}</div>`
-        : '<div class="empty-note">Every model in the library is already in this video.</div>'}
+      ${p.slides.length
+        ? `<div class="row"><span>The script is written (${p.slides.length} paragraphs).</span><div class="spacer"></div>
+            <button class="btn sm ghost" onclick="go('#/p/${p.id}/script')">go to the script</button></div>`
+        : `<div class="row"><button class="btn primary" onclick="castWrite()" ${planning || !subs.length ? 'disabled' : ''}>Write the script</button>
+            <span class="mono" style="color:var(--ink-faint)">${gaps || unconfirmed
+              ? `${gaps ? `${gaps} subject${gaps === 1 ? '' : 's'} without a model` : ''}${gaps && unconfirmed ? ' · ' : ''}${unconfirmed ? `${unconfirmed} to confirm` : ''} — you can still write it`
+              : 'every subject is ready'}</span></div>`}
     </div>`;
 }
 
-async function addToCast(mid) {
+async function castEdit(sid, patch) {
   try {
-    state.project = await api(`/api/projects/${state.project.id}/cast`,
-      { method: 'POST', body: JSON.stringify({ model: mid }) });
+    state.project = await api(`/api/projects/${state.project.id}/cast/${sid}`, { method: 'PATCH', body: JSON.stringify(patch) });
     render();
   } catch (e) { toast(e.message, true); }
 }
-
-async function removeFromCast(mid) {
+async function castRemove(sid) {
+  try { state.project = await api(`/api/projects/${state.project.id}/cast/${sid}`, { method: 'DELETE' }); render(); }
+  catch (e) { toast(e.message, true); }
+}
+async function castAdd() {
+  const name = ($('#newsubject').value || '').trim();
+  if (!name) return;
   try {
-    state.project = await api(`/api/projects/${state.project.id}/cast/${mid}`, { method: 'DELETE' });
+    state.project = await api(`/api/projects/${state.project.id}/cast`, { method: 'POST', body: JSON.stringify({ subject: name }) });
     render();
+  } catch (e) { toast(e.message, true); }
+}
+async function castPropose() {
+  try { const r = await api(`/api/projects/${state.project.id}/cast/propose`, { method: 'POST' }); watchJob(r.job, 'cast'); }
+  catch (e) { toast(e.message, true); }
+}
+async function uploadForSubject(sid, file) {
+  if (!file) return;
+  if (!/\.glb$/i.test(file.name)) return toast('Only .glb files can be added.', true);
+  toast(`Adding ${file.name}…`);
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const m = await api('/api/models', { method: 'POST', body: fd });
+    state.project = await api(`/api/projects/${state.project.id}/cast/${sid}`, { method: 'PATCH', body: JSON.stringify({ model: m.id }) });
+    render();
+    openModelIntake(m.id);          // understood straight away
+  } catch (e) { toast(e.message, true); }
+}
+// Writing with gaps is allowed: subjects without a model are written as
+// photo-and-card beats. It says so first.
+async function castWrite() {
+  const sum = state.project.cast_summary || { needing: [] };
+  if (sum.needing.length && !confirm(`${sum.needing.join(', ')} ${sum.needing.length === 1 ? 'has' : 'have'} no model yet, `
+      + 'so the script will show them with photos and cards. Write it anyway?')) return;
+  try {
+    const r = await api(`/api/projects/${state.project.id}/script`, { method: 'POST', body: '{}' });
+    go(`#/p/${state.project.id}/script`);
+    watchJob(r.job, 'script');
   } catch (e) { toast(e.message, true); }
 }
 

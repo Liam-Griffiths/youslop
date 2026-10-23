@@ -266,6 +266,12 @@ def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
 
     facts = _facts_block(project.research)
     facts_section = f"\n{facts}\n" if facts else ""
+    # A 3D explainer's writer is told what its models can show (app/cast.py).
+    from . import cast as cast_mod
+    cast_block = cast_mod.digest(project)
+    if cast_block:
+        facts_section += f"\n{cast_block}\n"
+    visual_note = cast_mod.visual_rule(project)
     prompt = f"""Write the narration for one section of a video.
 
 VIDEO: {outline.get('title')}
@@ -290,9 +296,7 @@ Rules:
 - Each paragraph is one continuous spoken thought the narrator reads in one take.
 - Paragraphs must flow into each other as continuous prose. Do not start every \
 paragraph with the subject's name.
-- The "visual" must be something that plausibly exists as a photograph, painting, \
-map, document or stock clip. Prefer specific archival material ("Chandrasekhar as a \
-student at Trinity College, 1930s") over abstractions ("a symbol of ambition").
+- {visual_note or 'The "visual" must be something that plausibly exists as a photograph, painting, map, document or stock clip. Prefer specific archival material ("Chandrasekhar as a student at Trinity College, 1930s") over abstractions ("a symbol of ambition").'}
 - Write only spoken words in "text". No stage directions, no headings, no markdown."""
 
     reply = complete_json(
@@ -748,13 +752,13 @@ Return JSON: a list of objects, one per paragraph that has a problem:
 
 
 # ------------------------------------------------------------------ full build
-def generate(project: Project, progress: Progress = lambda m: None,
-             checkpoint: Callable[[], None] = lambda: None,
-             fresh: bool = False) -> Project:
-    """Write the script. Picks up an unfinished run unless `fresh` is asked for.
+def brief(project: Project, progress: Progress = lambda m: None,
+          checkpoint: Callable[[], None] = lambda: None, fresh: bool = False) -> dict:
+    """Research and outline, banked in the draft — everything before the words.
 
-    `checkpoint` persists the project mid-run; without one this still works, it
-    just has nothing to come back to.
+    A 3D explainer stops here at creation: its script waits for the cast
+    (app/cast.py), and `generate()` later picks this same draft up rather than
+    researching and outlining all over again.
     """
     key = draft_key(project)
     if fresh or project.draft.get("key") != key:
@@ -786,7 +790,18 @@ def generate(project: Project, progress: Progress = lambda m: None,
     project.outline = outline
     project.title = outline.get("title", project.idea[:60])
     project.subtitle = outline.get("subtitle", "")
+    return outline
 
+
+def generate(project: Project, progress: Progress = lambda m: None,
+             checkpoint: Callable[[], None] = lambda: None,
+             fresh: bool = False) -> Project:
+    """Write the script. Picks up an unfinished run unless `fresh` is asked for.
+
+    `checkpoint` persists the project mid-run; without one this still works, it
+    just has nothing to come back to.
+    """
+    outline = brief(project, progress, checkpoint, fresh)
     slides = write_script(project, outline, progress, checkpoint)
     if not slides:
         raise ValueError("Script generation produced no paragraphs")
