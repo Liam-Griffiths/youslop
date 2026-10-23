@@ -736,9 +736,26 @@ In order. Each step ends with something you can use or watch.
 
    Regions become boxes you can drag. This replaces "parts and regions" in
    the earlier order.
-4. **The solver library.** Port the spike's checks and search engine into
-   `static/stage/`. Run the pure parts (framing, motion, paths) under
-   Node tests.
+4. **The solver library.** *Done.* The spike's checks and search, as
+   modules in `static/stage/`:
+   - `frame.js`: framing (`fit`, `place`, `keepInFrame`), pure
+   - `shot.js`: a shot as plain JSON (`move`, `path`, `turn`, `overhead`,
+     `still`) and the camera at any frame of it, pure
+   - `checks.js`: motion, detail budget, look-down, level, haze, flats,
+     whole-in-frame, pure
+   - `gpu.js`: key-colour edge share, voids with window rays, probe
+     clearance, occlusion
+   - `search.js`: nearest-first search with a flagged fallback, and
+     `checkShot`, which picks the checks from the model's limit codes
+   - `core.js` gained `standing()`: the intake's floor, ceiling and room
+     centre in scene coordinates
+
+   The pure parts have Node tests, with no npm needed:
+   `node --import ./tests/stage/three-hook.mjs --test 'tests/stage/*.test.mjs'`.
+   A browser smoke test on library models found a passing A380 left-wing
+   move on its second candidate (99% of the wing visible; the far side
+   correctly fails at 0%), and a loft establishing shot with no holes and
+   the window sky told apart (the same shot fails without the window box).
 5. **The six test models become a regression suite.** One command renders
    each model's reference shots at preview size and records:
    - the check numbers
