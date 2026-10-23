@@ -80,9 +80,21 @@ The three ways in all end at step 3:
 - **Script first:** the cast is pulled from the pasted script, and the script
   is not rewritten.
 
-**Changing the cast later:** a removed or swapped model should flag the
-paragraphs that use it, with a one-click rewrite of just those paragraphs.
-This is not built yet.
+**Changing the cast later:** the visual lines follow a fixed form (`3D:
+subject — part — shot` or `PHOTO: …`), so `cast.check_visuals` reads them
+back against the cast without asking Claude, every time the project loads.
+It flags:
+
+- a 3D line whose subject is not in the cast, has gone to photos, or whose
+  model is missing from the library
+- a 3D line aimed at a part the model has no name or region for
+- a PHOTO line about a subject that has a model now (a hint, not a warning)
+
+The Script tab shows each paragraph's visual line, editable, with its flag;
+the Cast tab counts them. **Rewrite them** sends only the flagged lines to
+Claude with the new cast digest; the narration is never touched. Tested by
+switching the Flyer to photos: five lines flagged, rewritten in 4 s, none
+left.
 
 **Tested end to end** with *"How did we get from the Wright Flyer to the
 A380?"*, with the Flyer chosen first:
@@ -750,8 +762,8 @@ In order. Each step ends with something you can use or watch.
 8. **The shot planner.** Claude writes intent per paragraph, constrained by
    each manifest's `limits`. The solver fills in the shot, and it goes back
    to Claude once on failure.
-9. **The manifest-aware script writer.** It only writes what the cast can
-   show.
+9. **The manifest-aware script writer.** *Done:* story, then cast, then
+   words, with visual lines checked against the cast when it changes.
 10. **Model search** (step 2): Smithsonian and Sketchfab first.
 
 **Open risks:**

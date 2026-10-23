@@ -2524,6 +2524,11 @@ function paintScript() {
     : `<button class="btn sm danger" onclick="regenScript()">rewrite whole script</button>`}
   </div>`;
 
+  const stage = isStage(p.style.format), vflags = p.visual_flags || {};
+  const nWarn = Object.values(vflags).filter((f) => f.level === 'warn').length;
+  const nHint = Object.values(vflags).length - nWarn;
+  if (stage && (nWarn || nHint)) html += castChangedNote(nWarn, nHint);
+
   let lastBeat = null;
   p.slides.forEach((s, i) => {
     if (s.beat !== lastBeat) {
@@ -2545,6 +2550,7 @@ function paintScript() {
       <div>
         <textarea rows="3" onblur="saveSlide('${s.id}',{narration:this.value})"
           >${esc(s.narration)}</textarea>
+        ${stage ? visualLine(s, vflags[s.id]) : ''}
         <div class="slide-meta">
           <input class="title-input" type="text" placeholder="on-screen title (optional)"
             value="${esc(s.title)}" onblur="saveSlide('${s.id}',{title:this.value})">
@@ -2640,6 +2646,41 @@ async function saveSlide(sid, patch) {
     Object.assign(state.project.slides.find((x) => x.id === sid), s);
     toast('saved');
     return s;
+  } catch (e) { toast(e.message, true); }
+}
+
+// A 3D explainer's visual line: what the stage shows under this paragraph,
+// in the form the writer was told to use ("3D: subject — part — shot" or
+// "PHOTO: …"). Flagged when the cast no longer matches it (app/cast.py,
+// check_visuals).
+function visualLine(s, flag) {
+  return `<div class="visual-line ${flag ? flag.level : ''}">
+    <span class="kicker">visual</span>
+    <input type="text" value="${esc(s.visual_note)}" aria-label="what the stage shows"
+      onchange="saveVisual('${s.id}', this.value)">
+    ${flag ? `<span class="pill ${flag.level === 'warn' ? 'warn' : ''}" title="${esc(flag.text)}"><span class="dot"></span>${esc(flag.text)}</span>
+      <button class="btn xs ghost" onclick="reviseVisuals(['${s.id}'])">rewrite</button>` : ''}
+  </div>`;
+}
+function castChangedNote(nWarn, nHint) {
+  return `<div class="card cast-changed">
+    <span>${nWarn ? `<strong>${nWarn} visual line${nWarn === 1 ? '' : 's'}</strong> no longer fit${nWarn === 1 ? 's' : ''} the cast` : ''}${nWarn && nHint ? ' · ' : ''}${nHint ? `${nHint} photo beat${nHint === 1 ? '' : 's'} could be 3D now` : ''}.
+      The narration is untouched; only the visual lines are rewritten.</span>
+    <div class="spacer"></div>
+    <button class="btn sm primary" onclick="reviseVisuals()">rewrite ${nWarn + nHint === 1 ? 'it' : 'them'}</button>
+  </div>`;
+}
+// The flags depend on the visual line, so a saved edit reloads the project.
+async function saveVisual(sid, value) {
+  if (!(await saveSlide(sid, { visual_note: value }))) return;
+  state.project = await api(`/api/projects/${state.project.id}`);
+  render();
+}
+async function reviseVisuals(ids) {
+  try {
+    const r = await api(`/api/projects/${state.project.id}/cast/revise`,
+      { method: 'POST', body: JSON.stringify(ids ? { slides: ids } : {}) });
+    watchJob(r.job, 'visuals');
   } catch (e) { toast(e.message, true); }
 }
 
@@ -6889,13 +6930,24 @@ async function paintCast() {
     </div>
     <div class="card">
       ${p.slides.length
-        ? `<div class="row"><span>The script is written (${p.slides.length} paragraphs).</span><div class="spacer"></div>
-            <button class="btn sm ghost" onclick="go('#/p/${p.id}/script')">go to the script</button></div>`
+        ? castScriptRow(p)
         : `<div class="row"><button class="btn primary" onclick="castWrite()" ${planning || !subs.length ? 'disabled' : ''}>Write the script</button>
             <span class="mono" style="color:var(--ink-faint)">${gaps || unconfirmed
               ? `${gaps ? `${gaps} subject${gaps === 1 ? '' : 's'} without a model` : ''}${gaps && unconfirmed ? ' · ' : ''}${unconfirmed ? `${unconfirmed} to confirm` : ''} — you can still write it`
               : 'every subject is ready'}</span></div>`}
     </div>`;
+}
+
+// Once the script exists, the Cast tab says whether its visual lines still
+// fit the cast, and offers to rewrite the ones that don't.
+function castScriptRow(p) {
+  const fl = Object.values(p.visual_flags || {}), w = fl.filter((f) => f.level === 'warn').length, h = fl.length - w;
+  const what = [w ? `${w} visual line${w === 1 ? '' : 's'} no longer fit` : '', h ? `${h} could be 3D now` : ''].filter(Boolean).join(' · ');
+  return `<div class="row"><span>The script is written (${p.slides.length} paragraphs).</span>
+      ${what ? `<span class="pill ${w ? 'warn' : ''}"><span class="dot"></span>${what}</span>` : ''}
+      <div class="spacer"></div>
+      ${fl.length ? '<button class="btn sm primary" onclick="reviseVisuals()">rewrite the visuals</button>' : ''}
+      <button class="btn sm ghost" onclick="go('#/p/${p.id}/script')">go to the script</button></div>`;
 }
 
 async function castEdit(sid, patch) {

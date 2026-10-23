@@ -844,3 +844,12 @@ video { width: 100%; border-radius: 10px; background: #000; display: block; }
 .cast-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
 .cast-head input[type=text] { flex: 1; min-width: 180px; font-weight: 600; }
 .cast-slot { gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* A 3D explainer's visual line under each paragraph, and the note when the
+   cast has changed under the script. */
+.visual-line { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; flex-wrap: wrap; }
+.visual-line .kicker { flex: none; }
+.visual-line input { flex: 1; min-width: 220px; font-size: 13px; padding: 5px 8px; }
+.visual-line.warn input { border-color: var(--bad); }
+.visual-line .pill { max-width: 100%; white-space: normal; }
+.cast-changed { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; border-color: var(--accent); }

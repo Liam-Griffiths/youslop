@@ -815,6 +815,7 @@ def get_project(pid: str) -> dict:
     if p.style.format == "stage":
         d["cast"] = cast_mod.subjects(p)
         d["cast_summary"] = cast_mod.summary(p)
+        d["visual_flags"] = cast_mod.check_visuals(p)
     return d
 
 
@@ -1067,6 +1068,8 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             s.narration = str(payload["narration"]).strip()
         if "title" in payload:
             s.title = str(payload["title"]).strip()[:40]
+        if "visual_note" in payload:
+            s.visual_note = str(payload["visual_note"]).strip()[:400]
         if "chapter" in payload:
             # "" clears the mark; a chapter also forces its own picture, which
             # `schema.group_slides` applies on the way back out.
@@ -2809,6 +2812,22 @@ def repropose_cast(pid: str) -> dict:
         return {"cast": len(p.cast)}
 
     return {"job": jobs.start("cast", pid, work)}
+
+
+@app.post("/api/projects/{pid}/cast/revise")
+def revise_visuals(pid: str, payload: dict = Body(default={})) -> dict:
+    """Rewrite the visual lines the cast can no longer carry (or `slides`)."""
+    _load(pid)
+    only = [str(i) for i in (payload.get("slides") or [])] or None
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            n = cast_mod.revise_visuals(p, progress, only)
+            store.save(p)
+        return {"changed": n}
+
+    return {"job": jobs.start("visuals", pid, work)}
 
 
 # ------------------------------------------------------------------- library
