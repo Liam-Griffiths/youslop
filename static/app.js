@@ -2422,11 +2422,12 @@ function render() {
   // (docs/3d-explainer.md). Other formats never see it.
   const stage = isStage(p.style.format);
   if (!state.tab) state.tab = stage ? 'cast' : 'script';
-  if (!stage && state.tab === 'cast') state.tab = 'script';
+  if (!stage && (state.tab === 'cast' || state.tab === 'stage')) state.tab = 'script';
   // Story, then cast, then words: a 3D explainer's Cast tab comes first.
   const tabs = [
     ...(stage ? [['cast', 'Cast', p.cast_summary ? `${p.cast_summary.ready}/${p.cast_summary.subjects - p.cast_summary.photos}` : (p.cast || []).length]] : []),
     ['script', 'Script', total],
+    ...(stage ? [['stage', 'Stage', p.stage ? `${p.stage.counts.ok}/${p.stage.total}` : '']] : []),
     ['media', 'Media', p.slides.filter((s) => s.chosen_id).length],
     ['record', 'Record', `${recorded}/${total}`],
     ['thumb', 'Thumbnail', p.thumb && p.thumb.image ? '✓' : ''],
@@ -2450,7 +2451,7 @@ function render() {
     ${jobPanel()}
     <div id="tabbody"></div>`;
 
-  ({ script: paintScript, media: paintMedia, cast: paintCast, record: paintRecord,
+  ({ script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage, record: paintRecord,
      thumb: paintThumb, render: paintRender }[state.tab] || paintScript)();
   paintJob();
   if (state.tab !== 'render' && typeof tlPause === 'function') tlPause();
@@ -7377,3 +7378,199 @@ async function openModelIntake(mid) {
 
 
 route();
+
+
+// ---------------------------------------------------------------- the stage
+// A 3D explainer's shot list (app/shots.py, docs/3d-explainer.md steps 7-9).
+// Every paragraph whose visual line is a 3D beat has a shot: the planner's
+// intent, solved and checked by the stage in a headless browser. A shot that
+// failed its checks is flagged amber; the creator fixes it by changing the
+// intent, or by setting it from the view in the preview — which locks it, so
+// planning again never overwrites it.
+const SHOT_STATE = {
+  ok: ['on', 'checked'], flagged: ['warn', 'flagged'], stale: ['warn', 'out of date'],
+  unsolved: ['', 'not solved'], no_model: ['warn', 'no model'],
+};
+const SHOT_OPTS = {
+  move: ['static', 'orbit', 'push', 'pull', 'crane', 'reveal', 'pan', 'turn'],
+  framing: ['wide', 'medium', 'tight'],
+  side: ['auto', 'front', 'three_quarter', 'left', 'right', 'rear', 'above', 'low'],
+  join: ['cut', 'match', 'continuous', 'dip'],
+};
+
+async function paintStage() {
+  const p = state.project, body = $('#tabbody');
+  const st = p.stage || { shots: {}, counts: {}, total: 0 };
+  if (!state.models) { try { state.models = await api('/api/models'); } catch (e) { state.models = []; } }
+  const byModel = Object.fromEntries((state.models || []).map((m) => [m.id, m]));
+  const subs = (p.cast || []).filter((x) => x.mode === 'model' && x.model);
+  const busy = (p.jobs || []).some((j) => j.kind === 'shots');
+  const rows = p.slides.filter((s) => st.shots[s.id]);
+  const c = st.counts || {};
+  if (!p.slides.length) {
+    body.innerHTML = '<div class="empty-note">The shots are planned once the script is written.</div>';
+    return;
+  }
+  const opt = (k, v) => SHOT_OPTS[k].map((o) => `<option ${o === v ? 'selected' : ''}>${o}</option>`).join('');
+  const partsOf = (sid) => {
+    const x = subs.find((y) => y.id === sid), m = x && byModel[x.model];
+    if (!m) return [];
+    const named = (m.identity && m.identity.parts) || {};
+    return [...new Set([...Object.values(named), ...(m.parts || []).filter((q) => !(q.node in named)).map((q) => q.label),
+      ...(m.regions || []).map((r) => r.label)].filter(Boolean))];
+  };
+  const thumb = (s, j, at) => `<img src="/api/projects/${p.id}/file/stage/thumbs/${s.id}_${j}.jpg?v=${Math.round(at || 0)}"
+      style="width:128px;height:72px;object-fit:cover;border-radius:4px;background:#111" onerror="this.style.visibility='hidden'">`;
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:18px">
+      <div class="row">
+        <h3 style="margin:0">Shots</h3>
+        <span class="mono" style="color:var(--ink-faint)">${st.total} 3D shot${st.total === 1 ? '' : 's'}
+          · ${c.ok || 0} checked${c.flagged ? ` · ${c.flagged} flagged` : ''}${c.stale ? ` · ${c.stale} out of date` : ''}${c.unsolved ? ` · ${c.unsolved} not solved` : ''}</span>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" onclick="stageSolve()" ${busy || !st.total ? 'disabled' : ''}
+          title="solve the shots that are new or out of date, without asking Claude">solve what changed</button>
+        <button class="btn sm primary" onclick="stagePlan()" ${busy || !st.total ? 'disabled' : ''}>${c.ok || c.flagged ? 'plan again' : 'plan the shots'}</button>
+      </div>
+      <p class="mono" style="color:var(--ink-faint);margin:8px 0 0">
+        Claude directs each 3D paragraph (subject, part, move, framing, side, join); the stage works out the
+        camera and checks it. Flagged shots failed a check and will render as they are unless you change
+        them. A shot you set from the view is locked, and planning again leaves it alone.</p>
+    </div>
+    ${rows.map((s, n) => {
+      const sh = s.shot || {}, it = sh.intent || {}, sol = sh.solved || {}, row = st.shots[s.id];
+      const [cls, word] = SHOT_STATE[row.state] || ['', row.state];
+      const first = (it.subjects || [])[0];
+      const parts = partsOf(first);
+      return `<div class="card shot-row" data-sid="${s.id}" style="margin-bottom:12px">
+        <div class="row" style="align-items:flex-start;gap:14px">
+          <div style="display:flex;gap:4px;cursor:pointer" onclick="openShot('${s.id}')" title="preview">
+            ${sol.shot ? [0, 1, 2].map((j) => thumb(s, j, sol.thumbs_at || sol.at)).join('') : '<div class="empty-note" style="width:392px;height:72px;padding:24px 0">no shot yet</div>'}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="row">
+              <span class="mono" style="color:var(--ink-faint)">${n + 1} · ${row.secs.toFixed(1)} s</span>
+              <span class="pill ${cls}"><span class="dot"></span>${word}</span>
+              ${sh.locked ? '<span class="pill">locked</span>' : ''}
+              <div class="spacer"></div>
+              <button class="btn xs ghost" onclick="openShot('${s.id}')">preview</button>
+              <button class="btn xs ghost" onclick="stageSolve(['${s.id}'])" ${busy || sh.locked ? 'disabled' : ''}>solve</button>
+              <button class="btn xs ghost" onclick="stageEdit('${s.id}', {locked: ${!sh.locked}})">${sh.locked ? 'unlock' : 'lock'}</button>
+            </div>
+            <div class="mi-p" style="margin:6px 0" title="${esc(s.narration)}">${esc(s.narration.slice(0, 160))}${s.narration.length > 160 ? '…' : ''}</div>
+            <div class="mono" style="color:var(--ink-faint);margin-bottom:6px">${esc(s.visual_note)}</div>
+            <div class="row" style="flex-wrap:wrap;gap:6px">
+              <select style="width:auto" onchange="stageEdit('${s.id}', {intent: {subjects: [this.value], part: ''}})">
+                ${subs.map((x) => `<option value="${x.id}" ${x.id === first ? 'selected' : ''}>${esc(x.subject)}</option>`).join('')}
+              </select>
+              ${(it.subjects || []).length > 1 ? `<span class="pill">+ ${(it.subjects || []).slice(1).map((id) => esc((subs.find((x) => x.id === id) || {}).subject || id)).join(', ')}</span>` : ''}
+              <select style="width:auto" onchange="stageEdit('${s.id}', {intent: {part: this.value}})">
+                <option value="">whole</option>${parts.map((q) => `<option ${q === it.part ? 'selected' : ''}>${esc(q)}</option>`).join('')}
+              </select>
+              ${['move', 'framing', 'side', 'join'].map((k) => `<select style="width:auto" title="${k}"
+                onchange="stageEdit('${s.id}', {intent: {${k}: this.value}})">${opt(k, it[k])}</select>`).join('')}
+            </div>
+            ${sol.flag || sol.error ? `<div class="mi-p" style="color:var(--warn,#d9a441);margin-top:6px">${esc(sol.error || sol.flag)}</div>` : ''}
+            ${(sol.notes || []).length ? `<div class="mono" style="color:var(--ink-faint);margin-top:4px">${sol.notes.map(esc).join(' · ')}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="empty-note">No paragraph has a 3D visual line. Visual lines that start “3D:” become shots here.</div>'}`;
+}
+
+async function stagePlan() {
+  try { const r = await api(`/api/projects/${state.project.id}/stage/plan`, { method: 'POST', body: '{}' }); watchJob(r.job, 'shots'); }
+  catch (e) { toast(e.message, true); }
+}
+async function stageSolve(slides) {
+  try {
+    const r = await api(`/api/projects/${state.project.id}/stage/solve`, { method: 'POST', body: JSON.stringify(slides ? { slides } : {}) });
+    watchJob(r.job, 'shots');
+  } catch (e) { toast(e.message, true); }
+}
+async function stageEdit(sid, patch) {
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/stage/${sid}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    render();
+    // A changed intent is solved straight away, on its own.
+    if (patch.intent) stageSolve([sid]);
+  } catch (e) { toast(e.message, true); }
+}
+
+// The preview: the shot played live in its scene, and a free camera to set
+// it by hand. Nothing is rendered; this is the editor's own WebGL.
+async function openShot(sid) {
+  const pid = state.project.id;
+  let data;
+  try { data = await api(`/api/projects/${pid}/stage/${sid}/scene`); } catch (e) { return toast(e.message, true); }
+  if (!window.StageEditor) await import('/static/stage/editor.js');
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `
+    <div class="modal-box wide">
+      <div class="row" style="margin-bottom:10px">
+        <strong>Shot preview</strong>
+        <span class="mono" style="color:var(--ink-faint)">${esc((data.solved && data.solved.subject) || '')} · ${data.secs.toFixed(1)} s</span>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="sh-close">close</button>
+      </div>
+      <div id="sh-view" style="width:100%;background:#111;border-radius:6px;overflow:hidden">
+        <div class="empty-note" style="padding:60px">loading the scene…</div></div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn sm" id="sh-play">play</button>
+        <input type="range" id="sh-seek" min="0" max="1000" value="0" style="flex:1">
+        <span class="mono" id="sh-t" style="width:80px;text-align:right">0.0 s</span>
+      </div>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <button class="btn sm ghost" id="sh-free" title="drag to orbit, right-drag to pan, scroll to move in">free camera</button>
+        <button class="btn sm ghost" id="sh-a" disabled>set start here</button>
+        <button class="btn sm ghost" id="sh-b" disabled>set end here</button>
+        <button class="btn sm primary" id="sh-save" disabled>check and keep</button>
+        <span class="mono" id="sh-msg" style="color:var(--ink-faint)"></span>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const msg = (t) => { $('#sh-msg', wrap).textContent = t; };
+  let ed = null;
+  const close = () => { if (ed) ed.dispose(); wrap.remove(); };
+  $('#sh-close', wrap).onclick = close;
+  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
+  try {
+    ed = await window.StageEditor.mount($('#sh-view', wrap), data, {
+      onTime: (t, total, playing) => {
+        $('#sh-t', wrap).textContent = `${t.toFixed(1)} s`;
+        $('#sh-seek', wrap).value = Math.round((t / total) * 1000);
+        $('#sh-play', wrap).textContent = playing ? 'pause' : 'play';
+      },
+    });
+  } catch (e) { $('#sh-view', wrap).innerHTML = `<div class="empty-note" style="padding:60px">${esc(e.message)}</div>`; return; }
+  if (!ed.hasShot()) msg('No shot yet: use the free camera to set one.');
+  let playing = false;
+  $('#sh-play', wrap).onclick = () => { playing = $('#sh-play', wrap).textContent === 'play'; playing ? ed.play() : ed.pause(); };
+  $('#sh-seek', wrap).oninput = (e) => ed.seek(e.target.value / 1000);
+  $('#sh-free', wrap).onclick = () => {
+    ed.free(); $('#sh-a', wrap).disabled = false; $('#sh-b', wrap).disabled = false;
+    msg('Frame the start and press “set start here”; then the end. One mark makes a still.');
+  };
+  const marked = () => {
+    const m = ed.marks();
+    $('#sh-save', wrap).disabled = !(m.a || m.b);
+    msg(`${m.a ? 'start set' : 'no start'} · ${m.b ? 'end set' : 'no end'}`);
+  };
+  $('#sh-a', wrap).onclick = () => { ed.mark('a'); marked(); };
+  $('#sh-b', wrap).onclick = () => { ed.mark('b'); marked(); };
+  $('#sh-save', wrap).onclick = async () => {
+    const shot = ed.fromMarks();
+    if (!shot) return;
+    msg('checking…');
+    const rep = ed.check(shot);
+    ed.use(shot);
+    try {
+      state.project = await api(`/api/projects/${pid}/stage/${sid}/shot`, { method: 'PUT',
+        body: JSON.stringify({ shot, checks: rep.checks, secs: data.secs }) });
+      msg(rep.ok ? 'kept and locked: every check passes' : `kept and locked, flagged: ${rep.failed.join(', ')}`);
+      $('#sh-save', wrap).disabled = true;
+      render();
+    } catch (e) { toast(e.message, true); }
+  };
+}

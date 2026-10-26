@@ -8,9 +8,10 @@
 // search with one candidate. `look` is how the contact sheet draws it —
 // never part of what is checked.
 import { THREE, standing } from '/static/stage/core.js';
-import { points, fit } from '/static/stage/frame.js';
+import { points } from '/static/stage/frame.js';
 import { moveShot } from '/static/stage/shot.js';
 import { withOptions } from '/static/stage/search.js';
+import { helpers } from '/static/stage/plan.js';
 
 const V = (...a) => new THREE.Vector3(...a);
 const meshesOf = (o) => { const s = new Set(); o.traverse((m) => { if (m.isMesh) s.add(m); }); return s; };
@@ -18,38 +19,8 @@ const centreOf = (pts) => new THREE.Sphere().setFromPoints(pts).center;
 // Vertical field of view for a horizontal one, at 16:9.
 const vfov = (h) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(h / 2)) / (16 / 9)));
 
-// Helpers every case gets: the model's points, a named node's, the points
-// inside an identity box ([x0, z0, x1, z1] in the scaler's space, as the
-// identification grid reads them), and texels per scene unit for meshes.
-export function helpers(holder, cam) {
-  const { manifest, scaler, inner } = holder.userData;
-  const scale = manifest.scale || 1;
-  const node = (name) => inner.getObjectByName(name) || inner.getObjectByName(name.replace(/[.\s]/g, ''));
-  const inRect = (rect, max = 3000) => {
-    const toLocal = new THREE.Matrix4().copy(scaler.matrixWorld).invert(), v = new THREE.Vector3();
-    return points([inner], 60000).filter((p) => {
-      v.copy(p).applyMatrix4(toLocal);
-      return v.x >= rect[0] && v.x <= rect[2] && v.z >= rect[1] && v.z <= rect[3];
-    }).filter((_, i, a) => i % Math.max(1, Math.floor(a.length / max)) === 0);
-  };
-  // The sharpest-needed budget among the meshes' own (untiled) materials.
-  const texels = (meshes) => {
-    const mats = (manifest.analysis || {}).materials || [], names = new Set();
-    meshes.forEach((m) => [].concat(m.material).forEach((x) => names.add(x.name)));
-    const tpu = mats.filter((m) => !m.tiled && (names.has(m.name) || mats.length === 1)).map((m) => m.texels_per_unit);
-    return tpu.length ? Math.max(...tpu) / scale : null;
-  };
-  // The site's extent in the scene, for haze.
-  const rect = () => {
-    const b = new THREE.Box3().setFromObject(inner);
-    return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z };
-  };
-  const fitAt = (pts, az, el, fill, sceneRadius, fov = 35) => {
-    cam.fov = fov; cam.aspect = 16 / 9; cam.clearViewOffset(); cam.updateProjectionMatrix();
-    return fit(cam, pts, { az, el, fill, sceneRadius });
-  };
-  return { manifest, limits: (manifest.analysis || {}).limits || [], node, inRect, texels, rect, fitAt, scale };
-}
+// The helpers every case gets are the planner's own (plan.js).
+export { helpers };
 
 // An object: an establishing orbit of the whole thing, slow, a quarter-turn
 // at most, lit by our set.

@@ -23,6 +23,8 @@ from . import reactions
 from . import llm as llm_mod
 from . import settings as settings_mod
 from . import cast as cast_mod
+from . import shots as shots_mod
+from . import stage as stage_mod
 from . import channels, ffutil, jobs, library, media, models3d, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import voice_cloud
@@ -816,6 +818,7 @@ def get_project(pid: str) -> dict:
         d["cast"] = cast_mod.subjects(p)
         d["cast_summary"] = cast_mod.summary(p)
         d["visual_flags"] = cast_mod.check_visuals(p)
+        d["stage"] = shots_mod.status(p)
     return d
 
 
@@ -1002,8 +1005,11 @@ def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
             # `fresh` throws that away and writes the script from the top.
             script_gen.generate(p, progress, lambda: store.save(p), fresh=fresh)
             store.save(p)
-            if p.style.format != "stage":      # a 3D explainer's pictures come from its shots
-                media.gather(p, progress)
+            # A 3D explainer's pictures come from its shots, except for the
+            # paragraphs whose visual line is a photo.
+            only = shots_mod.photo_leads(p) if p.style.format == "stage" else None
+            if only is None or only:
+                media.gather(p, progress, only=only)
                 store.save(p)
         return {"slides": len(p.slides)}
 
@@ -3126,3 +3132,125 @@ def unhandled(_request: Request, exc: Exception) -> JSONResponse:
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ------------------------------------------------------------- 3D shots
+# The Stage tab: each 3D paragraph's shot (app/shots.py), solved and drawn
+# by the stage's headless browser (app/stage.py). Solving can take a minute,
+# so it runs on a copy and only the shots are written back, under the lock —
+# the creator can keep editing the script meanwhile.
+def _save_shots(pid: str, worked: "Project") -> None:
+    with store.lock_for(pid):
+        p = store.load(pid)
+        got = {s.id: s.shot for s in worked.slides}
+        for s in p.slides:
+            if s.id in got and (s.shot or {}) != got[s.id]:
+                s.shot = got[s.id]
+        store.save(p)
+
+
+def _stage_or_400(p) -> None:
+    if p.style.format != "stage":
+        raise HTTPException(400, "Only a 3D explainer has shots.")
+    ok, why = stage_mod.available()
+    if not ok:
+        raise HTTPException(503, why)
+
+
+@app.post("/api/projects/{pid}/stage/plan")
+def plan_shots(pid: str, payload: dict = Body(default={})) -> dict:
+    """Direct, solve and check every unlocked 3D shot; failures go back to
+    Claude once; then the photo paragraphs get their pictures."""
+    _stage_or_400(_load(pid))
+    use_claude = payload.get("claude", True) is not False
+
+    def work(progress):
+        p = store.load(pid)
+        result = shots_mod.plan(p, progress, lambda: _save_shots(pid, p), use_claude=use_claude)
+        _save_shots(pid, p)
+        photos = [i for i in shots_mod.photo_leads(p)
+                  if not next((s for s in p.slides if s.id == i), None).chosen_id]
+        if photos:
+            with store.lock_for(pid):
+                q = store.load(pid)
+                media.gather(q, progress, only=photos)
+                store.save(q)
+        return result
+
+    return {"job": jobs.start("shots", pid, work)}
+
+
+@app.post("/api/projects/{pid}/stage/solve")
+def solve_shots(pid: str, payload: dict = Body(default={})) -> dict:
+    """Solve shots without asking Claude: the stale ones, or `slides`."""
+    _stage_or_400(_load(pid))
+    only = [str(i) for i in (payload.get("slides") or [])] or None
+
+    def work(progress):
+        p = store.load(pid)
+        shots_mod.solve(p, progress, only=only, force=bool(only))
+        _save_shots(pid, p)
+        return shots_mod.status(p)["counts"]
+
+    return {"job": jobs.start("shots", pid, work)}
+
+
+@app.patch("/api/projects/{pid}/stage/{sid}")
+def edit_shot(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Change a shot's intent (it is then solved again), or lock/unlock it."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = next((x for x in p.slides if x.id == sid), None)
+        if not s or not shots_mod.is_3d(s):
+            raise HTTPException(404, "That paragraph has no 3D shot.")
+        sh = dict(s.shot or {})
+        if "intent" in payload:
+            base = sh.get("intent") or shots_mod.intent_from_line(p, s) or {}
+            it = shots_mod.clean_intent({**base, **(payload["intent"] or {})}, p)
+            if not it:
+                raise HTTPException(400, "A shot needs a subject that has a model.")
+            sh["intent"], sh["by"], sh["locked"] = it, "hand", False
+        if "locked" in payload:
+            sh["locked"] = bool(payload["locked"])
+        if payload.get("reset"):
+            sh = {}
+        s.shot = sh
+        store.save(p)
+    return get_project(pid)
+
+
+@app.put("/api/projects/{pid}/stage/{sid}/shot")
+def set_shot_by_hand(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """A shot set from the view on the Stage tab, with the checks the page
+    ran on it. Kept as it is, and locked."""
+    shot = payload.get("shot")
+    if not isinstance(shot, dict) or shot.get("kind") not in ("move", "path", "turn", "overhead", "still"):
+        raise HTTPException(400, "Not a shot.")
+    if len(json.dumps(shot)) > 20_000:
+        raise HTTPException(400, "That shot is too large.")
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = next((x for x in p.slides if x.id == sid), None)
+        if not s or not shots_mod.is_3d(s):
+            raise HTTPException(404, "That paragraph has no 3D shot.")
+        checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+        shots_mod.set_by_hand(p, s, shot, checks, float(payload.get("secs") or shot.get("secs") or 8))
+        store.save(p)
+    return get_project(pid)
+
+
+@app.get("/api/projects/{pid}/stage/{sid}/scene")
+def shot_scene(pid: str, sid: str) -> dict:
+    """What the Stage tab's preview needs to load a shot's scene: the cast
+    members it shows with their models, the intent, the solved shot."""
+    p = _load(pid)
+    lead = next(((s, secs) for _i, s, secs in shots_mod.leads(p) if s.id == sid), None)
+    if not lead:
+        raise HTTPException(404, "That paragraph has no 3D shot.")
+    s, secs = lead
+    it = (s.shot or {}).get("intent") or shots_mod.intent_from_line(p, s)
+    if not it:
+        raise HTTPException(400, "No subject in this shot has a model yet.")
+    entries = [{"sid": e["sid"], "manifest": _model_or_404(e["model"])} for e in shots_mod.entries(p, it)]
+    return {"entries": entries, "intent": it, "solved": (s.shot or {}).get("solved"), "secs": secs,
+            "locked": bool((s.shot or {}).get("locked"))}

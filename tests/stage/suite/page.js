@@ -1,7 +1,9 @@
 // Runs every case in cases.js for the models the runner (suite.py) lists:
 // the solver's search with the GPU checks, then three frames of the pick —
 // first, middle, last — drawn at preview size for the contact sheet.
-import { THREE, loadModel, buildSet } from '/static/stage/core.js';
+import { THREE, loadModel } from '/static/stage/core.js';
+import { applyLook } from '/static/stage/looks.js';
+import { disposeObject } from '/static/stage/scene.js';
 import { poseAt, applyPose, frameCount } from '/static/stage/shot.js';
 import { search, checkShot } from '/static/stage/search.js';
 import { CASES } from './cases.js';
@@ -13,41 +15,6 @@ renderer.setSize(W, H); renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 const fitCam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);    // the cases' framing
 const cam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);       // checks and frames
-
-// How the sheet draws a shot. Only the frames see this: the checks run on the
-// model alone, so a floor or sky can never hide an edge or a hole.
-function look(kind, scene, report) {
-  const g = new THREE.Group(), keep = { bg: scene.background, fog: scene.fog, env: scene.environment };
-  let set = null;
-  if (kind === 'set') set = buildSet(renderer, scene, [scene.userData.model]);
-  else {
-    const sky = { baked: 0xf2efe8, scan_sky: 0xb9d3ec, city: 0xc4d2e0, set_inside: 0xb9d3ec }[kind] ?? 0x888888;
-    scene.background = new THREE.Color(sky);
-    g.add(new THREE.HemisphereLight(0xffffff, 0x555555, kind === 'set_inside' ? 2 : 1.4));
-    if (kind === 'city') {
-      const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(1, 2, 0.6); g.add(sun);
-      const hz = report.checks.haze;
-      if (hz && hz.far) scene.fog = new THREE.Fog(sky, hz.near, hz.far);
-    }
-    scene.add(g);
-  }
-  return () => {
-    if (set) set.dispose();
-    scene.remove(g); scene.background = keep.bg; scene.fog = keep.fog; scene.environment = keep.env;
-  };
-}
-
-function dispose(obj) {
-  obj.traverse((o) => {
-    if (!o.isMesh) return;
-    o.geometry.dispose();
-    for (const m of [].concat(o.material)) {
-      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
-      m.dispose();
-    }
-  });
-  renderer.renderLists.dispose();
-}
 
 const { models, trace } = await (await fetch('/suite/models.json')).json();
 for (const { file, id } of models) {
@@ -80,7 +47,7 @@ for (const { file, id } of models) {
       model: file, case: c.name, pick, shot: r.shot, tried: r.tried, of: r.of, flagged: r.flagged,
       failed: r.report.failed, score: r.report.score, checks: r.report.checks, ms: Math.round(performance.now() - t1),
     });
-    const undo = look(c.look, scene, r.report), N = frameCount(r.shot);
+    const undo = applyLook(renderer, scene, c.look, { models: [holder], haze: r.report.checks.haze }), N = frameCount(r.shot);
     for (const [j, u] of [0, 0.5, 1].entries()) {
       cam.aspect = W / H;
       applyPose(cam, poseAt(r.shot, Math.round(u * (N - 1))), { W, H });
@@ -89,6 +56,6 @@ for (const { file, id } of models) {
     }
     undo();
   }
-  scene.remove(holder); dispose(holder);
+  scene.remove(holder); disposeObject(holder); renderer.renderLists.dispose();
 }
 await post('/done', {});

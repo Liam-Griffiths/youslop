@@ -53,8 +53,12 @@ def info() -> list[dict]:
 
 
 def transition_for(style) -> float:
-    """The crossfade a video's segments are joined with."""
-    if is_cut(getattr(style, "format", "")):
+    """The crossfade a video's segments are joined with. A 3D explainer cuts
+    too: a dissolve between two camera moves reads as a mistake, and a shot
+    that wants a softer join dips through black inside its own segment
+    (app/shots.py, `join`)."""
+    fmt = getattr(style, "format", "")
+    if is_cut(fmt) or fmt == "stage":
         return HARD_CUT
     return max(0.0, float(style.transition))
 

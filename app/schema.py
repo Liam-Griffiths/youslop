@@ -122,6 +122,11 @@ class Slide:
     # Keyed so switching a video between cuts keeps what was written for each.
     # A cut with nothing here draws from the narration. See app/cuts/.
     cues: dict = field(default_factory=dict)
+    # A 3D explainer's shot for the picture this paragraph leads: the
+    # planner's intent, the solver's camera path and checks, and whether a
+    # human locked it. Only paragraphs whose visual line is a 3D beat have
+    # one. See app/shots.py.
+    shot: dict = field(default_factory=dict)
 
     @property
     def word_count(self) -> int:

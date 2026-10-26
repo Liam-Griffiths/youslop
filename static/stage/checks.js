@@ -173,3 +173,16 @@ export function cutOff(cam, pts, every = 50) {
   for (let i = 0; i < pts.length; i += every) { n++; v.copy(pts[i]).project(cam); if (Math.abs(v.x) > 0.97 || Math.abs(v.y) > 0.97 || v.z > 1) out++; }
   return n ? out / n : 0;
 }
+
+// ---------------------------------------------------------------- jump cuts
+// Two shots of the same subject hard-cut together must differ: by at least
+// 30° of viewpoint, or by a change of size. Otherwise the picture seems to
+// jump in place. Compares the end of the shot before with the start of this
+// one; `size_ratio` is how much bigger or smaller the frame is at the aim.
+export function jumpCut(before, shot, { fps = FPS, min_deg = 30, min_size = 1.4 } = {}) {
+  const a = poseAt(before, frameCount(before, fps) - 1, fps), b = poseAt(shot, 0, fps);
+  const angle = deg(a.pos.clone().sub(a.aim).angleTo(b.pos.clone().sub(b.aim)));
+  const span = (p) => p.pos.distanceTo(p.aim) * Math.tan(rad(p.fov / 2));
+  const ratio = Math.max(span(a), span(b)) / Math.max(1e-6, Math.min(span(a), span(b)));
+  return { ok: angle >= min_deg || ratio >= min_size, angle_deg: Math.round(angle), size_ratio: +ratio.toFixed(2) };
+}

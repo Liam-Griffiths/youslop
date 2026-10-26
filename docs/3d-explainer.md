@@ -585,7 +585,8 @@ Four checkpoints, each meant to take seconds:
 
 - Choosing **3D explainer** adds two tabs, which no other format shows:
   - **Cast:** the video's models, chosen from the library.
-  - **Stage:** the scene editor and shot list (to be built).
+  - **Stage:** the shot list: each 3D paragraph's intent, check badge and
+    three frames, a live preview, and set-from-view.
 - **Media stays.** A 3D explainer still has pictures and slides between its
   3D shots (the Kitty Hawk photo, a period newspaper). Once the shot list
   exists, it decides which paragraphs are 3D and which are pictures, and
@@ -599,7 +600,7 @@ Four checkpoints, each meant to take seconds:
   add-ons it needs. The scene code lives in `static/stage/` and is shared by
   the editor, the library viewer and (later) the renderer.
 
-## Status (21 October 2026)
+## Status (25 October 2026)
 
 **In the app** (uncommitted):
 
@@ -614,7 +615,6 @@ Four checkpoints, each meant to take seconds:
 - the **3D explainer** format tile, and a **Cast** tab only for that format
   (Media stays)
 - model credits in the generated description (CC-BY required, CC0 omitted)
-- rendering a 3D explainer stops with a plain "not built yet" message
 - `static/stage/core.js`: the first port of the spike (loading,
   set, framing, motion, occlusion, angle search)
 - **Intake v2** (`static/stage/probe.js`, `static/stage/intake.js`):
@@ -687,16 +687,9 @@ Four checkpoints, each meant to take seconds:
   - **Find a room's middle from where its floor is,** not from its bounding
     box, which backdrops can stretch onto a wall.
 
-**Proven in the spike only** (scratchpad pages, to be rebuilt in the app):
-
-- the depth probe
-- holes and edge checks with window tracing
-- the edge-aware search with lens and detail levels
-- haze, sky dome and ground skirt
-- clearance gates
-- interior lens shift and 360s
-- per-material detail budgets
-- the headless render loop: about 30–40 fps at 1080p on a Radeon 780M
+**Proven in the spike only** (not rebuilt in the app): the sky dome and
+the ground skirt under aerial scans. Everything else the spike proved is now
+in `static/stage/`.
 
 **Not tested anywhere yet:**
 
@@ -787,24 +780,84 @@ In order. Each step ends with something you can use or watch.
      the tile's irregular edge until the aim could slide toward the
      tile's middle. The pick is a 24° lens, tight, slid 12%: 0.16% edge at
      2.8 px per texel, candidate 641 of 1,944, in 10 s.
-6. **Renderer integration.**
-   - A render page served by the app, which posts frames to a FastAPI
-     endpoint and on into `ffutil`'s GPU encode.
-   - The watchdog, page error reporting and a fresh browser profile per run.
-   - Chunks per scene.
-   - Joins through the existing xfade chain.
-   - The looks: our light, or baked; haze and sky; skirt.
-7. **The Stage tab:** scenes and a shot list with hand-made plans.
-   - check badges
-   - set-from-view
-   - one-section live preview
-   - locked edits
-8. **The shot planner.** Claude writes intent per paragraph, constrained by
-   each manifest's `limits`. The solver fills in the shot, and it goes back
-   to Claude once on failure.
+6. **Renderer integration.** *Done.* `app/stage.py` runs a throwaway
+   headless Chromium (fresh profile, watchdog, page errors reported) on
+   `static/stage/run.html`, served by a private HTTP server with the static
+   files, the model library and one `job.json`. The page does one of three
+   tasks:
+   - **intake:** measure, classify and photograph models (all six test
+     models in 4 s)
+   - **solve:** see step 8
+   - **render:** draw every frame of each solved shot and post it raw, in
+     order; the server pipes it into ffmpeg
+
+   How a render uses it:
+   - `render.render` draws every 3D clip in one run before the segments,
+     grouped by scene so each scene's models load once.
+   - Each segment then cuts its clip in like any video: graded, with titles
+     and chapter cards.
+   - Clips are cached by everything that changes their pixels
+     (`<project>/stage/clips/`), so re-rendering after a music change draws
+     nothing.
+   - A 3D explainer joins on hard cuts (`cuts.transition_for`). A `dip` join
+     fades through black inside the two segments either side.
+   - The preview segment draws its clip at quarter size and half rate.
+   - A real render refuses while a 3D paragraph has no shot; a preview shows
+     a slate.
+   - The looks (`looks.js`: our set, baked, scan sky, city haze, set
+     inside) are shared with the suite and the editor.
+
+   Measured on the scratch test project: nine shots, 1,250 frames at 1080p,
+   in 47 s (27 fps).
+7. **The Stage tab.** *Done.*
+   - Every 3D paragraph shows its three frames, its state (checked, flagged,
+     out of date, not solved), the flag's reason and the solver's notes.
+   - The intent can be edited in place (subject, part, move, framing, side,
+     join), and each edit is solved again on its own.
+   - **Preview** plays the shot live in its scene (`editor.js`, the app's own
+     WebGL), with a scrubber.
+   - **Free camera → set start / set end → check and keep:** the two marks
+     become a move on one ease curve (one mark makes a still). It is checked
+     in the page with the solver's checks, saved, and locked.
+   - Not built: a scene editor. Scenes follow from a shot's subjects: one
+     model alone, or several objects lined up at true scale, largest first
+     (`scene.js`).
+8. **The shot planner.** *Done* (`app/shots.py`, `static/stage/plan.js`).
+   - Each 3D visual line is read back into an intent without Claude.
+   - Claude then directs every unlocked shot with the cast's parts and
+     limits.
+   - Jump cuts are moved round before solving.
+   - `plan.js` turns intent into candidates per kind of model, from what
+     intake measured: objects by fitted moves, rooms level from inside, sets
+     from their open side, aerial scans edge-aware, cities with haze and a
+     clearance gate.
+   - The solver runs in the video's order, so `continuous` and `match` joins
+     follow the shot before, and a hard cut that would jump fails the new
+     `jump` check.
+   - Flagged shots go back to Claude once with the failed checks, and the
+     better of the two tries is kept.
+   - Turns are shortened to the time they get, and the shot says so.
+   - Then Media gathers pictures for the `PHOTO:` paragraphs.
+
+   API: `POST /stage/plan` (with Claude), `POST /stage/solve` (stale shots,
+   or `slides`), `PATCH /stage/{sid}` (intent, lock), `PUT
+   /stage/{sid}/shot` (set from view), `GET /stage/{sid}/scene`.
 9. **The manifest-aware script writer.** *Done:* story, then cast, then
    words, with visual lines checked against the cast when it changes.
 10. **Model search** (step 2): Smithsonian and Sketchfab first.
+
+**Known gaps in the checks** (found on the test models; to be fixed as
+general checks, not by tuning shots to those models):
+
+- **Nothing checks that a set or room shot shows the room.** With the whole
+  set as the subject, a frame of one brick wall passes every check (the
+  loft). A coverage check is needed: how much of the frame is the subject's
+  furniture or floor, measured from what intake knows.
+- **Hand-set shots keep the solver's old frames** until they are solved
+  again; the editor does not post new ones.
+- **The regression suite has no baseline.** The library it ran against was
+  in a temporary folder and is gone; the suite needs re-running on a
+  confirmed library with `--accept`.
 
 **Open risks:**
 
