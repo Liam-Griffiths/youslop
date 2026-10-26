@@ -83,6 +83,8 @@ def list_projects() -> list[dict]:
                 "est_seconds": raw.get("est_seconds", 0),
                 "has_output": bool(raw.get("render", {}).get("output")),
                 "thumb_at": (raw.get("thumb") or {}).get("rendered_at", 0),
+                "format": (raw.get("style") or {}).get("format", "kenburns"),
+                "cast": [c.get("model") for c in raw.get("cast") or [] if isinstance(c, dict)],
             }
         )
     return sorted(out, key=lambda p: p["updated_at"], reverse=True)

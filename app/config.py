@@ -23,11 +23,12 @@ CHANNELS_DIR = DATA / "channels"
 MUSIC_DIR = DATA / "assets" / "music"
 TTS_DIR = DATA / "assets" / "tts"
 LIBRARY_DIR = DATA / "assets" / "library"
+MODELS_DIR = DATA / "assets" / "models"      # the 3D model library, see app/models3d.py
 CACHE_DIR = DATA / ".cache"
 LOG_DIR = DATA / "logs"
 
 WRITABLE_DIRS = (PROJECTS_DIR, CHANNELS_DIR, MUSIC_DIR, TTS_DIR,
-                 LIBRARY_DIR / "files", LIBRARY_DIR / "thumbs", CACHE_DIR, LOG_DIR)
+                 LIBRARY_DIR / "files", LIBRARY_DIR / "thumbs", MODELS_DIR, CACHE_DIR, LOG_DIR)
 
 
 def ensure_dirs() -> None:

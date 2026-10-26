@@ -23,7 +23,7 @@ from typing import Callable
 
 import httpx
 
-from . import channels
+from . import channels, models3d
 from .config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from .render import credits_text
 from .schema import Project
@@ -386,6 +386,18 @@ def build_description(project: Project, progress: Callable[[str], None] = lambda
         credits = []          # a heading with nothing under it
     while credits and not credits[-1].strip():
         credits.pop()
+    # A 3D explainer's models: a CC-BY model must be credited, so these are
+    # never left to the creator to remember. CC0 models owe nothing.
+    model_lines = []
+    for c in project.cast:
+        try:
+            line = models3d.credit_line(models3d.get(c.get("model", "")))
+        except models3d.ModelError:
+            continue
+        if line:
+            model_lines.append(f"- {line}")
+    if model_lines:
+        credits = credits + ([""] if credits else []) + ["3D models:"] + model_lines
     if credits:
         lines += credits + [""]
     if words["hashtags"]:

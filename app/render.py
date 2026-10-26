@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from . import audio as audio_mod
 from . import cuts, ffutil, media, sysinfo, titles
+from . import shots as shots_mod
 from .config import (
     FPS, HEAD_PAD, HEIGHT, MUSIC_DIR, PARAGRAPH_GAP, TAIL_PAD, WIDTH,
     WORDS_PER_MINUTE,
@@ -234,6 +235,40 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
         listing.unlink(missing_ok=True)
         paths.append(out)
     return paths
+
+
+DIP = 0.45      # seconds each side of a dip through black
+
+
+def _dips_into(groups, i: int) -> bool:
+    """Does the group at `i` ask to be dipped into (a 3D shot's `join`)?"""
+    if not 0 <= i < len(groups):
+        return False
+    lead = groups[i][0][0]
+    return ((lead.shot or {}).get("intent") or {}).get("join") == "dip" and shots_mod.is_3d(lead)
+
+
+def _stage_clips(project: Project, groups, seg_lens: list[float], size: tuple[int, int],
+                 fps: int, progress: Progress, preview: bool) -> None:
+    """Draw every 3D shot the cut needs before the segments are composed.
+    Refuses a real render with shots missing; a preview shows a slate."""
+    st = shots_mod.status(project)
+    missing = shots_mod.missing_shots(project, groups)
+    if missing and not preview:
+        raise ValueError(f"{len(missing)} 3D paragraph(s) have no shot yet. Plan the "
+                         "shots on the Stage tab first.")
+    if missing:
+        progress(f"Preview: {len(missing)} 3D paragraph(s) have no shot yet and show a slate")
+    if st["counts"]["flagged"]:
+        progress(f"{st['counts']['flagged']} 3D shot(s) are flagged on the Stage tab; "
+                 "rendering them as they are")
+    if st["counts"]["stale"]:
+        progress(f"{st['counts']['stale']} 3D shot(s) were solved for an older version of "
+                 "their paragraph or model; solve them again on the Stage tab")
+    gone = {s.id for s in missing}
+    wanted = [(g[0][0], seg_lens[i]) for i, g in enumerate(groups)
+              if shots_mod.is_3d(g[0][0]) and g[0][0].id not in gone]
+    shots_mod.ensure_clips(project, wanted, size, fps, progress)
 
 
 def chapter_card(project: Project, slide: Slide) -> tuple[str, str] | None:
@@ -472,7 +507,7 @@ def _render_segment(
     index: int, out: Path, channel=None, chapter: tuple[str, str] | None = None,
     threads: int = 0, size: tuple[int, int] = (WIDTH, HEIGHT),
     fps: int = FPS, crf: int = 18, preset: str = "veryfast",
-    frames: tuple[int, int] | None = None,
+    frames: tuple[int, int] | None = None, dip_out: bool = False,
 ) -> Path:
     """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
 
@@ -524,6 +559,13 @@ def _render_segment(
     essay = style.format == "essay"
     slide = group[0][0]
     src, kind, focal = _chosen(project, slide)
+    dip_in = False
+    if style.format == "stage" and shots_mod.is_3d(slide):
+        # The shot, drawn by the stage at exactly this segment's length and
+        # frame size; a paragraph with no solved shot gets the slate.
+        clip = shots_mod.ensure_clips(project, [(slide, seg_len)], size, fps).get(slide.id)
+        src, kind, focal = (clip if clip and clip.exists() else None), "video", []
+        dip_in = ((slide.shot or {}).get("intent") or {}).get("join") == "dip"
     frames = max(2, int(round(seg_len * fps)))
     grade = GRADES.get(style.grade, GRADES["warm"])
     vig = _vignette(style.vignette)
@@ -576,7 +618,10 @@ def _render_segment(
         chain.append(f"scale={w}:{h}")
         chain.append(HOLD_STILL)
 
-    tail = [c for c in (grade, vig, "format=yuv420p") if c]
+    # A dip through black: the shot before fades out, this one fades up.
+    dips = [f"fade=t=in:st=0:d={DIP:.2f}" if dip_in else "",
+            f"fade=t=out:st={max(0.0, seg_len - DIP):.3f}:d={DIP:.2f}" if dip_out else ""]
+    tail = [c for c in (grade, vig, *dips, "format=yuv420p") if c]
     if pre_graph:
         # The source built [base] itself (a looped clip); grade what came out.
         graph = f"{pre_graph};[base]{','.join(tail)}[graded]"
@@ -1139,6 +1184,12 @@ def render(project: Project, progress: Progress = lambda m: None,
 
     progress(f"Rendering {len(durations)} segments, {total / 60:.1f} min total")
 
+    # A 3D explainer's shots are drawn first, in one browser run, so each
+    # scene's models load once; the segments then cut them in like clips.
+    if project.style.format == "stage":
+        _stage_clips(project, groups, [seg_lens[i + slide_at] for i in range(len(groups))],
+                     (WIDTH, HEIGHT), FPS, progress, preview)
+
     # ------------------------------------------------------------ narration
     narration = root / "out" / "narration.wav"
     lead_in = T / 2 + pre_slides
@@ -1184,7 +1235,8 @@ def render(project: Project, progress: Progress = lambda m: None,
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
         _render_segment(project, groups[i], seg_lens[i + slide_at], i + slide_at,
-                        out, channel=seg_channel, chapter=chapter, threads=seg_threads)
+                        out, channel=seg_channel, chapter=chapter, threads=seg_threads,
+                        dip_out=_dips_into(groups, i + 1))
         return i, out
 
     # The drawn cuts paint every frame in Python, and Python threads take turns
@@ -1554,6 +1606,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
     _render_segment(project, group, seg_len,
                     index + _segments_before_slides(project), mute,
                     channel=channel, chapter=chapter, size=size,
+                    dip_out=_dips_into(groups, index + 1),
                     fps=PREVIEW_FPS, crf=PREVIEW_CRF, preset="ultrafast",
                     threads=max(2, min(8, os.cpu_count() or 4)))
 

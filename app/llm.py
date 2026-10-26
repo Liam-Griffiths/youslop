@@ -11,6 +11,7 @@ way, which is the point — `script_gen.py` and `research.py` write "opus" or
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -149,7 +150,7 @@ def _envelope(stdout: str) -> dict | None:
 
 def _complete_cli(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
-    effort: str = "",
+    effort: str = "", images: list[bytes] | None = None,
 ) -> str:
     """Run a single prompt through the Claude CLI and return the text reply.
 
@@ -177,11 +178,22 @@ def _complete_cli(
         cmd += ["--effort", effort]
     if system:
         cmd += ["--system-prompt", system]
-    cmd.append(prompt)
+    stdin = None
+    if images:
+        # Pictures go in as one stream-json user message with inline image
+        # blocks, so the CLI never needs to read a file from this machine.
+        # Its reply comes back as stream-json too; _envelope() takes the last
+        # line, which is the same result object --output-format json gives.
+        i = cmd.index("json")
+        cmd[i] = "stream-json"
+        cmd += ["--input-format", "stream-json", "--verbose"]
+        stdin = json.dumps({"type": "user", "message": {"role": "user", "content": _image_blocks(images, prompt)}}) + "\n"
+    else:
+        cmd.append(prompt)
 
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, input=stdin
         )
     except FileNotFoundError as exc:
         raise LLMError(
@@ -221,9 +233,20 @@ def _complete_cli(
 API_MAX_TOKENS = 8192
 
 
+def _image_blocks(images: list[bytes], prompt: str) -> list[dict]:
+    """Anthropic content blocks: each picture (JPEG or PNG bytes), then the text."""
+    blocks: list[dict] = []
+    for data in images:
+        kind = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+        blocks.append({"type": "image", "source": {"type": "base64", "media_type": kind,
+                                                   "data": base64.b64encode(data).decode()}})
+    blocks.append({"type": "text", "text": prompt})
+    return blocks
+
+
 def _complete_api(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
-    effort: str = "",
+    effort: str = "", images: list[bytes] | None = None,
 ) -> str:
     """The same prompt, answered by the Anthropic API instead of the CLI.
 
@@ -249,7 +272,7 @@ def _complete_api(
     kwargs: dict[str, Any] = {
         "model": _api_model_id(model),
         "max_tokens": API_MAX_TOKENS,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": _image_blocks(images, prompt) if images else prompt}],
     }
     if system:
         kwargs["system"] = system
@@ -291,7 +314,7 @@ def _complete_api(
 
 def _complete_ollama(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
-    effort: str = "",
+    effort: str = "", images: list[bytes] | None = None,
 ) -> str:
     """The same prompt, answered by a local Ollama daemon.
 
@@ -314,7 +337,9 @@ def _complete_ollama(
     body = {
         "model": OLLAMA_MODEL,
         "messages": ([{"role": "system", "content": system}] if system else [])
-                    + [{"role": "user", "content": prompt}],
+                    + [{"role": "user", "content": prompt,
+                        # a vision model reads these; a text-only one ignores them
+                        **({"images": [base64.b64encode(d).decode() for d in images]} if images else {})}],
         "stream": False,
         "options": {"temperature": 0.3, "num_ctx": OLLAMA_CONTEXT},
     }
@@ -409,6 +434,7 @@ def complete(
     timeout: int = 600,
     allow_search: bool = False,
     effort: str = "",
+    images: list[bytes] | None = None,
 ) -> str:
     """Run a single prompt through whichever backend is configured.
 
@@ -425,7 +451,7 @@ def complete(
         return _complete_openai_compat(backend, prompt, system, model, timeout,
                                        allow_search, effort or EFFORT)
     fn = {"api": _complete_api, "ollama": _complete_ollama}.get(backend, _complete_cli)
-    return fn(prompt, system, model, timeout, allow_search, effort or EFFORT)
+    return fn(prompt, system, model, timeout, allow_search, effort or EFFORT, images)
 
 
 # --------------------------------------------------------------- json helpers
@@ -513,6 +539,7 @@ def complete_json(
     require_hint: str = "",
     allow_search: bool = False,
     effort: str = "",
+    images: list[bytes] | None = None,
 ) -> Any:
     """Complete and parse a JSON reply, retrying on malformed *or wrong-shaped* output.
 
@@ -525,7 +552,7 @@ def complete_json(
     for attempt in range(retries + 1):
         try:
             text = complete(prompt, system=system, model=model, timeout=timeout,
-                            allow_search=allow_search, effort=effort)
+                            allow_search=allow_search, effort=effort, images=images)
             value = _extract_json(text, require)
             if require and not require(value):
                 shape = (f"a {type(value).__name__} with keys "

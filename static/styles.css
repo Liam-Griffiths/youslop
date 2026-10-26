@@ -822,3 +822,34 @@ video { width: 100%; border-radius: 10px; background: #000; display: block; }
   border: 1px solid var(--line, #2a2d36); border-radius: 8px; }
 .voice-chip.sel { border-color: var(--accent, #E8C36A); }
 .voice-chip .mono { color: var(--ink-faint); font-size: 12px; }
+
+/* ------------------------------------------------- 3D model intake screen */
+.model-intake { display: flex; gap: 18px; min-height: 0; flex: 1; }
+.model-view {
+  flex: 1; min-width: 0; aspect-ratio: 16/9; max-height: calc(100vh - 160px);
+  border-radius: 9px; overflow: hidden; background: #1d232a; border: 1px solid var(--line);
+}
+.model-side { width: 330px; flex: none; overflow-y: auto; max-height: calc(100vh - 160px); padding-right: 4px; }
+.model-side input[type=text] { width: 100%; }
+.mi-k { display: block; color: var(--ink-faint); font-size: 11px; margin-bottom: 4px; }
+.mi-sec { border-top: 1px solid var(--line-soft); margin-top: 14px; padding-top: 12px; }
+.mi-h { font-weight: 600; margin-bottom: 4px; }
+.mi-p { color: var(--ink-faint); font-size: 12.5px; margin: 0 0 8px; line-height: 1.45; }
+@media (max-width: 860px) { .model-intake { flex-direction: column; } .model-side { width: auto; } }
+.mi-limits { margin: 4px 0 6px 18px; padding: 0; color: var(--ink-faint); font-size: 12.5px; line-height: 1.5; }
+
+/* ---------------------------------------------------------- 3D cast tab */
+.cast-chapters { margin: 8px 0 0 22px; padding: 0; color: var(--ink-faint); font-size: 13px; line-height: 1.6; }
+.cast-row { border-top: 1px solid var(--line-soft); padding: 12px 0; }
+.cast-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.cast-head input[type=text] { flex: 1; min-width: 180px; font-weight: 600; }
+.cast-slot { gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* A 3D explainer's visual line under each paragraph, and the note when the
+   cast has changed under the script. */
+.visual-line { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; flex-wrap: wrap; }
+.visual-line .kicker { flex: none; }
+.visual-line input { flex: 1; min-width: 220px; font-size: 13px; padding: 5px 8px; }
+.visual-line.warn input { border-color: var(--bad); }
+.visual-line .pill { max-width: 100%; white-space: normal; }
+.cast-changed { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; border-color: var(--accent); }

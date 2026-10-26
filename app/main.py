@@ -22,7 +22,10 @@ from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
 from . import settings as settings_mod
-from . import channels, ffutil, jobs, library, media, render, script_gen, store, thumbs
+from . import cast as cast_mod
+from . import shots as shots_mod
+from . import stage as stage_mod
+from . import channels, ffutil, jobs, library, media, models3d, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import voice_cloud
 from . import intro as intro_mod
@@ -749,12 +752,23 @@ def create_project(payload: dict = Body(...)) -> dict:
     # than after: how the pictures are staged, and how often they change. Both
     # already have defaults from the channel (or Style()'s own), so this only
     # overrides them when the creator actually touched the control.
-    if payload.get("format") in ("kenburns", "essay", "board", *cuts_mod.KEYS):
+    if payload.get("format") in ("kenburns", "essay", "board", "stage", *cuts_mod.KEYS):
         project.style.format = payload["format"]
     if payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
     if payload.get("research_mode") in ("quick", "deep"):
         project.research_mode = payload["research_mode"]
+    # Models first: models the creator picked on the form are in the cast
+    # before the story is planned, and the brief is built around them.
+    if project.style.format == "stage":
+        for mid in (payload.get("models") or [])[:8]:
+            try:
+                m = models3d.get(str(mid))
+            except models3d.ModelError:
+                continue
+            project.cast.append({"id": "s" + m["id"][1:7], "subject": cast_mod.model_name(m),
+                                 "role": "hero", "why": "chosen by the creator", "chapters": [],
+                                 "model": m["id"], "mode": "model"})
     store.save(project)
     if script:
         (project_dir(project.id) / "source.txt").write_text(script, encoding="utf-8")
@@ -763,6 +777,22 @@ def create_project(payload: dict = Body(...)) -> dict:
         with store.lock_for(project.id):
             p = store.load(project.id)
             src = project_dir(p.id) / "source.txt"
+            if p.style.format == "stage":
+                # A 3D explainer is made story, then cast, then words: stop
+                # after the brief. The script is written from the same draft
+                # once the cast is gathered (docs/3d-explainer.md).
+                text = src.read_text(encoding="utf-8") if p.has_source and src.exists() else ""
+                if text:
+                    script_gen.import_script(p, text, p.fidelity, progress)
+                    store.log(p, f"Script imported: {len(p.slides)} paragraphs")
+                else:
+                    script_gen.brief(p, progress, lambda: store.save(p))
+                    store.log(p, f"Brief written: {len((p.outline or {}).get('sections', []))} chapters")
+                store.save(p)
+                p.cast = cast_mod.propose(p, progress, source_text=text)
+                p.status = "casting" if not text else p.status
+                store.save(p)
+                return {"slides": len(p.slides), "cast": len(p.cast)}
             if p.has_source and src.exists():
                 script_gen.import_script(p, src.read_text(encoding="utf-8"),
                                          p.fidelity, progress)
@@ -775,7 +805,8 @@ def create_project(payload: dict = Body(...)) -> dict:
             store.save(p)
         return {"slides": len(p.slides)}
 
-    jid = jobs.start("import" if script else "script", project.id, work)
+    jid = jobs.start("import" if script else ("brief" if project.style.format == "stage" else "script"),
+                     project.id, work)
     return {"project": project.to_dict(), "job": jid}
 
 
@@ -785,6 +816,11 @@ def get_project(pid: str) -> dict:
     d = p.to_dict()
     d["jobs"] = [{"id": j["id"], "kind": j["kind"]} for j in jobs.active_for(pid)]
     d["youtube"] = youtube_mod.status(p.channel_id) if p.channel_id else {"connected": False}
+    if p.style.format == "stage":
+        d["cast"] = cast_mod.subjects(p)
+        d["cast_summary"] = cast_mod.summary(p)
+        d["visual_flags"] = cast_mod.check_visuals(p)
+        d["stage"] = shots_mod.status(p)
     return d
 
 
@@ -971,8 +1007,12 @@ def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
             # `fresh` throws that away and writes the script from the top.
             script_gen.generate(p, progress, lambda: store.save(p), fresh=fresh)
             store.save(p)
-            media.gather(p, progress)
-            store.save(p)
+            # A 3D explainer's pictures come from its shots, except for the
+            # paragraphs whose visual line is a photo.
+            only = shots_mod.photo_leads(p) if p.style.format == "stage" else None
+            if only is None or only:
+                media.gather(p, progress, only=only)
+                store.save(p)
         return {"slides": len(p.slides)}
 
     return {"job": jobs.start("script", pid, work)}
@@ -1036,6 +1076,8 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             s.narration = str(payload["narration"]).strip()
         if "title" in payload:
             s.title = str(payload["title"]).strip()[:40]
+        if "visual_note" in payload:
+            s.visual_note = str(payload["visual_note"]).strip()[:400]
         if "chapter" in payload:
             # "" clears the mark; a chapter also forces its own picture, which
             # `schema.group_slides` applies on the way back out.
@@ -2562,6 +2604,240 @@ def music_list() -> list[dict]:
     ]
 
 
+# ------------------------------------------------------------- 3D models
+# The shared model library (app/models3d.py) and each 3D explainer's cast.
+def _model_or_404(mid: str) -> dict:
+    try:
+        return models3d.get(mid)
+    except models3d.ModelError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.get("/api/models")
+def list_models() -> list[dict]:
+    return models3d.all_models()
+
+
+@app.post("/api/models")
+async def add_model(file: UploadFile) -> dict:
+    """A GLB into the library. Streamed to a temp file, never held in memory."""
+    if not (file.filename or "").lower().endswith(".glb"):
+        raise HTTPException(400, "Only .glb files are accepted. Most sites offer a "
+                                 "GLB download; Blender exports one as glTF Binary.")
+    fd, tmp_name = tempfile.mkstemp(suffix=".glb", dir=str(CACHE_DIR))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            shutil.copyfileobj(file.file, out, 1024 * 1024)
+        return models3d.add(tmp, file.filename or "model.glb")
+    except models3d.ModelError as exc:
+        raise HTTPException(400, str(exc))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@app.get("/api/models/{mid}")
+def get_model(mid: str) -> dict:
+    return _model_or_404(mid)
+
+
+@app.patch("/api/models/{mid}")
+def edit_model(mid: str, payload: dict = Body(default={})) -> dict:
+    _model_or_404(mid)
+    try:
+        return models3d.update(mid, payload)
+    except (models3d.ModelError, TypeError, ValueError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.delete("/api/models/{mid}")
+def delete_model(mid: str) -> dict:
+    _model_or_404(mid)
+    using = [p["title"] for p in store.list_projects() if mid in p["cast"]]
+    if using:
+        raise HTTPException(409, "Still in the cast of: " + "; ".join(using[:5])
+                            + ". Remove it from those videos first.")
+    models3d.delete(mid)
+    return {"deleted": mid}
+
+
+@app.post("/api/models/{mid}/identify")
+async def identify_model(mid: str, views: list[UploadFile], captions: str = Form("[]"),
+                         meta: str = Form("{}"), kind: str = Form("object"),
+                         mode: str = Form("identify")) -> dict:
+    """Ask Claude what this model is, from the pictures the browser rendered
+    for its kind (static/stage/identify.js). Stores the suggestions; changes
+    nothing else — the confirm screen applies them on a click."""
+    m = _model_or_404(mid)
+    if kind not in models3d.KINDS:
+        raise HTTPException(400, f"Unknown kind {kind!r}")
+    images = [await v.read() for v in views[:8]]
+    if not images or any(len(b) > 4 * 1024 * 1024 for b in images):
+        raise HTTPException(400, "Send one to eight pictures, each under 4 MB.")
+    try:
+        caps = [str(c)[:200] for c in json.loads(captions)][:len(images)]
+        info = json.loads(meta) if meta else {}
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(400, f"Bad captions or meta: {exc}")
+    caps += [""] * (len(images) - len(caps))
+    from . import identify as identify_mod
+    from starlette.concurrency import run_in_threadpool
+    if mode == "parts":
+        # Highlighted pictures of the named parts, plus where each sits.
+        table = (info or {}).get("table") or []
+        try:
+            named = await run_in_threadpool(identify_mod.name_parts, m, images, caps, table)
+        except llm_mod.LLMUnavailable as exc:
+            raise HTTPException(503, str(exc))
+        except llm_mod.LLMError as exc:
+            raise HTTPException(502, f"Claude could not name the parts: {exc}")
+        ident = dict(m.get("identity") or {})
+        ident["parts"] = {**(ident.get("parts") or {}), **named}
+        ident["parts_from_pictures"] = True
+        ident["parts_table"] = [t for t in table if isinstance(t, dict)][:24]   # the measured positions, for checking
+        return models3d.update(mid, {"identity": ident})
+    if mode == "refine":
+        # The closer look at a site's subject: tighten its box, nothing else.
+        try:
+            box = await run_in_threadpool(identify_mod.refine, m, images[0], caps[0],
+                                          (info or {}).get("grid") or {})
+        except llm_mod.LLMUnavailable as exc:
+            raise HTTPException(503, str(exc))
+        except llm_mod.LLMError as exc:
+            raise HTTPException(502, f"Claude could not place it: {exc}")
+        ident = dict(m.get("identity") or {})
+        if box and ident.get("subject"):
+            ident["subject"] = {**ident["subject"], "box": box, "refined": True}
+        return models3d.update(mid, {"identity": ident})
+    try:
+        # Off the event loop: the Claude call blocks for up to a few minutes.
+        found = await run_in_threadpool(identify_mod.identify, m, kind, images, caps,
+                                        info if isinstance(info, dict) else {})
+    except llm_mod.LLMUnavailable as exc:
+        raise HTTPException(503, str(exc))
+    except llm_mod.LLMError as exc:
+        raise HTTPException(502, f"Claude could not identify it: {exc}")
+    return models3d.update(mid, {"identity": found})
+
+
+@app.get("/api/models/{mid}/model.glb")
+def model_file(mid: str, request: Request) -> Response:
+    try:
+        path = models3d.glb_path(mid)
+    except models3d.ModelError as exc:
+        raise HTTPException(404, str(exc))
+    return _ranged(path, request)
+
+
+@app.get("/api/models/{mid}/thumb.jpg")
+def model_thumb(mid: str) -> Response:
+    _model_or_404(mid)
+    path = models3d.thumb_path(mid)
+    if not path.is_file():
+        raise HTTPException(404, "No thumbnail yet")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/models/{mid}/thumb")
+async def set_model_thumb(mid: str, request: Request) -> dict:
+    """The browser renders the thumbnail, since it is the one with WebGL."""
+    _model_or_404(mid)
+    try:
+        models3d.set_thumb(mid, await request.body())
+    except models3d.ModelError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
+@app.post("/api/projects/{pid}/cast")
+def add_to_cast(pid: str, payload: dict = Body(...)) -> dict:
+    """Add a subject: {"subject": name}, or {"model": id} for a library model
+    playing itself."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        subs = cast_mod.subjects(p)
+        mid = str(payload.get("model") or "")
+        if mid:
+            m = _model_or_404(mid)
+            if not any(x["model"] == mid for x in subs):
+                subs.append(cast_mod.clean_subject({"subject": cast_mod.model_name(m), "model": mid,
+                                                    "role": "supporting"}, 99))
+        else:
+            new = cast_mod.clean_subject({"subject": payload.get("subject"), "role": payload.get("role")}, 99)
+            if not new:
+                raise HTTPException(400, "Name the subject.")
+            subs.append(new)
+        p.cast = subs
+        store.save(p)
+    return get_project(pid)
+
+
+@app.patch("/api/projects/{pid}/cast/{sid}")
+def edit_cast(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Rename a subject, change its role, give it a model, or say "photos instead"."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        subs = cast_mod.subjects(p)
+        s = next((x for x in subs if x["id"] == sid), None)
+        if not s:
+            raise HTTPException(404, "No such subject")
+        if "model" in payload:
+            mid = str(payload.get("model") or "")
+            if mid:
+                _model_or_404(mid)
+            s["model"] = mid
+            if mid:
+                s["mode"] = "model"
+        for k in ("subject", "role", "why", "mode"):
+            if k in payload:
+                s[k] = payload[k]
+        sections = len((p.outline or {}).get("sections") or [])
+        p.cast = [cast_mod.clean_subject(x, sections or 99) or x for x in subs]
+        store.save(p)
+    return get_project(pid)
+
+
+@app.delete("/api/projects/{pid}/cast/{sid}")
+def remove_from_cast(pid: str, sid: str) -> dict:
+    """Drop a subject (by its id, or by the model playing it)."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        p.cast = [x for x in cast_mod.subjects(p) if x["id"] != sid and x["model"] != sid]
+        store.save(p)
+    return get_project(pid)
+
+
+@app.post("/api/projects/{pid}/cast/propose")
+def repropose_cast(pid: str) -> dict:
+    """Ask again for the cast; subjects with a model already chosen are kept."""
+    _load(pid)
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            p.cast = cast_mod.propose(p, progress)
+            store.save(p)
+        return {"cast": len(p.cast)}
+
+    return {"job": jobs.start("cast", pid, work)}
+
+
+@app.post("/api/projects/{pid}/cast/revise")
+def revise_visuals(pid: str, payload: dict = Body(default={})) -> dict:
+    """Rewrite the visual lines the cast can no longer carry (or `slides`)."""
+    _load(pid)
+    only = [str(i) for i in (payload.get("slides") or [])] or None
+
+    def work(progress):
+        with store.lock_for(pid):
+            p = store.load(pid)
+            n = cast_mod.revise_visuals(p, progress, only)
+            store.save(p)
+        return {"changed": n}
+
+    return {"job": jobs.start("visuals", pid, work)}
+
+
 # ------------------------------------------------------------------- library
 @app.get("/api/library")
 def list_library(q: str = "", kind: str = "", tag: str = "") -> list[dict]:
@@ -2858,3 +3134,125 @@ def unhandled(_request: Request, exc: Exception) -> JSONResponse:
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ------------------------------------------------------------- 3D shots
+# The Stage tab: each 3D paragraph's shot (app/shots.py), solved and drawn
+# by the stage's headless browser (app/stage.py). Solving can take a minute,
+# so it runs on a copy and only the shots are written back, under the lock —
+# the creator can keep editing the script meanwhile.
+def _save_shots(pid: str, worked: "Project") -> None:
+    with store.lock_for(pid):
+        p = store.load(pid)
+        got = {s.id: s.shot for s in worked.slides}
+        for s in p.slides:
+            if s.id in got and (s.shot or {}) != got[s.id]:
+                s.shot = got[s.id]
+        store.save(p)
+
+
+def _stage_or_400(p) -> None:
+    if p.style.format != "stage":
+        raise HTTPException(400, "Only a 3D explainer has shots.")
+    ok, why = stage_mod.available()
+    if not ok:
+        raise HTTPException(503, why)
+
+
+@app.post("/api/projects/{pid}/stage/plan")
+def plan_shots(pid: str, payload: dict = Body(default={})) -> dict:
+    """Direct, solve and check every unlocked 3D shot; failures go back to
+    Claude once; then the photo paragraphs get their pictures."""
+    _stage_or_400(_load(pid))
+    use_claude = payload.get("claude", True) is not False
+
+    def work(progress):
+        p = store.load(pid)
+        result = shots_mod.plan(p, progress, lambda: _save_shots(pid, p), use_claude=use_claude)
+        _save_shots(pid, p)
+        photos = [i for i in shots_mod.photo_leads(p)
+                  if not next((s for s in p.slides if s.id == i), None).chosen_id]
+        if photos:
+            with store.lock_for(pid):
+                q = store.load(pid)
+                media.gather(q, progress, only=photos)
+                store.save(q)
+        return result
+
+    return {"job": jobs.start("shots", pid, work)}
+
+
+@app.post("/api/projects/{pid}/stage/solve")
+def solve_shots(pid: str, payload: dict = Body(default={})) -> dict:
+    """Solve shots without asking Claude: the stale ones, or `slides`."""
+    _stage_or_400(_load(pid))
+    only = [str(i) for i in (payload.get("slides") or [])] or None
+
+    def work(progress):
+        p = store.load(pid)
+        shots_mod.solve(p, progress, only=only, force=bool(only))
+        _save_shots(pid, p)
+        return shots_mod.status(p)["counts"]
+
+    return {"job": jobs.start("shots", pid, work)}
+
+
+@app.patch("/api/projects/{pid}/stage/{sid}")
+def edit_shot(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """Change a shot's intent (it is then solved again), or lock/unlock it."""
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = next((x for x in p.slides if x.id == sid), None)
+        if not s or not shots_mod.is_3d(s):
+            raise HTTPException(404, "That paragraph has no 3D shot.")
+        sh = dict(s.shot or {})
+        if "intent" in payload:
+            base = sh.get("intent") or shots_mod.intent_from_line(p, s) or {}
+            it = shots_mod.clean_intent({**base, **(payload["intent"] or {})}, p)
+            if not it:
+                raise HTTPException(400, "A shot needs a subject that has a model.")
+            sh["intent"], sh["by"], sh["locked"] = it, "hand", False
+        if "locked" in payload:
+            sh["locked"] = bool(payload["locked"])
+        if payload.get("reset"):
+            sh = {}
+        s.shot = sh
+        store.save(p)
+    return get_project(pid)
+
+
+@app.put("/api/projects/{pid}/stage/{sid}/shot")
+def set_shot_by_hand(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    """A shot set from the view on the Stage tab, with the checks the page
+    ran on it. Kept as it is, and locked."""
+    shot = payload.get("shot")
+    if not isinstance(shot, dict) or shot.get("kind") not in ("move", "path", "turn", "overhead", "still"):
+        raise HTTPException(400, "Not a shot.")
+    if len(json.dumps(shot)) > 20_000:
+        raise HTTPException(400, "That shot is too large.")
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = next((x for x in p.slides if x.id == sid), None)
+        if not s or not shots_mod.is_3d(s):
+            raise HTTPException(404, "That paragraph has no 3D shot.")
+        checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+        shots_mod.set_by_hand(p, s, shot, checks, float(payload.get("secs") or shot.get("secs") or 8))
+        store.save(p)
+    return get_project(pid)
+
+
+@app.get("/api/projects/{pid}/stage/{sid}/scene")
+def shot_scene(pid: str, sid: str) -> dict:
+    """What the Stage tab's preview needs to load a shot's scene: the cast
+    members it shows with their models, the intent, the solved shot."""
+    p = _load(pid)
+    lead = next(((s, secs) for _i, s, secs in shots_mod.leads(p) if s.id == sid), None)
+    if not lead:
+        raise HTTPException(404, "That paragraph has no 3D shot.")
+    s, secs = lead
+    it = (s.shot or {}).get("intent") or shots_mod.intent_from_line(p, s)
+    if not it:
+        raise HTTPException(400, "No subject in this shot has a model yet.")
+    entries = [{"sid": e["sid"], "manifest": _model_or_404(e["model"])} for e in shots_mod.entries(p, it)]
+    return {"entries": entries, "intent": it, "solved": (s.shot or {}).get("solved"), "secs": secs,
+            "locked": bool((s.shot or {}).get("locked"))}

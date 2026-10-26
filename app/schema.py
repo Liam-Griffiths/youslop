@@ -122,6 +122,11 @@ class Slide:
     # Keyed so switching a video between cuts keeps what was written for each.
     # A cut with nothing here draws from the narration. See app/cuts/.
     cues: dict = field(default_factory=dict)
+    # A 3D explainer's shot for the picture this paragraph leads: the
+    # planner's intent, the solver's camera path and checks, and whether a
+    # human locked it. Only paragraphs whose visual line is a 3D beat have
+    # one. See app/shots.py.
+    shot: dict = field(default_factory=dict)
 
     @property
     def word_count(self) -> int:
@@ -173,7 +178,7 @@ class Style:
     # talk, pictures taped onto it rather than filling it. See render.py.
     # The five drawn cuts in app/cuts/ — flameboat, casefile, loudmouth,
     # groupchat, ticker — draw every frame themselves and join on hard cuts.
-    format: str = "kenburns"        # kenburns | essay | board | a cut key | custom:<id>
+    format: str = "kenburns"        # kenburns | essay | board | stage | a cut key | custom:<id>
     vignette: float = 0.34          # 0 = off, 1 = heavy
     ken_burns: bool = True
     ken_burns_amount: float = 0.10  # fractional zoom over a slide
@@ -599,6 +604,10 @@ class Project:
     # by hand). Kept on the project so the upload form starts from them.
     description: str = ""
     yt_tags: list[str] = field(default_factory=list)
+    # The 3D explainer's models: [{"model": <library id>}], in the order they
+    # were added. Each is a reference into app/models3d.py's shared library,
+    # where what is known about the model (front, size, parts) lives.
+    cast: list[dict] = field(default_factory=list)
     render: dict = field(default_factory=dict)   # last render result
     log: list[str] = field(default_factory=list)
 
@@ -651,6 +660,7 @@ class Project:
             "music": self.music,
             "description": self.description,
             "yt_tags": self.yt_tags,
+            "cast": self.cast,
             "render": self.render,
             "log": self.log[-200:],
             "picture_runs": self.picture_runs(),
