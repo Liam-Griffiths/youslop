@@ -741,8 +741,9 @@ def create_project(payload: dict = Body(...)) -> dict:
         raise HTTPException(400, "That script is too short to build a video from.")
 
     channel = channels.load_or_none(payload.get("channel_id") or "")
-    minutes = max(5, min(30, int(payload.get("target_minutes")
-                                 or (channel.default_minutes if channel else 12))))
+    test = bool(payload.get("test")) and not script
+    minutes = 1 if test else max(5, min(30, int(payload.get("target_minutes")
+                                                or (channel.default_minutes if channel else 12))))
     tone = payload.get("tone") or (channel.tone if channel else "warm documentary")
     project = new_project(idea or script[:200], minutes, tone, channel=channel)
     if script:
@@ -758,6 +759,8 @@ def create_project(payload: dict = Body(...)) -> dict:
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
     if payload.get("research_mode") in ("quick", "deep"):
         project.research_mode = payload["research_mode"]
+    if test:
+        project.test, project.research_mode = True, "quick"
     # Models first: models the creator picked on the form are in the cast
     # before the story is planned, and the brief is built around them.
     if project.style.format == "stage":
@@ -972,7 +975,7 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
             elif key == "dim":
                 p.thumb.dim = min(0.95, max(0.0, float(value)))
         if "target_minutes" in payload:
-            p.target_minutes = max(5, min(30, int(payload["target_minutes"])))
+            p.target_minutes = max(1 if p.test else 5, min(30, int(payload["target_minutes"])))
         for key, value in (payload.get("style") or {}).items():
             if key == "theme":
                 if value not in themes_mod.THEME_KEYS:

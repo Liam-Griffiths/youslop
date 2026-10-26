@@ -583,6 +583,10 @@ class Project:
     # YOUSLOP_RESEARCH_MODE setting decides — every video made before this
     # existed, and any made without the choice.
     research_mode: str = ""
+    # A test run: a one-minute video with quick research, for trying the
+    # pipeline end to end without paying for a full one. Shown as "test" in
+    # the video list.
+    test: bool = False
     # Work in progress from a script run that did not finish: the outline it
     # settled on and the sections already written. A run costs real model time,
     # and a usage limit two sections into six used to throw all of it away.
@@ -649,6 +653,7 @@ class Project:
             "outline": self.outline,
             "research": self.research,
             "research_mode": self.research_mode,
+            "test": self.test,
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
             "style": self.style.to_dict(),

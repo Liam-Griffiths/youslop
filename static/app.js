@@ -578,9 +578,13 @@ async function renderHome() {
             <input type="text" disabled value="measured after import">
           </label>` : `
           <label class="field">
-            <span>Target length — <b id="minsLabel">12</b> minutes</span>
-            <input type="range" id="mins" min="7" max="22" value="12"
-                   oninput="document.getElementById('minsLabel').textContent=this.value">
+            <span>Target length — <b id="minsLabel">${state.newTest ? '1 minute (test run)' : '12 minutes'}</b></span>
+            <input type="range" id="mins" min="7" max="22" value="12" ${state.newTest ? 'disabled' : ''}
+                   oninput="document.getElementById('minsLabel').textContent=this.value + ' minutes'">
+            <label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:13px;cursor:pointer"
+                   title="a one-minute video with quick research, to try the whole pipeline cheaply">
+              <input type="checkbox" id="testrun" ${state.newTest ? 'checked' : ''} style="width:auto"
+                     onchange="newTestRun(this.checked)"> test run — 1 minute, quick research</label>
           </label>`}
         <label class="field">
           <span>Tone</span>
@@ -597,9 +601,9 @@ async function renderHome() {
       ${state.mode === 'script' ? '' : `
         <label class="field">
           <span>Research</span>
-          <select id="research" onchange="state.newResearch=this.value">
-            <option value="quick" ${(state.newResearch || 'quick') === 'quick' ? 'selected' : ''}>Quick — one search pass</option>
-            <option value="deep" ${state.newResearch === 'deep' ? 'selected' : ''}>Deep — Claude's research mode, several rounds (slower, more Claude calls)</option>
+          <select id="research" onchange="state.newResearch=this.value" ${state.newTest ? 'disabled' : ''}>
+            <option value="quick" ${state.newTest || (state.newResearch || 'quick') === 'quick' ? 'selected' : ''}>Quick — one search pass</option>
+            <option value="deep" ${!state.newTest && state.newResearch === 'deep' ? 'selected' : ''}>Deep — Claude's research mode, several rounds (slower, more Claude calls)</option>
           </select>
         </label>`}
 
@@ -721,6 +725,7 @@ function projRow(p) {
       <div class="m">${p.slides} paragraphs · ${p.recorded}/${p.slides} recorded ·
         ~${fmtTime(p.est_seconds)}</div>
     </div>
+    ${p.test ? '<span class="pill warn" title="a one-minute test run">test</span>' : ''}
     <span class="pill ${p.has_output ? 'on' : ''}">${esc(p.status)}</span>
     <button class="btn sm danger ghost"
       onclick="event.stopPropagation();delProject('${p.id}')">delete</button>
@@ -1009,6 +1014,7 @@ async function createProject() {
     if (body.idea.length < 8) return toast('Give me a sentence or two to work with.', true);
     body.target_minutes = +$('#mins').value;
     body.research_mode = $('#research').value;
+    if (state.newTest) { body.test = true; body.target_minutes = 1; body.research_mode = 'quick'; }
   }
   if (isStage(body.format)) body.models = state.newModels || [];
 
@@ -7583,4 +7589,14 @@ async function openShot(sid) {
       render();
     } catch (e) { toast(e.message, true); }
   };
+}
+
+
+// A test run: one minute, quick research — the whole pipeline, cheaply.
+function newTestRun(on) {
+  state.newTest = !!on;
+  const mins = $('#mins'), label = $('#minsLabel'), research = $('#research');
+  if (mins) mins.disabled = state.newTest;
+  if (label) label.textContent = state.newTest ? '1 minute (test run)' : `${mins ? mins.value : 12} minutes`;
+  if (research) { research.disabled = state.newTest; if (state.newTest) research.value = 'quick'; }
 }

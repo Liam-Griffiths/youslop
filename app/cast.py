@@ -134,7 +134,8 @@ def propose(project: Project, progress: Progress = lambda m: None,
             given=("THE CREATOR HAS ALREADY CHOSEN THESE MODELS — they are in the cast:\n"
                    + "\n".join(f"  {s['model']}: {s['subject']}" for s in given) + "\n") if given else "",
             library="\n".join(f"  {m['id']}: {model_name(m)}" for m in library[:60]) or "  (empty)",
-            size="Two to four" if project.target_minutes <= 8 else "Three to six"),
+            size=("One or two" if project.target_minutes < 3
+                  else "Two to four" if project.target_minutes <= 8 else "Three to six")),
         model=MODEL_UTILITY, timeout=300,
         require=lambda v: isinstance(v, dict) and isinstance(v.get("cast"), list))
     out = list(given)

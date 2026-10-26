@@ -84,6 +84,7 @@ def list_projects() -> list[dict]:
                 "has_output": bool(raw.get("render", {}).get("output")),
                 "thumb_at": (raw.get("thumb") or {}).get("rendered_at", 0),
                 "format": (raw.get("style") or {}).get("format", "kenburns"),
+                "test": bool(raw.get("test")),
                 "cast": [c.get("model") for c in raw.get("cast") or [] if isinstance(c, dict)],
             }
         )

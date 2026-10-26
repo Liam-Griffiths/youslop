@@ -78,7 +78,9 @@ def build_outline(project: Project, progress: Progress = lambda m: None) -> dict
     intro_words = int(total_words * 0.11)
     concl_words = int(total_words * 0.09)
     main_words = total_words - intro_words - concl_words
-    n_beats = max(4, min(11, round(main_words / 235)))
+    # A one-minute test run has room for a single main beat; anything of
+    # real length gets at least four.
+    n_beats = max(1 if project.target_minutes < 3 else 4, min(11, round(main_words / 235)))
 
     progress(f"Outlining ~{total_words} words across {n_beats} main beats")
 
@@ -249,7 +251,13 @@ def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
     sec = sections[idx]
     words = int(sec.get("words") or 220)
     # ~55 words per paragraph keeps each recorded take to a comfortable breath.
-    n_paras = max(2, round(words / 55))
+    # A short section (a test run's intro) is one paragraph, not two halves.
+    n_paras = max(1 if words < 80 else 2, round(words / 55))
+    # The length each paragraph is held to follows from the budget: about
+    # 40-75 words at the usual 55, and short enough for a test run's 17-word
+    # intro to stay 17 words rather than come back as 60.
+    per = words / n_paras
+    para_lo, para_hi = max(10, round(per * 0.75)), max(20, round(per * 1.35))
 
     before = " | ".join(s.get("heading", "") for s in sections[:idx]) or "(this opens the video)"
     after = " | ".join(s.get("heading", "") for s in sections[idx + 1 :]) or "(this ends the video)"
@@ -288,7 +296,7 @@ SECTIONS AFTER THIS ONE: {after}
 Budget: about {words} words, split into {n_paras} paragraphs.
 
 Return JSON: a list of {n_paras} objects, each:
-{{"text": "the paragraph, 40-75 words, spoken aloud verbatim",
+{{"text": "the paragraph, {para_lo}-{para_hi} words, spoken aloud verbatim",
   "visual": "one plain-English sentence describing the single image or clip that \
 should be on screen while this paragraph is read"}}
 
