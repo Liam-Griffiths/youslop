@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import re
+import shlex
 from datetime import datetime, timezone
 from copy import deepcopy
 from pathlib import Path
@@ -551,3 +552,147 @@ def act(pid, nid, action, *, finding=None):
         result['warnings_kept'] = [n for n in notes if n.get('state') == 'kept']
         _write_notes(pid, result)
     return response
+
+
+def patch_schema():
+    """Generate the agent's JSON schema from storyboard's editable contract."""
+    fields = {name: {'type': 'string'} for name in storyboard.EDITABLE}
+    fields['picture_mode'] = {'enum': ['auto', 'hold', 'new']}
+    fields['cues'] = {'type': 'object', 'additionalProperties': False,
+                      'properties': {key: {'type': 'array', 'items': {'type': 'object'}}
+                                     for key in sorted(cuts.BY_KEY)}}
+    return {'type': 'object', 'required': ['paragraphs'], 'additionalProperties': False,
+            'properties': {'paragraphs': {'type': 'object', 'additionalProperties': {
+                'type': 'object', 'additionalProperties': False,
+                'properties': dict(sorted(fields.items()))}}}}
+
+
+def packet(project, t, selection: dict, intent: str) -> dict:
+    """One playhead frame and a bounded, standalone editing prompt."""
+    t = float(t)
+    story = storyboard.build(project)
+    if not math.isfinite(t) or not 0 <= t < story['project']['duration']:
+        raise ValueError('Ask time is outside the cut')
+    if not isinstance(selection, dict) or not isinstance(intent, str) or not intent.strip():
+        raise ValueError('Ask needs a selection object and an intent')
+    paragraphs = story['paragraphs']
+    sid = selection.get('slide_id')
+    para = next((p for p in paragraphs if p['id'] == sid), None) if sid else None
+    if sid and para is None:
+        raise ValueError('No such selected paragraph')
+    para = para or next((p for p in paragraphs if p['start'] <= t < p['end']), None)
+    # Slates/gaps still have context, but are outside the paragraph patch contract.
+    para = para or min(paragraphs, key=lambda p: abs(p['start'] - t), default=None)
+    if para is None:
+        raise ValueError('Ask needs at least one paragraph')
+    i = paragraphs.index(para)
+    seg = next((s for s in story['segments'] if s['start'] <= t < s['start'] + s['duration']), {})
+    frame = {key: para.get(key) for key in ('title', 'picture', 'cues')}
+    frame['camera'] = seg.get('camera', '')
+    findings = check.run(project)['findings'] + read_notes(project.id).get('notes', [])
+    findings = sorted((f for f in findings if abs(f['t'] - t) <= 2),
+                      key=lambda f: abs(f['t'] - t))
+    context = 'Narration: ' + para['narration']
+    for label, n in [('Previous', i - 1), ('Next', i + 1)]:
+        if 0 <= n < len(paragraphs):
+            context += f"\n{label}: " + paragraphs[n]['narration'].split('\n')[0]
+    schema = patch_schema()
+    path = (project_dir(project.id) / 'review' / f'ask_{t:.2f}.png').resolve()
+    apply_command = (f'CORKBORED_DATA={shlex.quote(str(path.parents[3]))} '
+                     f'.venv/bin/python -m app.cli apply {shlex.quote(project.id)} patch.json')
+    reply = ("Return only the JSON patch matching this schema. Edit only what the intent needs. "
+             "Save the JSON to patch.json and apply with: "
+             f"{apply_command}\n" + json.dumps(schema))
+
+    def prompt():
+        sections = [('Intent', intent.strip()),
+                    ('Where', f"{_clock(t)} (t={t}); paragraph {para['id']}; "
+                     f"format {project.style.format}; theme {project.style.theme}"),
+                    ('Frame', f'Look at this frame: {path}\n' + json.dumps(frame, ensure_ascii=False)),
+                    ('Findings here', json.dumps(findings, ensure_ascii=False)),
+                    ('Doctrine', project.frame.prompt_block(project.style.format)),
+                    ('Context', context), ('Reply format', reply)]
+        return '\n\n'.join(f'## {title}\n{text}' for title, text in sections)
+
+    # Rough token estimate is characters / 4. Spend the budget on the contract.
+    excess = len(prompt()) - 12000
+    if excess > 0:
+        context = context[:max(0, len(context) - excess - 32)] + '\n[Context trimmed]'
+    if len(prompt()) > 12000:
+        findings = findings[:5]
+    while len(prompt()) > 12000 and findings:
+        findings.pop()
+    if len(prompt()) > 12000:
+        raise ValueError('Ask intent, frame or doctrine exceeds the 3,000 token packet budget')
+    grab(project, t, path, size=(480, 270))
+    return dict(prompt=prompt(), image_png=path.read_bytes(), patch_schema=schema)
+
+
+def _patch_view(project):
+    story = storyboard.build(project)
+    slides = {s.id: s for s in project.slides}
+    # build exports timed cues and picture.mode; patches use raw cues/picture_mode.
+    return [dict(p, cues=deepcopy(slides[p['id']].cues),
+                 picture_mode=slides[p['id']].picture_mode) for p in story['paragraphs']]
+
+
+def _diff_paragraphs(before, after):
+    old = {p['id']: p for p in before}
+    return [dict(id=p['id'], field=field, old=old[p['id']].get(field), new=p.get(field))
+            for p in after for field in sorted(storyboard.EDITABLE)
+            if old[p['id']].get(field) != p.get(field)]
+
+
+def _ask_hash(project):
+    # Include raw fields: the storyboard omits cues for inactive cut formats.
+    value = [storyboard.build(project),
+             [{k: getattr(s, k) for k in sorted(storyboard.EDITABLE)} for s in project.slides]]
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _validate_ask_patch(patch):
+    """Reject wrong JSON types rather than silently coercing an agent reply."""
+    if not isinstance(patch, dict) or not isinstance(patch.get('paragraphs'), dict):
+        raise ValueError('Reply must be a paragraphs JSON patch')
+    for fields in patch['paragraphs'].values():
+        if not isinstance(fields, dict):
+            raise ValueError('Paragraph edits must be objects')
+        for key, value in fields.items():
+            if key == 'cues':
+                if (not isinstance(value, dict) or any(
+                        not isinstance(rows, list) or any(not isinstance(c, dict) for c in rows)
+                        for rows in value.values())):
+                    raise ValueError('Cues must map cut names to lists of objects')
+            elif not isinstance(value, str):
+                raise ValueError(f'{key} must be a string')
+
+
+def ask(project, t, selection, intent, *, mode='ask'):
+    """Prepare a proposal only; model calls and frame grabs run without store locks."""
+    if mode not in ('copy', 'ask'):
+        raise ValueError('Ask mode must be copy or ask')
+    data = packet(project, t, selection, intent)
+    if mode == 'copy':
+        import base64
+        return dict(prompt=data['prompt'], image='data:image/png;base64,' +
+                    base64.b64encode(data['image_png']).decode('ascii'))
+    patch = llm.complete_json(data['prompt'], images=[data['image_png']])
+    _validate_ask_patch(patch)
+    # Copy/validate before offering any edits. The real project stays untouched.
+    from .schema import Project
+    q = Project.from_dict(project.to_dict())
+    storyboard.apply(q, patch)
+    diff = _diff_paragraphs(_patch_view(project), _patch_view(q))
+    return dict(patch=patch, diff=diff, base=_ask_hash(project))
+
+
+def apply_ask(pid, proposal):
+    """Apply the reviewed proposal to a fresh model, rejecting intervening edits."""
+    with store.lock_for(pid):
+        project = store.load(pid)
+        if not proposal.get('base') or proposal['base'] != _ask_hash(project):
+            raise ValueError('The storyboard changed; ask again to review a fresh diff')
+        _validate_ask_patch(proposal.get('patch'))
+        changed = storyboard.apply(project, proposal.get('patch'))
+        store.save(project)
+    return dict(applied=True, changed=changed)

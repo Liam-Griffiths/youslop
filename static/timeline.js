@@ -454,6 +454,7 @@ function tlInspect(para) {
     <div class="tl-text">${esc(s.narration)}</div>
     ${seg.problems.length ? `<div class="tl-warn">${seg.problems.map((m) => '⚠ ' + esc(m)).join('<br>')}</div>` : ''}
     <div class="tl-actions">
+      <button class="btn sm" onclick="tlAsk()">Ask</button>
       <button class="btn sm" onclick="tlEditText('${s.id}')">edit the words</button>
       <button class="btn sm" onclick="tlEditPicture('${seg.lead}')">change the picture</button>
       ${fmt === 'board' ? `<button class="btn sm" onclick="tlModal(() => openBoardEditor('${s.id}'))">edit the board</button>` : ''}
@@ -483,7 +484,7 @@ function tlInspectSlate(seg) {
     <div class="tl-text">${intro
       ? 'The video opens on this slate, with its own sting if it has one. The music bed holds off until it is over.'
       : 'The video closes on this card. The music bed fades out over it.'}</div>
-    <div class="tl-actions">${where}</div>`;
+    <div class="tl-actions"><button class="btn sm" onclick="tlAsk()">Ask</button>${where}</div>`;
 }
 
 // Open a tab with one paragraph scrolled into view (or, on Record, selected).
@@ -903,3 +904,83 @@ document.addEventListener('keydown', (e) => {
   else return;
   e.preventDefault();
 });
+
+// One paused playhead, one proposal, explicit review before applying.
+function tlAsk() {
+  const pid = TL.pid;
+  const t = TL.playing ? tlNow() : TL.cur;
+  const seg = tlSegAt(t);
+  const para = [...(seg?.paragraphs || [])].reverse().find((p) => p.start <= t);
+  tlPause();
+  tlModal(() => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    wrap.innerHTML = `<div class="modal-box wide">
+      <h3>Ask at ${tlClock(t)}</h3>
+      <label>What should change?<textarea data-intent rows="3" placeholder="Make this title shorter"></textarea></label>
+      <div class="tl-actions">
+        <button class="btn sm" data-copy>Copy for Claude Code</button>
+        <button class="btn sm primary" data-ask>Ask here</button>
+        <button class="btn sm" data-close>Discard</button>
+      </div>
+      <p data-status role="status"></p><div data-answer></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const intent = wrap.querySelector('[data-intent]');
+    const status = wrap.querySelector('[data-status]');
+    const answer = wrap.querySelector('[data-answer]');
+    let proposal = null;
+    wrap.querySelector('[data-close]').onclick = () => wrap.remove();
+    async function request(mode) {
+      proposal = null;
+      answer.innerHTML = '';
+      status.textContent = mode === 'copy' ? 'Preparing prompt…' : 'Asking…';
+      const buttons = wrap.querySelectorAll('[data-copy], [data-ask]');
+      buttons.forEach((b) => { b.disabled = true; });
+      try {
+        const result = await api(`/api/projects/${pid}/agent/ask`, {
+          method: 'POST', body: JSON.stringify({ t, selection: para ? { slide_id: para.id } : {},
+            intent: intent.value, mode }) });
+        if (!wrap.isConnected) return;
+        status.textContent = '';
+        if (mode === 'copy') {
+          // Also offer a selectable textarea when WebKit denies clipboard access.
+          const text = document.createElement('textarea');
+          text.value = result.prompt; text.rows = 8;
+          answer.appendChild(text);
+          const copy = document.createElement('button');
+          copy.className = 'btn sm'; copy.textContent = 'Copy prompt';
+          const write = () => {
+            text.focus(); text.select();
+            const fallback = () => {
+              const ok = document.execCommand('copy');
+              status.textContent = ok ? 'Copied to clipboard' : 'Select and copy the prompt above.';
+            };
+            if (navigator.clipboard?.writeText) {
+              navigator.clipboard.writeText(result.prompt).then(
+                () => { status.textContent = 'Copied to clipboard'; }, fallback);
+            } else fallback();
+          };
+          copy.onclick = write; answer.appendChild(copy); write();
+          return;
+        }
+        proposal = result;
+        answer.innerHTML = `<pre style="white-space:pre-wrap">${esc(result.diff.map((d) =>
+          `${d.id} · ${d.field}: ${JSON.stringify(d.old)} → ${JSON.stringify(d.new)}`).join('\n') || 'No changes proposed.')}</pre>
+          <button class="btn sm primary" data-apply ${result.diff.length ? '' : 'disabled'}>Apply</button>`;
+        answer.querySelector('[data-apply]').onclick = async (event) => {
+          event.target.disabled = true;
+          try {
+            await api(`/api/projects/${pid}/agent/apply`, {
+              method: 'POST', body: JSON.stringify(proposal) });
+            wrap.remove(); // tlModal refreshes the project and timeline.
+          } catch (e) { status.textContent = e.message; event.target.disabled = false; }
+        };
+      } catch (e) { status.textContent = e.message; }
+      finally { buttons.forEach((b) => { b.disabled = false; }); }
+    }
+    wrap.querySelector('[data-copy]').onclick = () => request('copy');
+    wrap.querySelector('[data-ask]').onclick = () => request('ask');
+    intent.focus();
+  });
+}

@@ -1090,6 +1090,27 @@ def project_storyboard(pid: str) -> dict:
         return storyboard.build(_load(pid))
 
 
+@app.post("/api/projects/{pid}/agent/ask")
+def agent_ask(pid: str, payload: dict = Body(...)) -> dict:
+    project = _load(pid)
+    try:
+        return review.ask(project, payload.get('t', 0), payload.get('selection', {}),
+                          payload.get('intent', ''), mode=payload.get('mode', 'ask'))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (llm_mod.LLMError, ffutil.FFError, OSError) as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/projects/{pid}/agent/apply")
+def agent_apply(pid: str, payload: dict = Body(...)) -> dict:
+    _load(pid)
+    try:
+        return review.apply_ask(pid, payload)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.patch("/api/projects/{pid}/slides/{sid}")
 def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     with store.lock_for(pid):

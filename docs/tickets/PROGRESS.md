@@ -52,7 +52,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T3.1 | Snapshots and contact sheet | M | T0.7, T1.5 | done | 2026-10-31 Codex; labels moved under frames by Claude; 298 tests |
 | T3.2 | Claude vision review and REVIEW.md | M | T3.1 | done | 2026-10-31 Codex; mocked only, owner: one real review; suite now 2.7s |
 | T3.3 | Fix routing | M | T3.2 | done | 2026-10-31 Codex; 317 tests (3.4s); UI rows checked headless |
-| T3.4 | Ask the agent packet | M | T3.1 | todo | |
+| T3.4 | Ask the agent packet | M | T3.1 | done | 2026-10-31 Codex; 334 tests; owner: try Ask the agent copy in the desktop window |
 | T3.5 | CLI full loop, ops.py and SKILL.md | M | T0.7, T1.6, T3.2 | todo | |
 | T3.6 | Learning loop: rules, rejected looks, formats | S | T1.1, T3.2 | todo | |
 

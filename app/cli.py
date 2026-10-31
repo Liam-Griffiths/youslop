@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import check, edits, ffutil, render, review, store, storyboard
+from . import check, edits, ffutil, llm, render, review, store, storyboard
 from .config import CACHE_DIR, ensure_dirs
 
 
@@ -114,6 +114,19 @@ def cmd_apply(args):
     _print_json(changed)
 
 
+def cmd_ask(args):
+    _guard_write()  # Even --copy writes a frame beside the project.
+    result = review.ask(store.load(args.pid), args.t, {}, args.intent,
+                        mode='copy' if args.copy else 'ask')
+    if args.copy:
+        print(result['prompt'])
+        return
+    _print_json(result['patch'])
+    print(json.dumps(result['diff'], indent=2, ensure_ascii=False), file=sys.stderr)
+    if args.apply:
+        review.apply_ask(args.pid, result)
+
+
 def cmd_scene_preview(args):
     from . import scenes
 
@@ -172,6 +185,13 @@ def main(argv=None):
     command = sub.add_parser("apply")
     command.add_argument("pid")
     command.add_argument("patch")
+    command = sub.add_parser("ask")
+    command.add_argument("pid")
+    command.add_argument("t", type=float)
+    command.add_argument("intent")
+    mode = command.add_mutually_exclusive_group()
+    mode.add_argument("--copy", action="store_true")
+    mode.add_argument("--apply", action="store_true")
     command = sub.add_parser("scene-preview")
     command.add_argument("template")
     command.add_argument("--ctx")
@@ -191,7 +211,7 @@ def main(argv=None):
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
-         "review": cmd_review, "fix": cmd_fix}[args.cmd](args)
+         "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
     except BrokenPipeError:
@@ -199,7 +219,7 @@ def main(argv=None):
         with open(os.devnull, "w") as sink:
             os.dup2(sink.fileno(), sys.stdout.fileno())
         return 0
-    except (edits.EditError, OSError, ValueError, httpx.HTTPError, ffutil.FFError) as exc:
+    except (edits.EditError, OSError, ValueError, httpx.HTTPError, ffutil.FFError, llm.LLMError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     return 0

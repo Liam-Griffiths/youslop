@@ -1,4 +1,10 @@
-"""The cut's stable, render-free contract for editors and agent tools."""
+"""The cut's stable, render-free contract for editors and agent tools.
+
+apply accepts {"paragraphs": {"slide_id": {field: value, ...}}} only.
+Fields come from EDITABLE; cues maps cut keys to lists of cue objects.
+Text fields are strings and picture_mode is auto, hold or new. Validation
+is atomic and uses the same normalisation as the slide API.
+"""
 from copy import deepcopy
 from dataclasses import asdict
 
