@@ -26,6 +26,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
+from . import brand
 from .config import CACHE_DIR, LOG_DIR, ensure_dirs, ffmpeg_ready
 from .paths import describe
 
@@ -69,7 +70,7 @@ def configure(port: int | None = None, token: str | None = None,
     port = port or free_port()
     token = token if token is not None else secrets.token_hex(12)
     if token:
-        os.environ["VB_TOKEN"] = token
+        os.environ[brand.ENV_PREFIX + "TOKEN"] = token
     return port, token
 
 

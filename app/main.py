@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from . import brand
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -54,7 +55,7 @@ app = FastAPI(title="Youslop")
 # Set by run.sh whenever the server is bound past loopback. Everything here can
 # read, edit and delete projects, so a second machine has to bring the token;
 # requests from this machine are never challenged, so local use is unchanged.
-ACCESS_TOKEN = (os.environ.get("VB_TOKEN") or "").strip()
+ACCESS_TOKEN = (brand.env("TOKEN") or "").strip()
 if ACCESS_TOKEN.lower() in ("off", "none", "no"):
     ACCESS_TOKEN = ""
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}

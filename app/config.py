@@ -5,6 +5,7 @@ import os
 import shutil
 from pathlib import Path
 
+from . import brand
 from .paths import SOURCE_ROOT, data_root, resource_root
 
 # Kept for anything that still reaches for it; `DATA` and `RESOURCES` are the
@@ -72,11 +73,14 @@ def _load_environment() -> None:
     """
     from . import settings as settings_mod
 
+    brand.promote_legacy(os.environ)
     merged: dict[str, str] = {}
     merged.update(settings_mod.environment_overrides())
     env_file = next((p for p in (DATA / ".env", ROOT / ".env") if p.exists()), None)
     if env_file is not None:
-        merged.update(_read_dotenv_file(env_file))
+        dot = _read_dotenv_file(env_file)
+        brand.promote_legacy(dot)
+        merged.update(dot)
     for k, v in merged.items():
         os.environ.setdefault(k, v)
 
@@ -102,8 +106,8 @@ def _binary(name: str, override: str = "") -> str:
     return shutil.which(name) or name
 
 
-FFMPEG = _binary("ffmpeg", os.environ.get("YOUSLOP_FFMPEG", ""))
-FFPROBE = _binary("ffprobe", os.environ.get("YOUSLOP_FFPROBE", ""))
+FFMPEG = _binary("ffmpeg", brand.env("FFMPEG", ""))
+FFPROBE = _binary("ffprobe", brand.env("FFPROBE", ""))
 def _find_claude_cli() -> str:
     """Where the Claude Code CLI actually is, for a process that may not have
     a real PATH.
@@ -162,15 +166,15 @@ def ffmpeg_ready() -> tuple[bool, str]:
 # (see app/llm.py) maps the same alias onto a real model id, so every caller
 # in this codebase keeps writing "opus" / "sonnet" regardless of which
 # backend answers it.
-MODEL_SCRIPT = os.environ.get("VB_MODEL_SCRIPT", "opus")
-MODEL_UTILITY = os.environ.get("VB_MODEL_UTILITY", "sonnet")
+MODEL_SCRIPT = brand.env("MODEL_SCRIPT", "opus")
+MODEL_UTILITY = brand.env("MODEL_UTILITY", "sonnet")
 
 # How hard the model thinks before answering — the same five-level scale the
 # `claude` CLI's own `--effort` flag and the Anthropic API's `output_config`
 # both use, which is what lets one setting drive either backend identically.
 # "" (the default) omits the knob entirely and takes whichever backend's own
 # default applies, rather than this app silently picking one.
-EFFORT = os.environ.get("YOUSLOP_EFFORT", "").strip().lower()
+EFFORT = brand.env("EFFORT", "").strip().lower()
 
 # ---------------------------------------------------------------- llm backend
 # Two ways to reach Claude. "cli" shells out to a logged-in Claude Code CLI —
@@ -180,7 +184,7 @@ EFFORT = os.environ.get("YOUSLOP_EFFORT", "").strip().lower()
 # "auto" (the default) picks the CLI when one is on PATH — it costs the user
 # nothing extra — and falls back to the API key otherwise. See
 # app/llm.py:resolve_backend().
-LLM_BACKEND = os.environ.get("YOUSLOP_LLM_BACKEND", "auto").strip().lower()
+LLM_BACKEND = brand.env("LLM_BACKEND", "auto").strip().lower()
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 
 # A third, fully-local backend: an Ollama daemon on this machine, no account,
@@ -190,12 +194,12 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 # because no CLI or key was found would hand someone a worse video without
 # them ever deciding that tradeoff themselves. Only `YOUSLOP_LLM_BACKEND=ollama`
 # selects it. See app/llm.py:_complete_ollama().
-OLLAMA_URL = os.environ.get("YOUSLOP_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.environ.get("YOUSLOP_OLLAMA_MODEL", "qwen2.5:7b-instruct")
+OLLAMA_URL = brand.env("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = brand.env("OLLAMA_MODEL", "qwen2.5:7b-instruct")
 # Ollama's context window per call. Its own default is far smaller than a
 # research dossier (up to ~20 sources), and it truncates silently when a prompt
 # overflows, so this is always sent explicitly.
-OLLAMA_CONTEXT = int(os.environ.get("YOUSLOP_OLLAMA_CONTEXT", "32768") or 32768)
+OLLAMA_CONTEXT = int(brand.env("OLLAMA_CONTEXT", "32768") or 32768)
 
 # Other chat providers, opt-in only. All three speak the OpenAI chat-completions
 # protocol, so one client serves them (see app/llm.py). The model names are
@@ -209,20 +213,20 @@ OPENAI_COMPAT = {
     "openai": {
         "label": "OpenAI", "base": "https://api.openai.com/v1",
         "key": OPENAI_API_KEY,
-        "script": os.environ.get("YOUSLOP_OPENAI_MODEL_SCRIPT", "gpt-5.6-sol"),
-        "utility": os.environ.get("YOUSLOP_OPENAI_MODEL_UTILITY", "gpt-5.6-luna"),
+        "script": brand.env("OPENAI_MODEL_SCRIPT", "gpt-5.6-sol"),
+        "utility": brand.env("OPENAI_MODEL_UTILITY", "gpt-5.6-luna"),
     },
     "deepseek": {
         "label": "DeepSeek", "base": "https://api.deepseek.com",
         "key": DEEPSEEK_API_KEY,
-        "script": os.environ.get("YOUSLOP_DEEPSEEK_MODEL_SCRIPT", "deepseek-reasoner"),
-        "utility": os.environ.get("YOUSLOP_DEEPSEEK_MODEL_UTILITY", "deepseek-chat"),
+        "script": brand.env("DEEPSEEK_MODEL_SCRIPT", "deepseek-reasoner"),
+        "utility": brand.env("DEEPSEEK_MODEL_UTILITY", "deepseek-chat"),
     },
     "grok": {
         "label": "Grok (xAI)", "base": "https://api.x.ai/v1",
         "key": XAI_API_KEY,
-        "script": os.environ.get("YOUSLOP_GROK_MODEL_SCRIPT", "grok-4"),
-        "utility": os.environ.get("YOUSLOP_GROK_MODEL_UTILITY", "grok-4-1-fast-non-reasoning"),
+        "script": brand.env("GROK_MODEL_SCRIPT", "grok-4"),
+        "utility": brand.env("GROK_MODEL_UTILITY", "grok-4-1-fast-non-reasoning"),
     },
 }
 
@@ -246,13 +250,13 @@ SEARXNG_URL = os.environ.get("SEARXNG_URL", "").rstrip("/")
 # Where research finds its results: "searxng", "claude" (Claude's own web
 # search, needs ANTHROPIC_API_KEY, no server to run) or "auto" — SearXNG if a
 # URL is set, else Claude's search if a key is. See app/research.py.
-SEARCH_BACKEND = os.environ.get("YOUSLOP_SEARCH_BACKEND", "auto").strip().lower()
+SEARCH_BACKEND = brand.env("SEARCH_BACKEND", "auto").strip().lower()
 # Brave Search API — free tier, key from brave.com/search/api. Used when set.
 BRAVE_SEARCH_KEY = os.environ.get("BRAVE_SEARCH_API_KEY", "").strip()
 # How far the research step goes. "quick" is one pass of search and synthesis;
 # "deep" is Claude's research mode — rounds of planning, follow-up searches and
 # page reads before it writes. Both need SEARXNG_URL. See app/research.py.
-RESEARCH_MODE = os.environ.get("YOUSLOP_RESEARCH_MODE", "quick").strip().lower()
+RESEARCH_MODE = brand.env("RESEARCH_MODE", "quick").strip().lower()
 
 # A Google Cloud "Desktop app" OAuth client, for publishing a rendered video
 # straight to YouTube. "" disables the feature entirely — the channel page's
@@ -261,16 +265,16 @@ RESEARCH_MODE = os.environ.get("YOUSLOP_RESEARCH_MODE", "quick").strip().lower()
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
-USER_AGENT = os.environ.get(
-    "VB_USER_AGENT",
+USER_AGENT = brand.env(
+    "USER_AGENT",
     "youslop/1.0 (local research tool; contact: set VB_USER_AGENT)",
 )
 
 # ---------------------------------------------------------------- narration
 # Kokoro runs locally: no key, no request, nothing leaves the machine. The two
 # files are a one-off download; see the README.
-KOKORO_MODEL = TTS_DIR / os.environ.get("VB_KOKORO_MODEL", "kokoro-v1.0.onnx")
-KOKORO_VOICES = TTS_DIR / os.environ.get("VB_KOKORO_VOICES", "voices-v1.0.bin")
+KOKORO_MODEL = TTS_DIR / brand.env("KOKORO_MODEL", "kokoro-v1.0.onnx")
+KOKORO_VOICES = TTS_DIR / brand.env("KOKORO_VOICES", "voices-v1.0.bin")
 
 # ---------------------------------------------------------------- video
 WIDTH, HEIGHT, FPS = 1920, 1080, 30

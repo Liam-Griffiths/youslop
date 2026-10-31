@@ -30,6 +30,8 @@ import os
 import sys
 from pathlib import Path
 
+from . import brand
+
 #: True when running from a PyInstaller bundle rather than a source checkout.
 FROZEN = bool(getattr(sys, "frozen", False))
 
@@ -62,7 +64,7 @@ def data_root() -> Path:
     A checkout that already has projects in it keeps using itself, so nobody
     comes back from an upgrade to an empty library.
     """
-    override = os.environ.get("YOUSLOP_DATA", "").strip()
+    override = brand.env("DATA", "").strip()
     if override:
         return Path(override).expanduser().resolve()
     if not FROZEN and (SOURCE_ROOT / "projects").is_dir():
@@ -76,5 +78,5 @@ def describe() -> dict:
         "frozen": FROZEN,
         "resources": str(resource_root()),
         "data": str(data_root()),
-        "overridden": bool(os.environ.get("YOUSLOP_DATA", "").strip()),
+        "overridden": bool(brand.env("DATA", "").strip()),
     }

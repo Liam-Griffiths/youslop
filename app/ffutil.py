@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 from typing import Iterable
 
+from . import brand
 from .config import FFMPEG, FFPROBE, FPS, HEIGHT, WIDTH
 
 
@@ -156,7 +157,7 @@ _HW: dict = {}           # "probe" -> the working encoder or None; "broken" -> b
 
 def encoder_mode() -> str:
     """auto, cpu or gpu — read on every call, so Settings applies at once."""
-    v = os.environ.get("YOUSLOP_ENCODER", "").strip().lower()
+    v = brand.env("ENCODER", "").strip().lower()
     if not v:
         try:
             from . import settings as settings_mod

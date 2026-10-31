@@ -69,15 +69,19 @@ QS=""
 case "$HOST" in
   127.0.0.1|localhost|::1) ;;
   *)
-    case "${VB_TOKEN:-}" in
-      off|none|no) unset VB_TOKEN ;;
+    CORKBORED_TOKEN="${CORKBORED_TOKEN-${YOUSLOP_TOKEN-${VB_TOKEN-}}}"
+    case "$CORKBORED_TOKEN" in
+      off|none|no) export CORKBORED_TOKEN ;;
       "")
-        if [ -s .token ]; then VB_TOKEN=$(cat .token)
-        else VB_TOKEN=$(openssl rand -hex 12); printf '%s' "$VB_TOKEN" > .token; chmod 600 .token; fi
-        export VB_TOKEN ;;
-      *) export VB_TOKEN ;;
+        if [ -s .token ]; then CORKBORED_TOKEN=$(cat .token)
+        else CORKBORED_TOKEN=$(openssl rand -hex 12); printf '%s' "$CORKBORED_TOKEN" > .token; chmod 600 .token; fi
+        export CORKBORED_TOKEN ;;
+      *) export CORKBORED_TOKEN ;;
     esac
-    [ -n "${VB_TOKEN:-}" ] && QS="?t=${VB_TOKEN}"
+    case "$CORKBORED_TOKEN" in
+      off|none|no) ;;
+      *) [ -n "$CORKBORED_TOKEN" ] && QS="?t=${CORKBORED_TOKEN}" ;;
+    esac
     ;;
 esac
 

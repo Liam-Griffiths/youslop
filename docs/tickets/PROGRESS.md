@@ -4,13 +4,13 @@ Status values: `todo`, `doing`, `done`, `blocked`. Update the row when you
 start and when you finish. Keep the newest note in the Notes column; the
 full log lives in the ticket file.
 
-Last updated: 2026-10-25 (tickets written, nothing started)
+Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 reviewing)
 
 ## Phase 0: foundations
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T0.1 | Brand module and env alias helper | M | — | todo | |
+| T0.1 | Brand module and env alias helper | M | — | done | 2026-10-31 Codex; 28 unit tests |
 | T0.2 | Data folder compatibility | S | T0.1 | todo | |
 | T0.3 | Project file and bundle compatibility | S | T0.1 | todo | |
 | T0.4 | Mechanical rename | M | T0.1, T0.2, T0.3 | todo | |

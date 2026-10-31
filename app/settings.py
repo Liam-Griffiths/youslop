@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import brand
 from .paths import data_root
 
 
@@ -48,15 +49,16 @@ class Field:
     # first, which silently lied about "Utility model" being Opus when the
     # real default (`MODEL_UTILITY`'s own fallback) is Sonnet.
     default: str = ""
+    aliases: tuple[str, ...] = ()
 
 
 # The whole of what Settings can configure — everything `.env.example` lists,
 # as a form instead of a file. Order here is UI order.
 FIELDS: list[Field] = [
-    Field("llm_backend", "YOUSLOP_LLM_BACKEND", "How to reach Claude",
+    Field("llm_backend", brand.ENV_PREFIX + "LLM_BACKEND", "How to reach Claude",
          "Auto prefers a signed-in Claude Code CLI — it costs nothing beyond "
          "your subscription — and falls back to the API key below.",
-         group="Claude", options=(
+         aliases=tuple(brand.env_names("LLM_BACKEND")[1:]), group="Claude", options=(
              ("auto", "Auto — CLI if signed in, else the API key"),
              ("cli", "Claude Code CLI only"),
              ("api", "Anthropic API only"),
@@ -74,10 +76,11 @@ FIELDS: list[Field] = [
     Field("xai_api_key", "XAI_API_KEY", "xAI (Grok) API key", secret=True,
          help="For the Grok option above. Billed per token to your xAI account.",
          group="Claude"),
-    Field("ollama_context", "YOUSLOP_OLLAMA_CONTEXT", "Local model context window",
+    Field("ollama_context", brand.ENV_PREFIX + "OLLAMA_CONTEXT", "Local model context window",
          "How much text the local model can read in one call. Research on a big "
          "subject can send tens of thousands of tokens of sources; anything past "
-         "this is silently cut off. Larger needs more memory.", group="Claude",
+         "this is silently cut off. Larger needs more memory.",
+         aliases=tuple(brand.env_names("OLLAMA_CONTEXT")[1:]), group="Claude",
          options=(
              ("8192", "8k tokens"),
              ("16384", "16k tokens"),
@@ -87,26 +90,29 @@ FIELDS: list[Field] = [
     Field("anthropic_api_key", "ANTHROPIC_API_KEY", "Anthropic API key", secret=True,
          help="Only needed if Claude Code isn't installed. Billed per token.",
          group="Claude"),
-    Field("model_script", "VB_MODEL_SCRIPT", "Script-writing model",
+    Field("model_script", brand.ENV_PREFIX + "MODEL_SCRIPT", "Script-writing model",
          "The paragraphs themselves — the one place quality is worth paying "
-         "for.", group="Claude", options=(
+         "for.",
+         aliases=tuple(brand.env_names("MODEL_SCRIPT")[1:]), group="Claude", options=(
              ("opus", "Opus — best writing, the default"),
              ("sonnet", "Sonnet — faster and cheaper, noticeably plainer prose"),
              ("haiku", "Haiku — fastest, for a rough draft only"),
          ), default="opus"),
-    Field("model_utility", "VB_MODEL_UTILITY", "Utility model",
+    Field("model_utility", brand.ENV_PREFIX + "MODEL_UTILITY", "Utility model",
          "The fiddly bits — planning which picture each paragraph wants, "
          "thumbnail text, pronunciation. Structured, not prose; sonnet is "
-         "normally plenty.", group="Claude", options=(
+         "normally plenty.",
+         aliases=tuple(brand.env_names("MODEL_UTILITY")[1:]), group="Claude", options=(
              ("opus", "Opus"),
              ("sonnet", "Sonnet — the default"),
              ("haiku", "Haiku — fastest, for the simplest calls"),
          ), default="sonnet"),
-    Field("effort", "YOUSLOP_EFFORT", "How hard it thinks",
+    Field("effort", brand.ENV_PREFIX + "EFFORT", "How hard it thinks",
          "Applies to both models above and both the CLI and API backends — "
          "the same scale either way. Higher costs more time and, on the API "
          "backend, more money. Blank leaves it at the backend's own default "
-         "(high).", group="Claude", options=(
+         "(high).",
+         aliases=tuple(brand.env_names("EFFORT")[1:]), group="Claude", options=(
              ("", "Default"),
              ("low", "Low — fastest, for simple calls"),
              ("medium", "Medium"),
@@ -114,11 +120,11 @@ FIELDS: list[Field] = [
              ("xhigh", "Extra high"),
              ("max", "Max — slowest, when correctness matters most"),
          )),
-    Field("llm_ollama_model", "YOUSLOP_OLLAMA_MODEL", "Local model (Ollama)",
+    Field("llm_ollama_model", brand.ENV_PREFIX + "OLLAMA_MODEL", "Local model (Ollama)",
          "Only used when \"How to reach Claude\" above is set to ollama — a "
          "fully local, no-account backend. Noticeably lower script quality "
          "than Claude; opt in deliberately, it is never chosen automatically.",
-         group="Claude"),
+         aliases=tuple(brand.env_names("OLLAMA_MODEL")[1:]), group="Claude"),
     Field("elevenlabs_api_key", "ELEVENLABS_API_KEY", "ElevenLabs API key", secret=True,
          help="For narration in an ElevenLabs voice, your cloned voices included. "
          "Billed per character to your ElevenLabs plan. Works as soon as it's "
@@ -152,22 +158,23 @@ FIELDS: list[Field] = [
          "Free key from brave.com/search/api (the Data for Search plan). Used "
          "for research when set, ahead of the no-key scrape.",
          secret=True, group="Research"),
-    Field("search_backend", "YOUSLOP_SEARCH_BACKEND", "Where research searches",
+    Field("search_backend", brand.ENV_PREFIX + "SEARCH_BACKEND", "Where research searches",
          "Auto takes the first of these that is set up: your SearXNG URL, a "
          "Brave key, your Anthropic key (Claude's own search, billed per search), "
          "or otherwise a plain scrape of DuckDuckGo that needs no key.",
-         group="Research", options=(
+         aliases=tuple(brand.env_names("SEARCH_BACKEND")[1:]), group="Research", options=(
              ("auto", "Auto — the best one that is set up"),
              ("searxng", "SearXNG — your own instance"),
              ("brave", "Brave Search — needs a Brave key"),
              ("claude", "Claude's web search — needs an Anthropic API key"),
              ("scrape", "DuckDuckGo scrape — no key, no setup"),
          ), default="auto"),
-    Field("research_mode", "YOUSLOP_RESEARCH_MODE", "Research depth",
+    Field("research_mode", brand.ENV_PREFIX + "RESEARCH_MODE", "Research depth",
          "Quick is one search pass, then the script is written. Deep is "
          "Claude's research mode: it plans, runs follow-up searches and reads "
          "pages over several rounds before writing. Deep takes longer and makes "
-         "more Claude calls.", group="Research", options=(
+         "more Claude calls.",
+         aliases=tuple(brand.env_names("RESEARCH_MODE")[1:]), group="Research", options=(
              ("quick", "Quick — one search pass"),
              ("deep", "Deep — Claude's research mode, several rounds"),
          ), default="quick"),
@@ -176,20 +183,20 @@ FIELDS: list[Field] = [
     Field("google_client_secret", "GOOGLE_CLIENT_SECRET", "Google OAuth client secret",
          secret=True, help="A Google Cloud \"Desktop app\" client, for publishing "
          "a render straight to YouTube. Blank hides that panel.", group="Publishing"),
-    Field("video_encoder", "YOUSLOP_ENCODER", "Video encoder",
+    Field("video_encoder", brand.ENV_PREFIX + "ENCODER", "Video encoder",
          "Where the finished video is encoded. Auto uses the graphics chip "
          "when it passes a test encode — VA-API on Linux, NVENC on NVIDIA, "
          "VideoToolbox on a Mac — and the CPU otherwise. Drawing the frames "
          "is CPU work either way.",
-         group="Rendering", options=(
+         aliases=tuple(brand.env_names("ENCODER")[1:]), group="Rendering", options=(
              ("auto", "Auto — the GPU if it works, else the CPU"),
              ("gpu", "GPU — prefer the graphics chip"),
              ("cpu", "CPU — x264, slower, slightly smaller files"),
          ), default="auto"),
-    Field("user_agent", "VB_USER_AGENT", "Contact string for archive requests",
+    Field("user_agent", brand.ENV_PREFIX + "USER_AGENT", "Contact string for archive requests",
          "Wikimedia and Nominatim ask automated clients to identify "
          "themselves with a contact — put an email address here.",
-         group="General"),
+         aliases=tuple(brand.env_names("USER_AGENT")[1:]), group="General"),
 ]
 FIELDS_BY_KEY = {f.key: f for f in FIELDS}
 
@@ -259,13 +266,15 @@ def status() -> list[dict[str, Any]]:
     out = []
     for f in FIELDS:
         from_file = stored.get(f.key, "")
-        env_value = os.environ.get(f.env, "")
+        env_value = next((os.environ[name] for name in (f.env, *f.aliases)
+                          if name in os.environ), "")
         # A real env var wins once the process has started (see
         # config._load_environment()); "locked" means editing this field here
         # would have no effect until that variable is unset.
         locked = bool(env_value) and env_value != from_file
         out.append({
-            "key": f.key, "env": f.env, "label": f.label, "help": f.help,
+            "key": f.key, "env": f.env, "aliases": list(f.aliases),
+            "label": f.label, "help": f.help,
             "secret": f.secret, "group": f.group,
             "value": "" if f.secret else from_file,
             "set": bool(from_file),
