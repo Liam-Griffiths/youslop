@@ -18,8 +18,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T0.6 | Word timestamps on takes | M | T0.5 | done | 2026-10-31 Codex; estimates for now, timed path ready for T0.10 |
 | T0.7 | Storyboard contract and CLI skeleton | M | T0.5 | done | 2026-10-31 Codex; 104 tests; gap: run.sh skips server marker (see log) |
 | T0.8 | Re-measure the render memory cap | S | — | done | 2026-10-31 measured essay 2058 MB, kenburns 1406 MB; cap 2500/1500 |
-| T0.9 | CLAUDE.md and repo hygiene | S | T0.7 | todo | |
-| T0.10 | Kokoro model with word timings | S | T0.6 | todo | owner listens to an A/B first |
+| T0.9 | CLAUDE.md and repo hygiene | S | T0.7 | done | 2026-10-31 Codex; CLAUDE.md added (T0.10 marked blocked: owner A/B) |
+| T0.10 | Kokoro model with word timings | S | T0.6 | blocked | owner listens to an A/B first |
 
 ## Phase 1: doctrine and check
 

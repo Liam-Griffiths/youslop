@@ -294,3 +294,36 @@ Six phases, each shippable. Sizes: S under a day, M a few days, L a week or more
 ## 6. Order of work
 
 Phase 0 first in full, because 0.1 makes the rebrand one file and 0.5 makes everything after safe. Then Phase 1 and Phase 2 can proceed in parallel branches (doctrine touches planners and ffmpeg; the scene engine touches `stage.py` and new files). Phase 3 needs both. Phase 4 needs 0.6 and 0.7. Phase 5 is a queue, one migration per PR.
+
+
+## 7. Carried forward from NEXT_STEPS
+
+Migrated 2026-10-31. Ticket Goals define implementation scope; these entries
+preserve the earlier queue's motivation and unticketed work.
+
+| Former item | Coverage and remaining work |
+|---|---|
+| §1 Render memory cap | T0.8: measure peak segment RSS and derive the worker cap (now implemented with `SEGMENT_RSS_MB`). |
+| §2 Cheap drawn previews | T5.2a-c migrate board, diagrams and custom slides to scenes; T5.2d-e extend authoring and text measurement. T5.3a-e separately migrate the five drawn cuts. Preview at quarter size rather than drawing every frame at 1080p. |
+| §3 Chapter cards | T2.5 supplies scene chapter cards, including board/custom formats that return before the photographic filtergraph. |
+| §4 Render tests | T0.5: graph goldens, voice offset `T/2` (+ `HEAD_PAD` first), timing invariants and opt-in SSIM (test scaffold now exists). |
+| §5 Standalone videos | No dedicated ticket: support project-local opening stings, offer adoption of channel look/voice/narrator on promotion, and default thumbnails to the video's theme rather than `banner`. |
+| §6 Searchable video list | T4.8: search title/idea and filter status on the home list. |
+| §7 Propose chapters | T4.8: suggest editable chapter marks from section/beat boundaries. |
+
+### Later work from §8
+
+- Caption rendering: T5.1 replaces per-phrase Pillow PNGs with one timed scene
+  per essay segment, reducing disk churn and ffmpeg inputs.
+- Large UI/API modules: T4.1 splits tab painters and timeline code into plain
+  script files; T3.5 extracts shared API/CLI operations. A broader split of
+  the remaining API module has no dedicated ticket.
+- Resume failed renders: T5.6 reuses finished segments by content key instead
+  of discarding them on restart.
+
+### Open research verification from §9
+
+- No ticket: diagnose SearXNG's `format=json` 403 after restart, record empty
+  research/failures in the project's own log, and have the owner verify the
+  reported RJ Mitte research omission against reliable sources in a real
+  script + Sources run; the earlier incident report remains unverified.
