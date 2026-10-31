@@ -835,3 +835,8 @@ video { width: 100%; border-radius: 10px; background: #000; display: block; }
 .visual-line.warn input { border-color: var(--bad); }
 .visual-line .pill { max-width: 100%; white-space: normal; }
 .cast-changed { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; border-color: var(--accent); }
+
+.tl-check-group { width: 100%; }
+.tl-check-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.tl-check-row > span:last-of-type { flex: 1; }
+.tl-check-p0::before { content: '● '; color: #e35d6a; }

@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand, edits, storyboard
+from . import brand, check, edits, storyboard
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -2415,7 +2415,10 @@ def delete_presenter(pid: str) -> dict:
 # --------------------------------------------------------------------- render
 @app.post("/api/projects/{pid}/render")
 def start_render(pid: str, payload: dict = Body(default={})) -> dict:
-    _load(pid)
+    p = _load(pid)
+    result = check.run(p)
+    if not result["ok"] and not payload.get("force"):
+        return {"error": "Render blocked by P0 issues.", "check": result}
     preview = bool(payload.get("preview"))
 
     def work(progress):
@@ -2473,11 +2476,23 @@ def preview_segment(pid: str, sid: str) -> dict:
 _PROXY_LOCKS: dict[str, "threading.Lock"] = {}
 
 
+@app.get("/api/projects/{pid}/check")
+def get_check(pid: str) -> dict:
+    return check.run(_load(pid))
+
+
 @app.get("/api/projects/{pid}/timeline")
 def get_timeline(pid: str) -> dict:
     """The cut laid out in time, and which pictures already have a proxy to
     play. Renders nothing."""
-    return render.timeline(_load(pid))
+    p = _load(pid)
+    tl = render.timeline(p)
+    result = check.run(p)
+    for seg in tl["segments"]:
+        a, b = seg["start"], seg["start"] + seg["duration"]
+        seg["findings"] = [f for f in result["findings"] if a <= f["t"] < b]
+    tl["check"] = result
+    return tl
 
 
 @app.post("/api/projects/{pid}/timeline/proxy")

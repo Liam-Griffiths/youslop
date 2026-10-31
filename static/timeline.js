@@ -259,14 +259,42 @@ function tlDraw() {
 function tlPaintProblems() {
   const box = $('#tl-problems');
   if (!box || !TL.data) return;
-  const rows = [];
-  for (const s of TL.data.segments) for (const m of s.problems) rows.push([s, m]);
-  box.innerHTML = rows.length
-    ? `<span class="mono tl-note">worth a look before rendering:</span>` + rows.slice(0, 12).map(([s, m]) =>
-        `<button class="tl-chip" onclick="tlSeek(${s.start},{ensure:true})">
-          ${tlLabel(s)} · ${esc(m)}</button>`).join('')
-      + (rows.length > 12 ? `<span class="mono tl-note">+${rows.length - 12} more</span>` : '')
-    : `<span class="mono tl-note">every picture has a picture and a recording.</span>`;
+  const findings = TL.data.check?.findings || TL.data.segments.flatMap((s) => s.findings || []);
+  box.replaceChildren();
+  if (!findings.length) {
+    box.textContent = 'No check findings.';
+    return;
+  }
+  for (const level of ['P0', 'P1', 'P2']) {
+    const rows = findings.filter((f) => f.level === level);
+    if (!rows.length) continue;
+    const group = document.createElement('section');
+    group.className = 'tl-check-group';
+    const title = document.createElement('strong');
+    title.textContent = `${level} (${rows.length})`;
+    if (level === 'P0') title.className = 'tl-check-p0';
+    group.append(title);
+    for (const f of rows) {
+      const row = document.createElement('div');
+      row.className = 'tl-check-row';
+      const chip = document.createElement('span');
+      chip.className = 'tl-chip';
+      chip.textContent = level;
+      const jump = document.createElement('button');
+      jump.className = 'mono tl-chip';
+      jump.textContent = `${tlClock(f.t)} · jump`;
+      jump.onclick = () => tlSeek(f.t, { ensure: true });
+      const msg = document.createElement('span');
+      msg.textContent = f.msg;
+      const fix = document.createElement('button');
+      fix.textContent = 'fix';
+      fix.disabled = true;
+      fix.dataset.fix = JSON.stringify(f.fix);
+      row.append(chip, jump, msg, fix);
+      group.append(row);
+    }
+    box.append(group);
+  }
 }
 
 // The cheap repaint: playhead, clock, play button, which paragraph is selected.

@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import edits, render, store, storyboard
+from . import check, edits, render, store, storyboard
 from .config import CACHE_DIR, ensure_dirs
 
 
@@ -57,6 +57,19 @@ def cmd_storyboard(args):
     _print_json(storyboard.build(store.load(args.pid)))
 
 
+def cmd_check(args):
+    result = check.run(store.load(args.pid))
+    if args.json:
+        _print_json(result)
+    else:
+        for level in ("P0", "P1", "P2"):
+            print(f"{level} ({result['counts'][level]})")
+            for finding in result["findings"]:
+                if finding["level"] == level:
+                    print(f"  {finding['t']:.3f}s  {finding['msg']}")
+    return 1 if result["counts"]["P0"] else 0
+
+
 def cmd_apply(args):
     _guard_write()
     patch = json.loads(Path(args.patch).read_text(encoding="utf-8"))
@@ -71,7 +84,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
-    for name in ("timeline", "storyboard"):
+    for name in ("timeline", "storyboard", "check"):
         command = sub.add_parser(name)
         command.add_argument("pid")
         command.add_argument("--json", action="store_true")
@@ -81,9 +94,10 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
-        {"list": cmd_list, "timeline": cmd_timeline,
+        status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply}[args.cmd](args)
         sys.stdout.flush()
+        return status or 0
     except BrokenPipeError:
         # A consumer such as head has finished; avoid another error at exit.
         with open(os.devnull, "w") as sink:

@@ -6757,8 +6757,14 @@ async function saveProject(patch) {
 }
 
 async function doRender(preview) {
-  const r = await api(`/api/projects/${state.project.id}/render`,
+  const path = `/api/projects/${state.project.id}/render`;
+  let r = await api(path,
     { method: 'POST', body: JSON.stringify({ preview }) });
+  if (r.check && r.check.counts.P0) {
+    if (!confirm(`${r.check.counts.P0} P0 issues. Render anyway?`)) return;
+    r = await api(path,
+      { method: 'POST', body: JSON.stringify({ preview, force: true }) });
+  }
   watchJob(r.job, preview ? 'preview render' : 'render');
   render();
 }
