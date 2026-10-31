@@ -37,7 +37,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T2.1 | CDP capture mode in the stage runner | L | T0.5 | todo | |
+| T2.1 | CDP capture mode in the stage runner | L | T0.5 | done | 2026-10-31 Codex; visual test passes; 10.9 fps at 1080p, 15.5 fps quarter |
 | T2.2 | Scene runtime and vendored GSAP | M | — | todo | |
 | T2.3 | scenes.py and Jinja templates | M | T2.1, T2.2 | todo | |
 | T2.4 | Render branch point for scenes | M | T2.3 | todo | |

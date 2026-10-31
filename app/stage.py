@@ -10,16 +10,21 @@ static files, the model library and one `job.json`, then opens
 static/stage/run.html in Chromium with a fresh profile. The page posts its
 results back; for a render it posts every frame raw, in order, and the server
 pipes them into ffmpeg. There is no Playwright and no remote debugging
-protocol — the page drives itself, and a watchdog ends it if it goes quiet.
+protocol in push mode — the page drives itself, and a watchdog ends it if
+it goes quiet. DOM scenes use CDP to seek and capture PNG frames instead.
 
 The browser draws on the GPU (ANGLE over Vulkan on Linux; the spike measured
 about 40 fps at 1080p on a Radeon 780M). See docs/3d-explainer.md, step 10.
 """
 from __future__ import annotations
 
+import base64
 import http.server
+import itertools
 import json
 import os
+import queue
+import secrets
 import shutil
 import subprocess
 import sys
@@ -28,6 +33,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
+from urllib.parse import unquote
 
 from . import brand, models3d
 from .config import FFMPEG, STATIC_DIR
@@ -73,6 +79,7 @@ def _angle() -> str:
 class _Run:
     def __init__(self, job: dict, out_dir: Path | None):
         self.job, self.out_dir = job, out_dir
+        self.token = secrets.token_hex(8)
         self.results: list[dict] = []
         self.errors: list[str] = []
         self.logs: list[str] = []
@@ -95,6 +102,16 @@ def _handler(run: _Run):
 
         def translate_path(self, path):
             path = path.split("?")[0]
+            if path.startswith("/scene/"):
+                parts = unquote(path).split("/", 3)
+                root = run.job.get("scene_root")
+                if len(parts) != 4 or parts[2] != run.token or not root:
+                    return "/nonexistent"
+                root = Path(root).resolve()
+                target = (root / parts[3]).resolve()
+                if not target.is_relative_to(root):
+                    return "/nonexistent"
+                return str(target)
             if path.startswith("/models/"):
                 p = Path(path)
                 try:
@@ -202,6 +219,13 @@ def _end(run: _Run, clip: str) -> None:
     c["done"] = True
 
 
+def _chromium_flags(prof, size):
+    return ["--headless=new", f"--use-angle={_angle()}", "--ignore-gpu-blocklist",
+            f"--user-data-dir={prof}", f"--window-size={size[0]},{size[1]}",
+            "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+            "--disable-background-timer-throttling", "--disable-renderer-backgrounding"]
+
+
 def _run(job: dict, progress: Progress, *, out_dir: Path | None = None,
          silence: int = 180, size: tuple[int, int] = (480, 270),
          on_result: Callable[[dict], None] | None = None) -> _Run:
@@ -219,10 +243,7 @@ def _run(job: dict, progress: Progress, *, out_dir: Path | None = None,
     # A throwaway profile per run: a crashed run's profile lock once blocked
     # the next one silently.
     with tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-stage-") as prof:
-        cmd = [exe, "--headless=new", f"--use-angle={_angle()}", "--ignore-gpu-blocklist",
-               f"--user-data-dir={prof}", f"--window-size={size[0]},{size[1]}",
-               "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-               "--disable-background-timer-throttling", "--disable-renderer-backgrounding", url]
+        cmd = [exe, *_chromium_flags(prof, size), url]
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             while not run.done.wait(timeout=1):
@@ -341,3 +362,270 @@ def render(items: list[dict], models: dict[str, dict], out_dir: Path,
     secs = max(0.01, time.time() - t0)
     progress(f"3D shots drawn: {frames} frames in {secs:.0f} s ({frames / secs:.0f} fps)")
     return made
+
+
+# -------------------------------------------------------------- DOM scenes
+class _Cdp:
+    """NUL-framed CDP pipe, with independent reply queues and bounded events."""
+    def __init__(self, w_in, r_out):
+        self.w, self.r = w_in, r_out
+        self.ids = itertools.count(1)
+        self.waiting = {}
+        self.events = []
+        self.condition = threading.Condition()
+        self.write_lock = threading.Lock()
+        self.closed = False
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
+
+    def _read(self):
+        buf = b""
+        try:
+            while chunk := os.read(self.r, 1 << 20):
+                buf += chunk
+                while b"\0" in buf:
+                    raw, buf = buf.split(b"\0", 1)
+                    msg = json.loads(raw)
+                    with self.condition:
+                        if "id" in msg:
+                            q = self.waiting.pop(msg["id"], None)
+                            if q is not None:
+                                q.put(msg)
+                        else:
+                            self.events.append(msg)
+                            self.events[:] = self.events[-200:]
+                        self.condition.notify_all()
+        except (OSError, ValueError):
+            pass
+        finally:
+            with self.condition:
+                self.closed = True
+                for q in self.waiting.values():
+                    q.put(None)
+                self.waiting.clear()
+                self.condition.notify_all()
+
+    def send(self, method, params=None, session=None, timeout=30):
+        q = queue.Queue(1)
+        with self.condition:
+            if self.closed:
+                raise StageError("the CDP pipe closed")
+            ident = next(self.ids)
+            self.waiting[ident] = q
+        msg = {"id": ident, "method": method, "params": params or {}}
+        if session:
+            msg["sessionId"] = session
+        try:
+            with self.write_lock:
+                data = memoryview(json.dumps(msg).encode() + b"\0")
+                while data:
+                    data = data[os.write(self.w, data):]
+            reply = q.get(timeout=timeout)
+            if reply is None:
+                raise StageError("the CDP pipe closed")
+            if "error" in reply:
+                raise StageError(f"{method}: {reply['error']}")
+            return reply.get("result", {})
+        except (OSError, queue.Empty) as exc:
+            raise StageError(f"{method}: CDP pipe failed or timed out") from exc
+        finally:
+            with self.condition:
+                self.waiting.pop(ident, None)
+
+    def clear_events(self):
+        with self.condition:
+            self.events.clear()
+
+    def wait_event(self, method, timeout=30):
+        end = time.monotonic() + timeout
+        with self.condition:
+            while True:
+                for event in self.events:
+                    if event.get("method") == method:
+                        self.events.remove(event)
+                        return event
+                if self.closed:
+                    raise StageError("the CDP pipe closed")
+                remaining = end - time.monotonic()
+                if remaining <= 0:
+                    raise StageError(f"waiting for {method} timed out")
+                self.condition.wait(remaining)
+
+    def close(self):
+        os.close(self.w)
+        self.reader.join(timeout=2)
+        os.close(self.r)
+
+
+def _begin_png(run, clip, W, H, fps, frames):
+    out = run.out_dir / f"{clip}.mp4"
+    tmp = out.with_suffix(".part.mp4")
+    proc = subprocess.Popen(
+        [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "image2pipe", "-c:v", "png", "-framerate", str(fps), "-i", "-",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
+         "-pix_fmt", "yuv420p", "-an", str(tmp)],
+        stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    run.clips[clip] = {"proc": proc, "tmp": tmp, "out": out, "frames": frames, "got": 0}
+
+
+def _evaluate(cdp, session, expression):
+    result = cdp.send("Runtime.evaluate", {"expression": expression,
+                      "awaitPromise": True, "returnByValue": True}, session)
+    if details := result.get("exceptionDetails"):
+        raise StageError(details.get("exception", {}).get("description")
+                         or details.get("text", "scene JavaScript failed"))
+    return result
+
+
+def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
+             frames=1, seek_js="window.__seek({t})", deterministic=True):
+    if sys.platform == "win32":
+        raise StageError("scene rendering needs Linux or macOS for now")
+    import fcntl
+
+    exe = browser()
+    if not exe:
+        raise StageError(available()[1])
+    run = _Run(job, out_dir)
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _handler(run))
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    proc = cdp = prof = None
+    pipes = []
+    try:
+        prof = tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-scene-")
+        r_in, w_in = os.pipe()
+        r_out, w_out = os.pipe()
+        pipes = [r_in, w_in, r_out, w_out]
+
+        def wire():
+            a = fcntl.fcntl(r_in, fcntl.F_DUPFD, 5)
+            b = fcntl.fcntl(w_out, fcntl.F_DUPFD, 5)
+            os.dup2(a, 3)
+            os.dup2(b, 4)
+            os.close(a)
+            os.close(b)
+
+        cmd = [exe, *_chromium_flags(prof.name, size), "--remote-debugging-pipe",
+               "--mute-audio", "--hide-scrollbars", "--force-color-profile=srgb",
+               "--disable-gpu-vsync", "--run-all-compositor-stages-before-draw"]
+        proc = subprocess.Popen(cmd, pass_fds=(3, 4), preexec_fn=wire,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.close(r_in)
+        os.close(w_out)
+        pipes = [w_in, r_out]
+        cdp = _Cdp(w_in, r_out)
+        pipes = []
+        targets = cdp.send("Target.getTargets")["targetInfos"]
+        target = next((t for t in targets if t["type"] == "page"), None)
+        if target is None:
+            target = cdp.send("Target.createTarget", {"url": "about:blank"})
+        session = cdp.send("Target.attachToTarget", {
+            "targetId": target["targetId"], "flatten": True})["sessionId"]
+        cdp.send("Page.enable", session=session)
+        cdp.send("Runtime.enable", session=session)
+        for item in job["items"]:
+            W, H = int(item["W"]), int(item["H"])
+            output_size = item.get("size", size)
+            if output_size[0] / W != output_size[1] / H:
+                raise StageError("scene output size must match the composition aspect ratio")
+            cdp.send("Emulation.setDeviceMetricsOverride", {
+                "width": W, "height": H, "deviceScaleFactor": output_size[0] / W,
+                "mobile": False}, session)
+            path = item["url_path"].replace("{token}", run.token)
+            if not path.startswith(("/static/", f"/scene/{run.token}/")):
+                raise StageError("scene URL must be a local /static/ or /scene/{token}/ path")
+            cdp.clear_events()
+            nav = cdp.send("Page.navigate", {
+                "url": f"http://127.0.0.1:{srv.server_address[1]}{path}"}, session)
+            if nav.get("errorText"):
+                raise StageError(nav["errorText"])
+            cdp.wait_event("Page.loadEventFired")
+            _evaluate(cdp, session, "window.__ready")
+            if deterministic:
+                _evaluate(cdp, session, """(() => {
+                    const style = document.createElement('style');
+                    style.textContent = '*{transition:none!important;animation-play-state:paused!important;caret-color:transparent!important}';
+                    document.head.appendChild(style);
+                })()""")
+            clip = item.get("clip", "snapshot")
+            count, rate = int(item.get("frames", frames)), item.get("fps", fps)
+            if out_dir is not None:
+                _begin_png(run, clip, *output_size, rate, count)
+            for i in range(count):
+                t = item.get("t", i / rate)
+                _evaluate(cdp, session, seek_js.format(t=t))
+                png = base64.b64decode(cdp.send("Page.captureScreenshot", {
+                    "format": "png", "fromSurface": True}, session)["data"])
+                if out_dir is None:
+                    run.thumbs[clip] = png
+                else:
+                    c = run.clips[clip]
+                    try:
+                        c["proc"].stdin.write(png)
+                    except OSError as exc:
+                        raise StageError(f"scene encoder stopped: {clip}") from exc
+                    c["got"] += 1
+                if (i + 1) % 30 == 0:
+                    progress(f"Scene {clip}: {i + 1}/{count} frames")
+            if out_dir is not None:
+                _end(run, clip)
+    finally:
+        if proc is not None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        if cdp is not None:
+            cdp.close()
+        if prof is not None:
+            prof.cleanup()
+        for fd in pipes:
+            os.close(fd)
+        srv.shutdown()
+        srv.server_close()
+        for c in run.clips.values():
+            if not c.get("done"):
+                if c["proc"].poll() is None:
+                    c["proc"].kill()
+                c["proc"].wait()
+                try:
+                    c["proc"].stdin.close()
+                except OSError:
+                    pass
+                c["proc"].stderr.close()
+                c["tmp"].unlink(missing_ok=True)
+    return run
+
+
+def render_scene(items: list[dict], out_dir: Path,
+                 progress: Progress = lambda m: None) -> dict[str, Path]:
+    """Capture local HTML scenes sequentially using one browser.
+
+    Items supply clip, url_path, W, H, fps, frames, size. For project files,
+    also supply a shared scene_root and use /scene/{token}/relative.html.
+    """
+    if not items:
+        return {}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    roots = {str(Path(i["scene_root"]).resolve()) for i in items if i.get("scene_root")}
+    if len(roots) > 1:
+        raise StageError("one scene_root is allowed per render call")
+    run = _run_cdp({"items": items, "scene_root": next(iter(roots), None)},
+                   progress, out_dir=out_dir)
+    return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
+
+
+def capture_one(url_path, W, H, t, size) -> bytes:
+    """Return a PNG from a local URL, or an absolute HTML file and its assets."""
+    root = None
+    if Path(url_path).is_file():
+        from urllib.parse import quote
+        path = Path(url_path).resolve()
+        root, url_path = str(path.parent), "/scene/{token}/" + quote(path.name)
+    run = _run_cdp({"scene_root": root, "items": [dict(
+        url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None)
+    return run.thumbs["snapshot"]
