@@ -1,0 +1,173 @@
+<title>Corkbored</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62,800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a cinema. Letterboxed black, one enormous condensed wordmark, a production log that writes itself, a single line of pitch. */
+:root {
+  --bg: #050505; --ink: #F4F2EE; --dim: #8E8B85; --faint: #3A3835; --btn-fg: #050505;
+  --accent: #FF5A1F;
+  --display: "Archivo", "Archivo Black", Impact, sans-serif;
+  --ui: Inter, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --bg: #F4F2EE; --ink: #0B0B0B; --dim: #6B6862; --faint: #D6D2CA; --btn-fg: #F4F2EE; --accent: #E84A12; color-scheme: light; }
+}
+:root[data-theme="light"] { --bg: #F4F2EE; --ink: #0B0B0B; --dim: #6B6862; --faint: #D6D2CA; --btn-fg: #F4F2EE; --accent: #E84A12; color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); margin: 0; }
+.theme { background: none; border: 1px solid var(--faint); color: var(--dim); font: 400 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 7px 10px; border-radius: 2px; cursor: pointer; }
+.theme:hover { color: var(--ink); border-color: var(--ink); }
+body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+.gut {
+  max-width: 1040px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.micro { font: 400 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* top bar */
+.bar { display: flex; justify-content: space-between; align-items: center; padding-block: 18px; border-bottom: 1px solid var(--faint); }
+.bar .l { display: flex; gap: 10px; align-items: center; }
+.rec { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); animation: rec 1.6s steps(1) infinite; }
+@keyframes rec { 50% { opacity: .2; box-shadow: none; } }
+
+/* wordmark */
+.mark { padding-block: clamp(28px, 5vw, 56px) 0; position: relative; }
+.mark h1 {
+  margin: 0; font: 800 clamp(56px, 16.6vw, 176px)/.84 var(--display); font-stretch: 62%;
+  letter-spacing: -.035em; text-transform: uppercase; white-space: nowrap;
+  color: var(--ink); overflow: hidden;
+}
+.mark h1 span { display: inline-block; transform: translateY(100%); animation: rise .9s cubic-bezier(.16,1,.3,1) forwards; }
+.mark h1 span:nth-child(2) { animation-delay: .06s; } .mark h1 span:nth-child(3) { animation-delay: .12s; }
+.mark h1 span:nth-child(4) { animation-delay: .18s; } .mark h1 span:nth-child(5) { animation-delay: .24s; }
+.mark h1 span:nth-child(6) { animation-delay: .30s; } .mark h1 span:nth-child(7) { animation-delay: .36s; }
+.mark h1 span:nth-child(8) { animation-delay: .42s; } .mark h1 span:nth-child(9) { animation-delay: .48s; }
+@keyframes rise { to { transform: none; } }
+.sub {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 24px; flex-wrap: wrap;
+  padding-block: 18px 0; border-top: 1px solid var(--faint); margin-top: clamp(12px, 2vw, 24px);
+}
+.sub .tag { font: 800 clamp(22px, 3.2vw, 34px)/1 var(--display); font-stretch: 62%; text-transform: uppercase; letter-spacing: -.01em; }
+.sub .tag em { font-style: normal; color: var(--accent); }
+
+/* log */
+.log {
+  margin-top: clamp(40px, 7vw, 72px); display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start;
+}
+.log pre {
+  margin: 0; font: 400 clamp(12px, 1.15vw, 14px)/1.75 var(--mono); color: var(--ink); white-space: pre-wrap;
+  min-height: 19em; border-left: 2px solid var(--accent); padding-left: 18px;
+}
+.log pre .d { color: var(--dim); } .log pre .a { color: var(--accent); }
+.log .cur::after { content: "▌"; color: var(--accent); animation: rec 1s steps(1) infinite; }
+.pitch { max-width: 36ch; }
+.pitch p { margin: 0 0 22px; font-size: clamp(18px, 1.7vw, 22px); line-height: 1.35; color: var(--ink); text-wrap: balance; }
+.pitch p.q { color: var(--dim); font-size: 15px; line-height: 1.55; }
+.btn {
+  display: inline-block; font: 500 14px/1 var(--ui); padding: 15px 20px; border-radius: 2px;
+  background: var(--ink); color: var(--btn-fg); text-decoration: none; margin-top: 4px;
+}
+.btn:hover { background: var(--accent); color: #fff; }
+
+/* bottom */
+.end { margin-top: clamp(48px, 9vw, 88px); padding-block: 28px 40px; border-top: 1px solid var(--faint); display: flex; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; align-items: center; }
+.addr { font: 400 15px/1 var(--mono); user-select: all; }
+.copy { background: none; border: 1px solid var(--faint); color: var(--ink); font: 500 12px/1 var(--ui); padding: 9px 12px; border-radius: 2px; cursor: pointer; }
+.copy:hover { border-color: var(--ink); }
+
+@media (max-width: 760px) {
+  .log { grid-template-columns: 1fr; gap: 28px; }
+  .mark h1 { font-size: 17vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark h1 span { animation: none; transform: none; } .rec, .cur::after { animation: none; }
+}
+</style>
+
+<div class="gut">
+  <div class="bar">
+    <div class="l"><span class="rec"></span><span class="micro">Corkbored · pre-release</span></div>
+    <div class="l"><span class="micro mono" id="tc">00:00:00:00</span><button class="theme" id="theme" type="button" aria-label="Switch light or dark">Light</button></div>
+  </div>
+
+  <div class="mark">
+    <h1 aria-label="Corkbored"><span>C</span><span>O</span><span>R</span><span>K</span><span>B</span><span>O</span><span>R</span><span>E</span><span>D</span></h1>
+  </div>
+  <div class="sub">
+    <div class="tag">Idea in. <em>Episode out.</em></div>
+    <span class="micro">Research · Write · Narrate · Cut · Publish</span>
+  </div>
+
+  <div class="log">
+    <pre id="log" aria-live="polite"></pre>
+    <div class="pitch">
+      <p>The showrunner that makes your channel's episodes, start to finish, on your own machine.</p>
+      <p class="q">It reads the sources, writes the beats, speaks in your voice, cuts the film, reviews its own frames and uploads. You watch the plan and change the timing. Nothing leaves the room.</p>
+      <a class="btn" href="#access">Ask for early access</a>
+    </div>
+  </div>
+
+  <div class="end" id="access">
+    <div><span class="micro">Early access</span><br><span class="addr" id="addr">rockinliam@gmail.com</span></div>
+    <button class="copy" id="copy" type="button">Copy address</button>
+    <span class="micro">Local first · No cloud render · No Node</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lines = [
+    ['d', '09:14:02  new episode    '], ['', '"Why every lighthouse used the same lens"'],
+    ['d', '09:14:03  research       '], ['', '31 pages read · 14 sources kept · 2 claims dropped'],
+    ['d', '09:16:40  outline        '], ['', 'hook (3s, works muted) · 4 beats · 2 open loops'],
+    ['d', '09:17:12  script         '], ['', '1,840 words · reading time 11:52'],
+    ['d', '09:17:50  pictures       '], ['', '46 archive stills · 3 diagrams · 1 map'],
+    ['d', '09:21:08  narration      '], ['', 'your voice · 29 takes · word-timed'],
+    ['d', '09:24:31  cut            '], ['', 'creep, punch, release · 38 titles · music ducked -17 dB'],
+    ['d', '09:26:05  review         '], ['', '"Frame at 04:12 has nothing in it." fixed'],
+    ['d', '09:27:40  render         '], ['', '1080p · 12:03 · verified'],
+    ['a', '09:31:12  published      '], ['a', 'youtube.com/watch?v=…']
+  ];
+  var el = document.getElementById('log');
+  if (reduce) {
+    el.innerHTML = lines.map(function (l, i) { return (i % 2 ? '' : '\n') + '<span class="' + l[0] + '">' + l[1] + '</span>'; }).join('').trim();
+  } else {
+    var i = 0, j = 0, cur = null;
+    function step() {
+      if (i >= lines.length) { setTimeout(function () { el.innerHTML = ''; i = 0; step(); }, 6000); return; }
+      if (!cur) { if (i % 2 === 0 && i) el.appendChild(document.createTextNode('\n')); cur = document.createElement('span'); cur.className = lines[i][0] + ' cur'; el.appendChild(cur); j = 0; }
+      cur.textContent = lines[i][1].slice(0, ++j);
+      if (j >= lines[i][1].length) { cur.classList.remove('cur'); cur = null; i++; setTimeout(step, i % 2 ? 60 : 420); }
+      else setTimeout(step, 14 + Math.random() * 22);
+    }
+    setTimeout(step, 900);
+  }
+  var tc = document.getElementById('tc'), t0 = performance.now();
+  (function tick() {
+    var t = (performance.now() - t0) / 1000, f = Math.floor(t * 25) % 25, s = Math.floor(t) % 60, m = Math.floor(t / 60) % 60;
+    tc.textContent = '00:' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + ':' + String(f).padStart(2, '0');
+    if (!reduce) requestAnimationFrame(tick);
+  })();
+  var th = document.getElementById('theme'), root = document.documentElement;
+  function label() { var dark = root.getAttribute('data-theme') === 'dark' || (!root.getAttribute('data-theme') && !matchMedia('(prefers-color-scheme: light)').matches); th.textContent = dark ? 'Light' : 'Dark'; }
+  try { var saved = localStorage.getItem('corkbored-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  label();
+  th.addEventListener('click', function () {
+    var dark = th.textContent === 'Light'; var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next); try { localStorage.setItem('corkbored-theme', next); } catch (e) {}
+    label();
+  });
+  var btn = document.getElementById('copy'), addr = document.getElementById('addr');
+  btn.addEventListener('click', function () {
+    function fb() { var r = document.createRange(); r.selectNodeContents(addr); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(addr.textContent).then(function () { btn.textContent = 'Copied'; }, fb); else fb();
+    setTimeout(function () { btn.textContent = 'Copy address'; }, 1800);
+  });
+})();
+</script>
