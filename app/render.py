@@ -1169,8 +1169,8 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
             return (voice + sting_graph +
                     f"{voice_src}{sting_tags}amix=inputs={1 + len(stings)}:"
                     f"duration=longest:normalize=0[mix];"
-                    f"[mix]loudnorm=I=-14:TP=-1.0:LRA=11[aout]")
-        return voice + f"{voice_src}loudnorm=I=-14:TP=-1.0:LRA=11[aout]"
+                    f"[mix]loudnorm=I={project.frame.voice_lufs:.1f}:TP=-1.0:LRA=11[aout]")
+        return voice + f"{voice_src}loudnorm=I={project.frame.voice_lufs:.1f}:TP=-1.0:LRA=11[aout]"
 
     mus = f"[{n_video + 1 + (1 if presenter else 0) + len(stings)}:a]"
     fade = max(0.5, min(18.0, music_fade))
@@ -1202,7 +1202,7 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
         # was taken out, so `music_db` alone sets how far under it sits.
         + f"{voice_src}[bed]{sting_tags}amix=inputs={2 + len(stings)}:"
           f"duration=longest:normalize=0[mix];"
-        + f"[mix]loudnorm=I=-14:TP=-1.0:LRA=11[aout]"
+        + f"[mix]loudnorm=I={project.frame.voice_lufs:.1f}:TP=-1.0:LRA=11[aout]"
     )
 
 

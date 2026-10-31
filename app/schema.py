@@ -320,8 +320,8 @@ class Style:
     ken_burns: bool = True
     ken_burns_amount: float = 0.10  # fractional zoom over a slide
     transition: float = 0.55        # crossfade seconds
-    music_db: float = -22.0         # dB below the narration (bed is loudness-matched first)
-    duck_db: float = -11.0          # how far music drops under narration
+    # Midpoint of FrameSpec.music_under_min_db / music_under_max_db; bed is loudness-matched first.
+    music_db: float = -17.5         # dB below the narration
     title_font: str = ""            # resolved automatically when empty
     accent: str = "#E8C36A"
     # The second colour. Flat-black-and-one-gold templates ignore it; the
