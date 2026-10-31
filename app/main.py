@@ -707,31 +707,12 @@ def youtube_disconnect(cid: str) -> dict:
 
 @app.post("/api/projects/{pid}/youtube/upload")
 def youtube_upload(pid: str, payload: dict = Body(default={})) -> dict:
-    p = _load(pid)
-    if not p.channel_id:
-        raise HTTPException(400, "This video isn't on a channel — nowhere to upload it to.")
-    if not youtube_mod.status(p.channel_id).get("connected"):
-        raise HTTPException(400, "This channel isn't connected to YouTube yet.")
-    if not (p.render or {}).get("output"):
-        raise HTTPException(400, "Nothing rendered yet.")
-
-    title = str(payload.get("title") or p.title or p.idea[:100])
-    description = str(payload.get("description") or youtube_mod.default_description(p))
-    tags = [str(t) for t in (payload.get("tags") or []) if str(t).strip()]
-    category_id = str(payload.get("category_id") or "22")
-    privacy = payload.get("privacy") or "private"   # server-side default too
-
-    def work(progress):
-        result = youtube_mod.upload_video(
-            p, p.channel_id, title=title, description=description, tags=tags,
-            category_id=category_id, privacy=privacy, progress=progress)
-        with store.lock_for(pid):
-            fresh = store.load(pid)
-            fresh.render["youtube_url"] = result["url"]
-            store.save(fresh)
-        return result
-
-    return {"job": jobs.start("youtube upload", pid, work)}
+    try:
+        prepared = ops.prepare_publish(_load(pid), payload)
+    except ops.PayloadError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"job": jobs.start("youtube upload", pid,
+                             lambda pr: ops.publish(pid, payload, pr, prepared=prepared))}
 
 
 # ------------------------------------------------------------------- projects
@@ -2359,21 +2340,10 @@ def delete_presenter(pid: str) -> dict:
 # --------------------------------------------------------------------- render
 @app.post("/api/projects/{pid}/render")
 def start_render(pid: str, payload: dict = Body(default={})) -> dict:
-    p = _load(pid)
-    result = check.run(p)
-    if not result["ok"] and not payload.get("force"):
-        return {"error": "Render blocked by P0 issues.", "check": result}
-    preview = bool(payload.get("preview"))
-
-    def work(progress):
-        with store.lock_for(pid):
-            p = store.load(pid)
-            result = render.render(p, progress, preview=preview)
-            store.log(p, f"Rendered {result['output']}")
-            store.save(p)
-        return result
-
-    return {"job": jobs.start("render", pid, work)}
+    blocked = ops.render_check(_load(pid), payload)
+    if blocked:
+        return blocked
+    return {"job": jobs.start("render", pid, lambda pr: ops.render(pid, payload, pr))}
 
 
 @app.post("/api/projects/{pid}/preview-opening")
@@ -2406,14 +2376,8 @@ def preview_segment(pid: str, sid: str) -> dict:
     """
     _slide(_load(pid), sid)
 
-    def work(progress):
-        with store.lock_for(pid):
-            p = store.load(pid)
-            result = render.preview_segment(p, sid, progress)
-            store.save(p)
-        return result
-
-    return {"job": jobs.start("segment preview", pid, work)}
+    return {"job": jobs.start("segment preview", pid,
+                             lambda pr: ops.render(pid, {"section": sid}, pr))}
 
 
 # ---------------------------------------------------------------- timeline

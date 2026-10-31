@@ -1,6 +1,8 @@
 """Synchronous production operations shared by HTTP jobs and the CLI."""
 import threading
 
+from . import render as renderer, youtube as youtube_mod
+
 from . import channels, check as checks, media, models3d, review as reviews, script_gen, store
 from . import cast as cast_mod, cuts as cuts_mod, shots as shots_mod
 from .schema import new_project
@@ -149,3 +151,57 @@ def review(pid, payload, progress):
 def fix(pid, payload, progress):
     return reviews.act(pid, payload['note_id'], payload.get('action', 'fix'),
                        finding=payload.get('finding'))
+
+
+def render_check(project, payload):
+    result = checks.run(project)
+    if not result["ok"] and not payload.get("force"):
+        return {"error": "Render blocked by P0 issues.", "check": result}
+
+
+def render(pid, payload, progress):
+    section = payload.get("section")
+    p = store.load(pid)
+    if section:
+        if not any(s.id == section for s in p.slides):
+            raise PayloadError("Paragraph not found")
+    else:
+        blocked = render_check(p, payload)
+        if blocked:
+            return blocked
+    with store.lock_for(pid):
+        p = store.load(pid)
+        if section:
+            result = renderer.preview_segment(p, section, progress)
+        else:
+            result = renderer.render(p, progress, preview=bool(payload.get("preview")))
+            store.log(p, f"Rendered {result['output']}")
+        store.save(p)
+    return result
+
+
+def prepare_publish(p, payload):
+    if not p.channel_id:
+        raise PayloadError("This video isn't on a channel — nowhere to upload it to.")
+    if payload.get("channel_id") and payload["channel_id"] != p.channel_id:
+        raise PayloadError("Requested channel does not match this video's channel.")
+    if not youtube_mod.status(p.channel_id).get("connected"):
+        raise PayloadError("This channel isn't connected to YouTube yet.")
+    if not (p.render or {}).get("output"):
+        raise PayloadError("Nothing rendered yet.")
+    return p, dict(
+        title=str(payload.get("title") or p.title or p.idea[:100]),
+        description=str(payload.get("description") or youtube_mod.default_description(p)),
+        tags=[str(t) for t in (payload.get("tags") or []) if str(t).strip()],
+        category_id=str(payload.get("category_id") or "22"),
+        privacy=payload.get("privacy") or "private")
+
+
+def publish(pid, payload, progress, *, prepared=None):
+    p, options = prepared if prepared is not None else prepare_publish(store.load(pid), payload)
+    result = youtube_mod.upload_video(p, p.channel_id, **options, progress=progress)
+    with store.lock_for(pid):
+        fresh = store.load(pid)
+        fresh.render["youtube_url"] = result["url"]
+        store.save(fresh)
+    return result

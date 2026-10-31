@@ -1,6 +1,6 @@
 ---
 name: corkbored-producer
-description: Plan, check, snapshot and review Corkbored videos from this repository's CLI, and propose targeted storyboard fixes.
+description: Plan, check, snapshot and review Corkbored videos from this repository's CLI, propose targeted storyboard fixes, preview sections and publish rendered videos.
 ---
 
 Use for producing or correcting a Corkbored episode. Run commands from the
@@ -28,7 +28,11 @@ choices. Read [storyboard patches](references/storyboard.md) before writing an
 `apply PID PATCH.json` patch. `apply` and `ask` currently require the app closed.
 Regenerate both references with `doctrine --write` when their Python sources change.
 
-Preview only one section at quarter size. Rendering/publishing CLI commands are
-tracked in T3.5b and are not available yet; use the UI's section preview. A full
-render requires an explicit user request; the planned CLI gate is `--full --yes`.
-Publishing requires the intended channel and privacy to be chosen by the user.
+7. `render PID --section SID` previews one section at quarter size. A full render
+   requires an explicit user request and `render PID --full --yes`; `--force`
+   overrides the P0 gate only when explicitly intended.
+8. `publish PID --channel CID --privacy private` uploads the existing render.
+   Confirm the intended channel and privacy with the user. The channel must match
+   the project's channel and already be connected through OAuth in the UI.
+   Privacy defaults to private; public and unlisted require an explicit choice.
+   Optional metadata: `--title`, `--description`, repeated `--tag`, `--category-id`.

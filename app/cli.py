@@ -58,7 +58,10 @@ def _operation(name, pid, payload):
             base = f'/api/projects/{pid}'
             method, path = {
                 'create': ('POST', '/api/projects'), 'plan': ('POST', base + '/script'),
-                'research': ('POST', base + '/research'), 'check': ('GET', base + '/check'),
+                'research': ('POST', base + '/research'),
+                'render': ('POST', base + '/slides/' + str(payload['section']) + '/preview'
+                           if payload.get('section') else base + '/render'),
+                'publish': ('POST', base + '/youtube/upload'), 'check': ('GET', base + '/check'),
                 'snapshot': ('POST', base + '/review/snapshots'),
                 'review': ('POST', base + '/review'),
                 'fix': ('POST', base + '/review/' + str(payload.get('note_id', ''))),
@@ -85,6 +88,24 @@ def _operation(name, pid, payload):
     if name != 'check':
         _guard_write()
     return getattr(ops, name)(pid, payload, lambda msg: print(msg, file=sys.stderr, flush=True))
+
+
+def cmd_render(args):
+    if not args.section and not (args.full and args.yes):
+        raise ValueError("Full renders require --full --yes; use --section SID for one preview.")
+    print("One quarter-size segment preview." if args.section else
+          "Full render: up to 6 segments at a time, limited by available memory; "
+          "heavy on this machine (ffmpeg threads capped).", file=sys.stderr, flush=True)
+    result = _operation('render', args.pid, {'section': args.section, 'force': args.force})
+    _print_json(result)
+    return int('error' in result)
+
+
+def cmd_publish(args):
+    _print_json(_operation('publish', args.pid, {
+        'channel_id': args.channel, 'privacy': args.privacy,
+        'title': args.title, 'description': args.description,
+        'tags': args.tag, 'category_id': args.category_id}))
 
 
 def cmd_new(args):
@@ -229,6 +250,21 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
+    command = sub.add_parser('render')
+    command.add_argument('pid')
+    mode = command.add_mutually_exclusive_group()
+    mode.add_argument('--section', metavar='SID')
+    mode.add_argument('--full', action='store_true')
+    command.add_argument('--yes', action='store_true')
+    command.add_argument('--force', action='store_true')
+    command = sub.add_parser('publish')
+    command.add_argument('pid')
+    command.add_argument('--channel', help="Confirm the project's existing channel id")
+    command.add_argument('--privacy', choices=('private', 'unlisted', 'public'), default='private')
+    command.add_argument('--title')
+    command.add_argument('--description')
+    command.add_argument('--tag', action='append', default=[])
+    command.add_argument('--category-id', default='22')
     command = sub.add_parser("new")
     command.add_argument("idea")
     command.add_argument("--test", action="store_true")
@@ -280,7 +316,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
-        status = {"new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
+        status = {"render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
