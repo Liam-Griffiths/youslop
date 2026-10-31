@@ -8,6 +8,7 @@ have been built with libfreetype, which not all of them are.
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -115,6 +116,11 @@ KICKER_TRACKING = 3.2
 
 
 def _load(stack: list[tuple[str, int]], size: int) -> ImageFont.FreeTypeFont:
+    return _load_cached(tuple(stack), size)
+
+
+@lru_cache(maxsize=128)
+def _load_cached(stack: tuple[tuple[str, int], ...], size: int):
     for path, index in stack:
         if Path(path).exists():
             try:
