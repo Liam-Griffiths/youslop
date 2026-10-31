@@ -12,7 +12,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T0.1 | Brand module and env alias helper | M | — | done | 2026-10-31 Codex; 28 unit tests |
 | T0.2 | Data folder compatibility | S | T0.1 | done | 2026-10-31 Codex; falls back to the youslop folder |
-| T0.3 | Project file and bundle compatibility | S | T0.1 | todo | |
+| T0.3 | Project file and bundle compatibility | S | T0.1 | done | 2026-10-31 Codex; .corkbored export, reads .youslop |
 | T0.4 | Mechanical rename | M | T0.1, T0.2, T0.3 | todo | |
 | T0.5 | Test scaffold and graph goldens | M | — | todo | |
 | T0.6 | Word timestamps on takes | M | T0.5 | todo | |

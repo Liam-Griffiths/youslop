@@ -170,7 +170,8 @@ def export_bundle(style_id: str) -> dict | None:
     style = get(style_id)
     if not style:
         return None
-    return {"youslop_slide_style": BUNDLE_VERSION, "name": style.name,
+    return {"corkbored_slide_style": BUNDLE_VERSION,
+            "youslop_slide_style": BUNDLE_VERSION, "name": style.name,
             "spec": _strip_resolved_images(style.spec)}
 
 

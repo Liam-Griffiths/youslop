@@ -532,7 +532,7 @@ async function renderHome() {
       <h1 style="flex:1;min-width:0">Build a video</h1>
       <button class="btn ghost sm" onclick="$('#projfile').click()"
         title="a .youslop file saved from this or another computer">open project file…</button>
-      <input type="file" id="projfile" accept=".youslop" style="display:none"
+      <input type="file" id="projfile" accept=".corkbored,.youslop" style="display:none"
         onchange="openProjectFile(this.files[0]); this.value=''">
     </div>
     <p class="sub">Describe the story. Claude writes the script, the archives supply the pictures,
