@@ -17,7 +17,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T0.5 | Test scaffold and graph goldens | M | — | todo | |
 | T0.6 | Word timestamps on takes | M | T0.5 | todo | |
 | T0.7 | Storyboard contract and CLI skeleton | M | T0.5 | todo | |
-| T0.8 | Re-measure the render memory cap | S | — | todo | |
+| T0.8 | Re-measure the render memory cap | S | — | done | 2026-10-31 measured essay 2058 MB, kenburns 1406 MB; cap 2500/1500 |
 | T0.9 | CLAUDE.md and repo hygiene | S | T0.7 | todo | |
 | T0.10 | Kokoro model with word timings | S | T0.6 | todo | owner listens to an A/B first |
 

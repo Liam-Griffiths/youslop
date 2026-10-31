@@ -22,6 +22,12 @@ from .store import project_dir
 
 Progress = Callable[[str], None]
 
+# Peak child RSS measured 2026-10-31 on Ryzen 7 7840-class, 8 cores,
+# Radeon 780M: essay 2058.29 MB, kenburns 1406.14 MB (1080p30, CPU H.264,
+# pf0bf417b's deepest group: 3 paragraphs). Rounded up to 500 MB; unmeasured
+# formats use the larger allowance. Reproduce with scripts/measure_segment_rss.py.
+SEGMENT_RSS_MB = {"essay": 2500, "kenburns": 1500, "default": 2500}
+
 GRADES = {
     "warm": "colorbalance=rs=0.035:bs=-0.045,eq=saturation=0.95:contrast=1.05:gamma=0.99",
     "neutral": "eq=contrast=1.03:saturation=0.98",
@@ -1204,18 +1210,15 @@ def render(project: Project, progress: Progress = lambda m: None,
 
     # ------------------------------------------------------------- segments
     workers = max(2, min(6, (os.cpu_count() or 4) // 2))
-    # An essay-format segment's caption overlays build a filter graph a few
-    # dozen nodes deep (one chain per caption), and was measured peaking
-    # around 4-5GB of RSS per encode — ffmpeg's own thread/filter-thread caps
-    # (see ffutil.run) barely move this number; it is the depth of the chain
-    # itself, not the threading, and there is no cheap knob for that short of
-    # changing how essay captions are composited. Until that is rebuilt, the
-    # only lever here is running fewer of them at once: six in parallel on a
-    # machine that is already tight on memory is exactly how a render becomes
-    # the thing that tips the system into an OOM kill.
+    # HOLD_STILL reduced caption decoding costs, but the essay overlay chain
+    # still uses more memory than the documentary graph. Budget per encode.
+    per = SEGMENT_RSS_MB.get(project.style.format, SEGMENT_RSS_MB["default"])
     free_mb = sysinfo.available_mb()
     if free_mb is not None:
-        workers = max(1, min(workers, int(free_mb // 5000)))
+        workers = max(1, min(workers, int(free_mb // per)))
+    if not cuts.is_cut(project.style.format):
+        memory = f"{free_mb:.0f} MB free" if free_mb is not None else "free memory unknown"
+        progress(f"{workers} segments at a time ({memory}, {per} MB each)")
     # ffmpeg's decode/encode/filter threading all default to "auto" against
     # the whole machine independently, which is wrong when several of these
     # run at once regardless of the point above — still worth capping so a
