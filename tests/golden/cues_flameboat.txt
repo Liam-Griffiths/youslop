@@ -1,0 +1,79 @@
+Write what goes on screen for each paragraph below.
+
+VIDEO: None - 
+SUBJECT: Test the photographic renderer
+
+The format is a rapid-fire tech explainer in the style of the fastest
+developer channels: near-black background, a NEW visual on almost every clause
+of the narration, hard cuts, dry humour.
+
+It is a VISUAL format. The narrator is already saying the words; the screen
+shows the thing — the picture, the code, the shape of the system — not the
+sentence again. Most cues should carry almost no text.
+
+Cue kinds — every cue is an object with "kind", "on" and the fields listed:
+- {"kind": "image", "focus": "left|center|right", "label": "optional, max 4 words"}
+  The paragraph's picture as a fast B-roll cut, pushing in. The workhorse.
+  Use it two or three times a paragraph with a different "focus" each time;
+  each reads as a different shot of the same scene.
+- {"kind": "code", "lang": "js|py|rs|go|ts|sh|sql|...", "lines": ["2-6 lines"], "hot": 0}
+  Real, correct, minimal code that types in. "hot" is the 1-based line to
+  light up once it has typed (0 for none). Trim to the lines that matter.
+- {"kind": "term", "cmd": "a shell command", "out": ["0-3 short output lines"]}
+- {"kind": "diagram", "nodes": ["2-4 labels, 1-2 words each"], "label": ""}
+  Boxes joined by arrows, popping on left to right. Client -> API -> DB.
+- {"kind": "logo", "text": "a product, language or tool name", "sub": ""}
+  The name popping on as a badge. Only names, never real logos.
+- {"kind": "stat", "value": "a number as said, e.g. 10x, 40ms, 2.3M", "label": "1-3 words"}
+- {"kind": "meme", "top": "", "bottom": "caption, 2-5 words"}
+  The paragraph's picture with a meme caption, landing with a shake. The joke
+  beat: undercut or exaggerate the line before it ("this is fine").
+- {"kind": "title", "text": "a short sentence, 4-8 words", "hot": "the phrase within
+  it that a highlighter would go over, or "" to highlight the whole line"}
+  A line punching in with a highlighter swiped across it. For the sentence
+  the point turns on — at most two per paragraph. Never a lone word.
+- {"kind": "post", "handle": "@an_invented_handle", "text": "max 12 words"}
+  A social post as a joke. Always invented — never a real person. At most one
+  in every three paragraphs.
+
+Rules: 4-9 cues per paragraph. Vary the kinds; at least half should be image,
+code, term, diagram, logo or meme. At most one meme per paragraph and only on
+a genuine joke beat. Code is real and would run.
+NEVER invent a figure: a stat's value must be a number the narration says.
+With no number to show, use an image or a diagram instead.
+PACING AND HOUSE RULES:
+Entrances take 0.45 seconds with expo.out easing.
+Exits take 0.55 times the entrance duration.
+Moves last 0.3 to 0.6 seconds.
+Hold a title for 0.5 seconds plus 0.3 seconds per word.
+Hold the last line for at least 2.0 seconds.
+Title height is 4.0 to 9.0 percent of the frame.
+Average shots last 1.8 to 3.0 seconds.
+Hold a payoff for 0.3 to 0.75 seconds.
+Allowed transitions are cut, fade, dip.
+In the first 90 seconds, leave at most 15.0 seconds between visual events.
+After that, leave at most 20.0 seconds between visual events; never exceed 30.0 seconds.
+The hook lasts 37.0 seconds and needs 6 overlays.
+Use 7 overlays and 7 camera moves per 90 seconds in the body.
+Anchor entrances no more than 0.6 seconds before or 0.1 seconds after their word.
+Keep music 16.0 to 19.0 dB under the voice, without ducking.
+Target voice loudness is -14.0 LUFS.
+Montage cuts last 0.13 to 0.8 seconds.
+Banned by name: breathing_loop: Do not loop a scale or opacity pulse on a resting element.; title_moves_after_landing: Keep a title still once its entrance finishes.; same_entrance_everywhere: Vary entrances rather than repeating one device everywhere.; fade_slide_up_everything: Do not give every element a fade and upward slide.; whoosh_under_text: Do not put a whoosh under text entrances.; bounce_on_ui: Do not use bouncing motion on interface elements.; slow_creeping_scale: Do not use continuous slow scaling as idle decoration.
+Rejected looks: none
+House rules: none
+Brand notes: none
+Frame notes: none
+Pacing: a new cue every 5-10 spoken words. Hold no visual longer than 3.0 seconds of speech; use the average-shot and montage budgets above.
+
+Every cue also has "on": the first 3-6 words of the narration, copied
+EXACTLY, at which that cue should appear. The first cue of a paragraph is on
+its opening words. Cues are in the order they are spoken.
+
+PARAGRAPHS:
+1. [main/] "First we look at the picture."
+2. [main/] "What happens next?"
+3. [main/] "This paragraph has no recording yet."
+
+Return a JSON list of 3 objects in the same order:
+{"n": <the number>, "cues": [ ...cue objects as described above... ]}

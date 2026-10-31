@@ -72,6 +72,10 @@ def _facts_block(research: dict) -> str:
     return block
 
 
+def _frame_text(project: Project) -> str:
+    return "PACING AND HOUSE RULES:\n" + project.frame.prompt_block(project.style.format)
+
+
 # --------------------------------------------------------------------- outline
 def build_outline(project: Project, progress: Progress = lambda m: None) -> dict:
     total_words = int(project.target_minutes * WORDS_PER_MINUTE)
@@ -84,9 +88,22 @@ def build_outline(project: Project, progress: Progress = lambda m: None) -> dict
 
     progress(f"Outlining ~{total_words} words across {n_beats} main beats")
 
+    outline = complete_json(
+        _outline_prompt(project, n_beats, intro_words, concl_words),
+        system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
+        require=lambda v: bool(_find_sections(v)),
+        require_hint='The object must have a top-level "sections" array.',
+    )
+    return _normalise_outline(outline, project, n_beats, intro_words, concl_words)
+
+
+def _outline_prompt(project: Project, n_beats: int, intro_words: int,
+                    concl_words: int) -> str:
+    total_words = int(project.target_minutes * WORDS_PER_MINUTE)
+    main_words = total_words - intro_words - concl_words
     facts = _facts_block(project.research)
     facts_section = f"{facts}\n\n" if facts else ""
-    prompt = f"""Plan an informational YouTube video.
+    return f"""Plan an informational YouTube video.
 
 IDEA FROM THE CREATOR:
 \"\"\"{project.idea}\"\"\"
@@ -94,6 +111,9 @@ IDEA FROM THE CREATOR:
 {facts_section}Target runtime: {project.target_minutes} minutes, which is about {total_words} \
 spoken words at {WORDS_PER_MINUTE} wpm.
 Tone: {project.tone}.
+Format: {project.style.format}.
+
+{_frame_text(project)}
 
 First work out what this story actually is: who or what it is about, the span of \
 time it covers, and the single tension or question that makes it worth {project.target_minutes} \
@@ -108,6 +128,10 @@ Return JSON with exactly this shape:
   "thesis": "one sentence: the argument or question the video answers",
   "visual_world": "one sentence describing what archival material exists for this \
 subject and what the video will therefore look like on screen",
+  "hook": {{"muted_image": "meaningful first frame", "first_line": "opening spoken line",
+            "open_loops": [{{"question": "the promised question",
+                            "plant_beat": "exact section heading",
+                            "payoff_beat": "exact section heading"}}]}},
   "sections": [
     {{"kind": "intro", "heading": "short beat name", "summary": "2-3 sentences on \
 what this beat covers and why it opens the video", "words": {intro_words}}},
@@ -124,14 +148,13 @@ roughly that.
 - Headings are for the creator's outline AND may be reused as on-screen chapter \
 titles, so keep them 2-5 words, evocative but honest.
 - The intro must open on a concrete scene or fact, not a definition or a greeting.
+- The first three seconds must work with the sound off: the first frame is a
+  meaningful image, not a settling camera or a title alone.
+- The first spoken word is clear of any card, sting or cut.
+- Open at most one main loop at a time; every loop you plant names the beat
+  that pays it off; close the promised lesson before any call to action.
+- Copy plant_beat and payoff_beat exactly from sections[*].heading.
 {"- Structure the sections around what RESEARCHED FACTS actually established, not the shape a generic version of this story would take. Where it flags an open question or a correction, the outline should reflect that rather than smooth over it." if facts else ""}"""
-
-    outline = complete_json(
-        prompt, system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
-        require=lambda v: bool(_find_sections(v)),
-        require_hint="The object must have a top-level \"sections\" array.",
-    )
-    return _normalise_outline(outline, project, n_beats, intro_words, concl_words)
 
 
 def find_records(value: Any, key: str, depth: int = 0) -> list[dict]:
@@ -193,6 +216,54 @@ def _find_sections(value: Any) -> list[dict]:
     return []
 
 
+def _normalise_hook(raw: Any) -> dict:
+    """Preserve a hook even when the model wraps its outline."""
+    def find(value: Any) -> dict:
+        if isinstance(value, dict):
+            if isinstance(value.get("hook"), dict):
+                return value["hook"]
+            children = value.values()
+        elif isinstance(value, list):
+            children = value
+        else:
+            return {}
+        for child in children:
+            found = find(child)
+            if found:
+                return found
+        return {}
+
+    hook = find(raw)
+    loops = hook.get("open_loops")
+    loops = [loop for loop in loops if isinstance(loop, dict)][:3] if isinstance(loops, list) else []
+    return {
+        "muted_image": str(hook.get("muted_image") or "")[:300],
+        "first_line": str(hook.get("first_line") or "")[:300],
+        "open_loops": [{"question": str(loop.get("question") or "")[:200],
+                        "plant_beat": str(loop.get("plant_beat") or ""),
+                        "payoff_beat": str(loop.get("payoff_beat") or "")}
+                       for loop in loops],
+    }
+
+
+def check_hook(outline: dict) -> list[dict]:
+    """Report unpaid promises without research or a model call."""
+    headings = {str(section.get("heading") or "").strip().casefold()
+                for section in outline.get("sections", []) if isinstance(section, dict)}
+    hook = outline.get("hook")
+    loops = hook.get("open_loops") if isinstance(hook, dict) else []
+    flags = []
+    for loop in loops if isinstance(loops, list) else []:
+        if not isinstance(loop, dict):
+            continue
+        payoff = str(loop.get("payoff_beat") or "").strip()
+        if not payoff or payoff.casefold() not in headings:
+            flags.append({"slide_id": "", "claim": str(loop.get("question") or "")[:200],
+                          "issue": f'Open loop payoff beat "{payoff}" does not name an existing section heading.',
+                          "severity": "high"})
+    return flags
+
+
 def _normalise_outline(raw: Any, project: Project, n_beats: int,
                        intro_words: int, concl_words: int) -> dict:
     """Coerce a plausible reply into the outline shape the writer expects."""
@@ -242,6 +313,7 @@ def _normalise_outline(raw: Any, project: Project, n_beats: int,
         "thesis": meta.get("thesis", ""),
         "visual_world": meta.get("visual_world", ""),
         "sections": clean,
+        "hook": _normalise_hook(raw),
     }
 
 
@@ -292,6 +364,10 @@ SECTIONS BEFORE THIS ONE: {before}
 SECTIONS AFTER THIS ONE: {after}
 
 {kind_note}
+
+HOOK PLAN (honour its opening and promised payoffs): {outline.get("hook", {})}
+
+{_frame_text(project)}
 
 Budget: about {words} words, split into {n_paras} paragraphs.
 
@@ -422,6 +498,8 @@ def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lam
 VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
 SUBJECT: {outline.get('subject')} ({outline.get('era', '')})
 AVAILABLE VISUAL WORLD: {outline.get('visual_world', '')}
+
+{_frame_text(project)}
 
 PARAGRAPHS:
 {listing}
@@ -629,6 +707,40 @@ a hierarchy, an overlap, a loop. At most {max(1, len(chunk) // 4)} of these
             progress(f"Boards written for chunk {ci + 1}/{len(chunks)}")
 
 
+def _cut_pacing(project: Project, module) -> str:
+    cadence = module.PACE.get("cue_every_words")
+    if not cadence:
+        return ""
+    lo, hi = cadence
+    return (f"Pacing: a new cue every {lo}-{hi} spoken words. "
+            f"Hold no visual longer than {project.frame.shot_avg_max_s} seconds of speech; "
+            "use the average-shot and montage budgets above.")
+
+
+def _cues_prompt(project: Project, module, chunk: list[Slide], facts: str) -> str:
+    outline = project.outline
+    listing = "\n".join(f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
+                         for n, s in enumerate(chunk, 1))
+    return f"""Write what goes on screen for each paragraph below.
+
+VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
+SUBJECT: {outline.get('subject', project.idea)}
+{facts}
+{module.PLAN}
+{_frame_text(project)}
+{_cut_pacing(project, module)}
+
+Every cue also has "on": the first 3-6 words of the narration, copied
+EXACTLY, at which that cue should appear. The first cue of a paragraph is on
+its opening words. Cues are in the order they are spoken.
+
+PARAGRAPHS:
+{listing}
+
+Return a JSON list of {len(chunk)} objects in the same order:
+{{"n": <the number>, "cues": [ ...cue objects as described above... ]}}"""
+
+
 def plan_cues(project: Project, slides: list[Slide],
               progress: Progress = lambda m: None) -> None:
     """Write what the video's drawn cut puts on screen, cue by cue, in place.
@@ -648,31 +760,13 @@ def plan_cues(project: Project, slides: list[Slide],
     targets = [s for s in slides if not (s.cues or {}).get(fmt)]
     if not targets:
         return
-    outline = project.outline
     facts = _facts_block(project.research or {}) if fmt == "ticker" else ""
     chunks = [targets[i : i + 8] for i in range(0, len(targets), 8)]
     progress(f"Writing {module.LABEL} cues for {len(targets)} paragraphs")
 
     def run(args: tuple[int, list[Slide]]) -> tuple[int, Any]:
         ci, chunk = args
-        listing = "\n".join(f'{n}. [{s.section}/{s.beat}] "{s.narration}"'
-                             for n, s in enumerate(chunk, 1))
-        prompt = f"""Write what goes on screen for each paragraph below.
-
-VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
-SUBJECT: {outline.get('subject', project.idea)}
-{facts}
-{module.PLAN}
-
-Every cue also has "on": the first 3-6 words of the narration, copied
-EXACTLY, at which that cue should appear. The first cue of a paragraph is on
-its opening words. Cues are in the order they are spoken.
-
-PARAGRAPHS:
-{listing}
-
-Return a JSON list of {len(chunk)} objects in the same order:
-{{"n": <the number>, "cues": [ ...cue objects as described above... ]}}"""
+        prompt = _cues_prompt(project, module, chunk, facts)
         return ci, complete_json(
             prompt, model=MODEL_UTILITY, timeout=600,
             require=lambda v: bool(find_records(v, "cues")),
@@ -702,13 +796,13 @@ def verify_script(project: Project, progress: Progress = lambda m: None) -> list
     is the check on the output, not the input, and it's cheap because it is
     checking against a dossier already gathered rather than researching again.
 
-    [] (not skipped) when there is no dossier to check against — nothing to
-    flag against nothing, which is different from "everything's fine".
+    Hook promises are checked even when there is no research dossier.
     """
     facts = _facts_block(project.research)
     slides = project.slides
+    hook_flags = check_hook(project.outline)
     if not facts or not slides:
-        return []
+        return hook_flags
 
     chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
     progress(f"Checking {len(slides)} paragraph(s) against the research")
@@ -756,7 +850,7 @@ Return JSON: a list of objects, one per paragraph that has a problem:
         for flags in pool.map(run, list(enumerate(chunks))):
             all_flags.extend(flags)
     progress(f"Fact check: {len(all_flags)} paragraph(s) flagged")
-    return all_flags
+    return all_flags + hook_flags
 
 
 # ------------------------------------------------------------------ full build
@@ -1270,6 +1364,8 @@ def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:
     prompt = f"""Rewrite one paragraph of narration.
 
 VIDEO: {project.outline.get('title')} - {project.outline.get('thesis', '')}
+
+{_frame_text(project)}
 
 PARAGRAPH BEFORE: "{prev}"
 PARAGRAPH TO REWRITE: "{slide.narration}"

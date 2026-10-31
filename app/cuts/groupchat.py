@@ -32,6 +32,8 @@ MIN_HOLD = 0.9
 KINDS = {"msg", "photo", "notice", "image"}
 FOCUS = {"left": 0.2, "center": 0.5, "right": 0.8}
 
+PACE = {}
+
 PLAN = """The format is a storytime video staged as a message thread: the frame is
 a chat window, and as the narrator tells the story the messages arrive in it.
 The narrator is "me" (blue bubbles on the right); everyone else is on the left

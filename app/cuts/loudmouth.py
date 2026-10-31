@@ -30,6 +30,8 @@ FALLBACK_KIND = "phrase"
 MIN_HOLD = 0.6
 MOVES = ("down", "right", "turn", "zoom")
 
+PACE = {}
+
 PLAN = """The format is kinetic typography: the narration's own words, set huge,
 appearing exactly as they are spoken. The camera moves over one giant page from
 phrase to phrase. Some phrases are set over the paragraph's picture instead,

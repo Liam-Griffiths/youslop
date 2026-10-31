@@ -32,6 +32,8 @@ MIN_HOLD = 1.0
 
 KINDS = {"stat", "chart", "bars", "headline"}
 
+PACE = {}
+
 PLAN = """The format is a markets terminal: dark navy, hairline grid, mono figures.
 Each cue is one panel that takes the screen.
 

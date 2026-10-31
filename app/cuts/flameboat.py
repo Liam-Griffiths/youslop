@@ -35,10 +35,11 @@ CYAN = "#5FD4FF"
 
 KINDS = {"image", "title", "code", "term", "diagram", "meme", "logo", "post", "stat"}
 
+PACE = {"cue_every_words": (5, 10)}
+
 PLAN = """The format is a rapid-fire tech explainer in the style of the fastest
 developer channels: near-black background, a NEW visual on almost every clause
-of the narration (every 5-10 spoken words), hard cuts, dry humour. Never hold
-one visual for more than about 4 seconds of speech.
+of the narration, hard cuts, dry humour.
 
 It is a VISUAL format. The narrator is already saying the words; the screen
 shows the thing — the picture, the code, the shape of the system — not the

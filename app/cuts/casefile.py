@@ -36,6 +36,8 @@ MIN_HOLD = 1.6
 
 KINDS = {"photo", "card", "clipping", "note", "redacted"}
 
+PACE = {}
+
 PLAN = """The format is an evidence board: a dark corkboard under one warm lamp.
 Each cue PINS ONE ITEM to the board as the narrator reaches it. Earlier items
 stay up for the whole case, so the board fills up as the story goes.
