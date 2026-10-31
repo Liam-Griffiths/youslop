@@ -84,6 +84,17 @@ def cmd_snapshot(args):
                            root / 'review/sheet.png'))
 
 
+def cmd_review(args):
+    _guard_write()
+    result = review.run(store.load(args.pid), lambda msg: print(msg, file=sys.stderr),
+                        mode='full' if args.full else 'targeted')
+    if args.json:
+        _print_json(result)
+    else:
+        print(store.project_dir(args.pid) / 'review/REVIEW.md')
+    return int(any(n['severity'] == 'P0' for n in result['notes']))
+
+
 def cmd_apply(args):
     _guard_write()
     patch = json.loads(Path(args.patch).read_text(encoding="utf-8"))
@@ -141,6 +152,10 @@ def main(argv=None):
     command = sub.add_parser("snapshot")
     command.add_argument("pid")
     command.add_argument("--sheet", action="store_true")
+    command = sub.add_parser("review")
+    command.add_argument("pid")
+    command.add_argument("--full", action="store_true")
+    command.add_argument("--json", action="store_true")
     command = sub.add_parser("apply")
     command.add_argument("pid")
     command.add_argument("patch")
@@ -162,7 +177,8 @@ def main(argv=None):
         ensure_dirs()
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog}[args.cmd](args)
+         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
+         "review": cmd_review}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
     except BrokenPipeError:

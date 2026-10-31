@@ -33,7 +33,7 @@ def test_cap_drops_middles_then_cues():
     rows = review.snapshot_times(sb, FrameSpec())
     assert len(rows) == 48
     assert not any(r['why'] == 'paragraph middle' for r in rows)
-    assert sum(r['why'] == 'paragraph start' for r in rows) == 40
+    assert sum(r['why'] == 'paragraph start' for r in rows) == 39  # Reserve a slot for the video's last frame.
     assert {0, 1.5, 3} <= {r['t'] for r in rows}
     sb['findings'] = [dict(level='P0', t=180, code='late', slide_id='x')]
     assert 180 in {r['t'] for r in review.snapshot_times(sb, FrameSpec())}
@@ -72,6 +72,7 @@ def test_grab_seek_and_missing_proxy(project, tmp_path, monkeypatch, kind):
 def test_manifest_sheet_cli_api(project, tmp_path, monkeypatch, capsys):
     root = store.project_dir(project.id)
     monkeypatch.setattr(review, '_story', lambda p: story())
+    monkeypatch.setattr(review, '_storyboard_hash', lambda p: 'synthetic-story')
     monkeypatch.setattr(render, 'timeline', lambda p: dict(segments=[]))
     def grab(p, t, out, size, segments):
         out.parent.mkdir(parents=True, exist_ok=True)

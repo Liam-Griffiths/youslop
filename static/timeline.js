@@ -105,7 +105,8 @@ async function tlMount() {
         <input type="range" id="tl-zoom" min="2" max="60" step="1" value="${TL.zoom}" style="width:130px"></label>
     </div>
     <div class="tl-scroll" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
-    <div class="tl-problems" id="tl-problems"></div>`;
+    <div class="tl-problems" id="tl-problems"></div>
+    <div class="tl-problems" id="tl-review"></div>`;
   const stage = $('#tl-stage');
   TL.vids.forEach((v, i) => { v.className = i === TL.active ? 'on' : ''; stage.prepend(v); });
 
@@ -252,8 +253,55 @@ function tlDraw() {
     <div class="tl-lane para"><em>voice</em>${paras}</div>
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
   tlPaintProblems();
+  tlPaintReview();
   TL.lastPara = '';
   tlPaintHead();
+}
+
+function tlPaintReview() {
+  const box = $('#tl-review');
+  if (!box || !TL.data) return;
+  box.replaceChildren();
+  const title = document.createElement('h3');
+  title.textContent = 'Review';
+  box.append(title);
+  for (const [mode, label] of [['targeted', 'Review'], ['full', 'Review every frame']]) {
+    const button = document.createElement('button');
+    button.className = 'btn sm';
+    button.textContent = label;
+    button.onclick = async () => {
+      const result = await api(`/api/projects/${TL.pid}/review`, {
+        method: 'POST', body: JSON.stringify({ mode }) });
+      watchJob(result.job, 'vision review');
+    };
+    box.append(button);
+  }
+  const review = TL.data.review || {};
+  const rows = [];
+  if (review.weakest) rows.push({ t: review.weakest.t, see: 'Weakest shot',
+    problem: review.weakest.why,
+    path: (review.frames || []).find((f) => f.t === review.weakest.t)?.path });
+  rows.push(...(review.notes || []));
+  for (const note of rows) {
+    const row = document.createElement('div');
+    row.className = 'tl-check-row';
+    if (note.path) {
+      const thumb = document.createElement('img');
+      thumb.src = `/api/projects/${encodeURIComponent(TL.pid)}/file/${note.path}`;
+      thumb.width = 120;
+      thumb.alt = note.see;
+      row.append(thumb);
+    }
+    const jump = document.createElement('button');
+    jump.className = 'mono tl-chip';
+    jump.textContent = `${tlClock(note.t)} · jump`;
+    jump.onclick = () => tlSeek(note.t, { ensure: true });
+    const text = document.createElement('span');
+    text.textContent = `${note.severity || 'Pinned'} · ${note.see} · ${note.problem}`
+      + (note.fix?.hint ? ` · ${note.fix.hint}` : '');
+    row.append(jump, text);
+    box.append(row);
+  }
 }
 
 function tlPaintProblems() {

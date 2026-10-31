@@ -754,6 +754,7 @@ class Project:
     # where what is known about the model (front, size, parts) lives.
     cast: list[dict] = field(default_factory=list)
     render: dict = field(default_factory=dict)   # last render result
+    review: dict = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
 
     # -------------------------------------------------------------- helpers
@@ -809,6 +810,7 @@ class Project:
             "yt_tags": self.yt_tags,
             "cast": self.cast,
             "render": self.render,
+            "review": self.review,
             "log": self.log[-200:],
             "picture_runs": self.picture_runs(),
             "est_seconds": self.est_seconds(),

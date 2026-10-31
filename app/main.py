@@ -2499,8 +2499,30 @@ def start_snapshots(pid: str) -> dict:
 @app.get("/api/projects/{pid}/review/snapshots")
 def get_snapshots(pid: str) -> list[dict]:
     _load(pid)
-    path = project_dir(pid) / 'review/snaps.json'
-    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+    return review.read_snapshots(pid)
+
+
+@app.post("/api/projects/{pid}/review")
+def start_review(pid: str, payload: dict = Body(default={})) -> dict:
+    _load(pid)
+    mode = payload.get('mode', 'targeted')
+    if mode not in ('targeted', 'full'):
+        raise HTTPException(400, 'Review mode must be targeted or full')
+
+    def work(progress):
+        import threading
+        lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())
+        with lock:
+            return review.run(store.load(pid), progress, mode=mode)
+
+    return {'job': jobs.start('review', pid, work)}
+
+
+@app.get("/api/projects/{pid}/review")
+def get_review(pid: str) -> dict:
+    _load(pid)
+    path = project_dir(pid) / 'review/notes.json'
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
 
 
 @app.get("/api/projects/{pid}/check")
@@ -2519,6 +2541,7 @@ def get_timeline(pid: str) -> dict:
         a, b = seg["start"], seg["start"] + seg["duration"]
         seg["findings"] = [f for f in result["findings"] if a <= f["t"] < b]
     tl["check"] = result
+    tl["review"] = get_review(pid)
     return tl
 
 
