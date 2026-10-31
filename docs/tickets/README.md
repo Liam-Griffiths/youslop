@@ -23,6 +23,11 @@ If a ticket turns out to be wrong about the code, fix the ticket text before
 fixing the code, and note it in the log. Tickets are the source of truth for
 *intent*; the code is the source of truth for *what exists*.
 
+## Design
+
+UI work follows `docs/design/studio-flow.md` (the design guide) and the
+mockup canvases it links. Read it before any Phase 4, 6, 9, 10 or 11 UI ticket.
+
 ## Rules that apply to every ticket
 
 - **No Node, no npm, no npx.** Anything that needs a browser runs in the

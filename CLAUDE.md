@@ -12,6 +12,7 @@ Read the rules in `docs/tickets/README.md` and shared gotchas in
 Implementer notes and Read first files. The work queue is
 `docs/tickets/PROGRESS.md`; the broader plan is `docs/roadmap.md`.
 Search by function name because ticket line numbers drift.
+For any UI work, read the design guide `docs/design/studio-flow.md` first.
 
 ## Run and test
 
