@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand
+from . import brand, edits, storyboard
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -1073,82 +1073,21 @@ def reimport_script(pid: str, payload: dict = Body(default={})) -> dict:
     return {"job": jobs.start("re-import", pid, work)}
 
 
+@app.get("/api/projects/{pid}/storyboard")
+def project_storyboard(pid: str) -> dict:
+    with store.lock_for(pid):
+        return storyboard.build(_load(pid))
+
+
 @app.patch("/api/projects/{pid}/slides/{sid}")
 def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)
-        if "narration" in payload:
-            s.narration = str(payload["narration"]).strip()
-        if "title" in payload:
-            s.title = str(payload["title"]).strip()[:40]
-        if "visual_note" in payload:
-            s.visual_note = str(payload["visual_note"]).strip()[:400]
-        if "chapter" in payload:
-            # "" clears the mark; a chapter also forces its own picture, which
-            # `schema.group_slides` applies on the way back out.
-            s.chapter = str(payload["chapter"]).strip()[:60]
-        if "queries" in payload:
-            s.queries = [q for q in payload["queries"] if str(q).strip()][:4]
-        if "prefer_kind" in payload:
-            kind = str(payload["prefer_kind"])
-            s.prefer_kind = (kind if kind in ("video", "map", "diagram", "custom")
-                             else "image")
-        if "board_template" in payload:
-            key = str(payload["board_template"] or "auto")
-            if key != "auto" and key not in board_mod.TEMPLATE_KEYS:
-                raise HTTPException(400, f"No such board template: {key}")
-            s.board_template = key
-        for key in ("board_lead", "board_note"):
-            if key in payload:
-                setattr(s, key, str(payload[key]).strip()[:160])
-        if "board_points" in payload:
-            raw = payload["board_points"]
-            if isinstance(raw, str):
-                raw = raw.split("\n")
-            s.board_points = [str(p).strip()[:120] for p in raw if str(p).strip()][:6]
-        if "diagram" in payload:
-            spec = payload["diagram"]
-            if not spec:
-                s.diagram = {}
-            else:
-                try:
-                    s.diagram = diagram_mod.normalise(spec)
-                except (ValueError, TypeError, json.JSONDecodeError) as exc:
-                    raise HTTPException(400, f"That diagram spec won't draw: {exc}")
-        if "picture_mode" in payload:
-            mode = str(payload["picture_mode"])
-            if mode not in ("auto", "hold", "new"):
-                raise HTTPException(400, "picture_mode is auto, hold or new")
-            s.picture_mode = mode
-        if isinstance(payload.get("cues"), dict):
-            # {"<cut key>": [cues]} — a list replaces that cut's cues, an
-            # empty one clears them back to drawing from the narration.
-            cues = dict(s.cues or {})
-            for key, value in payload["cues"].items():
-                if key not in cuts_mod.BY_KEY:
-                    raise HTTPException(400, f"No such cut: {key}")
-                if value and not isinstance(value, list):
-                    raise HTTPException(400, "Cues are a list of objects.")
-                clean = cuts_mod.normalise(cuts_mod.BY_KEY[key], value or [])
-                if value and not clean:
-                    raise HTTPException(400, "None of those cues are a kind this cut draws.")
-                if clean:
-                    cues[key] = clean
-                else:
-                    cues.pop(key, None)
-            s.cues = cues
-        if "chosen_id" in payload:
-            s.chosen_id = str(payload["chosen_id"])
-            s.locked_media = True
-        if "focal" in payload:
-            # Lives on the candidate, not the slide, so each image keeps its own
-            # point even after you switch pictures and switch back.
-            cid = str(payload.get("focal_id") or s.chosen_id)
-            cand = next((c for c in s.candidates if c["id"] == cid), None)
-            if cand is None:
-                raise HTTPException(404, "No such image on this slide")
-            cand["focal"] = _focal(payload["focal"])
+        try:
+            edits.patch_slide_fields(s, payload)
+        except edits.EditError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
         store.save(p)
     return s.to_dict()
 

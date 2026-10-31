@@ -18,6 +18,8 @@ attaches to another copy of itself, is a bad first five minutes.
 from __future__ import annotations
 
 import argparse
+import atexit
+import json
 import logging
 import os
 import secrets
@@ -54,9 +56,8 @@ def configure(port: int | None = None, token: str | None = None,
     """Prepare the data folders, logging and the access token.
 
     Returns the port and token the server will use. The token is minted per
-    launch rather than kept on disk: nothing but this process and whatever it
-    hands the URL to has any business reaching the API, and a secret that does
-    not outlive the run cannot leak from a file somebody forgot about.
+    launch. While serving, server.json records it alongside the process id
+    so command line writers can detect the running app.
     """
     ensure_dirs()
     handlers: list[logging.Handler] = [logging.FileHandler(_log_file())]
@@ -96,7 +97,27 @@ def serve(port: int, host: str = "127.0.0.1", ssl: tuple[str, str] | None = None
     config = uvicorn.Config(app, host=host, port=port, log_config=None,
                             ssl_keyfile=ssl[0] if ssl else None,
                             ssl_certfile=ssl[1] if ssl else None)
-    _Ready(config).run()
+    marker = CACHE_DIR / "server.json"
+    record = json.dumps({"port": port, "pid": os.getpid(),
+                         "token": brand.env("TOKEN") or ""})
+    # The desktop server is a daemon thread: also clean up at process exit.
+    def cleanup():
+        try:
+            if marker.read_text() == record:
+                marker.unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
+
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as file:
+        file.write(record)
+    atexit.register(cleanup)
+    try:
+        _Ready(config).run()
+    finally:
+        cleanup()
+        atexit.unregister(cleanup)
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -143,11 +143,38 @@ def load_picture(ctx, slide, cache_dir: Path | None):
     return img
 
 
-def beat_for(module, ctx, slide, length: float, lead: float, spoken: float,
-             cache_dir: Path | None = None) -> kit.Beat:
+def _cue_times(module, slide, spoken, length, lead):
     cues = cues_for(module, slide)
     times = kit.place(slide.narration, cues, spoken, length, lead=lead,
                       min_hold=getattr(module, "MIN_HOLD", 0.35))
+    return cues, times
+
+
+def _beat_spans(group, seg_len, lead_in):
+    spent = 0.0
+    for n, (slide, dur) in enumerate(group):
+        lead = lead_in if n == 0 else 0.0
+        length = (seg_len - spent) if n == len(group) - 1 else min(dur + lead, seg_len - spent)
+        start = spent
+        spent += length
+        if length > 0.05:
+            yield slide, dur, start, length, lead
+
+
+def timed_cues(project, group, seg_len: float, lead_in: float
+               ) -> list[tuple[str, list[dict], list[tuple[float, float]]]]:
+    """Cue spans in segment-file seconds, using the renderer's beat layout."""
+    module = BY_KEY[project.style.format]
+    out = []
+    for slide, dur, start, length, lead in _beat_spans(group, seg_len, lead_in):
+        cues, times = _cue_times(module, slide, spoken_of(slide, dur), length, lead)
+        out.append((slide.id, cues, [(start + a, start + b) for a, b in times]))
+    return out
+
+
+def beat_for(module, ctx, slide, length: float, lead: float, spoken: float,
+             cache_dir: Path | None = None) -> kit.Beat:
+    cues, times = _cue_times(module, slide, spoken, length, lead)
     slides = ctx.project.slides
     index = next((i for i, s in enumerate(slides) if s.id == slide.id), 0)
     src = source_for(ctx, slide)
@@ -178,13 +205,7 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
     ctx = make_ctx(project, size, fps, channel, image_for)
     ctx.cache["dir"] = cache_dir
     beats: list[kit.Beat] = []
-    spent = 0.0
-    for n, (slide, dur) in enumerate(group):
-        lead = lead_in if n == 0 else 0.0
-        length = (seg_len - spent) if n == len(group) - 1 else min(dur + lead, seg_len - spent)
-        spent += length
-        if length <= 0.05:
-            continue
+    for slide, dur, _start, length, lead in _beat_spans(group, seg_len, lead_in):
         beats.append(beat_for(module, ctx, slide, length, lead,
                               spoken_of(slide, dur), cache_dir))
 
