@@ -276,7 +276,7 @@ Six phases, each shippable. Sizes: S under a day, M a few days, L a week or more
 ### Phase 9: Studio flow overhaul (added 2026-10-31)
 The owner wants the whole UI and flow overhauled, not restyled, and kept
 serious: the Instrument look, cork only in the logo mark. A project
-becomes six stages (Plan as sources plus chapter columns of beats → Script → Visuals → Voice →
+becomes six stages (Plan as sources plus chapter columns of beats → Script → Voice (Camera for vlogs) → Visuals →
 Edit (the Timeline workspace) → Review & publish) inside a new shell with a
 stage stepper that says what is left. Footage, Library, Channels, Packs and
 Settings are app-level screens. T9.1 is a written flow map plus static
