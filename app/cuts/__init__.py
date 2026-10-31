@@ -72,6 +72,8 @@ def normalise(module, cues) -> list[dict]:
             clean = module.normalise(c)
             if clean:
                 clean["on"] = str(c.get("on") or "").strip()[:120]
+                if isinstance(c.get("at"), (int, float)):
+                    clean["at"] = max(0.0, float(c["at"]))
                 out.append(clean)
     return out
 

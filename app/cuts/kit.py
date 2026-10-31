@@ -440,8 +440,9 @@ def place(narration: str, cues: list[dict], spoken: float, length: float,
     """Start and end of every cue inside a paragraph `length` seconds long.
 
     The voice runs from `lead` to `lead + spoken`; the rest of `length` is
-    the pause after it. The first cue always opens the paragraph, so there is
-    never a frame with nothing on it. Returns one (start, end) per cue.
+    the pause after it. The first automatic cue opens the paragraph, so there is
+    never a frame with nothing on it unless explicitly retimed. Explicit
+    starts use paragraph seconds without adding lead. Returns one span per cue.
     """
     if not cues:
         return []
@@ -487,7 +488,19 @@ def place(narration: str, cues: list[dict], spoken: float, length: float,
     if starts and starts[-1] > limit:
         squeeze = limit / starts[-1] if starts[-1] > 0 else 0
         starts = [s * squeeze for s in starts]
-    ends = starts[1:] + [length]
+    # Explicit starts stay fixed; automatic neighbours fit between them.
+    fixed = {i: min(max(0.0, float(c["at"])), spoken, limit)
+             for i, c in enumerate(cues) if isinstance(c.get("at"), (int, float))}
+    for i, at in fixed.items():
+        starts[i] = at
+    if fixed:
+        for i in range(len(starts)):
+            if i in fixed:
+                continue
+            lo = starts[i - 1] if i else 0.0
+            hi = next((fixed[j] for j in range(i + 1, len(starts)) if j in fixed), limit)
+            starts[i] = min(hi, max(lo, starts[i]))
+    ends = [max(a, b) for a, b in zip(starts, starts[1:] + [length])]
     return list(zip(starts, ends))
 
 

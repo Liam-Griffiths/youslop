@@ -74,6 +74,10 @@ class Slide:
     # words are the card's, not the paragraph's: a chapter is usually titled
     # more broadly than the paragraph that happens to start it.
     chapter: str = ""
+    gap_override: float | None = None  # silence after this paragraph, seconds
+    title_at: float | None = None      # seconds from paragraph start
+    title_hold: float | None = None
+    chapter_hold: float | None = None  # card before this paragraph
     narration: str = ""
     visual_note: str = ""                 # plain-English description of the shot
     queries: list[str] = field(default_factory=list)

@@ -64,7 +64,8 @@ def paragraph_gaps(project: Project) -> list[float]:
             if (nxt.chapter or "").strip() or (
                     nxt.title and getattr(project.style, "format", "") == "essay"):
                 factor = max(factor, GAP_CHAPTER)
-        gaps.append(round(base * factor, 3))
+        gaps.append(round(min(10.0, max(0.0, s.gap_override)), 3)
+                    if s.gap_override is not None else round(base * factor, 3))
     return gaps
 
 

@@ -561,6 +561,21 @@ def _title_hold(frame, title, dur):
                         + frame.title_hold_per_word_s * len(title.split())))
 
 
+def _title_timing(project, member, dur, lead, last_line=False):
+    start = (lead + max(0.0, member.title_at) if member.title_at is not None
+             else project.frame.arrive_s)
+    hold = (max(0.0, member.title_hold) if member.title_hold is not None
+            else _title_hold(project.frame, member.title, dur))
+    if last_line and member.title_hold is None:
+        hold = max(hold, project.frame.last_line_min_s)
+    return start, hold
+
+
+def _chapter_override(project, group):
+    index = next(i for i, s in enumerate(project.slides) if s.id == group[-1][0].id)
+    return project.slides[index + 1].chapter_hold if index + 1 < len(project.slides) else None
+
+
 def _tail_pad(project, groups):
     """Extend only the final picture when its last line needs more reading time."""
     member, dur = groups[-1][-1]
@@ -788,10 +803,11 @@ def _segment_graph(
             idx = n_inputs
             inputs += _still_input(card, fps)
             n_inputs += 1
-            start = offset + frame.arrive_s
-            hold = _title_hold(frame, member.title, dur)
-            if last_line and n == len(group) - 1:
-                hold = max(hold, frame.last_line_min_s)
+            arrival, hold = _title_timing(
+                project, member, dur, cuts.transition_for(style) / 2
+                + cuts.head_pad_for(project, group[0][0]),
+                last_line and n == len(group) - 1)
+            start = offset + arrival
             fade_out_at = min(seg_len - frame.arrive_s * frame.exit_ratio, start + hold)
             if fade_out_at > start:
                 graph += (
@@ -819,6 +835,9 @@ def _segment_graph(
         gap = audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP)
         hold = max(frame.arrive_s, min(gap, frame.arrive_s + frame.title_hold_base_s
                                       + frame.title_hold_per_word_s * len(title.split())))
+        override = _chapter_override(project, group)
+        if override is not None:
+            hold = min(gap, max(0.0, override))
         start = max(0.2, seg_len - hold)
         inputs += _still_input(card, fps)
         graph += (
@@ -888,6 +907,9 @@ def _render_segment(
                + cuts.head_pad_for(project, group[0][0]))
     hold = max(0.9, min(3.2, audio_mod.gap_map(project).get(
         group[-1][0].id, PARAGRAPH_GAP) - 0.12))
+    override = _chapter_override(project, group)
+    if override is not None:
+        hold = min(audio_mod.gap_map(project)[group[-1][0].id], max(0.0, override))
     if scenes.handles(style.format):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
@@ -1722,6 +1744,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
          index, slides, _stat(pic),
          _segment_timing(project, groups, index), index == len(groups) - 1,
          chapter_card(project, nxt) if nxt else None,
+         nxt.chapter_hold if nxt else None,
          dataclasses.asdict(project.style), project.frame.to_dict(),
          camera_plan(project, groups)[index],
          dataclasses.asdict(channel) if dataclasses.is_dataclass(channel) else None,
@@ -2176,14 +2199,54 @@ def timeline(project: Project) -> dict:
         head = HEAD_PAD if i == 0 else 0.0
         paras = []
         pt = t + head
-        for s, d in group:
+        file_lead = T / 2 + cuts.head_pad_for(project, lead)
+        cue_times = {}
+        if cuts.is_cut(project.style.format):
+            _, _, length = _segment_timing(project, groups, i)
+            cue_times = {sid: (cues, times) for sid, cues, times in
+                         cuts.timed_cues(project, group, length, file_lead)}
+        _, _, segment_length = _segment_timing(project, groups, i)
+        paragraph_offset = 0.0
+        for n, (s, d) in enumerate(group):
+            arrival, title_hold = _title_timing(project, s, d, file_lead,
+                                                i == len(groups) - 1 and n == len(group) - 1)
+            title_hold = max(0.0, min(title_hold, segment_length
+                             - project.frame.arrive_s * project.frame.exit_ratio
+                             - paragraph_offset - arrival))
+            timing = {
+                "title_at": {"value": round(arrival - file_lead, 3),
+                             "start": round(pt + arrival - file_lead, 3),
+                             "src": "user" if s.title_at is not None else "auto"},
+                "title_hold": {"value": title_hold, "src": "user" if s.title_hold is not None else "auto"},
+                "gap": {"value": audio_mod.gap_map(project)[s.id],
+                        "src": "user" if s.gap_override is not None else "auto"},
+                "chapter_hold": {"value": 0.0, "src": "user" if s.chapter_hold is not None else "auto"},
+                "cues": [],
+            }
+            if chapter_title(project, s) and index_of[s.id] > 0:
+                gap = audio_mod.gap_map(project)[project.slides[index_of[s.id] - 1].id]
+                default = (max(0.9, min(3.2, gap - 0.12)) if scenes.handles(project.style.format)
+                           or cuts.is_cut(project.style.format) or project.style.format == "board"
+                           or project.style.format.startswith("custom:") else
+                           max(project.frame.arrive_s, min(gap, project.frame.arrive_s
+                               + project.frame.title_hold_base_s
+                               + project.frame.title_hold_per_word_s * len(chapter_title(project, s).split()))))
+                timing["chapter_hold"]["value"] = min(gap, max(0.0, s.chapter_hold)) if s.chapter_hold is not None else default
+            if s.id in cue_times:
+                cues, times = cue_times[s.id]
+                timing["cues"] = [{"at": round(t + a - T / 2 - pt, 3),
+                                   "start": round(t + a - T / 2, 3),
+                                   "end": round(t + b - T / 2, 3),
+                                   "src": "user" if "at" in cue else "auto"}
+                                  for cue, (a, b) in zip(cues, times)]
             paras.append({
                 "id": s.id, "index": index_of[s.id], "start": round(pt, 3),
                 "duration": d, "text": s.narration, "title": s.title,
-                "chapter": s.chapter, "words": s.word_count,
+                "chapter": s.chapter, "words": s.word_count, "timing": timing,
                 "recorded": bool(s.take), "section": s.section,
             })
             pt += d
+            paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
         if not lead.chosen_id:

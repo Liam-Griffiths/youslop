@@ -1,6 +1,9 @@
 """Slide field edits shared by the HTTP API and storyboard tools."""
 import copy
 import json
+import math
+
+TIMING_FIELDS = {"gap_override", "title_at", "title_hold", "chapter_hold"}
 
 from . import board as board_mod, cuts as cuts_mod, diagram as diagram_mod
 
@@ -13,7 +16,7 @@ class EditError(ValueError):
 
 EDITABLE = {"narration", "title", "visual_note", "chapter", "queries",
             "prefer_kind", "board_template", "board_lead", "board_note",
-            "board_points", "diagram", "picture_mode", "cues", "chosen_id", "focal"}
+            "board_points", "diagram", "picture_mode", "cues", "chosen_id", "focal"} | TIMING_FIELDS
 
 
 def _focal(value) -> list[float]:
@@ -30,6 +33,15 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
     """Apply API field validation in place; return the fields that changed."""
     before = {key: copy.deepcopy(getattr(s, key if key != "focal" else "candidates"))
               for key in payload if key in EDITABLE}
+    for key in TIMING_FIELDS & payload.keys():
+        value = payload[key]
+        if value is not None:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise EditError(f"{key} must be finite seconds or null")
+            value = max(0.0, float(value))
+            if key == "gap_override":
+                value = min(10.0, value)
+        setattr(s, key, value)
     if "narration" in payload:
         s.narration = str(payload["narration"]).strip()
     if "title" in payload:

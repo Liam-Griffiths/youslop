@@ -9,6 +9,6 @@ Fields come from EDITABLE; cues maps cut keys to lists of cue objects.
 Text fields are strings and picture_mode is auto, hold or new. Validation
 is atomic and uses the same normalisation as the slide API.
 
-Editable fields: `chapter`, `cues`, `narration`, `picture_mode`, `title`
+Editable fields: `chapter`, `chapter_hold`, `cues`, `gap_override`, `narration`, `picture_mode`, `title`, `title_at`, `title_hold`
 
 Validate the whole patch before editing; return unique changed fields.

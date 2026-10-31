@@ -10,7 +10,7 @@ from dataclasses import asdict
 
 from . import cuts, edits, render
 
-EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues"}
+EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues"} | edits.TIMING_FIELDS
 
 
 def build(project) -> dict:
@@ -30,7 +30,7 @@ def build(project) -> dict:
                 "id": slide.id, "index": para["index"], "start": para["start"],
                 "end": round(para["start"] + para["duration"], 3),
                 "narration": slide.narration, "title": slide.title,
-                "chapter": slide.chapter,
+                "chapter": slide.chapter, "timing": deepcopy(para["timing"]),
                 "picture": {"provider": candidate.get("provider", ""),
                             "title": candidate.get("title", ""),
                             "path": str(path) if path else "",
