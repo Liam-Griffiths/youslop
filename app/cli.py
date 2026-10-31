@@ -1,4 +1,4 @@
-"""Small in-process command line interface; writes require a closed app."""
+"""Production CLI: use HTTP jobs while the app is open, synchronous ops otherwise."""
 import httpx
 
 import argparse
@@ -6,9 +6,10 @@ import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
-from . import check, edits, ffutil, llm, render, review, store, storyboard
+from . import edits, ffutil, llm, ops, render, review, store, storyboard
 from .config import CACHE_DIR, ensure_dirs
 
 
@@ -36,6 +37,65 @@ def _guard_write():
     path.unlink(missing_ok=True)
 
 
+def _operation(name, pid, payload):
+    try:
+        server = json.loads((CACHE_DIR / "server.json").read_text())
+    except FileNotFoundError:
+        server = None
+    if server is not None and (not isinstance(server, dict) or
+                               type(server.get('pid')) is not int or server['pid'] <= 0):
+        raise ValueError('Invalid server.json pid; cannot safely write')
+    if server and _alive(server['pid']):
+        port = server.get('port')
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError("the app is open; close it or use the UI (invalid server port)")
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}",
+                          headers={'x-vb-token': server.get('token', '')}, timeout=30) as client:
+            health = client.get('/api/health')
+            health.raise_for_status()
+            if health.json() != {'ok': True, 'pid': server['pid']}:
+                raise ValueError("Server identity mismatch; refusing local writes")
+            base = f'/api/projects/{pid}'
+            method, path = {
+                'create': ('POST', '/api/projects'), 'plan': ('POST', base + '/script'),
+                'research': ('POST', base + '/research'), 'check': ('GET', base + '/check'),
+                'snapshot': ('POST', base + '/review/snapshots'),
+                'review': ('POST', base + '/review'),
+                'fix': ('POST', base + '/review/' + str(payload.get('note_id', ''))),
+            }[name]
+            response = client.request(method, path, **({'json': payload} if method == 'POST' else {}))
+            response.raise_for_status()
+            result = response.json()
+            initial = result
+            since = 0
+            while 'job' in initial:
+                response = client.get(f"/api/jobs/{initial['job']}", params={'since': since})
+                response.raise_for_status()
+                job = response.json()
+                for row in job['log']:
+                    print(row['m'], file=sys.stderr, flush=True)
+                since = job['log_total']
+                if job['state'] == 'error':
+                    raise ValueError(job['error'])
+                if job['state'] == 'done':
+                    result = job['result']
+                    break
+                time.sleep(.2)
+            return {'project': initial['project']} if name == 'create' else result
+    if name != 'check':
+        _guard_write()
+    return getattr(ops, name)(pid, payload, lambda msg: print(msg, file=sys.stderr, flush=True))
+
+
+def cmd_new(args):
+    result = _operation('create', '', {'idea': args.idea, 'test': args.test})
+    print(result['project']['id'])
+
+
+def cmd_plan(args):
+    _print_json(_operation(args.cmd, args.pid, {'fresh': args.fresh} if args.cmd == 'plan' else {}))
+
+
 def _print_json(value):
     print(json.dumps(value, indent=2, ensure_ascii=False))
 
@@ -61,7 +121,7 @@ def cmd_storyboard(args):
 
 
 def cmd_check(args):
-    result = check.run(store.load(args.pid))
+    result = _operation('check', args.pid, {})
     if args.json:
         _print_json(result)
     else:
@@ -74,20 +134,15 @@ def cmd_check(args):
 
 
 def cmd_snapshot(args):
-    _guard_write()
-    project = store.load(args.pid)
-    rows = review.snapshots(project)
-    root = store.project_dir(project.id)
-    print(root / 'review/snaps.json')
+    result = _operation('snapshot', args.pid, {'sheet': args.sheet})
+    root = store.project_dir(args.pid)
+    print(root / result['manifest'])
     if args.sheet:
-        print(review.sheet([dict(row, path=root / row['path']) for row in rows],
-                           root / 'review/sheet.png'))
+        print(root / result['sheet'])
 
 
 def cmd_review(args):
-    _guard_write()
-    result = review.run(store.load(args.pid), lambda msg: print(msg, file=sys.stderr),
-                        mode='full' if args.full else 'targeted')
+    result = _operation('review', args.pid, {'mode': 'full' if args.full else 'targeted'})
     if args.json:
         _print_json(result)
     else:
@@ -97,11 +152,10 @@ def cmd_review(args):
 
 
 def cmd_fix(args):
-    _guard_write()
-    proposal = review.act(args.pid, args.note_id, 'fix')
+    proposal = _operation('fix', args.pid, {'note_id': args.note_id, 'action': 'fix'})
     _print_json(proposal)
     if args.apply and not proposal.get('unsupported') and not proposal.get('proposal', {}).get('search'):
-        _print_json(review.act(args.pid, args.note_id, 'apply'))
+        _print_json(_operation('fix', args.pid, {'note_id': args.note_id, 'action': 'apply'}))
 
 
 def cmd_apply(args):
@@ -163,10 +217,28 @@ def cmd_catalog(args):
         _print_json(catalog.installed())
 
 
+def cmd_doctrine(args):
+    from . import doctrine
+    if args.write is not None:
+        doctrine.write(Path(args.write) if args.write else None)
+    else:
+        print(doctrine.motion(), end='')
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
+    command = sub.add_parser("new")
+    command.add_argument("idea")
+    command.add_argument("--test", action="store_true")
+    for name in ('plan', 'research'):
+        command = sub.add_parser(name)
+        command.add_argument('pid')
+        if name == 'plan':
+            command.add_argument('--fresh', action='store_true')
+    command = sub.add_parser('doctrine')
+    command.add_argument('--write', nargs='?', const='', metavar='PATH')
     for name in ("timeline", "storyboard", "check"):
         command = sub.add_parser(name)
         command.add_argument("pid")
@@ -208,7 +280,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
-        status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
+        status = {"new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
+         "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)

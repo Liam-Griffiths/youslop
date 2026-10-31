@@ -193,45 +193,45 @@ BANNED_MEANINGS = {
 @dataclass
 class FrameSpec:
     """Numeric motion, pacing and taste contract shared by planners and checks."""
-    arrive_s: float = 0.45
-    exit_ratio: float = 0.55
-    move_min_s: float = 0.3
-    move_max_s: float = 0.6
-    title_hold_base_s: float = 0.5
-    title_hold_per_word_s: float = 0.3
-    last_line_min_s: float = 2.0
-    title_height_pct_min: float = 4.0
-    title_height_pct_max: float = 9.0
-    montage_cut_min_s: float = 0.13
-    montage_cut_max_s: float = 0.8
-    shot_avg_min_s: float = 1.8
-    shot_avg_max_s: float = 3.0
-    payoff_hold_min_s: float = 0.3
-    payoff_hold_max_s: float = 0.75
-    transition_types: list = field(default_factory=lambda: ["cut", "fade", "dip"])
-    max_gap_first_90_s: float = 15.0
-    max_gap_after_s: float = 20.0
-    max_gap_ever_s: float = 30.0
-    hook_s: float = 37.0
-    overlays_per_hook: int = 6
-    overlays_per_90_s: int = 7
-    camera_moves_per_90_s: int = 7
-    creep_min: float = 1.10
-    creep_max: float = 1.12
-    punch_min: float = 1.18
-    punch_max: float = 1.25
-    camera_origin: str = "top"
-    snap_on_cut: bool = True
-    anchor_after_s: float = 0.10
-    anchor_before_s: float = 0.60
-    music_under_min_db: float = 16.0
-    music_under_max_db: float = 19.0
-    voice_lufs: float = -14.0
-    banned: list = field(default_factory=lambda: list(BANNED_DEFAULTS))
-    rejected_looks: list = field(default_factory=list)
-    rules: list = field(default_factory=list)
-    design_md: str = ""
-    frame_md: str = ""
+    arrive_s: float = field(default=0.45, metadata={"group": "Motion"})
+    exit_ratio: float = field(default=0.55, metadata={"group": "Motion"})
+    move_min_s: float = field(default=0.3, metadata={"group": "Motion"})
+    move_max_s: float = field(default=0.6, metadata={"group": "Motion"})
+    title_hold_base_s: float = field(default=0.5, metadata={"group": "Motion"})
+    title_hold_per_word_s: float = field(default=0.3, metadata={"group": "Motion"})
+    last_line_min_s: float = field(default=2.0, metadata={"group": "Motion"})
+    title_height_pct_min: float = field(default=4.0, metadata={"group": "Motion"})
+    title_height_pct_max: float = field(default=9.0, metadata={"group": "Motion"})
+    montage_cut_min_s: float = field(default=0.13, metadata={"group": "Motion"})
+    montage_cut_max_s: float = field(default=0.8, metadata={"group": "Motion"})
+    shot_avg_min_s: float = field(default=1.8, metadata={"group": "Motion"})
+    shot_avg_max_s: float = field(default=3.0, metadata={"group": "Motion"})
+    payoff_hold_min_s: float = field(default=0.3, metadata={"group": "Motion"})
+    payoff_hold_max_s: float = field(default=0.75, metadata={"group": "Motion"})
+    transition_types: list = field(default_factory=lambda: ["cut", "fade", "dip"], metadata={"group": "Motion"})
+    max_gap_first_90_s: float = field(default=15.0, metadata={"group": "Pacing"})
+    max_gap_after_s: float = field(default=20.0, metadata={"group": "Pacing"})
+    max_gap_ever_s: float = field(default=30.0, metadata={"group": "Pacing"})
+    hook_s: float = field(default=37.0, metadata={"group": "Pacing"})
+    overlays_per_hook: int = field(default=6, metadata={"group": "Pacing"})
+    overlays_per_90_s: int = field(default=7, metadata={"group": "Pacing"})
+    camera_moves_per_90_s: int = field(default=7, metadata={"group": "Pacing"})
+    creep_min: float = field(default=1.10, metadata={"group": "Camera"})
+    creep_max: float = field(default=1.12, metadata={"group": "Camera"})
+    punch_min: float = field(default=1.18, metadata={"group": "Camera"})
+    punch_max: float = field(default=1.25, metadata={"group": "Camera"})
+    camera_origin: str = field(default="top", metadata={"group": "Camera"})
+    snap_on_cut: bool = field(default=True, metadata={"group": "Camera"})
+    anchor_after_s: float = field(default=0.10, metadata={"group": "Anchors"})
+    anchor_before_s: float = field(default=0.60, metadata={"group": "Anchors"})
+    music_under_min_db: float = field(default=16.0, metadata={"group": "Audio"})
+    music_under_max_db: float = field(default=19.0, metadata={"group": "Audio"})
+    voice_lufs: float = field(default=-14.0, metadata={"group": "Audio"})
+    banned: list = field(default_factory=lambda: list(BANNED_DEFAULTS), metadata={"group": "Taste and overrides"})
+    rejected_looks: list = field(default_factory=list, metadata={"group": "Taste and overrides"})
+    rules: list = field(default_factory=list, metadata={"group": "Taste and overrides"})
+    design_md: str = field(default="", metadata={"group": "Taste and overrides"})
+    frame_md: str = field(default="", metadata={"group": "Taste and overrides"})
 
     def to_dict(self) -> dict:
         return asdict(self)

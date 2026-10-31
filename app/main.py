@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand, check, edits, review, storyboard
+from . import brand, check, edits, ops, review, storyboard
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -44,7 +44,7 @@ from . import slide_styles
 from . import youtube as youtube_mod
 from . import transfer
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
-from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, new_project
+from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel
 from .store import project_dir
 
 # The data folders, before anything can want one. `app/__main__.py` does this
@@ -742,83 +742,12 @@ def list_projects() -> list[dict]:
 
 @app.post("/api/projects")
 def create_project(payload: dict = Body(...)) -> dict:
-    script = (payload.get("script") or "").strip()
-    idea = (payload.get("idea") or "").strip()
-    if not script and len(idea) < 8:
-        raise HTTPException(400, "Describe the video idea, or paste a script.")
-    if script and len(script.split()) < 120:
-        raise HTTPException(400, "That script is too short to build a video from.")
-
-    channel = channels.load_or_none(payload.get("channel_id") or "")
-    test = bool(payload.get("test")) and not script
-    minutes = 1 if test else max(5, min(30, int(payload.get("target_minutes")
-                                                or (channel.default_minutes if channel else 12))))
-    tone = payload.get("tone") or (channel.tone if channel else "warm documentary")
-    project = new_project(idea or script[:200], minutes, tone, channel=channel)
-    if script:
-        project.has_source = True
-        project.fidelity = "adapted" if payload.get("fidelity") == "adapted" else "faithful"
-    # The two look-and-feel choices worth making before a script exists rather
-    # than after: how the pictures are staged, and how often they change. Both
-    # already have defaults from the channel (or Style()'s own), so this only
-    # overrides them when the creator actually touched the control.
-    if payload.get("format") in ("kenburns", "essay", "board", "stage", *cuts_mod.KEYS):
-        project.style.format = payload["format"]
-    if payload.get("picture_every"):
-        project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
-    if payload.get("research_mode") in ("quick", "deep"):
-        project.research_mode = payload["research_mode"]
-    if test:
-        project.test, project.research_mode = True, "quick"
-    # Models first: models the creator picked on the form are in the cast
-    # before the story is planned, and the brief is built around them.
-    if project.style.format == "stage":
-        for mid in (payload.get("models") or [])[:8]:
-            try:
-                m = models3d.get(str(mid))
-            except models3d.ModelError:
-                continue
-            project.cast.append({"id": "s" + m["id"][1:7], "subject": cast_mod.model_name(m),
-                                 "role": "hero", "why": "chosen by the creator", "chapters": [],
-                                 "model": m["id"], "mode": "model"})
-    store.save(project)
-    if script:
-        (project_dir(project.id) / "source.txt").write_text(script, encoding="utf-8")
-
-    def work(progress):
-        with store.lock_for(project.id):
-            p = store.load(project.id)
-            src = project_dir(p.id) / "source.txt"
-            if p.style.format == "stage":
-                # A 3D explainer is made story, then cast, then words: stop
-                # after the brief. The script is written from the same draft
-                # once the cast is gathered (docs/3d-explainer.md).
-                text = src.read_text(encoding="utf-8") if p.has_source and src.exists() else ""
-                if text:
-                    script_gen.import_script(p, text, p.fidelity, progress)
-                    store.log(p, f"Script imported: {len(p.slides)} paragraphs")
-                else:
-                    script_gen.brief(p, progress, lambda: store.save(p))
-                    store.log(p, f"Brief written: {len((p.outline or {}).get('sections', []))} chapters")
-                store.save(p)
-                p.cast = cast_mod.propose(p, progress, source_text=text)
-                p.status = "casting" if not text else p.status
-                store.save(p)
-                return {"slides": len(p.slides), "cast": len(p.cast)}
-            if p.has_source and src.exists():
-                script_gen.import_script(p, src.read_text(encoding="utf-8"),
-                                         p.fidelity, progress)
-                store.log(p, f"Script imported: {len(p.slides)} paragraphs")
-            else:
-                script_gen.generate(p, progress, lambda: store.save(p))
-                store.log(p, f"Script generated: {len(p.slides)} paragraphs")
-            store.save(p)
-            media.gather(p, progress)
-            store.save(p)
-        return {"slides": len(p.slides)}
-
+    try:
+        project, script = ops.prepare_create(payload)
+    except ops.PayloadError as exc:
+        raise HTTPException(400, str(exc)) from exc
     jid = jobs.start("import" if script else ("brief" if project.style.format == "stage" else "script"),
-                     project.id, work)
+                     project.id, lambda pr: ops.initialize(project.id, payload, pr))
     return {"project": project.to_dict(), "job": jid}
 
 
@@ -1015,24 +944,7 @@ def delete_project(pid: str) -> dict:
 @app.post("/api/projects/{pid}/script")
 def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
     _load(pid)
-    fresh = bool(payload.get("fresh"))
-
-    def work(progress):
-        with store.lock_for(pid):
-            p = store.load(pid)
-            # A previous run that died partway is picked up rather than repeated;
-            # `fresh` throws that away and writes the script from the top.
-            script_gen.generate(p, progress, lambda: store.save(p), fresh=fresh)
-            store.save(p)
-            # A 3D explainer's pictures come from its shots, except for the
-            # paragraphs whose visual line is a photo.
-            only = shots_mod.photo_leads(p) if p.style.format == "stage" else None
-            if only is None or only:
-                media.gather(p, progress, only=only)
-                store.save(p)
-        return {"slides": len(p.slides)}
-
-    return {"job": jobs.start("script", pid, work)}
+    return {"job": jobs.start("script", pid, lambda pr: ops.plan(pid, payload, pr))}
 
 
 @app.post("/api/projects/{pid}/factcheck")
@@ -2505,27 +2417,13 @@ def preview_segment(pid: str, sid: str) -> dict:
 
 
 # ---------------------------------------------------------------- timeline
-_PROXY_LOCKS: dict[str, "threading.Lock"] = {}
+_PROXY_LOCKS = ops.PROXY_LOCKS
 
 
 @app.post("/api/projects/{pid}/review/snapshots")
 def start_snapshots(pid: str) -> dict:
     _load(pid)
-
-    def work(progress):
-        import threading
-        lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())
-        with lock:
-            project = store.load(pid)
-            progress("Grabbing review frames from segment proxies")
-            rows = review.snapshots(project)
-            root = project_dir(pid)
-            review.sheet([dict(row, path=root / row['path']) for row in rows],
-                         root / 'review/sheet.png')
-            progress(f"Review ready: {len(rows)} frames")
-            return {"manifest": "review/snaps.json", "sheet": "review/sheet.png"}
-
-    return {"job": jobs.start("snapshot", pid, work)}
+    return {"job": jobs.start("snapshot", pid, lambda pr: ops.snapshot(pid, {}, pr))}
 
 
 @app.get("/api/projects/{pid}/review/snapshots")
@@ -2537,17 +2435,9 @@ def get_snapshots(pid: str) -> list[dict]:
 @app.post("/api/projects/{pid}/review")
 def start_review(pid: str, payload: dict = Body(default={})) -> dict:
     _load(pid)
-    mode = payload.get('mode', 'targeted')
-    if mode not in ('targeted', 'full'):
+    if payload.get('mode', 'targeted') not in ('targeted', 'full'):
         raise HTTPException(400, 'Review mode must be targeted or full')
-
-    def work(progress):
-        import threading
-        lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())
-        with lock:
-            return review.run(store.load(pid), progress, mode=mode)
-
-    return {'job': jobs.start('review', pid, work)}
+    return {'job': jobs.start('review', pid, lambda pr: ops.review(pid, payload, pr))}
 
 
 @app.get("/api/projects/{pid}/review")
@@ -2560,14 +2450,15 @@ def get_review(pid: str) -> dict:
 def review_action(pid: str, note_id: str, payload: dict = Body(...)) -> dict:
     _load(pid)
     try:
-        return review.act(pid, note_id, payload.get('action'), finding=payload.get('finding'))
+        return ops.fix(pid, dict(payload, note_id=note_id, action=payload.get('action')), lambda msg: None)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/projects/{pid}/check")
 def get_check(pid: str) -> dict:
-    return check.run(_load(pid))
+    _load(pid)
+    return ops.check(pid, {}, lambda msg: None)
 
 
 @app.get("/api/projects/{pid}/timeline")
@@ -3328,3 +3219,14 @@ def shot_scene(pid: str, sid: str) -> dict:
     entries = [{"sid": e["sid"], "manifest": _model_or_404(e["model"])} for e in shots_mod.entries(p, it)]
     return {"entries": entries, "intent": it, "solved": (s.shot or {}).get("solved"), "secs": secs,
             "locked": bool((s.shot or {}).get("locked"))}
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"ok": True, "pid": os.getpid()}
+
+
+@app.post("/api/projects/{pid}/research")
+def research_project(pid: str, payload: dict = Body(default={})) -> dict:
+    _load(pid)
+    return {"job": jobs.start("research", pid, lambda pr: ops.research(pid, payload, pr))}
