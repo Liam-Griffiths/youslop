@@ -21,6 +21,7 @@ from .schema import FrameSpec, Style
 SCENE_VERSION = 2
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
+ASSETS_URLS = {kind: f"/scene/{{token}}/{kind}/" for kind in ('project', 'channel')}
 env = jinja2.Environment(loader=jinja2.FileSystemLoader(SCENE_DIR),
                          autoescape=True, undefined=jinja2.StrictUndefined)
 log = logging.getLogger(__name__)
@@ -42,8 +43,14 @@ def context_base(project=None, channel=None) -> dict:
                           subtitle=project.subtitle if project else ""),
                 fonts={"Inter": "/fonts/Inter-Medium.ttf",
                        "Archivo": "/fonts/ArchivoNarrow-Bold.ttf",
+                       "EB Garamond": "/fonts/EBGaramond-Regular.ttf",
                        "JetBrains Mono": "/fonts/JetBrainsMono-Regular.ttf"},
-                assets_url="/scene/{token}/assets/", width=1920, height=1080,
+                assets_url="/scene/{token}/assets/",
+                assets_urls=dict(ASSETS_URLS),
+                asset_roots=dict(project_root=str(store.project_dir(project.id)) if project else None,
+                                 channel_root=str(channels.CHANNELS_DIR / channel.id)
+                                 if channel and channel.id else None),
+                width=1920, height=1080,
                 duration=5, fps=30)
 
 
@@ -211,6 +218,7 @@ def ensure_clip(project, template, ctx, *, seconds, size, fps, key_extra=()) -> 
         log.info('scene cache hit: %s', key)
     else:
         made = stage.render_scene([dict(clip=key, scene_root=str(html.parent),
+            **ctx.get('asset_roots', {}),
             assets_root=str(html.parent.parent), url_path=f'/scene/{{token}}/{html.name}',
             W=ctx['width'], H=ctx['height'], fps=fps,
             frames=max(2, round(seconds * fps)), size=size)], html.parent)
@@ -227,7 +235,7 @@ def capture(project, template, ctx, *, t, size) -> bytes:
     png = html.with_name(f'{key}_{t}.png')
     if not png.exists():
         data = stage.capture_one(html, ctx['width'], ctx['height'], t, size,
-                                 assets_root=html.parent.parent)
+                                 assets_root=html.parent.parent, **ctx.get('asset_roots', {}))
         png.write_bytes(data)
     return png.read_bytes()
 
@@ -278,12 +286,25 @@ def render_card(kind, name, channel, video_title, out_path,
     ctx['vars']['title'] = video_title
     if kind == 'outro' and name in ('outro_twoup', 'outro_quiet'):
         ctx.update(outro_context(channel))
+    if kind == 'intro':
+        ctx.update(intro_context(channel))
     # Keeping this cache alongside the output also covers synthetic solo channels.
     clip = ensure_clip(out_path.parent, f"cards/{name}.html", ctx,
                        seconds=seconds, size=(WIDTH, HEIGHT), fps=FPS)
     progress(f"Scene {kind}: {seconds:.1f}s")
     _encode(clip, out_path, seconds, (WIDTH, HEIGHT), FPS, 18)
     return seconds
+
+
+def intro_context(channel) -> dict:
+    """Resolve the first available channel portrait without fetching a cast."""
+    root = (channels.CHANNELS_DIR / channel.id).resolve()
+    for rel in channel.intro.images:
+        path = (root / rel).resolve()
+        if rel and '..' not in rel and path.is_relative_to(root) and path.is_file():
+            return dict(portrait_url=ASSETS_URLS['channel'] + quote(rel, safe='/'),
+                        portrait_hash=hashlib.sha1(path.read_bytes()).hexdigest())
+    return dict(portrait_url='', portrait_hash='')
 
 
 def outro_context(channel) -> dict:

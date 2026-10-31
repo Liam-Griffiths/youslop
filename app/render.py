@@ -963,8 +963,8 @@ def _has_slate(project: Project) -> bool:
     if not project.channel_id:
         return _solo_slate(project)
     channel = channels.load_or_none(project.channel_id)
-    return bool(channel and not (intro_mod.needs_images(channel.intro.template)
-                                 and len(channel.intro.images or []) < 2))
+    return bool(channel and len(channel.intro.images or []) >=
+                intro_mod.minimum_images(channel.intro.template))
 
 
 def _build_intro(project: Project, progress: Progress,
@@ -988,7 +988,7 @@ def _build_intro(project: Project, progress: Progress,
     if intro_mod.needs_images(channel.intro.template):
         if solo:
             channel.intro.template = intro_mod.SOLO_DEFAULT
-        elif len(channel.intro.images or []) < 2:
+        elif len(channel.intro.images or []) < intro_mod.minimum_images(channel.intro.template):
             progress(f"Channel “{channel.name}” has no cast yet; rendering without a slate")
             return None, 0.0
 

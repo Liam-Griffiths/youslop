@@ -116,6 +116,17 @@ TEMPLATES = [
      "columns_label": "Grid width", "stagger_label": "Gap between flips",
      "fly_label": "Flip speed"},
 ]
+TEMPLATES += [
+    {"key": "scene:intro_" + key, "label": label + " · scene",
+     "needs_images": key == "portrait", "blurb": blurb,
+     "columns_label": "", "stagger_label": "", "fly_label": ""}
+    for key, label, blurb in (
+        ("solo", "Signal", "A large series wordmark and accent rule."),
+        ("dossier", "Dossier", "A ruled case file with series metadata."),
+        ("folio", "Folio", "A cream page with a bookish series title."),
+        ("portrait", "Portrait", "One cast portrait beside the series title."),
+    )
+]
 TEMPLATE_KEYS = [t["key"] for t in TEMPLATES]
 # The templates a video with no channel behind it can use: no cast, no
 # portraits to fetch, nothing but its own title and colours.
@@ -131,6 +142,13 @@ def needs_images(template: str) -> bool:
     if template.startswith("scene:"):
         return False
     return True          # unknown template falls back to columns, which does
+
+
+def minimum_images(template: str) -> int:
+    """The portrait scene needs one face; legacy cast slates still need two."""
+    if template == "scene:intro_portrait":
+        return 1
+    return 2 if needs_images(template) else 0
 
 
 # ------------------------------------------------------------------- casting

@@ -109,11 +109,19 @@ def _handler(run: _Run):
                     return "/nonexistent"
                 root = Path(root).resolve()
                 relative = parts[3]
-                if relative.startswith("assets/") and run.job.get("assets_root"):
+                if ".." in relative:
+                    return "/nonexistent"
+                kind, _, rel = relative.partition("/")
+                if kind in ("project", "channel"):
+                    asset_root = run.job.get(kind + "_root")
+                    if not asset_root or not rel:
+                        return "/nonexistent"
+                    root, relative = Path(asset_root).resolve(), rel
+                if kind == "assets" and run.job.get("assets_root"):
                     root = Path(run.job["assets_root"]).resolve()
                     relative = relative[len("assets/"):]
                 target = (root / relative).resolve()
-                if not target.is_relative_to(root):
+                if target == root or not target.is_relative_to(root):
                     return "/nonexistent"
                 return str(target)
             if path.startswith("/fonts/"):
@@ -637,13 +645,20 @@ def render_scene(items: list[dict], out_dir: Path,
     assets = {str(Path(i["assets_root"]).resolve()) for i in items if i.get("assets_root")}
     if len(assets) > 1:
         raise StageError("one assets_root is allowed per render call")
+    asset_roots = {}
+    for kind in ("project", "channel"):
+        values = {str(Path(i[kind + '_root']).resolve()) for i in items if i.get(kind + '_root')}
+        if len(values) > 1:
+            raise StageError(f"one {kind}_root is allowed per render call")
+        asset_roots[kind + '_root'] = next(iter(values), None)
     run = _run_cdp({"items": items, "scene_root": next(iter(roots), None),
-                    "assets_root": next(iter(assets), None)},
+                    "assets_root": next(iter(assets), None), **asset_roots},
                    progress, out_dir=out_dir)
     return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
 
 
-def capture_one(url_path, W, H, t, size, *, assets_root=None) -> bytes:
+def capture_one(url_path, W, H, t, size, *, assets_root=None,
+                project_root=None, channel_root=None) -> bytes:
     """Return a PNG from a local URL, or an absolute HTML file and its assets."""
     root = None
     if Path(url_path).is_file():
@@ -651,6 +666,8 @@ def capture_one(url_path, W, H, t, size, *, assets_root=None) -> bytes:
         path = Path(url_path).resolve()
         root, url_path = str(path.parent), "/scene/{token}/" + quote(path.name)
     run = _run_cdp({"scene_root": root,
+                    "project_root": str(project_root) if project_root is not None else None,
+                    "channel_root": str(channel_root) if channel_root is not None else None,
                     "assets_root": str(assets_root) if assets_root is not None else None, "items": [dict(
         url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None)
     return run.thumbs["snapshot"]

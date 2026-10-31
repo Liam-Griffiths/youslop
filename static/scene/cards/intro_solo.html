@@ -1,0 +1,18 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>{% include "cards/_cards.css" %}</style>
+{% endblock %}
+{% block body %}
+<main class="intro-card {% block variant %}signal{% endblock %}">
+  <section class="intro-layout title-safe">
+    {% block portrait %}{% endblock %}
+    <div class="intro-copy clip" data-start="0" data-duration="{{ duration }}" data-anim="rise">
+      {% block metadata %}{% endblock %}
+      {% if vars.tagline %}<p class="kicker" data-var-text="tagline"></p>{% endif %}
+      <h1 data-var-text="channel_name" style="font-size:{{ [210, [54, 4000 / ([1, vars.channel_name | length] | max)] | max] | min }}px"></h1>
+      <div class="intro-rule"></div>
+      {% if card.show_video_title and vars.title %}<p class="episode" data-var-text="title"></p>{% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}

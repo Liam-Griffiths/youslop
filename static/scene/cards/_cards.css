@@ -1,0 +1,17 @@
+.intro-card { position:absolute; width:1920px; height:1080px; background:var(--bg); }
+.intro-layout { display:flex; align-items:center; gap:96px; }
+.intro-copy { min-width:0; flex:1; border-left:4px solid var(--accent); padding:32px 0 32px 48px; }
+.intro-copy h1 { font-family:Archivo,sans-serif; line-height:1.03; text-transform:uppercase; overflow-wrap:anywhere; }
+.kicker, .metadata { font:24px/1.4 'JetBrains Mono',monospace; letter-spacing:3px; text-transform:uppercase; overflow-wrap:anywhere; }
+.kicker { margin-bottom:32px; color:var(--accent); }
+.metadata { margin-bottom:38px; opacity:.6; }
+.intro-rule { width:120px; height:3px; background:var(--accent); margin:40px 0 24px; }
+.intro-copy .episode { font:30px/1.4 Inter,sans-serif; opacity:.75; overflow-wrap:anywhere; }
+.dossier { background:color-mix(in srgb,var(--bg),var(--ink) 8%); }
+.dossier .intro-copy { border:2px solid var(--accent); padding:64px; }
+.dossier .metadata { border-bottom:1px solid currentColor; padding-bottom:24px; }
+.folio { background:#f3ede3; color:#1b1a17; }
+.folio .intro-copy { border-left:0; text-align:center; padding:40px 100px; }
+.folio .intro-copy h1 { font-family:'EB Garamond',serif; font-weight:normal; text-transform:none; }
+.folio .intro-rule { margin-left:auto; margin-right:auto; }
+.cast-portrait { width:500px; height:720px; object-fit:cover; flex-shrink:0; }

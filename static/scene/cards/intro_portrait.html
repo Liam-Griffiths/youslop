@@ -1,0 +1,8 @@
+{% extends "cards/intro_solo.html" %}
+{% block variant %}portrait{% endblock %}
+{% block portrait %}
+{% if portrait_url %}
+<img class="cast-portrait clip" src="{{ portrait_url }}" alt="Channel portrait"
+     data-start="0" data-duration="{{ duration }}" data-anim="fade">
+{% endif %}
+{% endblock %}
