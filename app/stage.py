@@ -102,6 +102,16 @@ def _handler(run: _Run):
 
         def translate_path(self, path):
             path = path.split("?")[0]
+            if path.startswith("/catalog/"):
+                from .catalog import CATALOG_DIR
+                root = CATALOG_DIR.resolve()
+                relative = unquote(path[len("/catalog/"):])
+                target = (root / relative).resolve()
+                if (not target.is_relative_to(root) or target == root
+                        or any(part.startswith('_') for part in Path(relative).parts)
+                        or not target.is_file()):
+                    return "/nonexistent"
+                return str(target)
             if path.startswith("/scene/"):
                 parts = unquote(path).split("/", 3)
                 root = run.job.get("scene_root")

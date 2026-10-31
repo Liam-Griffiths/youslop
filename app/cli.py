@@ -1,4 +1,6 @@
 """Small in-process command line interface; writes require a closed app."""
+import httpx
+
 import argparse
 import json
 import os
@@ -102,6 +104,21 @@ def cmd_scene_preview(args):
     print(out)
 
 
+def cmd_catalog(args):
+    from . import catalog
+    if args.catalog_cmd == 'search':
+        print('WebGPU items excluded.', file=sys.stderr)
+        _print_json(catalog.search(args.query))
+    elif args.catalog_cmd == 'fetch':
+        path = catalog.fetch(args.name)
+        print(path)
+        source = json.loads((path / 'SOURCE.json').read_text())
+        for error in source['lint']:
+            print('Lint: ' + error, file=sys.stderr)
+    else:
+        _print_json(catalog.installed())
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -121,12 +138,17 @@ def main(argv=None):
     command.add_argument("--out")
     command.add_argument("--mp4", action="store_true")
     command.add_argument("--seconds", type=float, default=3)
+    command = sub.add_parser("catalog")
+    catalog_sub = command.add_subparsers(dest="catalog_cmd", required=True)
+    catalog_sub.add_parser("list")
+    catalog_sub.add_parser("search").add_argument("query")
+    catalog_sub.add_parser("fetch").add_argument("name")
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply,
-         "scene-preview": cmd_scene_preview}[args.cmd](args)
+         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
     except BrokenPipeError:
@@ -134,7 +156,7 @@ def main(argv=None):
         with open(os.devnull, "w") as sink:
             os.dup2(sink.fileno(), sys.stdout.fileno())
         return 0
-    except (edits.EditError, OSError, ValueError) as exc:
+    except (edits.EditError, OSError, ValueError, httpx.HTTPError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     return 0

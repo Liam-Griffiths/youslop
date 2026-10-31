@@ -100,9 +100,23 @@ def _local_file(url: str, base: Path) -> Path:
     if parts.scheme or parts.netloc:
         raise ValueError(f"non-local component: {url}")
     path = unquote(parts.path)
+    from .catalog import CATALOG_DIR
+    if path.startswith('/catalog/'):
+        target = (CATALOG_DIR / path[len('/catalog/'):]).resolve()
+        if not target.is_relative_to(CATALOG_DIR.resolve()) or '_index' in target.parts:
+            raise ValueError(f"component outside catalog directory: {url}")
+        relative = target.relative_to(CATALOG_DIR.resolve())
+        if relative.parts:
+            source = CATALOG_DIR / relative.parts[0] / 'SOURCE.json'
+            if source.is_file():
+                failures = json.loads(source.read_text()).get('lint', [])
+                if failures:
+                    raise ValueError('Catalog lint: ' + '; '.join(failures))
+        return target
     target = (STATIC_DIR / path[len('/static/'):] if path.startswith('/static/')
               else base / path).resolve()
-    if not target.is_relative_to(SCENE_DIR.resolve()):
+    if not (target.is_relative_to(SCENE_DIR.resolve()) or
+            target.is_relative_to(CATALOG_DIR.resolve())):
         raise ValueError(f"component outside scene directory: {url}")
     return target
 
@@ -143,6 +157,12 @@ def _scan(html, base, seen, errors, contract=False):
                 _scan(path.read_text(), path.parent, seen, errors)
         except (OSError, ValueError) as exc:
             errors.append(str(exc))
+
+
+def lint_component(html: str, base: Path) -> list[str]:
+    errors = []
+    _scan(html, base, set(), errors)
+    return errors
 
 
 def lint(html: str) -> list[str]:
