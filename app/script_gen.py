@@ -742,7 +742,7 @@ Return a JSON list of {len(chunk)} objects in the same order:
 
 
 def plan_cues(project: Project, slides: list[Slide],
-              progress: Progress = lambda m: None) -> None:
+              progress: Progress = lambda m: None, instruction: str = "") -> None:
     """Write what the video's drawn cut puts on screen, cue by cue, in place.
 
     The drawn cuts' equivalent of `plan_boards`, and additive the same way:
@@ -767,6 +767,8 @@ def plan_cues(project: Project, slides: list[Slide],
     def run(args: tuple[int, list[Slide]]) -> tuple[int, Any]:
         ci, chunk = args
         prompt = _cues_prompt(project, module, chunk, facts)
+        if instruction:
+            prompt += "\nCREATOR’S INSTRUCTION: " + instruction
         return ci, complete_json(
             prompt, model=MODEL_UTILITY, timeout=600,
             require=lambda v: bool(find_records(v, "cues")),

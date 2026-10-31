@@ -281,8 +281,14 @@ function tlPaintReview() {
   if (review.weakest) rows.push({ t: review.weakest.t, see: 'Weakest shot',
     problem: review.weakest.why,
     path: (review.frames || []).find((f) => f.t === review.weakest.t)?.path });
-  rows.push(...(review.notes || []));
+  rows.push(...(review.notes || []).filter((n) => n.source !== 'check' && (n.state || 'open') === 'open'));
+  rows.push(...(review.warnings_kept || []));
   for (const note of rows) {
+    if (note === review.warnings_kept?.[0]) {
+      const kept = document.createElement('h4');
+      kept.textContent = 'Warnings kept';
+      box.append(kept);
+    }
     const row = document.createElement('div');
     row.className = 'tl-check-row';
     if (note.path) {
@@ -300,7 +306,52 @@ function tlPaintReview() {
     text.textContent = `${note.severity || 'Pinned'} · ${note.see} · ${note.problem}`
       + (note.fix?.hint ? ` · ${note.fix.hint}` : '');
     row.append(jump, text);
+    if (note.id) tlFixButtons(row, note);
     box.append(row);
+  }
+}
+
+function tlFixButtons(row, note, finding = false) {
+  const kind = note.fix?.kind;
+  for (const [action, label] of [['fix', 'Fix'], ['dismiss', 'Dismiss'], ['keep', 'Keep']]) {
+    const button = document.createElement('button');
+    button.className = 'btn sm';
+    button.textContent = label;
+    button.disabled = action === 'fix' && !['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind);
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const send = (action) => api(`/api/projects/${TL.pid}/review/${note.id}`, {
+          method: 'POST', body: JSON.stringify({ action, ...(finding ? { finding: true } : {}) }) });
+        const result = await send(action);
+        if (action !== 'fix') return await tlRefresh();
+        if (result.unsupported) return toast('This fix is not available yet.');
+        const proposal = result.proposal;
+        if (proposal.search !== undefined) {
+          tlModal(() => openMediaSearch(proposal.slide_id, proposal.search));
+          return;
+        }
+        row.querySelector('.tl-fix-proposal')?.remove();
+        const panel = document.createElement('div');
+        panel.className = 'tl-fix-proposal';
+        const diff = document.createElement('pre');
+        diff.style.whiteSpace = 'pre-wrap';
+        diff.textContent = proposal.field === 'cues' ? 'Cues re-planned:\n' + JSON.stringify(proposal.new, null, 2)
+          : `Before: ${proposal.old ?? ''}\nAfter: ${proposal.new}`;
+        const apply = document.createElement('button');
+        apply.className = 'btn sm';
+        apply.textContent = 'Apply';
+        apply.onclick = async () => {
+          apply.disabled = true;
+          try { await send('apply'); await tlRefreshProject(); }
+          catch (e) { toast(e.message, true); apply.disabled = false; }
+        };
+        panel.append(diff, apply);
+        row.append(panel);
+      } catch (e) { toast(e.message, true); }
+      finally { button.disabled = false; }
+    };
+    row.append(button);
   }
 }
 
@@ -314,7 +365,7 @@ function tlPaintProblems() {
     return;
   }
   for (const level of ['P0', 'P1', 'P2']) {
-    const rows = findings.filter((f) => f.level === level);
+    const rows = findings.filter((f) => f.level === level && (f.state || 'open') === 'open');
     if (!rows.length) continue;
     const group = document.createElement('section');
     group.className = 'tl-check-group';
@@ -334,11 +385,8 @@ function tlPaintProblems() {
       jump.onclick = () => tlSeek(f.t, { ensure: true });
       const msg = document.createElement('span');
       msg.textContent = f.msg;
-      const fix = document.createElement('button');
-      fix.textContent = 'fix';
-      fix.disabled = true;
-      fix.dataset.fix = JSON.stringify(f.fix);
-      row.append(chip, jump, msg, fix);
+      row.append(chip, jump, msg);
+      tlFixButtons(row, f, true);
       group.append(row);
     }
     box.append(group);

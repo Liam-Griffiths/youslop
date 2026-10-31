@@ -92,7 +92,16 @@ def cmd_review(args):
         _print_json(result)
     else:
         print(store.project_dir(args.pid) / 'review/REVIEW.md')
-    return int(any(n['severity'] == 'P0' for n in result['notes']))
+    return int(any(n['severity'] == 'P0' and n.get('state', 'open') == 'open'
+                   for n in result['notes']))
+
+
+def cmd_fix(args):
+    _guard_write()
+    proposal = review.act(args.pid, args.note_id, 'fix')
+    _print_json(proposal)
+    if args.apply and not proposal.get('unsupported') and not proposal.get('proposal', {}).get('search'):
+        _print_json(review.act(args.pid, args.note_id, 'apply'))
 
 
 def cmd_apply(args):
@@ -156,6 +165,10 @@ def main(argv=None):
     command.add_argument("pid")
     command.add_argument("--full", action="store_true")
     command.add_argument("--json", action="store_true")
+    command = sub.add_parser("fix")
+    command.add_argument("pid")
+    command.add_argument("note_id")
+    command.add_argument("--apply", action="store_true")
     command = sub.add_parser("apply")
     command.add_argument("pid")
     command.add_argument("patch")
@@ -178,7 +191,7 @@ def main(argv=None):
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
-         "review": cmd_review}[args.cmd](args)
+         "review": cmd_review, "fix": cmd_fix}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
     except BrokenPipeError:

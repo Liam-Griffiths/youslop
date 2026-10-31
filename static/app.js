@@ -3118,10 +3118,10 @@ async function toggleKind(sid) {
 // The strip under a slide only has room for a dozen options at thumbnail size.
 // This opens the full picker: type any term, ask for photos or clips, and judge
 // the hits large. Picking saves straight away, so you can keep searching.
-function openMediaSearch(sid) {
+function openMediaSearch(sid, query = null) {
   const s = state.project.slides.find((x) => x.id === sid);
   if (!s) return;
-  const term = (s.queries || [])[0] || s.visual_note || s.title || s.beat || '';
+  const term = query ?? ((s.queries || [])[0] || s.visual_note || s.title || s.beat || '');
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.innerHTML = `

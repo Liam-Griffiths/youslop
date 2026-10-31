@@ -97,6 +97,7 @@ class Slide:
     # "elevenlabs", "openai" -> that read's take. Each lives in its own folder
     # under takes/. Write through `Project.set_take`, not into this directly.
     takes: dict = field(default_factory=dict)
+    history: list[dict] = field(default_factory=list)  # retired takes; files stay on disk
     locked_media: bool = False            # user picked; don't auto-overwrite
     # auto = follow the channel's picture_every rule; hold = keep the picture
     # already on screen; new = always start a fresh picture here.

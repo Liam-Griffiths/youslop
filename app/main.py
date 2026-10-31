@@ -1391,16 +1391,27 @@ def plan_cues(pid: str, payload: dict = Body(default={})) -> dict:
     only = payload.get("slide_ids")
 
     def work(progress):
+        p = store.load(pid)
+        slides = [s for s in p.slides if only is None or s.id in only]
+        before = {s.id: (s.narration, dict(s.cues or {})) for s in slides}
+        fmt = p.style.format
+        if redo:
+            for s in slides:
+                s.cues = {k: v for k, v in (s.cues or {}).items() if k != fmt}
+        script_gen.plan_cues(p, slides, progress, instruction=str(payload.get("instruction", "")))
         with store.lock_for(pid):
-            p = store.load(pid)
-            slides = [s for s in p.slides if only is None or s.id in only]
-            if redo:
-                for s in slides:
-                    s.cues = {k: v for k, v in (s.cues or {}).items()
-                              if k != p.style.format}
-            script_gen.plan_cues(p, slides, progress)
-            store.save(p)
-            return {"slides": len(slides)}
+            current = store.load(pid)
+            live = {s.id: s for s in current.slides}
+            if current.style.format != fmt or any(
+                    s.id not in live or (live[s.id].narration, live[s.id].cues) != before[s.id]
+                    for s in slides):
+                raise ValueError("Slides changed while planning cues; try again")
+            for s in slides:
+                # An empty planner response must not discard existing cues.
+                if s.cues.get(fmt):
+                    live[s.id].cues = {**live[s.id].cues, fmt: s.cues[fmt]}
+            store.save(current)
+        return {"slides": len(slides)}
 
     return {"job": jobs.start("cues", pid, work)}
 
@@ -2521,8 +2532,16 @@ def start_review(pid: str, payload: dict = Body(default={})) -> dict:
 @app.get("/api/projects/{pid}/review")
 def get_review(pid: str) -> dict:
     _load(pid)
-    path = project_dir(pid) / 'review/notes.json'
-    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+    return review.read_notes(pid)
+
+
+@app.post("/api/projects/{pid}/review/{note_id}")
+def review_action(pid: str, note_id: str, payload: dict = Body(...)) -> dict:
+    _load(pid)
+    try:
+        return review.act(pid, note_id, payload.get('action'), finding=payload.get('finding'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/projects/{pid}/check")
@@ -2537,6 +2556,12 @@ def get_timeline(pid: str) -> dict:
     p = _load(pid)
     tl = render.timeline(p)
     result = check.run(p)
+    decisions = review.read_notes(pid).get('notes', [])
+    for finding in result['findings']:
+        finding['id'] = review.note_id(finding)
+        decision = next((n for n in decisions if n.get('source') == 'check' and
+                         n.get('id') == finding['id']), {})
+        finding['state'] = decision.get('state', 'open')
     for seg in tl["segments"]:
         a, b = seg["start"], seg["start"] + seg["duration"]
         seg["findings"] = [f for f in result["findings"] if a <= f["t"] < b]

@@ -6,11 +6,12 @@ import io
 import logging
 import re
 from datetime import datetime, timezone
+from copy import deepcopy
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from . import audio, board, channels, check, cuts, ffutil, llm, render, scenes, store, storyboard
+from . import audio, board, channels, check, cuts, edits, ffutil, llm, render, scenes, script_gen, store, storyboard
 from .paths import resource_root
 from .schema import FrameSpec
 from .store import project_dir
@@ -302,7 +303,7 @@ def _markdown(result, story, measured):
               '', '## Looked at']
     for level in ('P0', 'P1', 'P2'):
         lines += ['', '### ' + level]
-        notes = [n for n in result['notes'] if n['severity'] == level]
+        notes = [n for n in result['notes'] if n['severity'] == level and n.get('state', 'open') == 'open']
         for n in notes:
             fix = n['fix']
             lines.append(f"- {_clock(n['t'])}: {n['see']} — {n['problem']} "
@@ -363,15 +364,26 @@ def run(project, progress=lambda msg: None, *, mode='targeted') -> dict:
         weakest = dict(t=first['t'], why=first['problem'])
     if selected and weakest is None:
         raise ValueError('Review reply did not name a valid weakest shot')
-    previous = out / 'notes.json'
-    old = json.loads(previous.read_text()) if previous.exists() else {}
-    kept = old.get('warnings_kept', []) + [n for n in old.get('notes', []) if n.get('dismissed')]
-    result = dict(mode=mode, frames_sent=len(selected), frames=selected,
-                  snapshots_not_sent=len(snaps)-len(selected), notes=notes,
-                  weakest=weakest, warnings_kept=kept)
-    previous.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
-    (out / 'REVIEW.md').write_text(_markdown(result, story, measured), encoding='utf-8')
     with store.lock_for(project.id):
+        old = read_notes(project.id)
+        retained = [n for n in old.get('notes', [])
+                    if n.get('state') in ('dismissed', 'kept', 'fixed') or n.get('source') == 'check']
+        for n in notes:
+            n['fix'] = normalize_fix(n['fix'])
+            n.update(id=note_id(n), state='open')
+        notes = [n for n in notes if not any(
+            abs(n['t'] - previous.get('t', -100)) <= .5 and
+            n['fix']['kind'] == normalize_fix(previous.get('fix', {}))['kind']
+            for previous in retained if previous.get('state') in ('dismissed', 'kept', 'fixed'))]
+        # Preserve legacy warnings without treating new dismissals as kept.
+        kept = [n for n in retained if n.get('state') == 'kept']
+        kept += [n for n in old.get('warnings_kept', []) if not n.get('state')]
+        kept += [n for n in old.get('notes', []) if n.get('dismissed') and not n.get('state')]
+        result = dict(mode=mode, frames_sent=len(selected), frames=selected,
+                      snapshots_not_sent=len(snaps)-len(selected), notes=notes + retained,
+                      weakest=weakest, warnings_kept=kept)
+        _write_notes(project.id, result)
+        (out / 'REVIEW.md').write_text(_markdown(result, story, measured), encoding='utf-8')
         current = store.load(project.id)
         current.review = dict(at=datetime.now(timezone.utc).isoformat(),
                               **{level.lower(): sum(n['severity'] == level for n in notes)
@@ -379,3 +391,163 @@ def run(project, progress=lambda msg: None, *, mode='targeted') -> dict:
                               weakest_t=weakest['t'] if weakest else None, path='review/REVIEW.md')
         store.save(current)
     return result
+
+
+ALIASES = {'words': 'text', 'cues': 'cue', 'style': 'look'}
+
+
+def normalize_fix(fix):
+    return dict(fix, kind=ALIASES.get(fix.get('kind'), fix.get('kind')),
+                hint=fix.get('hint') or fix.get('instruction', ''))
+
+
+def note_id(note):
+    fix = normalize_fix(note['fix'])
+    return hashlib.sha1(f"{round(note['t'], 1)}|{fix['kind']}|{fix.get('slide_id', '')}".encode()).hexdigest()[:10]
+
+
+def read_notes(pid):
+    path = project_dir(pid) / 'review/notes.json'
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def _write_notes(pid, result):
+    path = project_dir(pid) / 'review/notes.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    temporary.replace(path)
+
+
+def _slide(project, fix):
+    slide = next((s for s in project.slides if s.id == fix.get('slide_id')), None)
+    if slide is None:
+        raise ValueError('Fix needs an existing slide_id')
+    return slide
+
+
+def _fix_text(project, fix):
+    slide = _slide(project, fix)
+    text = script_gen.rewrite_slide(project, slide, fix['hint'])
+    if not text:
+        raise ValueError('Rewrite returned empty narration')
+    return dict(field='narration', old=slide.narration, new=text)
+
+
+def _fix_cue(project, fix):
+    slide = _slide(project, fix)
+    fmt = project.style.format
+    if not cuts.is_cut(fmt):
+        return dict(unsupported='cue')
+    old = deepcopy(slide.cues.get(fmt, []))
+    slide.cues.pop(fmt, None)
+    script_gen.plan_cues(project, [slide], instruction=fix['hint'])
+    if not slide.cues.get(fmt):
+        raise ValueError('Cue planner returned no cues; original cues retained')
+    return dict(field='cues', format=fmt, old=old, new=slide.cues[fmt],
+                narration=slide.narration)
+
+
+def _fix_picture(project, fix):
+    _slide(project, fix)
+    return dict(search=fix['hint'], slide_id=fix['slide_id'])
+
+
+def _fix_timing(project, fix):
+    return dict(unsupported='timing')  # T4.2 fields are not available yet.
+
+
+def _fix_title(project, fix):
+    slide = _slide(project, fix)
+    old = slide.title
+    edits.patch_slide_fields(slide, {'title': fix['hint']})
+    return dict(field='title', old=old, new=slide.title)
+
+
+def _fix_look(project, fix):
+    if not fix['hint'].strip():
+        raise ValueError('Look fix needs a description')
+    return dict(field='rejected_looks', new=fix['hint'])
+
+
+ROUTES = dict(text=_fix_text, cue=_fix_cue, picture=_fix_picture,
+              timing=_fix_timing, title=_fix_title, look=_fix_look)
+
+
+def route_fix(project, fix, *, apply=False, proposal=None):
+    """Prepare outside the lock; apply the exact proposal to a fresh project."""
+    fix = normalize_fix(fix)
+    fn = ROUTES.get(fix['kind'])
+    if fn is None:
+        return dict(unsupported=fix['kind'], applied=False)
+    proposal = proposal if proposal is not None else fn(deepcopy(project), fix)
+    result = dict(proposal=proposal, applied=False)
+    if 'unsupported' in proposal:
+        return dict(result, unsupported=proposal['unsupported'])
+    if not apply or 'search' in proposal:
+        return result
+    with store.lock_for(project.id):
+        current = store.load(project.id)
+        field = proposal['field']
+        if field == 'rejected_looks':
+            if proposal['new'] not in current.frame.rejected_looks:
+                current.frame.rejected_looks.append(proposal['new'])
+        else:
+            slide = _slide(current, fix)
+            old = slide.cues.get(proposal['format'], []) if field == 'cues' else getattr(slide, field)
+            if old != proposal['old'] or (field == 'cues' and
+                    (current.style.format != proposal['format'] or slide.narration != proposal['narration'])):
+                raise ValueError('Slide changed since proposal; request a new fix')
+            if field == 'narration' and slide.narration != proposal['new']:
+                for take in [*slide.takes.values(), slide.take]:
+                    if take and take not in slide.history:
+                        slide.history.append(deepcopy(take))
+                slide.take, slide.takes = None, {}
+            payload = {field: {proposal['format']: proposal['new']} if field == 'cues' else proposal['new']}
+            edits.patch_slide_fields(slide, payload)
+        store.save(current)
+    return dict(result, applied=True)
+
+
+def act(pid, nid, action, *, finding=None):
+    """Persist decisions/proposals; the client never supplies an editable proposal."""
+    if action not in ('fix', 'apply', 'dismiss', 'keep'):
+        raise ValueError('Action must be fix, apply, dismiss or keep')
+    with store.lock_for(pid):
+        result = read_notes(pid)
+        notes = result.setdefault('notes', [])
+        note = next((n for n in notes if n.get('id') == nid), None)
+        if note is None and finding is not None:
+            # Resolve check findings server-side rather than trusting a client patch.
+            candidate = next((f for f in check.run(store.load(pid))['findings']
+                              if note_id(f) == nid), None)
+            if candidate:
+                note = dict(candidate, id=nid, state='open', source='check',
+                            severity=candidate['level'], see='Check', problem=candidate['msg'])
+                notes.append(note)
+        if note is None:
+            raise ValueError('No such review note')
+        note = deepcopy(note)
+        if action in ('dismiss', 'keep'):
+            response = dict(state='dismissed' if action == 'dismiss' else 'kept')
+        elif action == 'apply' and not note.get('proposal'):
+            raise ValueError('Request a fix proposal before applying')
+        else:
+            response = None
+        project = store.load(pid)
+    if response is None:
+        response = route_fix(project, note['fix'], apply=action == 'apply',
+                             proposal=note.get('proposal') if action == 'apply' else None)
+    with store.lock_for(pid):
+        result = read_notes(pid)
+        notes = result.setdefault('notes', [])
+        current = next((n for n in notes if n.get('id') == nid), None)
+        if current is None:
+            notes.append(note)
+            current = note
+        current.update(state=response.get('state', 'fixed' if response.get('applied') else 'open'))
+        if 'proposal' in response:
+            current['proposal'] = response['proposal']
+        result['warnings_kept'] = [n for n in notes if n.get('state') == 'kept']
+        _write_notes(pid, result)
+    return response
