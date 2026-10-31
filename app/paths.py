@@ -16,7 +16,7 @@ per-user folder for the platform, because an application bundle in
 code-signed, so writing inside it would break the signature even where the
 permissions allowed it.
 
-`YOUSLOP_DATA` overrides the data root, which is how you keep two sets of
+`CORKBORED_DATA` (or legacy `YOUSLOP_DATA`) overrides the data root, which is how you keep two sets of
 projects, or put them on another disk.
 
 The layout under the data root is the same in both cases (`projects/`,
@@ -39,6 +39,8 @@ FROZEN = bool(getattr(sys, "frozen", False))
 # when not frozen, and it is also the data root for a checkout.
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
+LEGACY_DIR_IN_USE = False
+
 
 def resource_root() -> Path:
     """Where the files that ship with the program are. Never written to."""
@@ -48,14 +50,31 @@ def resource_root() -> Path:
     return SOURCE_ROOT
 
 
-def _platform_data_root() -> Path:
+def _platform_base() -> tuple[Path, bool]:
+    """The per-user data base and whether app folder names are lowercase."""
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Youslop"
+        return Path.home() / "Library" / "Application Support", False
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
-        return Path(base) / "Youslop"
+        return Path(base), False
     base = os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share")
-    return Path(base) / "youslop"
+    return Path(base), True
+
+
+def _platform_data_root() -> Path:
+    global LEGACY_DIR_IN_USE
+    LEGACY_DIR_IN_USE = False
+    base, lowercase = _platform_base()
+    name = brand.NAME.lower() if lowercase else brand.NAME
+    current = base / name
+    if current.is_dir():
+        return current
+    for slug in dict.fromkeys(s.lower() if lowercase else s for s in brand.LEGACY_SLUGS):
+        legacy = base / slug
+        if legacy.is_dir():
+            LEGACY_DIR_IN_USE = True
+            return legacy
+    return current
 
 
 def data_root() -> Path:
@@ -64,6 +83,8 @@ def data_root() -> Path:
     A checkout that already has projects in it keeps using itself, so nobody
     comes back from an upgrade to an empty library.
     """
+    global LEGACY_DIR_IN_USE
+    LEGACY_DIR_IN_USE = False
     override = brand.env("DATA", "").strip()
     if override:
         return Path(override).expanduser().resolve()
@@ -78,5 +99,6 @@ def describe() -> dict:
         "frozen": FROZEN,
         "resources": str(resource_root()),
         "data": str(data_root()),
+        "legacy": LEGACY_DIR_IN_USE,
         "overridden": bool(brand.env("DATA", "").strip()),
     }

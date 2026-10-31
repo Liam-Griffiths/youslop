@@ -63,8 +63,11 @@ def configure(port: int | None = None, token: str | None = None,
         level=logging.INFO, handlers=handlers, force=True,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     log = logging.getLogger("youslop")
-    for key, value in describe().items():
+    paths = describe()
+    for key, value in paths.items():
         log.info("paths: %s = %s", key, value)
+    if paths["legacy"]:
+        log.info("using legacy data folder %s", paths["data"])
     ok, said = ffmpeg_ready()
     log.info("ffmpeg: %s", said) if ok else log.error("ffmpeg: %s", said)
     port = port or free_port()
