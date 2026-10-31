@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand, check, edits, storyboard
+from . import brand, check, edits, review, storyboard
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -2474,6 +2474,33 @@ def preview_segment(pid: str, sid: str) -> dict:
 
 # ---------------------------------------------------------------- timeline
 _PROXY_LOCKS: dict[str, "threading.Lock"] = {}
+
+
+@app.post("/api/projects/{pid}/review/snapshots")
+def start_snapshots(pid: str) -> dict:
+    _load(pid)
+
+    def work(progress):
+        import threading
+        lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())
+        with lock:
+            project = store.load(pid)
+            progress("Grabbing review frames from segment proxies")
+            rows = review.snapshots(project)
+            root = project_dir(pid)
+            review.sheet([dict(row, path=root / row['path']) for row in rows],
+                         root / 'review/sheet.png')
+            progress(f"Review ready: {len(rows)} frames")
+            return {"manifest": "review/snaps.json", "sheet": "review/sheet.png"}
+
+    return {"job": jobs.start("snapshot", pid, work)}
+
+
+@app.get("/api/projects/{pid}/review/snapshots")
+def get_snapshots(pid: str) -> list[dict]:
+    _load(pid)
+    path = project_dir(pid) / 'review/snaps.json'
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
 
 
 @app.get("/api/projects/{pid}/check")

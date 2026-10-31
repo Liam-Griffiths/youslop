@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import check, edits, render, store, storyboard
+from . import check, edits, ffutil, render, review, store, storyboard
 from .config import CACHE_DIR, ensure_dirs
 
 
@@ -73,6 +73,17 @@ def cmd_check(args):
     return 1 if result["counts"]["P0"] else 0
 
 
+def cmd_snapshot(args):
+    _guard_write()
+    project = store.load(args.pid)
+    rows = review.snapshots(project)
+    root = store.project_dir(project.id)
+    print(root / 'review/snaps.json')
+    if args.sheet:
+        print(review.sheet([dict(row, path=root / row['path']) for row in rows],
+                           root / 'review/sheet.png'))
+
+
 def cmd_apply(args):
     _guard_write()
     patch = json.loads(Path(args.patch).read_text(encoding="utf-8"))
@@ -127,6 +138,9 @@ def main(argv=None):
         command = sub.add_parser(name)
         command.add_argument("pid")
         command.add_argument("--json", action="store_true")
+    command = sub.add_parser("snapshot")
+    command.add_argument("pid")
+    command.add_argument("--sheet", action="store_true")
     command = sub.add_parser("apply")
     command.add_argument("pid")
     command.add_argument("patch")
@@ -147,7 +161,7 @@ def main(argv=None):
     try:
         ensure_dirs()
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
-         "storyboard": cmd_storyboard, "apply": cmd_apply,
+         "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
@@ -156,7 +170,7 @@ def main(argv=None):
         with open(os.devnull, "w") as sink:
             os.dup2(sink.fileno(), sys.stdout.fileno())
         return 0
-    except (edits.EditError, OSError, ValueError, httpx.HTTPError) as exc:
+    except (edits.EditError, OSError, ValueError, httpx.HTTPError, ffutil.FFError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     return 0

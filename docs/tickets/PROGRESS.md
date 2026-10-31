@@ -49,7 +49,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T3.1 | Snapshots and contact sheet | M | T0.7, T1.5 | todo | |
+| T3.1 | Snapshots and contact sheet | M | T0.7, T1.5 | done | 2026-10-31 Codex; labels moved under frames by Claude; 298 tests |
 | T3.2 | Claude vision review and REVIEW.md | M | T3.1 | todo | targeted by default (≤12 frames) |
 | T3.3 | Fix routing | M | T3.2 | todo | |
 | T3.4 | Ask the agent packet | M | T3.1 | todo | |
