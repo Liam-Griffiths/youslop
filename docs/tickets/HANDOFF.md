@@ -107,3 +107,14 @@ later while the app stays free and GPL. Added Phase 8 (`08-packs/`,
 T8.1-T8.3): a data-only pack format, a Packs screen with install from a
 `.corkboredpack` file, and pack tooling with a free Starter pack. One open
 decision: T8.3 step 3 (MIT for the scene runtime files). 68 ticket files.
+
+**2026-10-31 (Claude Opus 5.5 orchestrating Codex gpt-6.1-sol):** Phases 0–3
+done on branch `dev` (T0.10 blocked on the owner's A/B), T4.2 and T4.9 done;
+per-ticket owner checks are in each Log and the PROGRESS Notes column. The
+owner then asked for: a full UI and flow overhaul (Phase 9, T9.1–T9.13),
+sponsor segments (Phase 10, T10.1–T10.7) and footage clipping/labelling
+(Phase 11, T11.1–T11.8). New logo (cork board, sticky note with a play mark,
+orange pin) drawn in `docs/brand/` with `docs/brand/src/build.py`; T6.2
+rewritten to wire it in. First sponsor read mocked as a scene
+(`static/scene/sponsor/house_short.html`) and rendered to
+`docs/brand/mockups/sponsor-house-short.mp4`.

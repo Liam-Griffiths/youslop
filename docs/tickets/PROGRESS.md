@@ -99,7 +99,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T6.1 | Instrument design tokens and fonts | S | T0.4 | todo | |
-| T6.2 | Mark, favicon and app icon | S | T0.4 | todo | |
+| T6.2 | Mark, favicon and app icon | S | T0.4 | todo | rewritten 2026-10-31: wire in the cork/post-it logo from docs/brand |
 | T6.3 | Copy, README and mockup | S | T6.1, T6.2 | todo | |
 
 ## Phase 7: camera (piece to camera)
@@ -122,3 +122,46 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T8.1 | Pack format and loader | M | T0.2, T2.3 | todo | added 2026-10-26 |
 | T8.2 | Packs screen and install from a file | S | T8.1, T6.1 | todo | |
 | T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | todo | step 3 waits on an owner decision |
+
+## Phase 9: studio flow overhaul
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T9.1 | Studio flow map and screen spec | S | T6.1, owner sign-off | todo | added 2026-10-31; owner approves mockups first |
+| T9.2 | UI screenshot and console harness | S | T0.5 | todo |  |
+| T9.3 | New app shell and routes | M | T9.1, T4.1, T6.1 | todo |  |
+| T9.4 | Stage model and readiness API | S | T9.1, T1.5 | todo |  |
+| T9.5 | Home and start-a-video flow | M | T9.3 | todo |  |
+| T9.6 | Plan stage: the outline as a corkboard | M | T9.3, T9.4 | todo |  |
+| T9.7 | Script stage redesign | M | T9.3, T9.4 | todo |  |
+| T9.8 | Visuals stage: one picker for every source | M | T9.3, T9.4 | todo |  |
+| T9.9 | Voice stage redesign | M | T9.3, T4.9 | todo |  |
+| T9.10 | Edit stage: the Timeline workspace | M | T9.3, T4.3 | todo |  |
+| T9.11 | Review & publish stage | M | T9.3, T3.3 | todo |  |
+| T9.12 | Jobs centre and command palette | S | T9.3 | todo |  |
+| T9.13 | First-run setup | S | T9.3 | todo |  |
+
+## Phase 10: sponsor segments
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T10.1 | Sponsor segments in the data model and the cut | M | T0.7, T4.2, T2.4 | todo | added 2026-10-31 |
+| T10.2 | Sponsor library on channels | S | T10.1 | todo | open: house read opt-in or opt-out |
+| T10.3 | Sponsor scene templates: short and long | M | T10.1, T2.3 | todo | house_short mockup exists |
+| T10.4 | Writing and voicing the read | S | T10.2 | todo |  |
+| T10.5 | Placement suggestions and checks | S | T10.1, T1.5 | todo |  |
+| T10.6 | Sponsors in the editor | M | T10.1, T9.10 or T4.4 | todo |  |
+| T10.7 | Description, chapters and YouTube flags | S | T10.1, T10.2 | todo |  |
+
+## Phase 11: footage (import, clip, label)
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T11.1 | Shoots: import and proxies | M | T0.5 | todo | added 2026-10-31 |
+| T11.2 | Shot detection into clips | M | T11.1 | todo |  |
+| T11.3 | Quality signals and duplicates | S | T11.2 | todo |  |
+| T11.4 | Auto labels for clips | M | T11.2, T3.2 | todo | token budget shown before a run |
+| T11.5 | Footage logger UI | M | T11.2, T9.3 | todo |  |
+| T11.6 | Clips into the edit | M | T11.4, T9.8 | todo |  |
+| T11.7 | Shot list from the script | S | T11.4 | todo |  |
+| T11.8 | Export clips | S | T11.2 | todo |  |

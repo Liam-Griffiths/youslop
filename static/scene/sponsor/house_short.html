@@ -1,0 +1,105 @@
+{% extends "_base.html" %}
+{#
+  Sponsor segment, short (house read): "This video was made with Corkbored."
+  Mockup for Phase 10 (T10.3). Times come from `beats` in the context, in
+  seconds from the start of the segment, so the picture lands on the words:
+    beats.made   "This video was made with"
+    beats.brand  "Corkbored"
+    beats.learn  "Learn how you can build your own videos"
+    beats.link   "...link in the description below"
+#}
+{% set b = beats | default({'made': 0.4, 'brand': 1.9, 'learn': 2.95, 'link': 5.55}) %}
+{% block head %}
+<style>
+  @font-face { font-family: 'CB Wordmark'; src: url('/fonts/ArchivoBlack-Regular.ttf'); font-display: block; }
+  @font-face { font-family: 'CB Marker'; src: url('/fonts/PermanentMarker-Regular.ttf'); font-display: block; }
+  body { background: #7a4f27; }
+  #board { position: absolute; left: -96px; top: -54px; width: 2112px; height: 1188px; transform-origin: 50% 45%; }
+  .note { position: absolute; left: 110px; top: 190px; width: 700px; height: 700px; }
+  .note svg { width: 100%; height: 100%; overflow: visible; }
+  .card { position: absolute; left: 800px; top: 236px; width: 960px; height: 560px; transform: rotate(2deg);
+          background: #FBF8F1; box-shadow: 10px 22px 30px rgba(42, 20, 4, .5);
+          background-image: linear-gradient(transparent 128px, #E7A2A2 128px, #E7A2A2 131px, transparent 131px); }
+  .card .pin { position: absolute; left: 440px; top: -34px; width: 76px; height: 76px; }
+  .made { position: absolute; left: 56px; top: 54px; font: 46px 'CB Marker'; color: #1B1B1F; }
+  .brand { position: absolute; left: 50px; top: 150px; font: 132px/1 'CB Wordmark'; letter-spacing: -3px; color: #1B1B1F; transform-origin: 0 70%; }
+  .learn { position: absolute; left: 56px; top: 330px; width: 860px; font: 50px/1.25 'CB Marker'; color: #1B1B1F; }
+  .link { position: absolute; left: 56px; top: 466px; font: 50px 'CB Marker'; color: #FF5A1F; }
+  .arrow { position: absolute; left: 1520px; top: 800px; width: 220px; height: 260px; overflow: visible; }
+  .url { position: absolute; left: 1150px; bottom: 74px; font: 30px 'JetBrains Mono', monospace; color: #FBF8F1;
+         letter-spacing: 1px; text-shadow: 0 2px 6px rgba(42, 20, 4, .7); }
+</style>
+{% endblock %}
+{% block body %}
+<img id="board" src="/static/brand/cork-1920.jpg" alt="">
+
+<div class="note" id="note">
+  <svg viewBox="0 0 64 64">
+    <defs>
+      <linearGradient id="n" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#FFE987"/><stop offset="1" stop-color="#FFD43B"/></linearGradient>
+      <linearGradient id="c" x1="1" y1="1" x2="0.6" y2="0.6"><stop offset="0" stop-color="#C79A12"/><stop offset="1" stop-color="#FFE071"/></linearGradient>
+      <filter id="lift" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0.6" dy="1.4" stdDeviation="1" flood-color="#2a1404" flood-opacity="0.5"/></filter>
+    </defs>
+    <g id="paper" transform="rotate(-6 32 34)" filter="url(#lift)">
+      <path d="M14.5 16.4 H49.5 V44.25 L44.75 50.1 H14.5 Z" fill="url(#n)"/>
+      <path d="M49.5 44.25 L44.75 50.1 L45.5 45 Z" fill="url(#c)"/>
+      <path id="play" d="M26.9 24.9 L26.9 41.6 L40 33.25 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.1" stroke-linejoin="round"/>
+    </g>
+  </svg>
+</div>
+<svg class="pin" id="notepin" style="position:absolute;left:418px;top:326px;width:84px;height:84px;overflow:visible" viewBox="-42 -42 84 84">
+  <defs><radialGradient id="ph" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#FFB08A"/><stop offset="0.35" stop-color="#FF5A1F"/><stop offset="1" stop-color="#B8320A"/></radialGradient></defs>
+  <ellipse cx="12" cy="16" rx="22" ry="9" fill="#2a1404" opacity="0.35"/>
+  <circle r="24" fill="url(#ph)"/><ellipse cx="-7" cy="-8" rx="7" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-30 -7 -8)"/>
+</svg>
+
+<div class="card" id="card">
+  <svg class="pin" id="cardpin" viewBox="-42 -42 84 84">
+    <ellipse cx="12" cy="16" rx="22" ry="9" fill="#2a1404" opacity="0.35"/>
+    <circle r="24" fill="url(#ph)"/><ellipse cx="-7" cy="-8" rx="7" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-30 -7 -8)"/>
+  </svg>
+  <div class="made" id="made">This video was made with</div>
+  <div class="brand" id="brand">Corkbored</div>
+  <div class="learn" id="learn">Learn how you can build your own videos</div>
+  <div class="link" id="link">Link in the description</div>
+</div>
+
+<svg class="arrow" viewBox="0 0 220 260">
+  <path id="arrow" d="M150 10 C 190 80, 170 150, 96 214 M96 214 L 104 160 M96 214 L 150 196"
+        fill="none" stroke="#FBF8F1" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<div class="url" id="url">corkbored.com</div>
+{% endblock %}
+{% block script %}
+<script>
+  (() => {
+    const D = {{ duration }};
+    const B = {{ b | tojson }};
+    const tl = gsap.timeline({ paused: true, defaults: { ease: 'expo.out' } });
+    const arrow = document.querySelector('#arrow');
+    const len = arrow.getTotalLength();
+    gsap.set(arrow, { strokeDasharray: len, strokeDashoffset: len, opacity: 0 });
+
+    // The board breathes in for the whole segment.
+    tl.fromTo('#board', { scale: 1.0 }, { scale: 1.05, duration: D, ease: 'none' }, 0);
+    // Note drops onto the board, then the pin goes in.
+    tl.fromTo('#note', { y: -720, rotation: -14 }, { y: 0, rotation: 0, duration: 0.6, ease: 'back.out(1.4)' }, 0.05);
+    tl.fromTo('#notepin', { scale: 0, y: -40 }, { scale: 1, y: 0, duration: 0.35, ease: 'back.out(3)' }, 0.62);
+    tl.fromTo('#play', { scale: 0.6, transformOrigin: '50% 50%' }, { scale: 1, duration: 0.5, ease: 'back.out(2.5)' }, 0.7);
+    // Card slides in from the right as the first words start.
+    tl.fromTo('#card', { x: 1300, rotation: 9 }, { x: 0, rotation: 2, duration: 0.7 }, Math.max(0.2, B.made - 0.25));
+    tl.fromTo('#made', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45 }, B.made + 0.15);
+    // The name lands on its word, and the card's pin goes in with it.
+    tl.fromTo('#brand', { opacity: 0, scale: 1.35 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' }, B.brand - 0.05);
+    tl.fromTo('#cardpin', { scale: 0, y: -30 }, { scale: 1, y: 0, duration: 0.3, ease: 'back.out(3)' }, B.brand + 0.1);
+    tl.fromTo('#learn', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5 }, B.learn);
+    tl.fromTo('#link', { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45 }, B.link - 0.1);
+    tl.set(arrow, { opacity: 1 }, B.link + 0.2);
+    tl.to(arrow, { strokeDashoffset: 0, duration: 0.7, ease: 'power2.inOut' }, B.link + 0.2);
+    tl.fromTo('#url', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5 }, B.link + 0.5);
+    // Gentle settle out: the whole board dips in the last 0.35 s.
+    tl.to(['#note', '#notepin', '#card', '.arrow', '#url'], { opacity: 0, duration: 0.35, ease: 'power1.in' }, D - 0.35);
+    window.__timelines['sponsor-house-short'] = tl;
+  })();
+</script>
+{% endblock %}

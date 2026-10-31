@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Corkbored</title>
+  <defs>
+    <!-- Cork: a warm base, fine dark granules, a few lighter flecks and soft blotches. -->
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <!-- Coarse granules: two noise fields thresholded into dark and light specks. -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.16" numOctaves="3" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.40  0 0 0 0 0.23  0 0 0 0 0.10  0 0 0 -6 3.2" result="dark"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.22" numOctaves="2" seed="21" result="m"/>
+      <feColorMatrix in="m" type="matrix" values="0 0 0 0 0.86  0 0 0 0 0.64  0 0 0 0 0.40  0 0 0 7 -4.55" result="light"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="1" seed="5" result="f"/>
+      <feColorMatrix in="f" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.16  0 0 0 0 0.06  0 0 0 -3 1.75" result="fine"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="2" seed="3" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="0 0 0 0 0.52  0 0 0 0 0.31  0 0 0 0 0.14  0 0 0 2 -0.85" result="blot"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="blot"/><feMergeNode in="fine"/><feMergeNode in="dark"/><feMergeNode in="light"/></feMerge>
+    </filter>
+    <clipPath id="tile"><rect width="1024" height="1024" rx="228"/></clipPath>
+    <radialGradient id="vignette" cx="50%" cy="45%" r="70%">
+      <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#2a1404" stop-opacity="0.45"/>
+    </radialGradient>
+    <linearGradient id="note" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#FFE987"/>
+      <stop offset="1" stop-color="#FFD43B"/>
+    </linearGradient>
+    <linearGradient id="curl" x1="1" y1="1" x2="0.6" y2="0.6">
+      <stop offset="0" stop-color="#C79A12"/>
+      <stop offset="1" stop-color="#FFE071"/>
+    </linearGradient>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="10" dy="22" stdDeviation="16" flood-color="#2a1404" flood-opacity="0.55"/>
+    </filter>
+    <radialGradient id="pinhead" cx="38%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#FFB08A"/>
+      <stop offset="0.35" stop-color="#FF5A1F"/>
+      <stop offset="1" stop-color="#B8320A"/>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="1024" height="1024" fill="#C58C52" filter="url(#grain)"/>
+    <rect width="1024" height="1024" fill="url(#vignette)"/>
+  </g>
+
+  <!-- The note, tilted, with its bottom-right corner lifting off the board. -->
+  <g transform="rotate(-5 512 540)" filter="url(#lift)">
+    <path d="M232 262 H792 V708 L716 802 H232 Z" fill="url(#note)"/>
+    <path d="M792 708 L716 802 L728 720 Z" fill="url(#curl)"/>
+    <!-- Play mark, drawn like a thick marker stroke. -->
+    <path d="M430 398 L430 666 L640 532 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="34" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Push pin through the top of the note. -->
+  <ellipse cx="530" cy="300" rx="44" ry="18" fill="#2a1404" opacity="0.35" transform="translate(16 18)"/>
+  <circle cx="512" cy="268" r="58" fill="url(#pinhead)"/>
+  <ellipse cx="494" cy="248" rx="18" ry="11" fill="#fff" opacity="0.55" transform="rotate(-30 494 248)"/>
+</svg>

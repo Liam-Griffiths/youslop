@@ -92,8 +92,14 @@ YS_VISUAL=1 .venv/bin/pytest tests/visual -q   # slow, opt-in
 | `06-brand-rollout` | 6 | Instrument tokens, mark and icon, copy, mockup |
 | `07-camera` | 7 | piece to camera: camera takes, recording, render, jump cuts, cutaways, talking-head videos |
 | `08-packs` | 8 | content packs: the format and loader, the Packs screen, tooling and the first free pack |
+| `09-studio-flow` | 9 | the UI and flow overhaul: flow map and mockups, screenshot harness, shell, six stages, jobs, first run |
+| `10-sponsors` | 10 | sponsor segments: short and long reads, placement, templates, checks, publishing |
+| `11-footage` | 11 | the user's own footage: import, proxies, shot detection, quality, labels, logger, clips into the edit |
 
 Phase 0 is done first in full. Phases 1 and 2 are independent of each other.
 Phase 3 needs both. Phase 4 needs T0.6 and T0.7. Phase 5 is a queue. Phase 6
 can run any time after T0.1 to T0.4. Phase 7 starts once T4.9 (keep every
 take) is done; T7.1 to T7.3 need nothing else from Phases 1 to 5.
+Phase 9 starts with T9.1 (owner signs off the mockups) and T9.2 (screenshot
+harness), then needs T4.1 and T6.1. Phase 10 can start once T4.2 and T2.4 are
+done. Phase 11 needs only T0.5 to start; its UI tickets wait for T9.3.

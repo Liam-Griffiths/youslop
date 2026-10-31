@@ -48,7 +48,7 @@ Set "Corkbored" as one word, no "AI" badge: the name already says what it is, an
 
 ### Visual identity: three directions
 
-All three share: Inter for UI text, JetBrains Mono for timecodes and counts, one easing family (`cubic-bezier(.16,1,.3,1)`, the expo.out the motion doctrine prefers), and the push-pin mark (a pin through the corner of a card: card square, pin head, pin shadow; three shapes, readable at 16px, drawn in Pillow from the primitives `app/intro.py` already has so the favicon, app icon, slates and about screen share one source). They differ in mood, palette and display face. Fonts named are all open licence and most already ship in `resources/fonts`.
+All three share: Inter for UI text, JetBrains Mono for timecodes and counts, one easing family (`cubic-bezier(.16,1,.3,1)`, the expo.out the motion doctrine prefers), and the Corkbored mark (a yellow sticky note with a black play mark, pinned with an orange push pin on cork; flat version for small sizes; files and build script in `docs/brand/`, readable at 16px, drawn in Pillow from the primitives `app/intro.py` already has so the favicon, app icon, slates and about screen share one source). They differ in mood, palette and display face. Fonts named are all open licence and most already ship in `resources/fonts`.
 
 **A. Control Room** (dark, broadcast; evolves what exists)
 
@@ -272,6 +272,38 @@ Six phases, each shippable. Sizes: S under a day, M a few days, L a week or more
 | 5.5 | 3D stage gains `__seek(t)` so it can also run under CDP and share compositions with DOM overlays; push mode stays the fast path; solver untouched | static/stage/run.js | M |
 | 5.6 | Resume a failed render: stop `rmtree(seg_dir)`, name segments by content key, skip existing, sweep stale | render.py | S |
 | 5.7 | `app/verify.py` after encode: black runs, bitrate, A/V delta, clipped words, loudness; shown on the Render tab | new | S |
+
+### Phase 9: Studio flow overhaul (added 2026-10-31)
+The owner wants the whole UI and flow overhauled, not restyled. A project
+becomes six stages (Plan as a corkboard of beats → Script → Visuals → Voice →
+Edit (the Timeline workspace) → Review & publish) inside a new shell with a
+stage stepper that says what is left. Footage, Library, Channels, Packs and
+Settings are app-level screens. T9.1 is a written flow map plus static
+mockups the owner signs off before any code; T9.2 is a headless screenshot
+and console harness every later ticket uses. Depends on T4.1 (split JS) and
+T6.1 (tokens). Tickets T9.1–T9.13 in `tickets/09-studio-flow/`.
+
+### Phase 10: Sponsor segments (added 2026-10-31)
+Sponsor reads as first-class segments: short (5–10 s) or long (30–60 s),
+placed pre-roll (after the hook), mid-roll (at a paragraph boundary) or end
+(before the outro), each with its own script, voice take and scene template;
+later times shift by the segment. Sponsors live on channels; a built-in house
+read, "This video was made with Corkbored...", is the first (mockup:
+`docs/brand/mockups/sponsor-house-short.mp4`, template
+`static/scene/sponsor/house_short.html`). Placement suggestions, check rules,
+description blocks and YouTube's paid-promotion flag. Tickets T10.1–T10.7.
+Open decision: house read opt-in or opt-out by default (T10.2).
+
+### Phase 11: Footage: import, clip, label (added 2026-10-31)
+For videos shot by the user (the owner's example: film a building outside,
+the street, inside; come home with 90 minutes). Shoots are imported (linked,
+originals never touched) with background proxies; shot detection cuts them
+into clips; quality signals hide misfires and group duplicates; a vision
+model labels clips from batched contact sheets (plus the user's own
+vocabulary; transcripts opt-in); a keyboard logger finishes the job; clips
+become a media provider matched to paragraphs and rendered by in/out from the
+original; a shot list can be made from the script before filming. Tickets
+T11.1–T11.8. Shares opt-in speech recognition with T7.8.
 
 ### Risks
 
