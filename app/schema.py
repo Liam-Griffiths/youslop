@@ -55,6 +55,7 @@ class Take:
     duration: float = 0.0
     peak_db: float = 0.0
     recorded_at: float = 0.0
+    words: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -140,7 +141,11 @@ class Slide:
     @classmethod
     def from_dict(cls, d: dict) -> "Slide":
         known = {f for f in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in d.items() if k in known})
+        slide = cls(**{k: v for k, v in d.items() if k in known})
+        if slide.take:
+            slide.take = {"words": [], **slide.take}
+        slide.takes = {track: {"words": [], **take} for track, take in slide.takes.items()}
+        return slide
 
 
 def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:

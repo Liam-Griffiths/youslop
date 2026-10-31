@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -29,6 +30,7 @@ from . import stage as stage_mod
 from . import channels, ffutil, jobs, library, media, models3d, render, script_gen, store, thumbs
 from . import tts as tts_mod
 from . import voice_cloud
+from . import words as words_mod
 from . import intro as intro_mod
 from . import outro as outro_mod
 from . import playback as playback_mod
@@ -1901,6 +1903,11 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
         out.parent.mkdir(parents=True, exist_ok=True)
         try:
             meta = audio_mod.process_take(raw, out, p.voice)
+            try:
+                meta["words"] = words_mod.estimate(out, s.narration)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not estimate mic word times")
+                meta["words"] = []
         except Exception as exc:
             raise HTTPException(400, f"Could not process that take: {exc}")
         p.set_take(s, MIC_TRACK, {"path": f"takes/{MIC_TRACK}/{sid}.wav",

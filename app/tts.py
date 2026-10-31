@@ -115,6 +115,7 @@ def status() -> dict:
         "ready": installed and weights,
         "installed": installed,
         "weights": weights,
+        "has_timings": None if _MODEL is None else bool(_MODEL.has_timings),
         "model_path": str(KOKORO_MODEL),
         "voices_path": str(KOKORO_VOICES),
         "frozen": FROZEN,
@@ -402,8 +403,8 @@ def _join(pieces: list[str]) -> str:
 
 
 def synthesise(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.0,
-               lexicon: dict[str, str] | None = None):
-    """Raw samples for one paragraph. Returns (samples, sample_rate)."""
+               lexicon: dict[str, str] | None = None, timed: bool = False):
+    """Raw samples and sample rate, plus optional phoneme timings when asked."""
     said = spoken_form(text)
     if not said:
         raise TTSError("There is nothing to say in that paragraph.")
@@ -413,15 +414,19 @@ def synthesise(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.0,
     lang = _lang_for(voice)
     speed = max(0.5, min(1.5, float(speed)))
     with _LOCK:
+        create = model.create_timed if timed and model.has_timings else model.create
+        kwargs = {"voice": voice, "speed": speed, "lang": lang}
+        source = said
         if lexicon:
             phonemes, hits = phonemise_with_lexicon(said, lexicon, lang)
             # Only take the phoneme path when the guide actually applies. Text is
             # the better-trodden route through the model, so a paragraph with no
             # names in it should not be sent a different way.
             if hits and phonemes:
-                return model.create(phonemes, voice=voice, speed=speed,
-                                    lang=lang, is_phonemes=True)
-        return model.create(said, voice=voice, speed=speed, lang=lang)
+                source = phonemes
+                kwargs["is_phonemes"] = True
+        result = create(source, **kwargs)
+        return (*result, None) if timed and not model.has_timings else result
 
 
 # A synthetic read has no room, no hiss and no mouth noise, so the recorded-take
@@ -469,11 +474,14 @@ def speak_to_file(text: str, out_path: Path, voice: str = DEFAULT_VOICE,
     out_path.parent.mkdir(parents=True, exist_ok=True)
     raw = out_path.with_suffix(".raw.wav")
     tmp = out_path.with_suffix(".part.wav")
+    from . import words
+
+    timings = None
     try:
         if engine == ENGINE:
             import soundfile as sf
 
-            samples, rate = synthesise(text, voice, speed, lexicon)
+            samples, rate, timings = synthesise(text, voice, speed, lexicon, timed=True)
             sf.write(str(raw), samples, rate)
         else:
             from . import voice_cloud
@@ -494,13 +502,18 @@ def speak_to_file(text: str, out_path: Path, voice: str = DEFAULT_VOICE,
         dur = ffutil.duration(tmp)
         if dur < 0.15:
             raise TTSError("That paragraph came back silent.")
+        word_times = (words.from_phonemes(timings, text, words.head_trim(raw, tmp), tmp)
+                      if timings else words.estimate(tmp, text))
+        for word in word_times:
+            word["start"] = min(word["start"], round(dur, 3))
+            word["end"] = min(word["end"], round(dur, 3))
         tmp.replace(out_path)
     finally:
         raw.unlink(missing_ok=True)
         tmp.unlink(missing_ok=True)
     meta = {"duration": round(dur, 3), "recorded_at": time.time(),
             "voice": voice, "speed": round(float(speed), 2), "synthetic": True,
-            "engine": engine}
+            "engine": engine, "words": word_times}
     if engine != ENGINE:
         meta["model"] = model
     return meta
