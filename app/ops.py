@@ -28,7 +28,11 @@ def prepare_create(payload):
     minutes = 1 if test else max(5, min(30, int(payload.get("target_minutes")
                                                 or (channel.default_minutes if channel else 12))))
     tone = payload.get("tone") or (channel.tone if channel else "warm documentary")
-    project = new_project(idea or script[:200], minutes, tone, channel=channel)
+    try:
+        project = new_project(idea or script[:200], minutes, tone, channel=channel,
+                              format_name=payload.get("format_name", ""))
+    except ValueError as exc:
+        raise PayloadError(str(exc)) from exc
     if script:
         project.has_source = True
         project.fidelity = "adapted" if payload.get("fidelity") == "adapted" else "faithful"
@@ -36,9 +40,9 @@ def prepare_create(payload):
     # than after: how the pictures are staged, and how often they change. Both
     # already have defaults from the channel (or Style()'s own), so this only
     # overrides them when the creator actually touched the control.
-    if payload.get("format") in ("kenburns", "essay", "board", "stage", *cuts_mod.KEYS):
+    if not payload.get("format_name") and payload.get("format") in ("kenburns", "essay", "board", "stage", *cuts_mod.KEYS):
         project.style.format = payload["format"]
-    if payload.get("picture_every"):
+    if not payload.get("format_name") and payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
     if payload.get("research_mode") in ("quick", "deep"):
         project.research_mode = payload["research_mode"]

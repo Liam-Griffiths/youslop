@@ -81,8 +81,8 @@ def test_other_routes(saved):
     sid = saved.slides[0].id
     title = review.route_fix(saved, dict(kind='title', slide_id=sid, hint='  New title  '), apply=True)
     assert title['applied'] and store.load(saved.id).slides[0].title == 'New title'
-    look = review.route_fix(saved, dict(kind='style', hint='No gradients'), apply=True)
-    assert look['applied'] and store.load(saved.id).frame.rejected_looks == ['No gradients']
+    look = review.route_fix(saved, dict(kind='style', hint='camera:punch'), apply=True)
+    assert look['applied'] and store.load(saved.id).frame.rejected_looks == ['camera:punch']
     picture = review.route_fix(saved, dict(kind='picture', slide_id=sid, hint='archive ship'))
     assert picture['proposal'] == dict(search='archive ship', slide_id=sid)
     assert review.route_fix(saved, dict(kind='timing'))['unsupported'] == 'timing'

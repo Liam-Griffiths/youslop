@@ -246,6 +246,21 @@ def cmd_doctrine(args):
         print(doctrine.motion(), end='')
 
 
+def cmd_learning(args):
+    from . import channels, learning
+    if args.cmd == 'format' and args.action == 'list':
+        return _print_json(channels.load(args.cid).formats)
+    _guard_write()
+    if args.cmd == 'rule':
+        result = learning.add(args.pid, args.text, scope=args.scope)
+    elif args.cmd == 'look':
+        result = learning.add(args.pid, args.token, kind='rejected_looks', scope=args.scope)
+    else:
+        project = store.load(args.pid)
+        result = learning.save_format(project.channel_id, args.pid, args.name)
+    _print_json(result)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -313,10 +328,20 @@ def main(argv=None):
     catalog_sub.add_parser("list")
     catalog_sub.add_parser("search").add_argument("query")
     catalog_sub.add_parser("fetch").add_argument("name")
+    for name, action, value in [('rule', 'add', 'text'), ('look', 'reject', 'token'), ('format', 'save', 'name')]:
+        command = sub.add_parser(name)
+        actions = command.add_subparsers(dest='action', required=True)
+        child = actions.add_parser(action)
+        child.add_argument(value)
+        child.add_argument('--pid', required=True)
+        if name != 'format':
+            child.add_argument('--scope', choices=('project', 'channel'), default='project')
+        else:
+            actions.add_parser('list').add_argument('cid')
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
-        status = {"render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
+        status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,

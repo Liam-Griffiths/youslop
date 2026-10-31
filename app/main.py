@@ -413,6 +413,8 @@ def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
     take = payload.get("templates", True)
     with channels.lock_for(cid):
         ch = _channel(cid)
+        from .learning import choose
+        key = choose("theme", [key, *themes_mod.THEME_KEYS], ch.frame)
         picks = themes_mod.apply_to_style(ch.style, key, bool(take))
         ch.frame = themes_mod.apply_to_frame(ch.frame, key)
         if picks:
@@ -3194,3 +3196,40 @@ def health() -> dict:
 def research_project(pid: str, payload: dict = Body(default={})) -> dict:
     _load(pid)
     return {"job": jobs.start("research", pid, lambda pr: ops.research(pid, payload, pr))}
+
+
+@app.post("/api/projects/{pid}/frame/rules")
+def add_frame_rule(pid: str, payload: dict = Body(...)) -> dict:
+    from . import learning
+    _load(pid)
+    try:
+        return learning.add(pid, payload.get('text'), scope=payload.get('scope', 'project'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/projects/{pid}/frame/rejected")
+def reject_frame_look(pid: str, payload: dict = Body(...)) -> dict:
+    from . import learning
+    _load(pid)
+    try:
+        return learning.add(pid, payload.get('look'), kind='rejected_looks', scope=payload.get('scope', 'project'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/channels/{cid}/formats")
+def save_channel_format(cid: str, payload: dict = Body(...)) -> dict:
+    from . import learning
+    _channel(cid)
+    _load(str(payload.get('pid') or ''))
+    try:
+        return learning.save_format(cid, payload['pid'], payload.get('name'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/looks")
+def learning_looks() -> dict:
+    from .learning import LOOK_TOKENS
+    return {kind: sorted(names) for kind, names in LOOK_TOKENS.items()}

@@ -572,6 +572,7 @@ async function renderHome() {
             ${chans.map((c) => `<option value="${c.id}" ${c.id === state.presetChannel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
           </select>
         </label>
+        <label class="field"><span>Saved format</span><select id="saved-format"><option value="">Channel defaults</option></select></label>
         ${state.mode === 'script' ? `
           <label class="field">
             <span>Length comes from your script</span>
@@ -979,6 +980,9 @@ async function deleteLibraryAsset(id) {
 
 function channelPicked() {
   const c = (state.channels || []).find((x) => x.id === $('#chan').value);
+  const saved = $('#saved-format');
+  if (saved) saved.innerHTML = '<option value="">Channel defaults</option>' +
+    (c?.formats || []).map((f) => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('');
   // Standalone again: back to this form's own defaults rather than whatever
   // the last-picked channel left behind.
   state.newFormat = c ? c.format : 'kenburns';
@@ -1002,6 +1006,7 @@ async function createProject() {
                  format: state.newFormat || 'kenburns',
                  picture_every: state.newPictureEvery || 1 };
 
+  body.format_name = $('#saved-format')?.value || '';
   if (scripting) {
     const script = $('#script').value.trim();
     if (script.split(/\s+/).length < 120) {
@@ -6225,6 +6230,7 @@ function openingPanel(p) {
         <div class="row">
           <strong>Channel opening and close</strong>
           ${channelPicker(p)}
+          <button class="btn sm" onclick="saveProjectFormat()">Save as format</button>
           <div class="spacer"></div>
           <label class="row" style="gap:8px;cursor:pointer">
             <input type="checkbox" ${p.use_intro ? 'checked' : ''} style="width:auto"
@@ -7605,4 +7611,16 @@ function newTestRun(on) {
   if (mins) mins.disabled = state.newTest;
   if (label) label.textContent = state.newTest ? '1 minute (test run)' : `${mins ? mins.value : 12} minutes`;
   if (research) { research.disabled = state.newTest; if (state.newTest) research.value = 'quick'; }
+}
+
+
+async function saveProjectFormat() {
+  const name = prompt('Format name');
+  if (!name) return;
+  try {
+    await api(`/api/channels/${state.project.channel_id}/formats`, {
+      method: 'POST', body: JSON.stringify({pid: state.project.id, name}) });
+    state.channels = await api('/api/channels');
+    toast('Format saved');
+  } catch (e) { toast(e.message, true); }
 }

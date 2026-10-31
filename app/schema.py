@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from copy import deepcopy
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, get_type_hints
@@ -267,8 +268,11 @@ class FrameSpec:
             setattr(out, key, value)
         return out
 
-    def prompt_block(self, fmt: str) -> str:
+    def prompt_block(self, fmt: str, channel_frame=None) -> str:
         """Describe this spec without importing a renderer or planner."""
+        merged = self.to_dict()
+        for key in ("rules", "rejected_looks"):
+            merged[key] = list(dict.fromkeys(getattr(channel_frame, key, []) + merged[key]))
         lines = [
             f"Entrances take {self.arrive_s} seconds with expo.out easing.",
             f"Exits take {self.exit_ratio} times the entrance duration.",
@@ -298,8 +302,8 @@ class FrameSpec:
             ])
         lines.extend([
             "Banned by name: " + "; ".join(f"{name}: {BANNED_MEANINGS.get(name, name)}" for name in self.banned),
-            "Rejected looks: " + ("; ".join(self.rejected_looks) or "none"),
-            "House rules: " + ("; ".join(self.rules) or "none"),
+            "Rejected looks: " + ("; ".join(merged["rejected_looks"]) or "none"),
+            "House rules: " + ("; ".join(merged["rules"]) or "none"),
             "Brand notes: " + (self.design_md or "none"),
             "Frame notes: " + (self.frame_md or "none"),
         ])
@@ -622,6 +626,7 @@ class Channel:
     frame: FrameSpec = field(default_factory=FrameSpec)
     voice: Voice = field(default_factory=Voice)
     narrator: Narrator = field(default_factory=Narrator)
+    formats: list[dict] = field(default_factory=list)
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, the series
     music: str = ""                 # the bed new videos start on; "" = none
     intro: IntroSpec = field(default_factory=IntroSpec)
@@ -640,7 +645,7 @@ class Channel:
             "tone": self.tone, "style": self.style.to_dict(),
             "frame": self.frame.to_dict(),
             "voice": self.voice.to_dict(), "narrator": self.narrator.to_dict(),
-            "lexicon": self.lexicon,
+            "lexicon": self.lexicon, "formats": self.formats,
             "music": self.music, "intro": self.intro.to_dict(),
             "outro": self.outro.to_dict(), "avatar": self.avatar.to_dict(),
             "thumb_template": self.thumb_template,
@@ -668,11 +673,12 @@ class Channel:
         avatar = AvatarSpec(**{k: v for k, v in (d.get("avatar") or {}).items()
                                if k in AvatarSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"frame", "style", "intro", "voice", "outro", "narrator", "avatar"})
+                 - {"frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
         return cls(**{k: v for k, v in d.items() if k in known},
                    frame=FrameSpec.from_dict(d.get("frame") or {}),
                    style=style, intro=intro, voice=voice, outro=outro,
-                   narrator=narrator, avatar=avatar)
+                   narrator=narrator, avatar=avatar,
+                   formats=deepcopy(d.get("formats") or []))
 
 
 def new_channel(name: str, concept: str = "") -> Channel:
@@ -685,6 +691,7 @@ class Project:
     idea: str
     title: str = ""
     subtitle: str = ""
+    format_look: dict = field(default_factory=dict)
     channel_id: str = ""
     use_intro: bool = True
     use_outro: bool = True
@@ -781,7 +788,7 @@ class Project:
             "idea": self.idea,
             "title": self.title,
             "subtitle": self.subtitle,
-            "channel_id": self.channel_id,
+            "channel_id": self.channel_id, "format_look": self.format_look,
             "use_intro": self.use_intro,
             "use_outro": self.use_outro,
             "intro": self.intro.to_dict(),
@@ -953,7 +960,7 @@ def chapter_title(project: Project, slide: Slide) -> str:
 
 
 def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documentary",
-                channel: Channel | None = None) -> Project:
+                channel: Channel | None = None, format_name: str = "") -> Project:
     """A new video. Inside a channel it inherits that channel's look and voice."""
     p = Project(id=_uid("p"), idea=idea.strip(), target_minutes=target_minutes, tone=tone)
     if channel:
@@ -965,4 +972,17 @@ def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documenta
         p.narrator = Narrator(**channel.narrator.to_dict())
         p.music = channel.music
         p.thumb.template = channel.thumb_template or "banner"
+    if format_name:
+        saved = next((f for f in channel.formats if f["name"] == format_name), None) if channel else None
+        if saved is None:
+            raise ValueError(f"No such format: {format_name}")
+        p.style = Style(**{k: v for k, v in deepcopy(saved["style"]).items() if k in Style.__dataclass_fields__})
+        p.frame = FrameSpec.from_dict(deepcopy(saved["frame"]))
+        look = saved.get("look") or {}
+        p.intro = IntroSpec(**{k: v for k, v in deepcopy(look.get("intro") or {}).items()
+                              if k in IntroSpec.__dataclass_fields__})
+        p.outro = OutroSpec(**{k: v for k, v in deepcopy(look.get("outro") or {}).items()
+                              if k in OutroSpec.__dataclass_fields__})
+        p.format_look = dict(theme=p.style.theme, cut=p.style.format,
+                             intro=p.intro.to_dict(), outro=p.outro.to_dict())
     return p

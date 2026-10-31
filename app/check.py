@@ -282,6 +282,8 @@ RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_s
 
 
 def run(project) -> dict:
+    from .learning import effective_frame
+    frame = effective_frame(project)
     sb = storyboard.build(project)
     sb['outline'] = project.outline
     sb['music'] = bool(render.pick_music(project))
@@ -289,7 +291,7 @@ def run(project) -> dict:
     groups = render._picture_groups(project, render._slide_durations(project, True))
     for i, seg in enumerate(pictures):
         if i:
-            seg['transition'] = render._join_for(groups[i-1], groups[i], project.frame)
+            seg['transition'] = render._join_for(groups[i-1], groups[i], frame)
         if i + 1 < len(groups) and project.style.format in {'kenburns', 'essay', 'stage'}:
             card = render.chapter_card(project, groups[i+1][0][0])
             if card:

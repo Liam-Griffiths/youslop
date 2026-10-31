@@ -73,7 +73,10 @@ def _facts_block(research: dict) -> str:
 
 
 def _frame_text(project: Project) -> str:
-    return "PACING AND HOUSE RULES:\n" + project.frame.prompt_block(project.style.format)
+    from . import channels
+    channel = channels.load_or_none(project.channel_id)
+    return "PACING AND HOUSE RULES:\n" + project.frame.prompt_block(
+        project.style.format, channel.frame if channel else None)
 
 
 # --------------------------------------------------------------------- outline
@@ -482,6 +485,8 @@ def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lam
     """Fill in search queries, media kind and on-screen titles, in place."""
     if not slides:
         return
+    from .learning import resolve_choices
+    resolve_choices(project)
     outline = project.outline
     chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
     progress(f"Planning visuals for {len(slides)} slides")
@@ -618,6 +623,8 @@ def plan_boards(project: Project, slides: list[Slide],
                if not (s.board_lead or s.board_points or s.diagram)]
     if not targets:
         return
+    from .learning import resolve_choices
+    resolve_choices(project)
     outline = project.outline
     chunks = [targets[i : i + 10] for i in range(0, len(targets), 10)]
     progress(f"Writing boards for {len(targets)} slides")

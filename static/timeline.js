@@ -265,6 +265,11 @@ function tlPaintReview() {
   const title = document.createElement('h3');
   title.textContent = 'Review';
   box.append(title);
+  const reject = document.createElement('button');
+  reject.className = 'btn sm';
+  reject.textContent = 'Reject this look';
+  reject.onclick = tlRejectLook;
+  box.append(reject);
   for (const [mode, label] of [['targeted', 'Review'], ['full', 'Review every frame']]) {
     const button = document.createElement('button');
     button.className = 'btn sm';
@@ -306,6 +311,11 @@ function tlPaintReview() {
     text.textContent = `${note.severity || 'Pinned'} · ${note.see} · ${note.problem}`
       + (note.fix?.hint ? ` · ${note.fix.hint}` : '');
     row.append(jump, text);
+    const rule = document.createElement('button');
+    rule.className = 'btn sm';
+    rule.textContent = 'Make this a rule';
+    rule.onclick = () => tlMakeRule(note.problem);
+    row.append(rule);
     if (note.id) tlFixButtons(row, note);
     box.append(row);
   }
@@ -921,6 +931,7 @@ function tlAsk() {
       <div class="tl-actions">
         <button class="btn sm" data-copy>Copy for Claude Code</button>
         <button class="btn sm primary" data-ask>Ask here</button>
+        <button class="btn sm" data-rule>Make this a rule</button>
         <button class="btn sm" data-close>Discard</button>
       </div>
       <p data-status role="status"></p><div data-answer></div>
@@ -980,7 +991,51 @@ function tlAsk() {
       finally { buttons.forEach((b) => { b.disabled = false; }); }
     }
     wrap.querySelector('[data-copy]').onclick = () => request('copy');
+    wrap.querySelector('[data-rule]').onclick = () => tlMakeRule(wrap.querySelector('[data-intent]').value);
     wrap.querySelector('[data-ask]').onclick = () => request('ask');
     intent.focus();
   });
+}
+
+
+async function tlMakeRule(problem) {
+  const text = prompt('House rule (up to 200 characters)', problem || '');
+  if (!text) return;
+  const scope = prompt('Scope: project or channel', 'project');
+  if (!scope) return;
+  try {
+    await api(`/api/projects/${TL.pid}/frame/rules`, {
+      method: 'POST', body: JSON.stringify({text, scope}) });
+    toast('Rule saved');
+  } catch (e) { toast(e.message, true); }
+}
+
+
+async function tlRejectLook() {
+  try {
+    const vocabulary = await api('/api/looks');
+    tlModal(() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'modal';
+      wrap.innerHTML = `<div class="modal-box"><h3>Reject this look</h3>
+        <label>Look<select data-look></select></label>
+        <label>Scope<select data-scope><option>project</option><option>channel</option></select></label>
+        <button class="btn sm" data-save>Reject</button>
+        <button class="btn sm" data-close>Cancel</button></div>`;
+      const select = wrap.querySelector('[data-look]');
+      for (const [kind, names] of Object.entries(vocabulary)) {
+        for (const name of names) select.add(new Option(`${kind}: ${name}`, `${kind}:${name}`));
+      }
+      wrap.querySelector('[data-close]').onclick = () => wrap.remove();
+      wrap.querySelector('[data-save]').onclick = async () => {
+        try {
+          await api(`/api/projects/${TL.pid}/frame/rejected`, {method: 'POST',
+            body: JSON.stringify({look: select.value, scope: wrap.querySelector('[data-scope]').value})});
+          wrap.remove();
+          await tlRefreshProject();
+        } catch (e) { toast(e.message, true); }
+      };
+      document.body.appendChild(wrap);
+    });
+  } catch (e) { toast(e.message, true); }
 }

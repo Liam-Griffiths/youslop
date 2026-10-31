@@ -251,6 +251,8 @@ def _clock(t):
 
 
 def prompt_for(batch, story_slice, frame):
+    from .learning import LOOK_TOKENS
+    tokens = sorted(f"{kind}:{name}" for kind, names in LOOK_TOKENS.items() for name in names)
     captions = '\n'.join(f"Image {i+1}: {_clock(r['t'])} (t={r['t']}, {r['why']})"
                          for i, r in enumerate(batch))
     return (captions + '\nReference each image by its numeric seconds t. '
@@ -260,6 +262,7 @@ def prompt_for(batch, story_slice, frame):
             'Return {"notes":[{"t":0,"severity":"P0|P1|P2","see":"...",'
             '"problem":"...","fix":{"kind":"text|cue|picture|timing|title|look",'
             '"slide_id":"...","hint":"..."}}],"weakest":{"t":0,"why":"..."}}. '
+            'For look fixes, hint must be one of: ' + ', '.join(tokens) + '. '
             'No scores anywhere.\nFrameSpec: ' + json.dumps(frame.to_dict()) +
             '\nStoryboard context (do not assume unseen visuals): ' + json.dumps(story_slice))
 
@@ -320,6 +323,7 @@ def _markdown(result, story, measured):
 
 
 def run(project, progress=lambda msg: None, *, mode='targeted') -> dict:
+    from .learning import effective_frame
     if mode not in ('targeted', 'full'):
         raise ValueError('Review mode must be targeted or full')
     root = project_dir(project.id)
@@ -343,7 +347,7 @@ def run(project, progress=lambda msg: None, *, mode='targeted') -> dict:
         context = dict(story, paragraphs=[p for p in story['paragraphs']
                        if any(p['start'] <= r['t'] <= p['end'] for r in batch)])
         reply = _strip_scores(llm.complete_json(
-            prompt_for(batch, context, project.frame), system=SYSTEM, model=llm.MODEL_UTILITY,
+            prompt_for(batch, context, effective_frame(project)), system=SYSTEM, model=llm.MODEL_UTILITY,
             images=[_jpeg(root, r) for r in batch],
             require=lambda v: isinstance(v, dict) and isinstance(v.get('notes'), list)))
         times = {r['t'] for r in batch}
@@ -466,9 +470,8 @@ def _fix_title(project, fix):
 
 
 def _fix_look(project, fix):
-    if not fix['hint'].strip():
-        raise ValueError('Look fix needs a description')
-    return dict(field='rejected_looks', new=fix['hint'])
+    from .learning import validate_look
+    return dict(field='rejected_looks', new=validate_look(fix['hint']))
 
 
 ROUTES = dict(text=_fix_text, cue=_fix_cue, picture=_fix_picture,
@@ -491,6 +494,8 @@ def route_fix(project, fix, *, apply=False, proposal=None):
         current = store.load(project.id)
         field = proposal['field']
         if field == 'rejected_looks':
+            from .learning import validate_look
+            validate_look(proposal['new'])
             if proposal['new'] not in current.frame.rejected_looks:
                 current.frame.rejected_looks.append(proposal['new'])
         else:
@@ -610,7 +615,7 @@ def packet(project, t, selection: dict, intent: str) -> dict:
                      f"format {project.style.format}; theme {project.style.theme}"),
                     ('Frame', f'Look at this frame: {path}\n' + json.dumps(frame, ensure_ascii=False)),
                     ('Findings here', json.dumps(findings, ensure_ascii=False)),
-                    ('Doctrine', project.frame.prompt_block(project.style.format)),
+                    ('Doctrine', script_gen._frame_text(project)),
                     ('Context', context), ('Reply format', reply)]
         return '\n\n'.join(f'## {title}\n{text}' for title, text in sections)
 

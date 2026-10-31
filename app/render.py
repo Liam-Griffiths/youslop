@@ -58,7 +58,7 @@ JOIN_XFADE = {
 }
 
 
-def _join_for(prev_group, next_group, frame) -> str:
+def _join_preference(prev_group, next_group, frame) -> str:
     prev, nxt = prev_group[-1][0], next_group[0][0]
     if nxt.chapter or _dips_into([next_group], 0):
         return "dip"
@@ -66,6 +66,13 @@ def _join_for(prev_group, next_group, frame) -> str:
         return next((name for name in frame.transition_types
                      if name in NAMED_XFADES), "fade")
     return "cut" if prev.beat == nxt.beat else "fade"
+
+
+def _join_for(prev_group, next_group, frame) -> str:
+    from .learning import choose
+    preferred = _join_preference(prev_group, next_group, frame)
+    candidates = [preferred, *frame.transition_types, *JOIN_XFADE]
+    return choose('join', [n for n in candidates if n in JOIN_XFADE or n in NAMED_XFADES], frame)
 
 
 def _join_graph(seg_lens, T, groups, frame, slide_at):
@@ -80,11 +87,12 @@ def _join_graph(seg_lens, T, groups, frame, slide_at):
         for i in range(1, len(seg_lens)):
             label = "[vout]" if i == len(seg_lens) - 1 else f"[x{i}]"
             group_index = i - slide_at
+            from .learning import choose
             join = (_join_for(groups[group_index - 1], groups[group_index], frame)
-                    if 0 < group_index < len(groups) else "fade")
+                    if 0 < group_index < len(groups) else choose("join", ["fade", *JOIN_XFADE], frame))
             # Stage dips already fade inside their segments; avoid a second dip.
             if join == "dip" and _dips_into(groups, group_index):
-                join = "fade"
+                join = choose("join", ["fade", "cut"], frame)
             transition = JOIN_XFADE.get(join, f"transition={join}")
             parts.append(
                 f"{prev}[p{i}]xfade={transition}:duration={T:.3f}:"
@@ -101,21 +109,27 @@ def _pick_op(frame, index, prev_op, is_cut_in, is_payoff) -> str:
     cycle = ("creep_in", "set", "creep_out", "reveal")
     choices = (["punch"] if is_payoff else []) + [
         cycle[(index + n) % len(cycle)] for n in range(len(cycle))]
-    return next(op for op in choices if op != prev_op
+    from .learning import choose
+    eligible = [op for op in choices if op != prev_op
                 and not (frame.snap_on_cut and is_cut_in
-                         and op in {"creep_out", "reveal"}))
+                         and op in {"creep_out", "reveal"})]
+    # Repetition is preferable to selecting a rejected look.
+    alternatives = [op for op in CAMERA_OPS if op not in eligible]
+    return choose('camera', [*eligible, *alternatives], frame)
 
 
 def camera_plan(project, groups) -> list[str]:
     """One deterministic camera op per picture group, shared by every caller."""
+    from .learning import effective_frame
+    frame = effective_frame(project)
     payoffs = {loop.get("payoff_beat") for loop in
                ((project.outline or {}).get("hook") or {}).get("open_loops", [])}
     plan = []
     for i, group in enumerate(groups):
         lead = group[0][0]
         plan.append(_pick_op(
-            project.frame, i, plan[-1] if plan else None,
-            i > 0 and _join_for(groups[i - 1], group, project.frame) == "cut",
+            frame, i, plan[-1] if plan else None,
+            i > 0 and _join_for(groups[i - 1], group, frame) == "cut",
             bool(lead.chapter) or bool(lead.beat and lead.beat in payoffs)))
     return plan
 
@@ -936,7 +950,18 @@ def _slate_channel(project: Project):
     from .schema import Channel, FrameSpec, IntroSpec, OutroSpec, Style
 
     if project.channel_id:
-        return channels.load_or_none(project.channel_id)
+        channel = channels.load_or_none(project.channel_id)
+        if channel and project.format_look:
+            channel.intro = IntroSpec(**project.format_look['intro'])
+            channel.outro = OutroSpec(**project.format_look['outro'])
+            channel.style = Style(**project.style.to_dict())
+        if channel:
+            from .learning import choose, effective_frame
+            from . import themes
+            key = choose('theme', [channel.style.theme, *themes.THEME_KEYS], effective_frame(project))
+            if key != channel.style.theme:
+                themes.apply_to_style(channel.style, key, False)
+        return channel
     # Copies, not the project's own specs: the renderers are free to settle a
     # template or a length on the channel they are handed, and none of that
     # should turn into a change to the video that gets saved.
@@ -1270,6 +1295,8 @@ def _memory_check(progress: Progress) -> None:
 def render(project: Project, progress: Progress = lambda m: None,
            preview: bool = False) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
+    from .learning import resolve_choices
+    resolve_choices(project)
     _memory_check(progress)
 
     root = project_dir(project.id)
@@ -1533,7 +1560,8 @@ def render(project: Project, progress: Progress = lambda m: None,
     # then ends the whole video stream there and the rest of the render plays
     # over a frozen picture. The padding is overlapped by the next segment or
     # trimmed by -t, so it never shows.
-    video_graph = _join_graph(seg_lens, T, groups, project.frame, slide_at)
+    from .learning import effective_frame
+    video_graph = _join_graph(seg_lens, T, groups, effective_frame(project), slide_at)
 
     # An end screen is long enough that where the bed gives out is a decision,
     # so the card carries the fade length; without one the default stands.
@@ -1815,6 +1843,8 @@ def preview_segment(project: Project, slide_id: str,
     Paragraphs with nothing recorded yet get their estimated length, exactly
     as a preview cut gives them. Always re-rendered: this is the button.
     """
+    from .learning import resolve_choices
+    resolve_choices(project)
     groups = _groups_for_preview(project)
     index = next((i for i, g in enumerate(groups)
                   if any(s.id == slide_id for s, _d in g)), -1)
@@ -1828,6 +1858,8 @@ def proxy_segment(project: Project, index: int,
     """The same small render, kept: the timeline plays these back to back, so
     one that is still right for the current script is reused rather than drawn
     again."""
+    from .learning import resolve_choices
+    resolve_choices(project)
     groups = _groups_for_preview(project)
     if not 0 <= index < len(groups):
         raise ValueError("That picture is not in the cut.")
@@ -1951,6 +1983,8 @@ def _layout(project: Project) -> dict:
     one's screen time with the head and tail padding on the first and last
     picture. Picture time starts at the first frame of whatever opens the video.
     """
+    from .learning import resolve_choices
+    resolve_choices(project)
     groups = _groups_for_preview(project)
     T = cuts.transition_for(project.style)
     intro = _slate_state(project, "intro")
