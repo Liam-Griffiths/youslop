@@ -274,8 +274,9 @@ Six phases, each shippable. Sizes: S under a day, M a few days, L a week or more
 | 5.7 | `app/verify.py` after encode: black runs, bitrate, A/V delta, clipped words, loudness; shown on the Render tab | new | S |
 
 ### Phase 9: Studio flow overhaul (added 2026-10-31)
-The owner wants the whole UI and flow overhauled, not restyled. A project
-becomes six stages (Plan as a corkboard of beats → Script → Visuals → Voice →
+The owner wants the whole UI and flow overhauled, not restyled, and kept
+serious: the Instrument look, cork only in the logo mark. A project
+becomes six stages (Plan as sources plus chapter columns of beats → Script → Visuals → Voice →
 Edit (the Timeline workspace) → Review & publish) inside a new shell with a
 stage stepper that says what is left. Footage, Library, Channels, Packs and
 Settings are app-level screens. T9.1 is a written flow map plus static

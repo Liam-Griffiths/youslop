@@ -127,12 +127,12 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T9.1 | Studio flow map and screen spec | S | T6.1, owner sign-off | todo | added 2026-10-31; owner approves mockups first |
+| T9.1 | Studio flow map and screen spec | S | T6.1, owner sign-off | todo | mockups: Corkbored studio flow canvas; owner approves first |
 | T9.2 | UI screenshot and console harness | S | T0.5 | todo |  |
 | T9.3 | New app shell and routes | M | T9.1, T4.1, T6.1 | todo |  |
 | T9.4 | Stage model and readiness API | S | T9.1, T1.5 | todo |  |
 | T9.5 | Home and start-a-video flow | M | T9.3 | todo |  |
-| T9.6 | Plan stage: the outline as a corkboard | M | T9.3, T9.4 | todo |  |
+| T9.6 | Plan stage: sources and the outline in chapter columns | M | T9.3, T9.4 | todo |  |
 | T9.7 | Script stage redesign | M | T9.3, T9.4 | todo |  |
 | T9.8 | Visuals stage: one picker for every source | M | T9.3, T9.4 | todo |  |
 | T9.9 | Voice stage redesign | M | T9.3, T4.9 | todo |  |
