@@ -4665,6 +4665,15 @@ function paintRecord() {
       <kbd>p</kbd> play back &nbsp; <kbd>r</kbd> discard
     </div>`}
 
+    ${(s.history || []).length ? `
+    <details style="margin-top:12px">
+      <summary>earlier takes (${s.history.length})</summary>
+      ${s.history.map((t, n) => `<div class="row" style="margin-top:8px">
+        <span class="mono">${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · ${esc(t.reason || '')}${t.narration !== s.narration ? ' · different text' : ''}</span>
+        <audio controls preload="none" src="/api/projects/${p.id}/file/${esc(t.path)}"></audio>
+        <button class="btn sm" onclick="restoreEarlierTake(${n})">use this</button>
+      </div>`).join('')}
+    </details>` : ''}
     <div class="take-map">
       ${p.slides.map((x, n) => `<span class="${tk(x) ? 'done' : ''} ${n === i ? 'cur' : ''}"
         title="${n + 1}" onclick="state.rec.index=${n};paintRecord()"></span>`).join('')}
@@ -5502,6 +5511,19 @@ async function uploadTake(blob) {
 function recTrack() {
   const p = state.project;
   return (p.narrator || {}).mode === 'ai' ? narratorEngine(p) : 'mic';
+}
+
+async function restoreEarlierTake(n) {
+  const p = state.project;
+  const slide = p.slides[state.rec.index];
+  try {
+    const res = await api(`/api/projects/${p.id}/slides/${slide.id}/history/${n}/restore`, {method: 'POST'});
+    Object.assign(slide, res.slide);
+    syncVoiceCounts();
+    p.recorded_seconds = res.recorded_seconds;
+    toast(res.stale ? 'Take restored · recorded for different text' : 'Take restored');
+    paintRecord();
+  } catch (e) { toast(e.message, true); }
 }
 
 function playTake(track) {

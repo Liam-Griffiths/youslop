@@ -69,7 +69,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T4.6 | Razor (keeps audio) | M | T4.3, T0.6 | todo | rewritten 2026-10-26: split takes, never delete |
 | T4.7 | Variables panel | S | T4.3, T1.1 | todo | |
 | T4.8 | Quick wins: search, suggest chapters | S | T4.1 | todo | |
-| T4.9 | Keep every take | S | — | todo | owner rule: never delete recorded audio |
+| T4.9 | Keep every take | S | — | done | 2026-10-31 Codex; audited: no take deleted or overwritten; owner: try earlier-takes UI |
 
 ## Phase 5: migrations, resume, verify
 

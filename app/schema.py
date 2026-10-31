@@ -761,6 +761,7 @@ class Project:
     # were added. Each is a reference into app/models3d.py's shared library,
     # where what is known about the model (front, size, parts) lives.
     cast: list[dict] = field(default_factory=list)
+    mic_test: dict = field(default_factory=dict)  # latest mic setup raw/processed paths
     render: dict = field(default_factory=dict)   # last render result
     review: dict = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
@@ -817,6 +818,7 @@ class Project:
             "description": self.description,
             "yt_tags": self.yt_tags,
             "cast": self.cast,
+            "mic_test": self.mic_test,
             "render": self.render,
             "review": self.review,
             "log": self.log[-200:],
@@ -829,11 +831,19 @@ class Project:
         }
 
     # --------------------------------------------------------------- voices
-    def set_take(self, slide: "Slide", track: str, take: dict | None) -> None:
+    def set_take(self, slide: "Slide", track: str, take: dict | None,
+                 reason: str = "") -> None:
         """Store (or clear) one paragraph's read in one voice. It becomes the
         take the video uses only if that voice is the video's voice — or if
         the video has no voice yet, in which case this one becomes it."""
+        old = slide.takes.get(track)
+        if old and (not take or old.get("path") != take.get("path")):
+            slide.history.append({**deepcopy(old), "track": track,
+                                  "narration": old.get("narration", slide.narration),
+                                  "retired_at": time.time(),
+                                  "reason": reason or ("revoice" if old.get("synthetic") else "rerecord")})
         if take:
+            take = {**take, "narration": take.get("narration", slide.narration)}
             slide.takes[track] = take
         else:
             slide.takes.pop(track, None)

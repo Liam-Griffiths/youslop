@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -20,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from . import brand, check, edits, ops, review, storyboard
+from .audio_files import next_raw_path, next_take_path
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -44,7 +46,7 @@ from . import slide_styles
 from . import youtube as youtube_mod
 from . import transfer
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
-from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel
+from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
 from .store import project_dir
 
 # The data folders, before anything can want one. `app/__main__.py` does this
@@ -1043,9 +1045,9 @@ def split_slide(pid: str, sid: str) -> dict:
                      narration=" ".join(sentences[half:]),
                      visual_note=s.visual_note, queries=list(s.queries),
                      prefer_kind=s.prefer_kind, candidates=list(s.candidates))
+        for track in list(s.takes):
+            p.set_take(s, track, None, reason="split")
         s.narration = " ".join(sentences[:half])
-        s.take = None
-        s.takes = {}
         p.slides.insert(p.slides.index(s) + 1, tail)
         store.save(p)
     return p.to_dict()
@@ -1063,9 +1065,9 @@ def rewrite(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             progress("Rewriting paragraph")
             text = script_gen.rewrite_slide(proj, slide, payload.get("instruction", ""))
             if text:
+                for track in list(slide.takes):
+                    proj.set_take(slide, track, None, reason="rewrite")
                 slide.narration = text
-                slide.take = None      # the old take no longer matches the words
-                slide.takes = {}       # ...in any voice
                 store.save(proj)
             progress("Rewritten")
             return {"narration": text}
@@ -1770,13 +1772,14 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
         p = _load(pid)
         s = _slide(p, sid)
         root = project_dir(pid)
-        raw = root / "raw" / f"{sid}.webm"
+        raw = next_raw_path(root, sid)
         raw.write_bytes(await file.read())
         if raw.stat().st_size < 1024:
+            raw.unlink()  # empty upload, not a recording
             raise HTTPException(400, "That recording is empty.")
         # Each voice keeps its own folder, so recording never overwrites a
         # read in another voice.
-        out = root / "takes" / MIC_TRACK / f"{sid}.wav"
+        out = next_take_path(root, MIC_TRACK, sid)
         out.parent.mkdir(parents=True, exist_ok=True)
         try:
             meta = audio_mod.process_take(raw, out, p.voice)
@@ -1787,7 +1790,7 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
                 meta["words"] = []
         except Exception as exc:
             raise HTTPException(400, f"Could not process that take: {exc}")
-        p.set_take(s, MIC_TRACK, {"path": f"takes/{MIC_TRACK}/{sid}.wav",
+        p.set_take(s, MIC_TRACK, {"path": out.relative_to(root).as_posix(),
                                   "raw_path": f"raw/{raw.name}", **meta})
         if p.status in ("scripted", "media"):
             p.status = "recording"
@@ -1931,7 +1934,7 @@ def _voice_one(p, s, root: Path, lexicon: dict | None = None) -> dict:
     """Synthesise one paragraph in the project's chosen engine, into that
     engine's own folder — never over a read in another voice."""
     engine = _engine(p)
-    out = root / "takes" / engine / f"{s.id}.wav"
+    out = next_take_path(root, engine, s.id)
     out.parent.mkdir(parents=True, exist_ok=True)
     at = next((i for i, x in enumerate(p.slides) if x.id == s.id), 0)
     context = (p.slides[at - 1].narration if at > 0 else "",
@@ -1943,7 +1946,7 @@ def _voice_one(p, s, root: Path, lexicon: dict | None = None) -> dict:
                                  context=context, style=p.tone or "")
     # No raw_path: there is no recording behind this one, and "reprocess every
     # take from its raw upload" must skip it rather than fail on it.
-    return {"path": f"takes/{engine}/{s.id}.wav", "raw_path": "", **meta}
+    return {"path": out.relative_to(root).as_posix(), "raw_path": "", **meta}
 
 
 def _clean_lexicon(raw) -> list[dict]:
@@ -2186,6 +2189,30 @@ def delete_take(pid: str, sid: str, track: str = "") -> dict:
     return {"slide": s.to_dict()}
 
 
+@app.get("/api/projects/{pid}/slides/{sid}/history")
+def take_history(pid: str, sid: str) -> dict:
+    s = _slide(_load(pid), sid)
+    return {"history": [{**take, "url": f"/api/projects/{pid}/file/{quote(take['path'])}",
+                          "stale": take.get("narration") != s.narration}
+                         for take in s.history]}
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/history/{n}/restore")
+def restore_take(pid: str, sid: str, n: int) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = _slide(p, sid)
+        if n < 0 or n >= len(s.history):
+            raise HTTPException(404, "No earlier take")
+        saved = s.history.pop(n)
+        track = saved.get("track") or take_track(saved)
+        take = {k: v for k, v in saved.items() if k not in ("track", "retired_at", "reason")}
+        p.set_take(s, track, take, reason="restore")
+        store.save(p)
+    return {"slide": s.to_dict(), "stale": saved.get("narration") != s.narration,
+            "recorded_seconds": p.recorded_seconds()}
+
+
 @app.get("/api/projects/{pid}/slides/{sid}/take.wav")
 def get_take(pid: str, sid: str, request: Request, track: str = "") -> Response:
     """One paragraph's read — in the video's voice, or in `track` to compare."""
@@ -2212,10 +2239,11 @@ def set_voice_track(pid: str, payload: dict = Body(...)) -> dict:
 
 
 # ----------------------------------------------------------------- mic setup
-# Everything the record tab's mic panel runs on. One short test recording is
-# kept per project (raw/_mictest.webm); it is measured once and then re-cleaned
+# Everything the record tab's mic panel runs on. The latest test recording is
+# tracked in Project.mic_test; older files stay on disk. It is re-cleaned
 # on every change to the chain, so a slider can be judged by ear against the
 # same eight seconds rather than by reading its own label.
+# Fixed paths remain fallbacks for old projects.
 MICTEST_RAW = "raw/_mictest.webm"
 MICTEST_OUT = "takes/_mictest.wav"
 
@@ -2228,16 +2256,17 @@ def voice_presets() -> dict:
 def _voice_report(p) -> dict:
     """Measure the test recording and re-clean it with this project's chain."""
     root = project_dir(p.id)
-    raw = root / MICTEST_RAW
+    raw = _safe_join(root, p.mic_test.get("raw_path", MICTEST_RAW))
     if not raw.exists():
         raise HTTPException(404, "No test recording yet — record one first.")
-    out = root / MICTEST_OUT
+    out = next_take_path(root, "", "_mictest")
+    p.mic_test["path"] = out.relative_to(root).as_posix()
+    store.save(p)
     error, meta = "", {}
     try:
         meta = audio_mod.process_take(raw, out, p.voice)
     except Exception as exc:                  # a silent or truncated test clip
         error = str(exc)
-        out.unlink(missing_ok=True)
     return {"analysis": audio_mod.analyse(raw), "voice": p.voice.to_dict(),
             # `trimmed` is what lets the panel line the before and after up:
             # the cleaned file starts where the speech does, the raw one does not.
@@ -2250,13 +2279,15 @@ async def voice_test(pid: str, file: UploadFile) -> dict:
     """Take the mic panel's test recording and report on the room it was made in."""
     with store.lock_for(pid):
         p = _load(pid)
-        raw = project_dir(pid) / MICTEST_RAW
+        raw = next_raw_path(project_dir(pid), "_mictest")
         raw.parent.mkdir(parents=True, exist_ok=True)
         raw.write_bytes(await file.read())
         if raw.stat().st_size < 1024:
             raw.unlink(missing_ok=True)
             raise HTTPException(400, "That recording is empty.")
-    return _voice_report(p)
+        p.mic_test["raw_path"] = raw.relative_to(project_dir(pid)).as_posix()
+        store.save(p)
+        return _voice_report(p)
 
 
 @app.post("/api/projects/{pid}/voice/preview")
@@ -2267,13 +2298,14 @@ def voice_preview(pid: str, payload: dict = Body(default={})) -> dict:
         if payload.get("voice"):
             _apply_voice(p.voice, payload["voice"])
             store.save(p)
-    return _voice_report(p)
+        return _voice_report(p)
 
 
 @app.get("/api/projects/{pid}/voice/test.wav")
 def voice_test_wav(pid: str, request: Request) -> Response:
     """The test recording after the chain — the "after" side of the A/B."""
-    path = project_dir(pid) / MICTEST_OUT
+    p = _load(pid)
+    path = _safe_join(project_dir(pid), p.mic_test.get("path", MICTEST_OUT))
     if not path.exists():
         raise HTTPException(404, "Nothing cleaned yet")
     return _ranged(path, request)
@@ -2282,7 +2314,8 @@ def voice_test_wav(pid: str, request: Request) -> Response:
 @app.get("/api/projects/{pid}/voice/test.src")
 def voice_test_src(pid: str, request: Request) -> Response:
     """The test recording exactly as the browser handed it over — the "before"."""
-    path = project_dir(pid) / MICTEST_RAW
+    p = _load(pid)
+    path = _safe_join(project_dir(pid), p.mic_test.get("raw_path", MICTEST_RAW))
     if not path.exists():
         raise HTTPException(404, "No test recording yet")
     return _ranged(path, request)
