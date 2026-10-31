@@ -260,7 +260,8 @@ def _run(job: dict, progress: Progress, *, out_dir: Path | None = None,
     url = f"http://127.0.0.1:{srv.server_address[1]}{PAGE}"
     # A throwaway profile per run: a crashed run's profile lock once blocked
     # the next one silently.
-    with tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-stage-") as prof:
+    with tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-stage-",
+                                     ignore_cleanup_errors=True) as prof:
         cmd = [exe, *_chromium_flags(prof, size), url]
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
@@ -512,7 +513,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
     proc = cdp = prof = None
     pipes = []
     try:
-        prof = tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-scene-")
+        prof = tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-scene-",
+                                           ignore_cleanup_errors=True)
         r_in, w_in = os.pipe()
         r_out, w_out = os.pipe()
         pipes = [r_in, w_in, r_out, w_out]

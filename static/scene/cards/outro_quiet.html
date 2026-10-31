@@ -1,0 +1,22 @@
+{% extends "cards/outro_twoup.html" %}
+{% block variant_style %}
+<style>
+  .identity { width:100%; height:auto; justify-items:center; text-align:center; gap:18px; }
+  .identity h1 { font:30px Inter,sans-serif; letter-spacing:4px; text-transform:uppercase; }
+  .identity p { font-size:22px; }
+  .identity::before { content:''; width:150px; height:2px; background:var(--accent); margin-bottom:26px; }
+  .cta { top:392px; right:192px; left:192px; text-align:center; font-size:24px; }
+  .plate { border-width:1px; }
+  .quiet-subscribe { position:absolute; top:{{ 859 if plates else 648 }}px; left:900px; width:120px; height:120px; border:2px solid var(--accent); border-radius:50%; display:grid; place-items:center; font:20px Inter,sans-serif; }
+  .episode { top:435px; left:192px; right:192px; max-width:none; text-align:center; font-size:22px; }
+</style>
+{% endblock %}
+{% block identity %}
+<section class="title-safe" style="top:220px">
+  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">
+    <h1 data-var-text="channel_name"></h1>
+    {% if card.handle %}<div class="handle">{{ card.handle }}</div>{% endif %}
+  </div>
+</section>
+{% if card.subscribe %}<div class="quiet-subscribe clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">Subscribe</div>{% endif %}
+{% endblock %}

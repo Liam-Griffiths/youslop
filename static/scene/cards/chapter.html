@@ -1,0 +1,15 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+  .chapter { display:grid; align-content:center; justify-items:center; gap:34px; text-align:center; }
+  .chapter p { font:26px Inter,sans-serif; text-transform:uppercase; letter-spacing:5px; opacity:.6; }
+  .chapter h1 { font:86px/1.1 Archivo,sans-serif; max-width:100%; overflow-wrap:anywhere; }
+  .chapter::after { content:''; width:96px; height:4px; background:var(--accent); }
+</style>
+{% endblock %}
+{% block body %}
+<section class="chapter title-safe clip" data-start="0" data-duration="{{ duration }}" data-anim="fade">
+  {% if vars.kicker %}<p data-var-text="kicker"></p>{% endif %}
+  <h1 data-var-text="title"></h1>
+</section>
+{% endblock %}

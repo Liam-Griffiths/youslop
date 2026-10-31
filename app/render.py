@@ -818,6 +818,31 @@ def _segment_graph(
     return inputs, graph, last
 
 
+def _overlay_tail(out: Path, card: Path, start: float, *, crf=18, threads=0):
+    """Replace the picture tail with an opaque scene; preserve the source on failure."""
+    temporary = out.with_name(out.stem + '.chapter' + out.suffix)
+    try:
+        ffutil.run([
+            '-i', str(out), '-itsoffset', f'{start:.6f}', '-i', str(card),
+            '-filter_complex',
+            f"[0:v][1:v]overlay=enable='gte(t,{start:.6f})':eof_action=pass[v]",
+            '-map', '[v]', *ffutil.video_args(temporary, crf=crf),
+            '-pix_fmt', 'yuv420p', '-an', str(temporary)], threads=threads)
+        os.replace(temporary, out)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _chapter_tail(project, out, chapter, seg_len, hold, size, fps, crf, threads, channel):
+    if chapter and seg_len > hold + 0.2:
+        ctx = scenes.context_base(project, channel)
+        ctx['vars'].update(title=chapter[0], kicker=chapter[1])
+        card = scenes.ensure_clip(project, 'cards/chapter.html', ctx,
+                                  seconds=hold, size=size, fps=fps)
+        _overlay_tail(out, card, seg_len - hold, crf=crf, threads=threads)
+    return out
+
+
 def _render_segment(
     project: Project, group: list[tuple[Slide, float]], seg_len: float,
     index: int, out: Path, channel=None, chapter: tuple[str, str] | None = None,
@@ -857,7 +882,8 @@ def _render_segment(
         rendered = _render_custom_style(project, group, seg_len, out, size,
                                         fps, crf)
         if rendered is not None:
-            return rendered
+            return _chapter_tail(project, rendered, chapter, seg_len, hold, size,
+                                 fps, crf, threads, channel)
         # The style was deleted, or this paragraph has no filled spec yet:
         # fall through to the documentary cut rather than abort the render.
     if cuts.is_cut(style.format):
@@ -872,11 +898,13 @@ def _render_segment(
             hold=hold)
     if style.format == "board":
         from . import board as board_mod
-        return board_mod.render_segment(
+        board_mod.render_segment(
             project, group, seg_len, out, channel=channel,
             cache=project_dir(project.id) / "board",
             image_for=lambda s: _chosen(project, s)[0],
             crf=crf, extra=_reframe(size, fps))
+        return _chapter_tail(project, out, chapter, seg_len, hold, size,
+                             fps, crf, threads, channel)
     inputs, graph, last = _segment_graph(
         project, group, seg_len, op, channel, chapter, size, fps, dip_out,
         camera_index, last_line)

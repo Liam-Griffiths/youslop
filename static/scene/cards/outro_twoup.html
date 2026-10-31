@@ -1,0 +1,34 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+  .identity { display:grid; align-content:center; gap:24px; width:660px; height:100%; }
+  .identity h1 { font:76px/1.05 Archivo,sans-serif; overflow-wrap:anywhere; }
+  .identity p { font-size:25px; line-height:1.4; opacity:.65; }
+  .handle { color:var(--accent); font:24px 'JetBrains Mono',monospace; }
+  .subscribe { margin-top:22px; display:flex; align-items:center; gap:24px; font-size:25px; letter-spacing:3px; }
+  .badge { width:130px; height:130px; border:3px solid var(--accent); border-radius:50%; display:grid; place-items:center; font:48px Archivo,sans-serif; }
+  .plate { position:absolute; left:var(--plate-x); top:var(--plate-y); width:var(--plate-w); height:var(--plate-h); border:2px solid var(--accent); background:color-mix(in srgb,var(--bg),var(--ink) 7%); display:grid; place-items:center; }
+  .plate span { font:20px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:2px; opacity:.55; }
+  .cta { position:absolute; right:132px; top:264px; font:26px Inter,sans-serif; letter-spacing:3px; text-transform:uppercase; }
+  .episode { position:absolute; right:132px; top:784px; max-width:844px; font:24px/1.4 Inter,sans-serif; opacity:.6; }
+</style>
+{% block variant_style %}{% endblock %}
+{% endblock %}
+{% block body %}
+{% block identity %}
+<section class="title-safe">
+  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">
+    <h1 data-var-text="channel_name"></h1>
+    {% if vars.tagline %}<p data-var-text="tagline"></p>{% endif %}
+    {% if card.handle %}<div class="handle">{{ card.handle }}</div>{% endif %}
+    {% if card.subscribe %}<div class="subscribe"><div class="badge">{{ vars.channel_name[:1] }}</div>Subscribe</div>{% endif %}
+  </div>
+</section>
+{% endblock %}
+<div class="cta clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">{{ cta }}</div>
+{% for plate in plates %}
+<div class="plate clip" style="--plate-x:{{ plate.x }}px;--plate-y:{{ plate.y }}px;--plate-w:{{ plate.width }}px;--plate-h:{{ plate.height }}px"
+     data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0"><span>{{ plate.label }}</span></div>
+{% endfor %}
+{% if card.show_video_title %}<p class="episode clip" data-var-text="title" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0"></p>{% endif %}
+{% endblock %}

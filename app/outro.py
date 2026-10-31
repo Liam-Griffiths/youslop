@@ -99,6 +99,10 @@ TEMPLATES = [
               "it and up to three plates below. For music and talk.",
      "slots_label": "Plates"},
 ]
+# Keep the UI controls and defaults identical to the corresponding Pillow card.
+TEMPLATES += [{**t, "key": "scene:outro_" + t["key"],
+               "label": t["label"] + " (scene)", "scene": True}
+              for t in TEMPLATES if t["key"] in ("twoup", "quiet")]
 TEMPLATE_KEYS = [t["key"] for t in TEMPLATES]
 
 
@@ -394,6 +398,23 @@ def _row(sizes: list[tuple[int, int]], gap: int, cx: float,
     return out
 
 
+def plate_rects(key: str, slots: int) -> list[dict]:
+    """Final video plate rectangles shared by Pillow and scene end screens."""
+    key = key.removeprefix("scene:outro_")
+    n = max(0, min(max_slots(key), int(slots)))
+    if key == "twoup":
+        positions = [(WIDTH - MARGIN - SQUARE - (n - 1 - i) * (SQUARE + 44),
+                      int((HEIGHT - SQUARE) / 2) + 6) for i in range(n)]
+        side = SQUARE
+    elif key == "quiet":
+        side = 330
+        positions = _row([(side, side)] * max(1, n), 56, WIDTH / 2, HEIGHT * 0.60)[:n]
+    else:
+        raise ValueError("no shared plate geometry for " + key)
+    return [dict(x=x, y=y, width=side, height=side, label=SLOT_LABELS[i])
+            for i, (x, y) in enumerate(positions)]
+
+
 def _at(pos: tuple[int, int]) -> tuple[int, int]:
     """Where a plate's *layer* goes, given where the plate itself should land."""
     return (pos[0] - PLATE_PAD, pos[1] - PLATE_PAD)
@@ -430,8 +451,8 @@ def _render_twoup(channel: Channel, video_title: str, out_path: Path,
     # leaves the remaining plate where the eye already expects it. The labels
     # still run left to right: the plate a viewer reads first is the next video.
     ys = int((HEIGHT - SQUARE) / 2) + 6
-    for i in range(n):
-        x = WIDTH - MARGIN - SQUARE - (n - 1 - i) * (SQUARE + 44)
+    for i, rect in enumerate(plate_rects(key, n)):
+        x = rect["x"]
         pieces.append(Piece(_plate(SQUARE, SQUARE, accent, SLOT_LABELS[i]),
                             _at((x, ys)), delay=0.18 + 0.12 * i,
                             dur=settle, rise=(0, 44)))
@@ -763,9 +784,8 @@ def _render_quiet(channel: Channel, video_title: str, out_path: Path,
 
     side = 330
     row_cy = HEIGHT * 0.60
-    for i, (x, y) in enumerate(_row([(side, side)] * max(1, n), 56, WIDTH / 2, row_cy)):
-        if i >= n:
-            break
+    for i, rect in enumerate(plate_rects(key, n)):
+        x, y = rect["x"], rect["y"]
         pieces.append(Piece(_plate(side, side, accent, SLOT_LABELS[i]), _at((x, y)),
                             delay=0.26 + 0.1 * i, dur=settle, rise=(0, 30)))
 

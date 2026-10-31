@@ -41,7 +41,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.2 | Scene runtime and vendored GSAP | M | — | done | 2026-10-31 Codex; GSAP 3.13.0 vendored; browser checks 17/17 |
 | T2.3 | scenes.py and Jinja templates | M | T2.1, T2.2 | done | 2026-10-31 Codex; needs jinja2 (installed); 227 unit + 3 visual pass |
 | T2.4 | Render branch point for scenes | M | T2.3 | done | 2026-10-31 Codex; 239 tests; scene preview renders (checked by Claude) |
-| T2.5 | Migration: outro and chapter cards | M | T2.4 | todo | |
+| T2.5 | Migration: outro and chapter cards | M | T2.4 | done | 2026-10-31 Codex; outro compared by Claude; owner: chapter card in Timeline |
 | T2.6 | Migration: intro slates | M | T2.5 | todo | |
 | T2.7 | Catalog fetcher | S | T2.3 | todo | |
 

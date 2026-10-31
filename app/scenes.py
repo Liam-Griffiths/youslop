@@ -18,7 +18,7 @@ from . import channels, cuts, ffutil, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
-SCENE_VERSION = 1
+SCENE_VERSION = 2
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
 env = jinja2.Environment(loader=jinja2.FileSystemLoader(SCENE_DIR),
@@ -276,9 +276,21 @@ def render_card(kind, name, channel, video_title, out_path,
     ctx = context_base(channel=channel)
     ctx.update(card=asdict(spec), kind=kind)
     ctx['vars']['title'] = video_title
+    if kind == 'outro' and name in ('outro_twoup', 'outro_quiet'):
+        ctx.update(outro_context(channel))
     # Keeping this cache alongside the output also covers synthetic solo channels.
     clip = ensure_clip(out_path.parent, f"cards/{name}.html", ctx,
                        seconds=seconds, size=(WIDTH, HEIGHT), fps=FPS)
     progress(f"Scene {kind}: {seconds:.1f}s")
     _encode(clip, out_path, seconds, (WIDTH, HEIGHT), FPS, 18)
     return seconds
+
+
+def outro_context(channel) -> dict:
+    """Card variables and pixel geometry, also usable by scene-preview fixtures."""
+    from . import outro
+
+    key = channel.outro.template.removeprefix('scene:outro_')
+    return dict(card=asdict(channel.outro),
+                plates=outro.plate_rects(key, channel.outro.slots),
+                cta=outro._cta(channel, key))
