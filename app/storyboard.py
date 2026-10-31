@@ -53,7 +53,7 @@ def build(project) -> dict:
     return {"version": 1,
             "project": {"id": project.id, "title": project.title,
                         "format": project.style.format, "duration": timeline["total"]},
-            "style": asdict(project.style), "frame": {},
+            "style": asdict(project.style), "frame": project.frame.to_dict(),
             "segments": segments, "paragraphs": paragraphs}
 
 

@@ -283,6 +283,11 @@ def patch_channel(cid: str, payload: dict = Body(...)) -> dict:
         # end screen on or off and leaves its template alone.
         if isinstance(payload.get("outro"), bool):
             ch.outro.enabled = bool(payload["outro"])
+        if "frame" in payload:
+            try:
+                ch.frame = ch.frame.merge(payload["frame"])
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         for key, value in (payload.get("style") or {}).items():
             if key == "theme":
                 if value not in themes_mod.THEME_KEYS:
@@ -979,6 +984,11 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
                 p.thumb.dim = min(0.95, max(0.0, float(value)))
         if "target_minutes" in payload:
             p.target_minutes = max(1 if p.test else 5, min(30, int(payload["target_minutes"])))
+        if "frame" in payload:
+            try:
+                p.frame = p.frame.merge(payload["frame"])
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         for key, value in (payload.get("style") or {}).items():
             if key == "theme":
                 if value not in themes_mod.THEME_KEYS:

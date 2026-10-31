@@ -1,0 +1,25 @@
+Entrances take 0.45 seconds with expo.out easing.
+Exits take 0.55 times the entrance duration.
+Moves last 0.3 to 0.6 seconds.
+Hold a title for 0.5 seconds plus 0.3 seconds per word.
+Hold the last line for at least 2.0 seconds.
+Title height is 4.0 to 9.0 percent of the frame.
+Average shots last 1.8 to 3.0 seconds.
+Hold a payoff for 0.3 to 0.75 seconds.
+Allowed transitions are cut, fade, dip.
+In the first 90 seconds, leave at most 15.0 seconds between visual events.
+After that, leave at most 20.0 seconds between visual events; never exceed 30.0 seconds.
+The hook lasts 37.0 seconds and needs 6 overlays.
+Use 7 overlays and 7 camera moves per 90 seconds in the body.
+Anchor entrances no more than 0.6 seconds before or 0.1 seconds after their word.
+Keep music 16.0 to 19.0 dB under the voice, without ducking.
+Target voice loudness is -14.0 LUFS.
+Camera creeps scale from 1.1 to 1.12 times the original size.
+Camera punches scale from 1.18 to 1.25 times the original size.
+Anchor the camera origin at top.
+Snap scale to 100 percent on cuts.
+Banned by name: breathing_loop: Do not loop a scale or opacity pulse on a resting element.; title_moves_after_landing: Keep a title still once its entrance finishes.; same_entrance_everywhere: Vary entrances rather than repeating one device everywhere.; fade_slide_up_everything: Do not give every element a fade and upward slide.; whoosh_under_text: Do not put a whoosh under text entrances.; bounce_on_ui: Do not use bouncing motion on interface elements.; slow_creeping_scale: Do not use continuous slow scaling as idle decoration.
+Rejected looks: none
+House rules: none
+Brand notes: none
+Frame notes: none

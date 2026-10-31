@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, get_type_hints
 
 # What `Project.music` holds when the creator has not named a track. Nothing
 # selected means no bed at all: a video that was never given music should come
@@ -171,6 +171,138 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
         runs[-1].append(slide)
         n += 1
     return runs
+
+
+BANNED_DEFAULTS = [
+    "breathing_loop", "title_moves_after_landing", "same_entrance_everywhere",
+    "fade_slide_up_everything", "whoosh_under_text", "bounce_on_ui",
+    "slow_creeping_scale",
+]
+BANNED_MEANINGS = {
+    "breathing_loop": "Do not loop a scale or opacity pulse on a resting element.",
+    "title_moves_after_landing": "Keep a title still once its entrance finishes.",
+    "same_entrance_everywhere": "Vary entrances rather than repeating one device everywhere.",
+    "fade_slide_up_everything": "Do not give every element a fade and upward slide.",
+    "whoosh_under_text": "Do not put a whoosh under text entrances.",
+    "bounce_on_ui": "Do not use bouncing motion on interface elements.",
+    "slow_creeping_scale": "Do not use continuous slow scaling as idle decoration.",
+}
+
+
+@dataclass
+class FrameSpec:
+    """Numeric motion, pacing and taste contract shared by planners and checks."""
+    arrive_s: float = 0.45
+    exit_ratio: float = 0.55
+    move_min_s: float = 0.3
+    move_max_s: float = 0.6
+    title_hold_base_s: float = 0.5
+    title_hold_per_word_s: float = 0.3
+    last_line_min_s: float = 2.0
+    title_height_pct_min: float = 4.0
+    title_height_pct_max: float = 9.0
+    montage_cut_min_s: float = 0.13
+    montage_cut_max_s: float = 0.8
+    shot_avg_min_s: float = 1.8
+    shot_avg_max_s: float = 3.0
+    payoff_hold_min_s: float = 0.3
+    payoff_hold_max_s: float = 0.75
+    transition_types: list = field(default_factory=lambda: ["cut", "fade", "dip"])
+    max_gap_first_90_s: float = 15.0
+    max_gap_after_s: float = 20.0
+    max_gap_ever_s: float = 30.0
+    hook_s: float = 37.0
+    overlays_per_hook: int = 6
+    overlays_per_90_s: int = 7
+    camera_moves_per_90_s: int = 7
+    creep_min: float = 1.10
+    creep_max: float = 1.12
+    punch_min: float = 1.18
+    punch_max: float = 1.25
+    camera_origin: str = "top"
+    snap_on_cut: bool = True
+    anchor_after_s: float = 0.10
+    anchor_before_s: float = 0.60
+    music_under_min_db: float = 16.0
+    music_under_max_db: float = 19.0
+    voice_lufs: float = -14.0
+    banned: list = field(default_factory=lambda: list(BANNED_DEFAULTS))
+    rejected_looks: list = field(default_factory=list)
+    rules: list = field(default_factory=list)
+    design_md: str = ""
+    frame_md: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "FrameSpec":
+        return cls(**{k: v for k, v in (d or {}).items()
+                      if k in cls.__dataclass_fields__})
+
+    def merge(self, patch: dict) -> "FrameSpec":
+        """Return an independent spec; reject unknown fields and bad values."""
+        if not isinstance(patch, dict):
+            raise ValueError("frame must be an object")
+        out = FrameSpec.from_dict(self.to_dict())
+        types = get_type_hints(FrameSpec)
+        for key, value in patch.items():
+            if key not in types:
+                raise ValueError(f"unknown frame field: {key}")
+            kind = types[key]
+            try:
+                if kind is bool:
+                    value = value if isinstance(value, bool) else str(value).lower() in ("1", "true", "yes")
+                elif kind in (int, float):
+                    value = kind(float(value))
+                elif kind is list:
+                    if not isinstance(value, list):
+                        raise ValueError("expected a list")
+                    value = [str(item) for item in value]
+                else:
+                    value = str(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(f"bad frame value for {key}: {value!r}") from exc
+            setattr(out, key, value)
+        return out
+
+    def prompt_block(self, fmt: str) -> str:
+        """Describe this spec without importing a renderer or planner."""
+        lines = [
+            f"Entrances take {self.arrive_s} seconds with expo.out easing.",
+            f"Exits take {self.exit_ratio} times the entrance duration.",
+            f"Moves last {self.move_min_s} to {self.move_max_s} seconds.",
+            f"Hold a title for {self.title_hold_base_s} seconds plus {self.title_hold_per_word_s} seconds per word.",
+            f"Hold the last line for at least {self.last_line_min_s} seconds.",
+            f"Title height is {self.title_height_pct_min} to {self.title_height_pct_max} percent of the frame.",
+            f"Average shots last {self.shot_avg_min_s} to {self.shot_avg_max_s} seconds.",
+            f"Hold a payoff for {self.payoff_hold_min_s} to {self.payoff_hold_max_s} seconds.",
+            f"Allowed transitions are {', '.join(self.transition_types)}.",
+            f"In the first 90 seconds, leave at most {self.max_gap_first_90_s} seconds between visual events.",
+            f"After that, leave at most {self.max_gap_after_s} seconds between visual events; never exceed {self.max_gap_ever_s} seconds.",
+            f"The hook lasts {self.hook_s} seconds and needs {self.overlays_per_hook} overlays.",
+            f"Use {self.overlays_per_90_s} overlays and {self.camera_moves_per_90_s} camera moves per 90 seconds in the body.",
+            f"Anchor entrances no more than {self.anchor_before_s} seconds before or {self.anchor_after_s} seconds after their word.",
+            f"Keep music {self.music_under_min_db} to {self.music_under_max_db} dB under the voice, without ducking.",
+            f"Target voice loudness is {self.voice_lufs} LUFS.",
+        ]
+        if fmt in ("flameboat", "casefile", "loudmouth", "groupchat", "ticker"):
+            lines.append(f"Montage cuts last {self.montage_cut_min_s} to {self.montage_cut_max_s} seconds.")
+        if fmt in ("kenburns", "essay"):
+            lines.extend([
+                f"Camera creeps scale from {self.creep_min} to {self.creep_max} times the original size.",
+                f"Camera punches scale from {self.punch_min} to {self.punch_max} times the original size.",
+                f"Anchor the camera origin at {self.camera_origin}.",
+                "Snap scale to 100 percent on cuts." if self.snap_on_cut else "Do not snap scale on cuts.",
+            ])
+        lines.extend([
+            "Banned by name: " + "; ".join(f"{name}: {BANNED_MEANINGS.get(name, name)}" for name in self.banned),
+            "Rejected looks: " + ("; ".join(self.rejected_looks) or "none"),
+            "House rules: " + ("; ".join(self.rules) or "none"),
+            "Brand notes: " + (self.design_md or "none"),
+            "Frame notes: " + (self.frame_md or "none"),
+        ])
+        return "\n".join(lines)
 
 
 @dataclass
@@ -486,6 +618,7 @@ class Channel:
     default_minutes: int = 12
     tone: str = "warm documentary"
     style: Style = field(default_factory=Style)
+    frame: FrameSpec = field(default_factory=FrameSpec)
     voice: Voice = field(default_factory=Voice)
     narrator: Narrator = field(default_factory=Narrator)
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, the series
@@ -504,6 +637,7 @@ class Channel:
             "id": self.id, "name": self.name, "tagline": self.tagline,
             "concept": self.concept, "default_minutes": self.default_minutes,
             "tone": self.tone, "style": self.style.to_dict(),
+            "frame": self.frame.to_dict(),
             "voice": self.voice.to_dict(), "narrator": self.narrator.to_dict(),
             "lexicon": self.lexicon,
             "music": self.music, "intro": self.intro.to_dict(),
@@ -533,8 +667,9 @@ class Channel:
         avatar = AvatarSpec(**{k: v for k, v in (d.get("avatar") or {}).items()
                                if k in AvatarSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"style", "intro", "voice", "outro", "narrator", "avatar"})
+                 - {"frame", "style", "intro", "voice", "outro", "narrator", "avatar"})
         return cls(**{k: v for k, v in d.items() if k in known},
+                   frame=FrameSpec.from_dict(d.get("frame") or {}),
                    style=style, intro=intro, voice=voice, outro=outro,
                    narrator=narrator, avatar=avatar)
 
@@ -599,6 +734,7 @@ class Project:
     draft: dict = field(default_factory=dict)
     slides: list[Slide] = field(default_factory=list)
     style: Style = field(default_factory=Style)
+    frame: FrameSpec = field(default_factory=FrameSpec)
     voice: Voice = field(default_factory=Voice)
     presenter: Presenter = field(default_factory=Presenter)
     thumb: Thumb = field(default_factory=Thumb)
@@ -662,6 +798,7 @@ class Project:
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
             "style": self.style.to_dict(),
+            "frame": self.frame.to_dict(),
             "voice": self.voice.to_dict(),
             "presenter": self.presenter.to_dict(),
             "thumb": self.thumb.to_dict(),
@@ -756,12 +893,13 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"slides", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"frame", "slides", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
+            frame=FrameSpec.from_dict(d.get("frame") or {}),
             style=style,
             voice=voice,
             presenter=presenter,
@@ -819,6 +957,7 @@ def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documenta
         p.channel_id = channel.id
         p.tone = channel.tone or tone
         p.style = Style(**channel.style.to_dict())
+        p.frame = FrameSpec.from_dict(channel.frame.to_dict())
         p.voice = Voice(**channel.voice.to_dict())
         p.narrator = Narrator(**channel.narrator.to_dict())
         p.music = channel.music

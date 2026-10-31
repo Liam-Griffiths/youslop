@@ -25,7 +25,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T1.1 | FrameSpec dataclass | M | T0.5 | todo | |
+| T1.1 | FrameSpec dataclass | M | T0.5 | done | 2026-10-31 Codex; 119 tests |
 | T1.2 | Theme defaults for frame | S | T1.1 | todo | |
 | T1.3 | Prompt block and hook gate | M | T1.1 | todo | |
 | T1.4 | ffmpeg camera vocabulary and title timing | M | T1.1, T0.5 | todo | |
