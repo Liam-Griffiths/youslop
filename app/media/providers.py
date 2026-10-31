@@ -8,6 +8,7 @@ import os
 import re
 import time
 
+from .. import brand
 from ..config import PEXELS_KEY, PIXABAY_KEY, STORYBLOCKS_PUBLIC, STORYBLOCKS_SECRET
 from ..schema import MediaCandidate
 from .base import get_json, is_junk
@@ -367,7 +368,7 @@ class Storyblocks:
         sig = hmac.new((STORYBLOCKS_SECRET + expires).encode(),
                        resource.encode(), hashlib.sha256).hexdigest()
         return {"APIKEY": STORYBLOCKS_PUBLIC, "EXPIRES": expires, "HMAC": sig,
-                "project_id": os.environ.get("STORYBLOCKS_PROJECT_ID", "youslop"),
+                "project_id": os.environ.get("STORYBLOCKS_PROJECT_ID", brand.SLUG),
                 "user_id": os.environ.get("STORYBLOCKS_USER_ID", "local")}
 
     def search(self, query: str, kind: str, limit: int = 8) -> list[MediaCandidate]:

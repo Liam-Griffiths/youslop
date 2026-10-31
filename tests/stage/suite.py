@@ -5,7 +5,7 @@ shots, and what the solver makes of them.
     ./.venv/bin/python tests/stage/suite.py --only loft  just the models whose file name matches
     ./.venv/bin/python tests/stage/suite.py --accept     make the last run the baseline
 
-It serves the repo and the model library (YOUSLOP_DATA's, like the app) to
+It serves the repo and the model library (CORKBORED_DATA's, like the app) to
 headless Chromium, which runs tests/stage/suite/page.js: every case's search
 with the GPU checks, then three preview frames of each pick. Results go to
 <data>/stage-suite/latest/:

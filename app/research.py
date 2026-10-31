@@ -11,7 +11,7 @@ HTTP, no CLI tool-use involved, and Claude only ever sees pages that were
 really fetched. `script_gen.py` uses `gather()`; nothing else in this module
 writes narration.
 
-Two depths, chosen by `YOUSLOP_RESEARCH_MODE`:
+Two depths, chosen by `CORKBORED_RESEARCH_MODE`:
 
 - **quick** — one pass: propose queries, search, fetch, synthesise.
 - **deep** — Claude's research mode: a loop of rounds in which Claude reads
@@ -34,6 +34,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
+from . import brand
 from .config import (
     ANTHROPIC_API_KEY, BRAVE_SEARCH_KEY, RESEARCH_MODE, SEARCH_BACKEND,
     SEARXNG_URL, USER_AGENT,
@@ -45,7 +46,7 @@ from .llm import (
 )
 
 Progress = Callable[[str], None]
-log = logging.getLogger("youslop.research")
+log = logging.getLogger(f"{brand.SLUG}.research")
 
 # Search sites answer a bot's request with a challenge or a rate limit, so the
 # searches identify as a browser. Page fetches keep the app's own contact

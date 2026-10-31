@@ -6,7 +6,7 @@ are ~90MB a platform and git is the wrong place for them. `resources/bin/` is
 gitignored; a release build runs this first, and a checkout that has not run it
 falls back to whatever ffmpeg is on PATH (see `config._binary`).
 
-Youslop is GPLv3, so these are **GPL** builds — the ones with libx264 in them,
+Corkbored is GPLv3, so these are **GPL** builds — the ones with libx264 in them,
 which every render needs. An LGPL build without x264 would fail on the first
 segment. See THIRD-PARTY.md for what that obliges us to carry.
 

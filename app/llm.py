@@ -21,12 +21,13 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import brand
 from .config import (
     ANTHROPIC_API_KEY, CLAUDE_BIN, EFFORT, LLM_BACKEND, MODEL_SCRIPT,
     MODEL_UTILITY, OLLAMA_CONTEXT, OLLAMA_MODEL, OLLAMA_URL, OPENAI_COMPAT,
 )
 
-log = logging.getLogger("youslop.llm")
+log = logging.getLogger(f"{brand.SLUG}.llm")
 
 
 class LLMError(RuntimeError):
@@ -332,7 +333,7 @@ def _complete_ollama(
     approx_tokens = (len(system) + len(prompt)) // 4
     if approx_tokens > OLLAMA_CONTEXT:
         log.warning("ollama: prompt is about %d tokens, over the %d-token context "
-                    "(YOUSLOP_OLLAMA_CONTEXT); the model will not see all of it",
+                    f"({brand.ENV_PREFIX}OLLAMA_CONTEXT); the model will not see all of it",
                     approx_tokens, OLLAMA_CONTEXT)
     body = {
         "model": OLLAMA_MODEL,

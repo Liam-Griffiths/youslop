@@ -1,16 +1,20 @@
-# Youslop
+# Corkbored
 
-Youslop turns an idea or a script into a narrated, illustrated video: Claude
-writes it, it searches for images or you supply them, it generates a voice or you supply the voice yourself, ffmpeg cuts the final file. It runs
-entirely on your own machine — your Claude subscription or API key, your
-microphone, your render. Voila a low effort slop youtube video.
+Corkbored turns an idea or script into a researched, narrated, illustrated
+video on your own machine. Research, write, record or generate narration,
+review the pictures, then cut and publish an episode with your own tools and
+API keys.
 
 ## Why this exists
 
-YouTube is now overrun with low effort slop content. This janky vibe coded tool aims to make it so easy and lazy to produce low effort slop content that YouTube will be foreced to implement solutions to make slop content unprofitable. Real creators that make quality content are being drowned out in a sea of garbage, and users are forced to wade through that sea of garbage to find the creator we like. This must end.
+Careful, researched videos should be practical for a solo creator. Corkbored
+keeps the script, recordings, pictures and edit together so you can review and
+correct the work before rendering.
 
-Here is an Example video created with no effort at all:
-https://www.youtube.com/watch?v=YAlnSGxnru4
+## History
+
+The project began as Youslop, a joke about slop. The renderer it grew is now
+serious: Corkbored helps creators turn research into finished episodes.
 
 ## Using it
 
@@ -93,11 +97,11 @@ cd youslop
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt pyinstaller pywebview
 .venv/bin/python scripts/fetch_ffmpeg.py
-.venv/bin/pyinstaller --noconfirm youslop.spec
-open dist/Youslop.app
+.venv/bin/pyinstaller --noconfirm corkbored.spec
+open dist/Corkbored.app
 ```
 
-Drag `dist/Youslop.app` into Applications to keep it. If macOS says it "can't
+Drag `dist/Corkbored.app` into Applications to keep it. If macOS says it "can't
 be opened", right-click it → **Open** once; it isn't signed.
 
 ### Linux
@@ -125,7 +129,7 @@ sudo pacman -S python pkgconf cairo gobject-introspection webkit2gtk-4.1 \
   gst-plugins-good gst-libav
 ```
 
-GStreamer reads its plugin list once at startup, so restart Youslop after
+GStreamer reads its plugin list once at startup, so restart Corkbored after
 installing them. To check a machine before guessing — `gst-inspect-1.0
 avdec_h264` prints the decoder if it is there and nothing if it is not.
 
@@ -141,11 +145,11 @@ cd youslop
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt pyinstaller pywebview pygobject
 .venv/bin/python scripts/fetch_ffmpeg.py
-.venv/bin/pyinstaller --noconfirm youslop.spec
-./dist/Youslop/Youslop
+.venv/bin/pyinstaller --noconfirm corkbored.spec
+./dist/Corkbored/Corkbored
 ```
 
-The app is the whole `dist/Youslop/` folder. Move it anywhere you like, but
+The app is the whole `dist/Corkbored/` folder. Move it anywhere you like, but
 keep the folder together.
 
 ### Windows
@@ -158,11 +162,11 @@ cd youslop
 py -m venv .venv
 .venv\Scripts\pip install -r requirements.txt pyinstaller pywebview
 .venv\Scripts\python scripts\fetch_ffmpeg.py
-.venv\Scripts\pyinstaller --noconfirm youslop.spec
-.\dist\Youslop\Youslop.exe
+.venv\Scripts\pyinstaller --noconfirm corkbored.spec
+.\dist\Corkbored\Corkbored.exe
 ```
 
-The app is the whole `dist\Youslop\` folder; keep it together.
+The app is the whole `dist\Corkbored\` folder; keep it together.
 
 ### The AI narrator's voice files
 
@@ -173,11 +177,15 @@ folder is:
 
 | | |
 |---|---|
-| macOS | `~/Library/Application Support/Youslop/assets/tts/` |
-| Linux | `~/.local/share/youslop/assets/tts/` |
-| Windows | `%LOCALAPPDATA%\Youslop\assets\tts\` |
+| macOS | `~/Library/Application Support/Corkbored/assets/tts/` |
+| Linux | `~/.local/share/corkbored/assets/tts/` |
+| Windows | `%LOCALAPPDATA%\Corkbored\assets\tts\` |
 
-Download both files into that folder, then restart Youslop:
+Existing installs keep using their legacy data folder when the new folder
+does not exist; Settings shows the active location. `CORKBORED_DATA` overrides
+it.
+
+Download both files into that folder, then restart Corkbored:
 
 - [kokoro-v1.0.onnx](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx)
 - [voices-v1.0.bin](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin)

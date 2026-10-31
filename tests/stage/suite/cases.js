@@ -2,7 +2,7 @@
 // the shots that taught a rule (docs/3d-explainer.md, step 3b–3e), each run
 // through the solver exactly as the app will run it. Models are found in the
 // library by their file name, so the suite runs against whatever library
-// YOUSLOP_DATA points at.
+// CORKBORED_DATA points at.
 //
 // A case is { name, cands, build(k) -> shot, ctx, look?, max? }. A fixed shot is a
 // search with one candidate. `look` is how the contact sheet draws it —

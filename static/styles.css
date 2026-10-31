@@ -42,25 +42,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   display: flex; align-items: center; gap: 8px;
   font-weight: 600; letter-spacing: .01em; cursor: pointer;
 }
-/* A tipped bucket that tips further and drips on hover — the whole brand in
-   one gesture, so it doesn't need explaining. */
-.brand .mark {
-  position: relative; display: inline-block; font-size: 19px;
-  line-height: 1; transform: rotate(-10deg);
-  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
-}
-.brand:hover .mark { transform: rotate(22deg) translateY(-1px); }
-.mark .drip {
-  position: absolute; left: 46%; top: 65%; width: 4px; height: 4px;
-  background: var(--accent); border-radius: 50% 50% 50% 0;
-  transform: translate(-50%, 0) rotate(45deg); opacity: 0;
-}
-.brand:hover .mark .drip { animation: drip-fall .7s ease-in forwards .1s; }
-@keyframes drip-fall {
-  0%   { opacity: 1; transform: translate(-50%, 0) rotate(45deg); }
-  75%  { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, 16px) rotate(45deg); }
-}
+.brand .mark { font-size: 19px; line-height: 1; color: var(--accent); }
 /* A rounder, heavier face than the rest of the UI — the brand gets to have a
    little personality the body copy doesn't. ui-rounded resolves to SF Pro
    Rounded on Apple platforms; everywhere else it's just a bold sans-serif. */

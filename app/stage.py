@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import models3d
+from . import brand, models3d
 from .config import FFMPEG, STATIC_DIR
 
 Progress = Callable[[str], None]
@@ -218,7 +218,7 @@ def _run(job: dict, progress: Progress, *, out_dir: Path | None = None,
     url = f"http://127.0.0.1:{srv.server_address[1]}{PAGE}"
     # A throwaway profile per run: a crashed run's profile lock once blocked
     # the next one silently.
-    with tempfile.TemporaryDirectory(prefix="youslop-stage-") as prof:
+    with tempfile.TemporaryDirectory(prefix=f"{brand.SLUG}-stage-") as prof:
         cmd = [exe, "--headless=new", f"--use-angle={_angle()}", "--ignore-gpu-blocklist",
                f"--user-data-dir={prof}", f"--window-size={size[0]},{size[1]}",
                "--no-first-run", "--no-default-browser-check", "--disable-extensions",

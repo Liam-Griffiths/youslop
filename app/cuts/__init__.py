@@ -27,7 +27,7 @@ import math
 from pathlib import Path
 
 from ..config import FPS, HEAD_PAD, WIDTH, WORDS_PER_MINUTE
-from .. import ffutil
+from .. import brand, ffutil
 from . import casefile, flameboat, groupchat, kit, loudmouth, ticker
 
 MODULES = [flameboat, casefile, loudmouth, groupchat, ticker]
@@ -134,7 +134,7 @@ def load_picture(ctx, slide, cache_dir: Path | None):
     cache_dir = cache_dir or ctx.cache.get("dir")
     if cache_dir is None:
         import tempfile
-        cache_dir = Path(tempfile.gettempdir()) / "youslop_cuts"
+        cache_dir = Path(tempfile.gettempdir()) / f"{brand.SLUG}_cuts"
     src = source_for(ctx, slide)
     img = board._load_photo(src, Path(cache_dir)) if src else None
     if img is not None and max(img.size) > 2200:

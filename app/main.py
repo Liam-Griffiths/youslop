@@ -50,7 +50,7 @@ from .store import project_dir
 # what `run.sh` and any uvicorn invocation do — is enough on its own.
 ensure_dirs()
 
-app = FastAPI(title="Youslop")
+app = FastAPI(title=brand.NAME)
 
 # Set by run.sh whenever the server is bound past loopback. Everything here can
 # read, edit and delete projects, so a second machine has to bring the token;
@@ -1693,7 +1693,7 @@ def export_slide_style(style_id: str) -> Response:
     slug = re.sub(r"[^a-z0-9]+", "-", bundle["name"].lower()).strip("-") or "style"
     body = json.dumps(bundle, indent=2, ensure_ascii=False)
     return Response(body, media_type="application/json", headers={
-        "Content-Disposition": f'attachment; filename="{slug}.youslop-style.json"'})
+        "Content-Disposition": f'attachment; filename="{slug}.{brand.SLUG}-style.json"'})
 
 
 @app.post("/api/slide-styles/import")

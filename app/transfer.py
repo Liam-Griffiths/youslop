@@ -147,12 +147,12 @@ def read_manifest(src: Path) -> dict:
                 raise KeyError(MANIFEST)
             data = json.loads(zf.read(name))
     except (zipfile.BadZipFile, KeyError, json.JSONDecodeError):
-        raise TransferError("That isn't a Youslop project file.")
+        raise TransferError(f"That isn't a {brand.NAME} project file.")
     version = (data.get("corkbored_project") or data.get("youslop_project")) if isinstance(data, dict) else None
     if not version:
-        raise TransferError("That isn't a Youslop project file.")
+        raise TransferError(f"That isn't a {brand.NAME} project file.")
     if int(version) > FORMAT_VERSION:
-        raise TransferError("That project was saved by a newer Youslop. "
+        raise TransferError(f"That project was saved by a newer {brand.NAME}. "
                             "Update this one to open it.")
     return data
 

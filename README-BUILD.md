@@ -1,14 +1,14 @@
-# Building Youslop — maintainer notes
+# Building Corkbored — maintainer notes
 
 The step-by-step build for macOS, Linux and Windows is in the
 [README](README.md#building-it-yourself). This file covers what's behind it.
 
-- **One spec, every platform.** `youslop.spec` builds for whatever it runs on.
+- **One spec, every platform.** `corkbored.spec` builds for whatever it runs on.
   PyInstaller does not cross-compile, so each OS/architecture needs its own
   build machine (or CI runner).
-- **Output.** macOS: `dist/Youslop.app`. Linux/Windows: the `dist/Youslop/`
+- **Output.** macOS: `dist/Corkbored.app`. Linux/Windows: the `dist/Corkbored/`
   folder. For a release, archive it:
-  `tar -C dist -czf dist/youslop-<version>-linux-<arch>.tar.gz Youslop`
+  `tar -C dist -czf dist/corkbored-<version>-linux-<arch>.tar.gz Corkbored`
   (zip the folder on Windows).
 - **ffmpeg** is fetched by `scripts/fetch_ffmpeg.py` (gitignored, ~250MB) and
   checked against `resources/bin/MANIFEST.json`. Commit the manifest when a
@@ -20,7 +20,7 @@ The step-by-step build for macOS, Linux and Windows is in the
 - **The voice engine** (kokoro-onnx, onnxruntime, espeak-ng, soundfile) is
   bundled. A packaged app runs its own private Python, so a `pip install`
   outside it can never be seen. Only the model weights stay outside, in the
-  per-user data folder (`app/paths.py`); `YOUSLOP_DATA` overrides it.
+  per-user data folder (`app/paths.py`); `CORKBORED_DATA` overrides it.
 - **Tested so far:** macOS (arm64) and Linux (arm64, Arch). The Windows path
   and microphone permission handling on Linux/Windows (`app/desktop.py`)
   have not been run on real hardware yet.

@@ -751,7 +751,7 @@ In order. Each step ends with something you can use or watch.
    the window sky told apart (the same shot fails without the window box).
 5. **The six test models become a regression suite.** *Done.*
    `./.venv/bin/python tests/stage/suite.py` finds the six models in the
-   library (by file name, under `YOUSLOP_DATA` like the app) and runs each
+   library (by file name, under `CORKBORED_DATA` like the app) and runs each
    one's reference shots (`tests/stage/suite/cases.js`) through the solver
    in headless Chromium:
    - A380 orbit and left-wing push

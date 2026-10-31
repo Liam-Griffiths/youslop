@@ -192,7 +192,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 # extended to script-writing. Deliberately never chosen by `auto`: a local 7B
 # model writes a noticeably worse script than Claude, and picking it silently
 # because no CLI or key was found would hand someone a worse video without
-# them ever deciding that tradeoff themselves. Only `YOUSLOP_LLM_BACKEND=ollama`
+# them ever deciding that tradeoff themselves. Only `CORKBORED_LLM_BACKEND=ollama`
 # selects it. See app/llm.py:_complete_ollama().
 OLLAMA_URL = brand.env("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = brand.env("OLLAMA_MODEL", "qwen2.5:7b-instruct")
@@ -267,7 +267,7 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
 USER_AGENT = brand.env(
     "USER_AGENT",
-    "youslop/1.0 (local research tool; contact: set VB_USER_AGENT)",
+    f"{brand.SLUG}/1.0 (local research tool; contact: set {brand.ENV_PREFIX}USER_AGENT)",
 )
 
 # ---------------------------------------------------------------- narration

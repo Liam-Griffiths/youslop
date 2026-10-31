@@ -580,7 +580,7 @@ class Project:
     # configured, just has an empty one.
     research: dict = field(default_factory=dict)
     # "quick" or "deep" as chosen on the idea form. "" means the app-wide
-    # YOUSLOP_RESEARCH_MODE setting decides — every video made before this
+    # CORKBORED_RESEARCH_MODE setting decides — every video made before this
     # existed, and any made without the choice.
     research_mode: str = ""
     # A test run: a one-minute video with quick research, for trying the

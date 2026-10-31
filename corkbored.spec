@@ -78,7 +78,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [],
     exclude_binaries=True,
-    name="Youslop",
+    name="Corkbored",
     debug=False,
     strip=False,
     upx=False,
@@ -87,7 +87,7 @@ exe = EXE(
 
 coll = COLLECT(
     exe, a.binaries, a.datas,
-    strip=False, upx=False, name="Youslop",
+    strip=False, upx=False, name="Corkbored",
 )
 
 if MACOS:
@@ -95,11 +95,11 @@ if MACOS:
 
     app = BUNDLE(
         coll,
-        name="Youslop.app",
+        name="Corkbored.app",
         icon=ICON,
-        bundle_identifier="dev.youslop.app",
+        bundle_identifier="dev.corkbored.app",
         info_plist={
-            "NSMicrophoneUsageDescription": "Youslop records your narration for the video you are making.",
+            "NSMicrophoneUsageDescription": "Corkbored records your narration for the video you are making.",
             "CFBundleShortVersionString": "0.1.0",
             "CFBundleVersion": "1",
             "NSHighResolutionCapable": True,

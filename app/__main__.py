@@ -40,7 +40,10 @@ def free_port() -> int:
 def _log_file() -> Path:
     """One rolling log in the data folder, because a windowed app has no
     terminal to print a traceback to."""
-    path = LOG_DIR / "youslop.log"
+    path = LOG_DIR / f"{brand.SLUG}.log"
+    old = LOG_DIR / "youslop.log"
+    if old.exists() and not path.exists():
+        old.replace(path)
     if path.exists() and path.stat().st_size > 4_000_000:
         path.replace(path.with_suffix(".log.1"))
     return path
@@ -62,7 +65,7 @@ def configure(port: int | None = None, token: str | None = None,
     logging.basicConfig(
         level=logging.INFO, handlers=handlers, force=True,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    log = logging.getLogger("youslop")
+    log = logging.getLogger(brand.SLUG)
     paths = describe()
     for key, value in paths.items():
         log.info("paths: %s = %s", key, value)
@@ -97,7 +100,7 @@ def serve(port: int, host: str = "127.0.0.1", ssl: tuple[str, str] | None = None
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="python -m app", description="Start Youslop.")
+    ap = argparse.ArgumentParser(prog="python -m app", description=f"Start {brand.NAME}.")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT") or 0),
                     help="0 (the default) picks a free one")
     ap.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))

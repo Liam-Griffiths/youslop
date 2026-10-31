@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Youslop.
+# Start Corkbored.
 #
 #   ./run.sh                        this machine only, http://127.0.0.1:8420
 #   HOST=0.0.0.0 HTTPS=1 ./run.sh   reachable from the network, over https

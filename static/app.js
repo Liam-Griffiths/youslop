@@ -1,4 +1,4 @@
-/* Youslop — local single-page client. */
+/* Corkbored — local single-page client. */
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $('#view');
@@ -138,7 +138,7 @@ function settingsFieldRow(f) {
     : '';
   const value = f.secret ? '' : esc(f.value || '');
   const badge = f.locked
-    ? `<span class="pill warn" style="margin-left:6px" title="A real environment variable (${esc(f.env)}) is set outside Youslop and overrides this">locked by environment</span>`
+    ? `<span class="pill warn" style="margin-left:6px" title="A real environment variable (${esc(f.env)}) is set outside Corkbored and overrides this">locked by environment</span>`
     : f.set ? `<span class="pill on" style="margin-left:6px">set</span>` : '';
   // A field with a fixed, correct set of answers gets a <select> instead of
   // free text — which model, which backend, how hard it thinks are all
@@ -182,7 +182,7 @@ async function renderSettings() {
   view.innerHTML = `
     <h1>Settings</h1>
     <p class="sub">What used to live in a <span class="mono">.env</span> file you hand-edited.
-      Changes take effect the next time Youslop starts.</p>
+      Changes take effect the next time Corkbored starts.</p>
     <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">
       Data folder: ${esc(data.data_dir)}</p>
 
@@ -401,11 +401,11 @@ function renderGuide() {
   view.innerHTML = `
     <h1>How it works</h1>
     <p class="sub">From an idea to a finished video in five tabs. Claude writes it, the
-      archives supply the pictures, you (or the AI narrator) read it, and Youslop cuts it.</p>
+      archives supply the pictures, you (or the AI narrator) read it, and Corkbored cuts it.</p>
 
     <div class="panel guide-before">
       <h3>Before you start</h3>
-      <p>Youslop needs Claude to write scripts. Either have the
+      <p>Corkbored needs Claude to write scripts. Either have the
         <a href="https://claude.com/claude-code" target="_blank">Claude Code CLI</a> installed
         and signed in, or add an Anthropic API key in
         <a href="#/settings">Settings</a>.</p>
@@ -498,7 +498,7 @@ function renderGuide() {
     <h2>Taking a video to another computer</h2>
     <div class="panel guide-before">
       <p>On the video's page, <b>save project file…</b> puts the whole video in one
-        <span class="mono">.youslop</span> file: script, chosen pictures, recordings,
+        <span class="mono">.corkbored</span> file: script, chosen pictures, recordings,
         settings, and its channel, music and style if it has them.</p>
       <p>On the other computer, press <b>open project file…</b> at the top of the
         <a href="#/">New video</a> page and pick that file. If the video is already there,
@@ -531,7 +531,7 @@ async function renderHome() {
     <div class="row" style="align-items:flex-start">
       <h1 style="flex:1;min-width:0">Build a video</h1>
       <button class="btn ghost sm" onclick="$('#projfile').click()"
-        title="a .youslop file saved from this or another computer">open project file…</button>
+        title="a .corkbored file saved from this or another computer">open project file…</button>
       <input type="file" id="projfile" accept=".corkbored,.youslop" style="display:none"
         onchange="openProjectFile(this.files[0]); this.value=''">
     </div>
@@ -1321,7 +1321,7 @@ async function exportSlideStyle(id, name) {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'style';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${slug}.youslop-style.json`;
+    a.download = `${slug}.corkbored-style.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   } catch (e) { toast(e.message, true); }
@@ -4702,9 +4702,9 @@ function showCommand(platform) {
 
   let note = '';
   if (platform === 'windows') {
-    note = 'Run in PowerShell or Command Prompt. If using the Youslop desktop app, run this in your system terminal (not within the app).';
+    note = 'Run in PowerShell or Command Prompt. If using the Corkbored desktop app, run this in your system terminal (not within the app).';
   } else {
-    note = 'Run in your terminal (bash, zsh, etc.). If using the Youslop desktop app, run this in your system terminal (not within the app).';
+    note = 'Run in your terminal (bash, zsh, etc.). If using the Corkbored desktop app, run this in your system terminal (not within the app).';
   }
 
   if (noteEl && note) {
@@ -5033,7 +5033,7 @@ function localVoicePanel(p, slide) {
           <button class="btn xs ghost" style="position:absolute;top:4px;right:4px"
             onclick="navigator.clipboard.writeText($('#weights-cmd').textContent).then(() => toast('Copied to clipboard'), () => toast('Failed to copy', true))">copy</button>
         </div>
-        <div style="margin-top:6px;font-size:12px;color:var(--ink-faint)">Run in a terminal, then restart Youslop.</div>`;
+        <div style="margin-top:6px;font-size:12px;color:var(--ink-faint)">Run in a terminal, then restart Corkbored.</div>`;
     } else if (t.detail) {
       setupGuide = `<div style="margin-top:10px;font-size:12px;color:var(--ink-faint);user-select:text">${esc(t.detail)}</div>`;
     }

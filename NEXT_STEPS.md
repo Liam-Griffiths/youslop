@@ -1,4 +1,4 @@
-# Next steps
+# Corkbored: next steps
 
 Suggestions, roughly in the order I'd do them. Each one says why it is worth
 doing and where the work actually lands, because the reason is the part that
@@ -126,7 +126,7 @@ Wikipedia both have it, 12–16 Oct 2026). The project's research field was
 empty: research found nothing and wrote without grounding, and nothing recorded
 why.
 
-**Causes found in the app log (`~/Library/Application Support/Youslop/logs/youslop.log`):**
+**Causes found in the app log (`~/Library/Application Support/Corkbored/logs/corkbored.log`):**
 - DuckDuckGo answered the burst of six queries with HTTP 202 (a bot challenge),
   which the scrape read as "no results". No retry, no fallback.
 - In the dev checkout, `SEARXNG_URL` was set but the instance returned 403 to

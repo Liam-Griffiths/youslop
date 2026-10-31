@@ -36,14 +36,14 @@ import time
 import webbrowser
 from typing import Callable
 
-from . import jobs
+from . import brand, jobs
 from .__main__ import configure, free_port, serve
 from .paths import data_root
 
 
 def _log(message: str) -> None:
     import logging
-    logging.getLogger("youslop.desktop").info(message)
+    logging.getLogger(f"{brand.SLUG}.desktop").info(message)
 
 
 # ------------------------------------------------------------- macOS (WebKit)
@@ -80,7 +80,7 @@ def _patch_macos_microphone() -> None:
     info = AppKit.NSBundle.mainBundle().infoDictionary()
     if not info.get("NSMicrophoneUsageDescription"):
         info["NSMicrophoneUsageDescription"] = (
-            "Youslop records your narration for the video you are making.")
+            f"{brand.NAME} records your narration for the video you are making.")
 
     selector = ("webView:requestMediaCapturePermissionForOrigin:"
                "initiatedByFrame:type:decisionHandler:")
@@ -141,9 +141,9 @@ def _patch_linux_microphone() -> None:
         for _ in range(100):
             for inst in list(gtk_platform.BrowserView.instances.values()):
                 webview = getattr(inst, "webview", None)
-                if webview is not None and not getattr(webview, "_youslop_mic_patched", False):
+                if webview is not None and not getattr(webview, "_corkbored_mic_patched", False):
                     webview.connect("permission-request", _on_permission)
-                    webview._youslop_mic_patched = True
+                    webview._corkbored_mic_patched = True
             time.sleep(0.2)
 
     threading.Thread(target=_attach, daemon=True).start()
@@ -180,9 +180,9 @@ def _patch_windows_microphone() -> None:
                 gui = getattr(win, "gui", None)
                 core = getattr(gui, "webview", None)
                 core = getattr(core, "CoreWebView2", None) if core else None
-                if core is not None and not getattr(win, "_youslop_mic_patched", False):
+                if core is not None and not getattr(win, "_corkbored_mic_patched", False):
                     core.PermissionRequested += _on_permission
-                    win._youslop_mic_patched = True
+                    win._corkbored_mic_patched = True
             time.sleep(0.2)
 
     threading.Thread(target=_attach, daemon=True).start()
@@ -232,7 +232,7 @@ def _menu():
             subprocess.run(["xdg-open", d])
 
     return [
-        wv.menu.Menu("Youslop", [
+        wv.menu.Menu(brand.NAME, [
             wv.menu.MenuAction("New video", new_video),
             wv.menu.MenuAction("Open data folder", open_data_folder),
             wv.menu.MenuSeparator(),
@@ -274,7 +274,7 @@ def main(open_in_browser: bool = False) -> None:
     port, token = configure()
     ready = threading.Event()
     threading.Thread(target=serve, args=(port,), kwargs={"ready": ready},
-                     daemon=True, name="youslop-server").start()
+                     daemon=True, name=f"{brand.SLUG}-server").start()
     if not ready.wait(timeout=20):
         raise RuntimeError("The server did not start in time.")
 
@@ -284,7 +284,7 @@ def main(open_in_browser: bool = False) -> None:
         return
 
     _patch_microphone()
-    window = wv.create_window("Youslop", url, width=1360, height=900, min_size=(960, 640))
+    window = wv.create_window(brand.NAME, url, width=1360, height=900, min_size=(960, 640))
     window.events.closing += _confirm_quit
     _install_folder_dialog(window)
     wv.start(_request_macos_microphone if sys.platform == "darwin" else (lambda: None),

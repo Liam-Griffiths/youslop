@@ -23,6 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import brand
+
 # The package that carries GStreamer's libav-based decoders, per family. The
 # key is matched against ID and then ID_LIKE from /etc/os-release.
 _LIBAV_PACKAGES = {
@@ -105,7 +107,7 @@ def status() -> dict:
         command, note = _linux_fix()
         if not note:
             note = ("GStreamer reads its plugin list at startup, so restart "
-                    "Youslop once it is installed.")
+                    f"{brand.NAME} once it is installed.")
     elif ok:
         note = ("This machine decodes H.264 itself, so a video that will not "
                 "play here is unlikely to be a codec. Open the folder and try "
