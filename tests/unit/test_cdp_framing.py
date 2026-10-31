@@ -77,6 +77,16 @@ def test_scene_paths_are_token_scoped_and_contained(tmp_path):
         assert translate(path) == "/nonexistent"
 
 
+def test_scene_fonts_and_project_assets(tmp_path):
+    run = _Run({'scene_root': str(tmp_path / 'scenes'), 'assets_root': str(tmp_path)}, None)
+    translate = object.__new__(_handler(run)).translate_path
+    assert translate('/fonts/Inter-Medium.ttf').endswith('/resources/fonts/Inter-Medium.ttf')
+    assert translate('/fonts/%2e%2e/secret') == '/nonexistent'
+    assert translate(f'/scene/{run.token}/assets/media/photo.png') == str(tmp_path / 'media/photo.png')
+    assert translate(f'/scene/{run.token}/assets/../../secret') == '/nonexistent'
+    assert translate('/scene/wrong/assets/media/photo.png') == '/nonexistent'
+
+
 def test_cdp_error_reply_and_event_limit():
     request_r, request_w = os.pipe()
     response_r, response_w = os.pipe()

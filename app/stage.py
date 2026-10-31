@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import unquote
 
-from . import brand, models3d
+from . import brand, models3d, paths
 from .config import FFMPEG, STATIC_DIR
 
 Progress = Callable[[str], None]
@@ -108,10 +108,18 @@ def _handler(run: _Run):
                 if len(parts) != 4 or parts[2] != run.token or not root:
                     return "/nonexistent"
                 root = Path(root).resolve()
-                target = (root / parts[3]).resolve()
+                relative = parts[3]
+                if relative.startswith("assets/") and run.job.get("assets_root"):
+                    root = Path(run.job["assets_root"]).resolve()
+                    relative = relative[len("assets/"):]
+                target = (root / relative).resolve()
                 if not target.is_relative_to(root):
                     return "/nonexistent"
                 return str(target)
+            if path.startswith("/fonts/"):
+                root = (paths.resource_root() / "resources" / "fonts").resolve()
+                target = (root / unquote(path[len("/fonts/"):])).resolve()
+                return str(target) if target.is_relative_to(root) else "/nonexistent"
             if path.startswith("/models/"):
                 p = Path(path)
                 try:
@@ -127,6 +135,16 @@ def _handler(run: _Run):
             super().end_headers()
 
         def do_GET(self):
+            if self.path.startswith(f"/scene/{run.token}/"):
+                path = Path(self.translate_path(self.path))
+                if path.suffix == ".html" and path.is_file():
+                    body = path.read_text(encoding="utf-8").replace("{token}", run.token).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
             if self.path.split("?")[0] == "/job.json":
                 body = json.dumps(run.job).encode()
                 self.send_response(200)
@@ -614,18 +632,23 @@ def render_scene(items: list[dict], out_dir: Path,
     roots = {str(Path(i["scene_root"]).resolve()) for i in items if i.get("scene_root")}
     if len(roots) > 1:
         raise StageError("one scene_root is allowed per render call")
-    run = _run_cdp({"items": items, "scene_root": next(iter(roots), None)},
+    assets = {str(Path(i["assets_root"]).resolve()) for i in items if i.get("assets_root")}
+    if len(assets) > 1:
+        raise StageError("one assets_root is allowed per render call")
+    run = _run_cdp({"items": items, "scene_root": next(iter(roots), None),
+                    "assets_root": next(iter(assets), None)},
                    progress, out_dir=out_dir)
     return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
 
 
-def capture_one(url_path, W, H, t, size) -> bytes:
+def capture_one(url_path, W, H, t, size, *, assets_root=None) -> bytes:
     """Return a PNG from a local URL, or an absolute HTML file and its assets."""
     root = None
     if Path(url_path).is_file():
         from urllib.parse import quote
         path = Path(url_path).resolve()
         root, url_path = str(path.parent), "/scene/{token}/" + quote(path.name)
-    run = _run_cdp({"scene_root": root, "items": [dict(
+    run = _run_cdp({"scene_root": root,
+                    "assets_root": str(assets_root) if assets_root is not None else None, "items": [dict(
         url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None)
     return run.thumbs["snapshot"]

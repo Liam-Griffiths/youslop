@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-composition-id="{{ composition_id | default('scene') }}"
+      data-width="{{ width }}" data-height="{{ height }}"
+      data-duration="{{ duration }}" data-fps="{{ fps }}" data-seed="{{ seed | default(1) }}"
+      style="--arrive-s:{{ frame.arrive_s }};--exit-ratio:{{ frame.exit_ratio }};--bg:{{ palette.ground }};--ink:{{ palette.ink }};--accent:{{ palette.accent }};--accent2:{{ palette.accent2 }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ vars.title }}</title>
+  <link rel="stylesheet" href="/static/scene/_base.css">
+  <style>
+    {% for name, url in fonts.items() %}
+    @font-face { font-family: {{ name | tojson }}; src: url({{ url | tojson }}); font-display: block; }
+    {% endfor %}
+  </style>
+  <script>window.__vars = {{ vars | tojson }};</script>
+  <script src="/static/scene/runtime.js"></script>
+  <script src="/static/vendor/gsap/gsap.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block body %}{% endblock %}
+  {% block script %}{% endblock %}
+</body>
+</html>

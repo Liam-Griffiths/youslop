@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from . import check, edits, render, store, storyboard
@@ -80,6 +81,27 @@ def cmd_apply(args):
     _print_json(changed)
 
 
+def cmd_scene_preview(args):
+    from . import scenes
+
+    project = store.load(args.project) if args.project else None
+    ctx = scenes.context_base(project)
+    if args.ctx:
+        ctx.update(json.loads(Path(args.ctx).read_text(encoding="utf-8")))
+    out = Path(args.out or ("scene.mp4" if args.mp4 else "frame.png"))
+    # Keep temporary inputs alive until Chromium has finished reading them.
+    with tempfile.TemporaryDirectory(prefix="corkbored-scene-") as temporary:
+        root = project if project else Path(temporary)
+        if args.mp4:
+            clip = scenes.ensure_clip(root, args.template, ctx,
+                                      seconds=args.seconds, size=(480, 270), fps=30)
+            out.write_bytes(clip.read_bytes())
+        else:
+            out.write_bytes(scenes.capture(root, args.template, ctx,
+                                          t=args.t, size=(480, 270)))
+    print(out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -91,11 +113,20 @@ def main(argv=None):
     command = sub.add_parser("apply")
     command.add_argument("pid")
     command.add_argument("patch")
+    command = sub.add_parser("scene-preview")
+    command.add_argument("template")
+    command.add_argument("--ctx")
+    command.add_argument("--project")
+    command.add_argument("--t", type=float, default=1.5)
+    command.add_argument("--out")
+    command.add_argument("--mp4", action="store_true")
+    command.add_argument("--seconds", type=float, default=3)
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
         status = {"check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
-         "storyboard": cmd_storyboard, "apply": cmd_apply}[args.cmd](args)
+         "storyboard": cmd_storyboard, "apply": cmd_apply,
+         "scene-preview": cmd_scene_preview}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
     except BrokenPipeError:

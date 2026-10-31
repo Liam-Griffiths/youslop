@@ -1,0 +1,12 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>
+  #title { position:absolute; top:120px; left:160px; font:bold 96px Inter, sans-serif; }
+  #box { position:absolute; top:400px; left:160px; width:320px; height:240px; background:var(--accent); }
+</style>
+{% endblock %}
+{% block body %}
+<div class="clip" data-start="0" data-duration="3" data-anim="rise">
+  <h1 id="title" data-var-text="title">{{ vars.title }}</h1><div id="box"></div>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+:root {
+  --arrive-s: 0.45;
+  --exit-ratio: 0.55;
+  --bg: #0e0f11;
+  --ink: #f2f2f2;
+  --accent: #ff5a1f;
+  --accent2: #6fb7ff;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; overflow: hidden; }
+body { position: relative; background: var(--bg); color: var(--ink); font-family: Inter, sans-serif; }
+h1, h2, h3, p { margin: 0; }
+img, video { display: block; }
+.title-safe { position: absolute; inset: 10%; }
+.action-safe { position: absolute; inset: 5%; }
