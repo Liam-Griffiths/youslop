@@ -22,8 +22,9 @@ def test_scene_capture(tmp_path):
                              str(clips["static"])], check=True, capture_output=True, text=True)
     stream = json.loads(result.stdout)["streams"][0]
     assert stream == {"width": 480, "height": 270, "nb_read_frames": "30"}
-    one = stage.capture_one(page, 1920, 1080, 0, (480, 270))
-    assert one == stage.capture_one(page, 1920, 1080, 0, (480, 270))
+    # T2.2 adds an arrival: inspect the settled frame rather than invisible t=0.
+    one = stage.capture_one(page, 1920, 1080, 1.5, (480, 270))
+    assert one == stage.capture_one(page, 1920, 1080, 1.5, (480, 270))
     image = Image.open(io.BytesIO(one))
     assert image.size == (480, 270)
     # The orange box also proves composition layout and upright output.

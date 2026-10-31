@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Scene runtime demo</title>
+<script>
+  const demo = new URL('_test/static.html', location.href);
+  demo.search = location.search;
+  demo.searchParams.set('demo', '');
+  location.replace(demo);
+</script>

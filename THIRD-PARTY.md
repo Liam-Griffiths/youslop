@@ -28,6 +28,15 @@ copy of the source tarball for as long as the binary is distributed.
 If ffmpeg is absent from `resources/bin/`, the app falls back to whatever is on
 `PATH` (`app/config.py:_binary`), which is how a development checkout works.
 
+## GSAP
+
+GSAP **3.13.0**, core only, is vendored at
+`static/vendor/gsap/gsap.min.js`, supplied from
+[cdnjs](https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js).
+Copyright 2025 GreenSock; author Jack Doyle.
+Distributed under the [GSAP Standard "no charge" licence](https://gsap.com/standard-license),
+as referenced by the preserved file header. No plugins are bundled.
+
 ## Typefaces
 
 Fifteen faces under the **SIL Open Font License 1.1**, bundled in

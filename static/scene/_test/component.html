@@ -1,0 +1,16 @@
+<!doctype html>
+<html data-composition-id="mounted-test"
+      data-composition-variables='[{"id":"text","default":"DEFAULT"}]'>
+<body><template>
+  <div class="mounted-label" data-var-text="text"></div>
+  <script>
+    (() => {
+      const vars = window.__hyperframes.getVariables();
+      const label = document.currentScript.previousElementSibling;
+      label.textContent = vars.text;
+      window.__timelines['mounted-test'] = gsap.timeline({paused:true})
+        .fromTo(label, {x:0}, {x:100, duration:2, ease:'none'});
+    })();
+  </script>
+</template></body>
+</html>

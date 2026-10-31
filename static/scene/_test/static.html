@@ -1,13 +1,19 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Scene capture fixture</title>
-<style>
-  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0e0f11; }
-  h1 { position: absolute; top: 120px; left: 160px; color: #f2f2f2; font: bold 96px sans-serif; }
-  #box { position: absolute; top: 400px; left: 160px; width: 320px; height: 240px; background: #ff5a1f; }
-</style>
-<h1>Scene capture</h1><div id="box"></div>
-<script>
-  window.__ready = document.fonts.ready;
-  window.__seek = async t => { await new Promise(resolve => requestAnimationFrame(resolve)); };
-</script>
+<html lang="en" data-composition-id="runtime-test" data-width="1920" data-height="1080"
+      data-duration="5" data-fps="30" data-seed="1" style="--bg:#0e0f11;--arrive-s:0.6;--exit-ratio:0.5">
+<head>
+  <meta charset="utf-8">
+  <title>Scene runtime fixture</title>
+  <script src="../runtime.js"></script>
+  <script src="../../vendor/gsap/gsap.min.js"></script>
+  <style>
+    #title { position:absolute; top:120px; left:160px; color:#f2f2f2; font:bold 96px sans-serif; }
+    #box { position:absolute; top:400px; left:160px; width:320px; height:240px; background:#ff5a1f; }
+  </style>
+</head>
+<body>
+  <div class="clip" data-start="0" data-duration="3" data-anim="rise">
+    <h1 id="title" data-var-text="title">Scene capture</h1><div id="box"></div>
+  </div>
+</body>
+</html>

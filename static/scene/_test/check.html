@@ -1,0 +1,74 @@
+<!doctype html>
+<html data-composition-id="runtime-check" data-width="480" data-height="270" data-duration="5" data-seed="7">
+<head>
+  <meta charset="utf-8">
+  <title>Scene runtime assertions</title>
+  <script src="../runtime.js"></script>
+  <script src="../../vendor/gsap/gsap.min.js"></script>
+  <script>window.__vars = {title:'BOUND', bg:'#101010'};</script>
+  <style>
+    @keyframes slide { from {margin-left:0} to {margin-left:100px} }
+    #css { animation:slide 2s linear both }
+    #results {position:absolute;top:120px;white-space:pre-wrap;color:white}
+  </style>
+</head>
+<body>
+  <div id="bound" data-var-text="title"></div>
+  <div id="first" class="clip" data-start="1" data-duration="2"
+       data-composition-src="component.html" data-variable-values='{"text":"ONE"}'><b id="css">CSS</b></div>
+  <div id="second" class="clip" data-start="2" data-duration="2"
+       data-composition-src="component.html" data-variable-values='{"text":"TWO"}'></div>
+  <div class="clip" data-start="0" data-duration="3" data-anim="rise">Rise</div>
+  <div class="clip" data-start="0" data-duration="3" data-anim="blur-in">Blur</div>
+  <div class="clip" data-start="0" data-duration="3" data-anim="fade">Fade</div>
+  <div class="clip" data-start="0" data-duration="3" data-anim="scale-in">Scale</div>
+  <div class="clip" data-start="0" data-duration="3" data-anim="words">Two words</div>
+  <pre id="results">Running…</pre>
+  <script>
+    // Open through a local HTTP server; no renderer, network service or LLM required.
+    window.__checks = window.__ready.then(async () => {
+      let passed = 0;
+      const check = (ok, name) => { if (!ok) throw new Error(name); passed++; };
+      const first = document.querySelector('#first'), second = document.querySelector('#second');
+      check(document.querySelector('#bound').textContent === 'BOUND', 'text variable');
+      check(document.documentElement.style.getPropertyValue('--title') === 'BOUND', 'CSS variable');
+      check(document.body.style.width === '480px' && document.body.style.height === '270px', 'size');
+      check(first.querySelector('.mounted-label').textContent === 'ONE', 'first mount variables');
+      check(second.querySelector('.mounted-label').textContent === 'TWO', 'second mount variables');
+      check(Object.keys(__timelines).filter(k => k.startsWith('mounted-test#')).length === 2, 'distinct mount timelines');
+      check(Object.keys(__timelines).filter(k => k.startsWith('preset#')).length === 5, 'all presets');
+      // Exercise media sequencing without loading or playing an audio file.
+      const media = document.createElement('audio');
+      let mediaTime = 0, pauses = 0, seeks = 0;
+      Object.defineProperty(media, 'duration', {get: () => 2});
+      Object.defineProperty(media, 'currentTime', {
+        get: () => mediaTime,
+        set: t => { mediaTime = t; queueMicrotask(() => { seeks++; media.dispatchEvent(new Event('seeked')); }); }
+      });
+      media.pause = () => { pauses++; };
+      second.appendChild(media);
+      await __seek(1.5);
+      check(first.style.visibility === 'visible' && second.style.visibility === 'hidden', 'clip intervals');
+      check(Math.abs(gsap.getProperty(first.querySelector('.mounted-label'), 'x') - 25) < 0.01, 'local timeline offset');
+      check(Math.abs(parseFloat(getComputedStyle(document.querySelector('#css')).marginLeft) - 25) < 0.1, 'CSS local offset');
+      check(Date.now() === 1500 && performance.now() === 1500, 'frozen clocks');
+      const snapshot = first.querySelector('.mounted-label').style.cssText;
+      await __seek(2.5);
+      check(mediaTime === 0.5 && seeks === 1 && pauses > 0, 'media local seek and pause');
+      await __seek(1.5);
+      check(mediaTime === 0.5 && seeks === 1, 'hidden media stays paused without seeking');
+      check(first.querySelector('.mounted-label').style.cssText === snapshot, 'backward seek');
+      check(Object.values(__timelines).every(tl => tl.paused()), 'paused timelines');
+      await __seek(3);
+      check(first.style.visibility === 'hidden' && second.style.visibility === 'visible', 'exclusive clip end');
+      await __seek(4);
+      check([...document.querySelectorAll('.clip')].every(el => el.style.visibility === 'hidden'), 'all hidden at 4');
+      document.querySelector('#results').textContent = `${passed} passed, 0 failed`;
+      return {passed, failed:0};
+    }).catch(error => {
+      document.querySelector('#results').textContent = `FAIL: ${error.stack}`;
+      throw error;
+    });
+  </script>
+</body>
+</html>
