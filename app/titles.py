@@ -418,6 +418,7 @@ def render_title(
     kicker: str = "",
     accent: str = "#E8C36A",
     out_path: Path | None = None,
+    size: int | None = None,
 ) -> Path:
     """Render one lower-left title card as a transparent 1920x1080 PNG."""
     card = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
@@ -426,7 +427,7 @@ def render_title(
     scrim = scrim_layer()
     card.paste(Image.new("RGBA", (WIDTH, HEIGHT), (8, 9, 12, 255)), (0, 0), scrim)
 
-    title_font = _load(FONT_STACK, TITLE_SIZE)
+    title_font = _load(FONT_STACK, TITLE_SIZE if size is None else size)
     kicker_font = _load(KICKER_STACK, KICKER_SIZE)
 
     # Type goes on its own layer so the shadow can be blurred independently.

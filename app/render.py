@@ -35,8 +35,97 @@ GRADES = {
     "mono": "hue=s=0,eq=contrast=1.10:gamma=1.02",
 }
 
-# Ken Burns moves, cycled so consecutive slides never repeat a motion.
-MOVES = ["in_center", "out_center", "in_left", "in_right", "out_left"]
+CAMERA_OPS = ("set", "creep_in", "creep_out", "punch", "reveal")
+EASE = {
+    "linear": "{t}",
+    "expo_out": "(1-pow(2,-10*{t}))",
+    "power2_inout": "if(lt({t},0.5),2*{t}*{t},1-pow(-2*{t}+2,2)/2)",
+}
+# Real xfade names; ignore unsupported strings from user-edited FrameSpecs.
+NAMED_XFADES = frozenset("""
+    wipeleft wiperight wipeup wipedown slideleft slideright slideup slidedown
+    circlecrop rectcrop distance fadeblack fadewhite radial smoothleft smoothright
+    smoothup smoothdown circleopen circleclose vertopen vertclose horzopen horzclose
+    dissolve pixelize diagtl diagtr diagbl diagbr hlslice hrslice vuslice vdslice
+    hblur fadegrays wipetl wipetr wipebl wipebr squeezeh squeezev zoomin fadefast
+    fadeslow hlwind hrwind vuwind vdwind coverleft coverright coverup coverdown
+    revealleft revealright revealup revealdown
+""".split())
+JOIN_XFADE = {
+    "fade": "transition=fade",
+    "dip": "transition=fadeblack",
+    "cut": "transition=custom:expr='if(gt(P,0.5),A,B)'",
+}
+
+
+def _join_for(prev_group, next_group, frame) -> str:
+    prev, nxt = prev_group[-1][0], next_group[0][0]
+    if nxt.chapter or _dips_into([next_group], 0):
+        return "dip"
+    if prev.section != nxt.section:
+        return next((name for name in frame.transition_types
+                     if name in NAMED_XFADES), "fade")
+    return "cut" if prev.beat == nxt.beat else "fade"
+
+
+def _join_graph(seg_lens, T, groups, frame, slide_at):
+    """Join files with the same overlap regardless of the transition cause."""
+    pad = f"tpad=stop_mode=clone:stop_duration={4 / FPS:.4f}"
+    if len(seg_lens) == 1:
+        video_graph = "[0:v]null[vout]"
+    else:
+        parts = [f"[{i}:v]{pad}[p{i}]" for i in range(len(seg_lens))]
+        offset = seg_lens[0] - T
+        prev = "[p0]"
+        for i in range(1, len(seg_lens)):
+            label = "[vout]" if i == len(seg_lens) - 1 else f"[x{i}]"
+            group_index = i - slide_at
+            join = (_join_for(groups[group_index - 1], groups[group_index], frame)
+                    if 0 < group_index < len(groups) else "fade")
+            # Stage dips already fade inside their segments; avoid a second dip.
+            if join == "dip" and _dips_into(groups, group_index):
+                join = "fade"
+            transition = JOIN_XFADE.get(join, f"transition={join}")
+            parts.append(
+                f"{prev}[p{i}]xfade={transition}:duration={T:.3f}:"
+                f"offset={offset:.3f}{label}"
+            )
+            prev = label
+            offset += seg_lens[i] - T
+        video_graph = ";".join(parts)
+
+    return video_graph
+
+
+def _pick_op(frame, index, prev_op, is_cut_in, is_payoff) -> str:
+    cycle = ("creep_in", "set", "creep_out", "reveal")
+    choices = (["punch"] if is_payoff else []) + [
+        cycle[(index + n) % len(cycle)] for n in range(len(cycle))]
+    return next(op for op in choices if op != prev_op
+                and not (frame.snap_on_cut and is_cut_in
+                         and op in {"creep_out", "reveal"}))
+
+
+def camera_plan(project, groups) -> list[str]:
+    """One deterministic camera op per picture group, shared by every caller."""
+    payoffs = {loop.get("payoff_beat") for loop in
+               ((project.outline or {}).get("hook") or {}).get("open_loops", [])}
+    plan = []
+    for i, group in enumerate(groups):
+        lead = group[0][0]
+        plan.append(_pick_op(
+            project.frame, i, plan[-1] if plan else None,
+            i > 0 and _join_for(groups[i - 1], group, project.frame) == "cut",
+            bool(lead.chapter) or bool(lead.beat and lead.beat in payoffs)))
+    return plan
+
+
+def _camera_amount(project, op, index):
+    frame = project.frame
+    low, high = ((frame.punch_min, frame.punch_max) if op == "punch"
+                 else (frame.creep_min, frame.creep_max))
+    target = high if index % 2 else (low + high) / 2
+    return (target - 1) * project.style.ken_burns_amount / 0.10
 
 
 def _vignette(strength: float) -> str:
@@ -68,27 +157,28 @@ def _clamp_to_focal(desired: str, focal_px: float, span: str, extent: str) -> st
 
 def _kenburns(move: str, frames: int, amount: float,
               focal_px: tuple[float, float] | None = None,
-              size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS) -> str:
-    """A zoompan expression driven by frame number, so motion is perfectly linear."""
+              size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
+              ease: str = "linear", origin: str = "center",
+              move_max_s: float = 0.6) -> str:
+    """Frame-driven camera motion; arrivals reach their target then hold."""
     n = max(2, frames)
-    t = f"(on/{n - 1})"
-    if move.startswith("in"):
-        z = f"1+{amount:.4f}*{t}"
+    t = (f"min(1,on/{max(1, round(move_max_s * fps))})"
+         if move in {"punch", "reveal"} else f"(on/{n - 1})")
+    e = EASE[ease].format(t=t)
+    if ease == "expo_out":
+        e = f"if(gte({t},1),1,{e})"
+    if move == "set":
+        z = "1"
+    elif move in {"creep_in", "punch"}:
+        z = f"1+{amount:.4f}*{e}"
     else:
-        z = f"1+{amount:.4f}-{amount:.4f}*{t}"
-
-    if move.endswith("center"):
-        x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
-    elif move.endswith("left"):
-        x, y = f"(iw-iw/zoom)*(1-{t})", "ih/2-(ih/zoom/2)"
-    else:
-        x, y = f"(iw-iw/zoom)*{t}", "ih/2-(ih/zoom/2)"
-
+        z = f"1+{amount:.4f}-{amount:.4f}*{e}"
+    x = "iw/2-(iw/zoom/2)"
+    y = "(ih-ih/zoom)*0.33" if origin == "top" and not focal_px else "ih/2-(ih/zoom/2)"
     if focal_px:
         fx, fy = focal_px
         x = _clamp_to_focal(x, fx, "iw/zoom", "iw")
         y = _clamp_to_focal(y, fy, "ih/zoom", "ih")
-
     return (f"zoompan=z='{z}':x='{x}':y='{y}':"
             f"d={n}:s={size[0]}x{size[1]}:fps={fps}")
 
@@ -429,10 +519,8 @@ ESSAY_BORDER = 8
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9]+")
 
-CAPTION_MIN_HOLD = 1.0   # a caption on screen for less than this can't be read
 
-
-def _caption_timings(chunks: list[str], budget: float) -> list[float]:
+def _caption_timings(chunks: list[str], budget: float, frame) -> list[float]:
     """How long each caption in `chunks` holds, within `budget` seconds total.
 
     Proportional to word count, not an even split — a 6-word caption and an
@@ -447,11 +535,33 @@ def _caption_timings(chunks: list[str], budget: float) -> list[float]:
     words = [max(1, len(c.split())) for c in chunks]
     total = sum(words)
     raw = [budget * w / total for w in words]
-    shares = [max(CAPTION_MIN_HOLD, s) for s in raw]
+    shares = [max(frame.title_hold_base_s + frame.title_hold_per_word_s, s) for s in raw]
     if budget > 0 and sum(shares) > budget:
         scale = budget / sum(shares)
         shares = [s * scale for s in shares]
     return shares
+
+
+def _title_hold(frame, title, dur):
+    return max(0.0, min(dur - 1.2, frame.title_hold_base_s
+                        + frame.title_hold_per_word_s * len(title.split())))
+
+
+def _tail_pad(project, groups):
+    """Extend only the final picture when its last line needs more reading time."""
+    member, dur = groups[-1][-1]
+    frame = project.frame
+    if project.style.format == "essay":
+        chunks = titles.essay_chunks(member.narration)
+        spoken = float((member.take or {}).get("duration") or 0.0) or dur * 0.85
+        shares = _caption_timings(chunks, min(dur, spoken), frame)
+        needed = sum(shares[:-1]) + frame.last_line_min_s + 0.05 if shares else 0
+    elif project.style.format == "kenburns" and member.title:
+        needed = frame.arrive_s + max(frame.last_line_min_s,
+                                     _title_hold(frame, member.title, dur)) + frame.arrive_s * frame.exit_ratio
+    else:
+        needed = 0
+    return max(TAIL_PAD, needed - dur)
 
 
 def _essay_card(src: Path | None, k: float = 1.0) -> tuple[int, int, int, int]:
@@ -510,9 +620,9 @@ def _essay_stage(source: str, accent: str, src: Path | None,
 
 def _segment_graph(
     project: Project, group: list[tuple[Slide, float]], seg_len: float,
-    index: int, channel=None, chapter: tuple[str, str] | None = None,
+    op: str, channel=None, chapter: tuple[str, str] | None = None,
     size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
-    dip_out: bool = False,
+    dip_out: bool = False, camera_index: int = 0, last_line: bool = False,
 ) -> tuple[list[str], str, str]:
     """Return input args, filtergraph and output label for a photographic segment.
 
@@ -520,6 +630,7 @@ def _segment_graph(
     photographic formats never run ffmpeg here.
     """
     style = project.style
+    frame = project.frame
     w, h = size
     essay = style.format == "essay"
     slide = group[0][0]
@@ -573,8 +684,10 @@ def _segment_graph(
         # Oversample to 2x output before the zoom so the pan stays subpixel-smooth.
         crop, focal_px = _cover_crop(src, w * 2, h * 2, focal)
         chain.append(crop)
-        chain.append(_kenburns(MOVES[index % len(MOVES)], frames,
-                               style.ken_burns_amount, focal_px, size, fps))
+        chain.append(_kenburns(op, frames,
+                               _camera_amount(project, op, camera_index), focal_px, size, fps,
+                               ease="expo_out" if op in {"punch", "reveal"} else "linear",
+                               origin=frame.camera_origin, move_max_s=frame.move_max_s))
     else:
         # A still with the drift switched off: staged once, then held.
         inputs += _still_input(src, fps)
@@ -626,7 +739,9 @@ def _segment_graph(
             # the paragraph, and a caption still on screen through a chapter
             # break reads as one that has been left up by mistake.
             spoken = float((member.take or {}).get("duration") or 0.0) or dur * 0.85
-            shares = _caption_timings(chunks, min(dur, spoken))
+            shares = _caption_timings(chunks, min(dur, spoken), frame)
+            if last_line and n == len(group) - 1 and shares:
+                shares[-1] = max(shares[-1], frame.last_line_min_s)
             cap_offset = 0.0
             for c, text in enumerate(chunks):
                 card = (project_dir(project.id) / "titles"
@@ -651,20 +766,24 @@ def _segment_graph(
                 )
                 last = f"[v{n}_{c}]"
         elif member.title:
-            card = project_dir(project.id) / "titles" / f"{member.id}.png"
+            title_size = round(HEIGHT * (frame.title_height_pct_min
+                                          + frame.title_height_pct_max) / 200 / 0.72)
+            card = project_dir(project.id) / "titles" / f"{member.id}_{title_size}.png"
             titles.render_title(member.title, kicker=member.beat or "",
-                                accent=style.accent, out_path=card)
+                                accent=style.accent, out_path=card, size=title_size)
             idx = n_inputs
             inputs += _still_input(card, fps)
             n_inputs += 1
-            start = offset + 0.55
-            hold = min(6.0, max(2.0, dur - 1.2))
-            fade_out_at = min(seg_len - 0.9, start + hold)
-            if fade_out_at > start + 0.4:
+            start = offset + frame.arrive_s
+            hold = _title_hold(frame, member.title, dur)
+            if last_line and n == len(group) - 1:
+                hold = max(hold, frame.last_line_min_s)
+            fade_out_at = min(seg_len - frame.arrive_s * frame.exit_ratio, start + hold)
+            if fade_out_at > start:
                 graph += (
                     f";[{idx}:v]format=rgba{card_fit},{HOLD_STILL},"
-                    f"fade=t=in:st={start:.3f}:d=0.75:alpha=1,"
-                    f"fade=t=out:st={fade_out_at:.3f}:d=0.85:alpha=1[ttl{n}]"
+                    f"fade=t=in:st={start:.3f}:d={frame.arrive_s:.3f}:alpha=1,"
+                    f"fade=t=out:st={fade_out_at:.3f}:d={frame.arrive_s * frame.exit_ratio:.3f}:alpha=1[ttl{n}]"
                     f";{last}[ttl{n}]overlay=0:0:format=auto[v{n}]"
                 )
                 last = f"[v{n}]"
@@ -684,12 +803,13 @@ def _segment_graph(
         # Timed off the actual silence rather than a share of the segment, so
         # the card comes up as the voice stops instead of over its last words.
         gap = audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP)
-        hold = max(0.9, min(3.2, gap - 0.12))
+        hold = max(frame.arrive_s, min(gap, frame.arrive_s + frame.title_hold_base_s
+                                      + frame.title_hold_per_word_s * len(title.split())))
         start = max(0.2, seg_len - hold)
         inputs += _still_input(card, fps)
         graph += (
             f";[{n_inputs}:v]format=rgba{card_fit},{HOLD_STILL},"
-            f"fade=t=in:st={start:.3f}:d=0.45:alpha=1[chap]"
+            f"fade=t=in:st={start:.3f}:d={frame.arrive_s:.3f}:alpha=1[chap]"
             f";{last}[chap]overlay=0:0:format=auto[vchap]"
         )
         n_inputs += 1
@@ -704,6 +824,7 @@ def _render_segment(
     threads: int = 0, size: tuple[int, int] = (WIDTH, HEIGHT),
     fps: int = FPS, crf: int = 18, preset: str = "veryfast",
     frames: tuple[int, int] | None = None, dip_out: bool = False,
+    op: str = "set", camera_index: int = 0, last_line: bool = False,
 ) -> Path:
     """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
 
@@ -752,7 +873,8 @@ def _render_segment(
             image_for=lambda s: _chosen(project, s)[0],
             crf=crf, extra=_reframe(size, fps))
     inputs, graph, last = _segment_graph(
-        project, group, seg_len, index, channel, chapter, size, fps, dip_out)
+        project, group, seg_len, op, channel, chapter, size, fps, dip_out,
+        camera_index, last_line)
 
     ffutil.run([
         *inputs, "-filter_complex", graph, "-map", last,
@@ -1162,7 +1284,7 @@ def render(project: Project, progress: Progress = lambda m: None,
         progress(f"{len(groups)} pictures across {len(plan)} paragraphs "
                  f"({held} paragraph(s) hold the picture already on screen)")
     durations[0] += HEAD_PAD
-    durations[-1] += TAIL_PAD
+    durations[-1] += _tail_pad(project, groups)
 
     # The channel slate, if this video belongs to a channel that has one, is
     # simply another segment on the front of the chain. Everything downstream
@@ -1249,6 +1371,8 @@ def render(project: Project, progress: Progress = lambda m: None,
     from . import channels as channels_mod
     seg_channel = channels_mod.load_or_none(project.channel_id)
 
+    ops = camera_plan(project, groups)
+
     def work(i: int) -> tuple[int, Path]:
         out = seg_dir / f"seg{i + slide_at:04d}.mp4"
         # A section starting in the next group is announced at the end of this
@@ -1257,7 +1381,8 @@ def render(project: Project, progress: Progress = lambda m: None,
                    if i + 1 < len(groups) else None)
         _render_segment(project, groups[i], seg_lens[i + slide_at], i + slide_at,
                         out, channel=seg_channel, chapter=chapter, threads=seg_threads,
-                        dip_out=_dips_into(groups, i + 1))
+                        dip_out=_dips_into(groups, i + 1),
+                        op=ops[i], camera_index=i, last_line=i == len(groups) - 1)
         return i, out
 
     # The drawn cuts paint every frame in Python, and Python threads take turns
@@ -1374,22 +1499,7 @@ def render(project: Project, progress: Progress = lambda m: None,
     # then ends the whole video stream there and the rest of the render plays
     # over a frozen picture. The padding is overlapped by the next segment or
     # trimmed by -t, so it never shows.
-    pad = f"tpad=stop_mode=clone:stop_duration={4 / FPS:.4f}"
-    if len(seg_paths) == 1:
-        video_graph = "[0:v]null[vout]"
-    else:
-        parts = [f"[{i}:v]{pad}[p{i}]" for i in range(len(seg_paths))]
-        offset = seg_lens[0] - T
-        prev = "[p0]"
-        for i in range(1, len(seg_paths)):
-            label = "[vout]" if i == len(seg_paths) - 1 else f"[x{i}]"
-            parts.append(
-                f"{prev}[p{i}]xfade=transition=fade:duration={T:.3f}:"
-                f"offset={offset:.3f}{label}"
-            )
-            prev = label
-            offset += seg_lens[i] - T
-        video_graph = ";".join(parts)
+    video_graph = _join_graph(seg_lens, T, groups, project.frame, slide_at)
 
     # An end screen is long enough that where the bed gives out is a decision,
     # so the card carries the fade length; without one the default stands.
@@ -1472,11 +1582,8 @@ def preview_size() -> tuple[int, int]:
 def _segments_before_slides(project: Project) -> int:
     """How many segments a full render puts in front of the first paragraph.
 
-    The Ken Burns move cycles on the segment index (see MOVES), so previewing
-    one picture has to count the slate and the camera clip the same way
-    `render` does, or the picture drifts the other way than it will in the
-    finished cut. Nothing is rendered here — this only asks whether those
-    segments would be.
+    Nothing is rendered here; this only asks whether those segments exist.
+    Camera selection uses picture-group indices independently of these cards.
     """
     n = 1 if _has_slate(project) else 0
     pres = project.presenter
@@ -1513,7 +1620,7 @@ def preview_opening(project: Project, kind: str,
 
 # Bump when anything about how a proxy is composed changes, so every cached one
 # is rebuilt rather than trusted.
-PROXY_VERSION = 1
+PROXY_VERSION = 2
 
 
 def _stat(path: Path | None) -> list[int] | None:
@@ -1550,8 +1657,10 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     pic = _chosen(project, lead)[0]
     blob = json.dumps(
         [PROXY_VERSION, index, slides, _stat(pic),
+         _segment_timing(project, groups, index), index == len(groups) - 1,
          chapter_card(project, nxt) if nxt else None,
-         dataclasses.asdict(project.style),
+         dataclasses.asdict(project.style), project.frame.to_dict(),
+         camera_plan(project, groups)[index],
          dataclasses.asdict(channel) if dataclasses.is_dataclass(channel) else None,
          _segments_before_slides(project), list(preview_size()), PREVIEW_FPS],
         default=str, sort_keys=True)
@@ -1583,7 +1692,7 @@ def _segment_timing(project: Project, groups, index: int) -> tuple[float, float,
     if index == 0:
         dur += HEAD_PAD
     if index == len(groups) - 1:
-        dur += TAIL_PAD
+        dur += _tail_pad(project, groups)
     return dur, T, dur + T
 
 
@@ -1628,6 +1737,8 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
                     index + _segments_before_slides(project), mute,
                     channel=channel, chapter=chapter, size=size,
                     dip_out=_dips_into(groups, index + 1),
+                    op=camera_plan(project, groups)[index], camera_index=index,
+                    last_line=index == len(groups) - 1,
                     fps=PREVIEW_FPS, crf=PREVIEW_CRF, preset="ultrafast",
                     threads=max(2, min(8, os.cpu_count() or 4)))
 
@@ -1969,6 +2080,7 @@ def timeline(project: Project) -> dict:
     lay = _layout(project)
     groups, T = lay["groups"], lay["T"]
     channel = channels_mod.load_or_none(project.channel_id)
+    ops = camera_plan(project, groups)
     index_of = {s.id: i for i, s in enumerate(project.slides)}
     segments: list[dict] = []
     t = 0.0
@@ -2017,7 +2129,7 @@ def timeline(project: Project) -> dict:
         segments.append({
             "ref": str(i), "type": "picture", "n": i + 1, "group": i, "lead": lead.id,
             "start": round(t, 3), "duration": round(dur, 3), "skip": round(T / 2, 3),
-            "kind": kind, "problems": problems, "paragraphs": paras,
+            "kind": kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
             "ready": _proxy_ready(project, groups, i, channel),
             # Something to play, even if the script has moved on since.
             "have": out.exists() and out.stat().st_size > 0,

@@ -28,7 +28,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T1.1 | FrameSpec dataclass | M | T0.5 | done | 2026-10-31 Codex; 119 tests |
 | T1.2 | Theme defaults for frame | S | T1.1 | done | 2026-10-31 Codex; 124 tests |
 | T1.3 | Prompt block and hook gate | M | T1.1 | done | 2026-10-31 Codex; 145 tests; owner: one real-LLM outline run to eyeball the hook |
-| T1.4 | ffmpeg camera vocabulary and title timing | M | T1.1, T0.5 | todo | |
+| T1.4 | ffmpeg camera vocabulary and title timing | M | T1.1, T0.5 | done | 2026-10-31 Codex; 163 tests; preview checked by Claude, owner: watch a join |
 | T1.5 | check.py findings | L | T1.1, T0.6, T0.7 | todo | |
 | T1.6 | Check in the UI, CLI and render gate | S | T1.5 | todo | |
 | T1.7 | Audio doctrine defaults | S | T1.1 | todo | |
