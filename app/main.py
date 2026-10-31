@@ -414,6 +414,7 @@ def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
     with channels.lock_for(cid):
         ch = _channel(cid)
         picks = themes_mod.apply_to_style(ch.style, key, bool(take))
+        ch.frame = themes_mod.apply_to_frame(ch.frame, key)
         if picks:
             ch.intro.template = picks["intro"]
             ch.thumb_template = picks["thumb"]

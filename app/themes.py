@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .schema import FrameSpec
+
 # ---------------------------------------------------------------------- themes
 # `ground` and `ink` are what the colourful templates paint on and in; `accent`
 # and `accent2` are copied into the channel's style when the theme is applied.
@@ -30,6 +32,8 @@ THEMES = [
         "ground": "#0A0B0E", "ink": "#FFFFFF", "grade": "warm",
         "icons": ["column", "laurel", "hourglass", "quill", "key"],
         "pattern": "icons", "light": False,
+        "frame": {"move_max_s": 0.8, "creep_max": 1.10,
+                  "transition_types": ["fade", "dip"], "shot_avg_min_s": 2.5},
         "intro": "columns", "thumb": "banner", "outro": "twoup",
     },
     {
@@ -40,6 +44,8 @@ THEMES = [
         "ground": "#140A2E", "ink": "#FFFFFF", "grade": "cool",
         "icons": ["controller", "dpad", "pixel_heart", "star4", "bolt"],
         "pattern": "icons", "light": False,
+        "frame": {"montage_cut_max_s": 0.5, "punch_max": 1.25,
+                  "transition_types": ["cut", "dip", "wipeleft"]},
         "intro": "arcade", "thumb": "sticker", "outro": "arcade",
     },
     {
@@ -50,6 +56,7 @@ THEMES = [
         "ground": "#FBE9EF", "ink": "#3A2A31", "grade": "warm",
         "icons": ["sparkle", "droplet", "bow", "lipstick", "compact", "brush"],
         "pattern": "icons", "light": True,
+        "frame": {},
         "intro": "gloss", "thumb": "gloss", "outro": "gloss",
     },
     {
@@ -60,6 +67,7 @@ THEMES = [
         "ground": "#0B2545", "ink": "#FFFFFF", "grade": "cool",
         "icons": ["ball", "whistle", "trophy", "flag", "stopwatch"],
         "pattern": "stripes", "light": False,
+        "frame": {},
         "intro": "kickoff", "thumb": "scoreline", "outro": "sideline",
     },
     {
@@ -70,6 +78,7 @@ THEMES = [
         "ground": "#12070E", "ink": "#FFFFFF", "grade": "warm",
         "icons": ["note", "beam", "wave", "disc", "mic", "speaker"],
         "pattern": "words", "light": False,
+        "frame": {},
         "intro": "stack", "thumb": "duotone", "outro": "wordmark",
     },
     {
@@ -80,6 +89,7 @@ THEMES = [
         "ground": "#080A0C", "ink": "#FFFFFF", "grade": "cool",
         "icons": ["chip", "cursor", "bolt", "plus", "ring", "globe"],
         "pattern": "icons", "light": False,
+        "frame": {},
         "intro": "signal", "thumb": "split", "outro": "console",
     },
     {
@@ -90,6 +100,7 @@ THEMES = [
         "ground": "#F4EAD8", "ink": "#2E241C", "grade": "warm",
         "icons": ["pot", "leaf", "droplet", "plus", "camera"],
         "pattern": "icons", "light": True,
+        "frame": {},
         "intro": "tiles", "thumb": "tiles", "outro": "ledger",
     },
     {
@@ -100,6 +111,7 @@ THEMES = [
         "ground": "#15181E", "ink": "#FFFFFF", "grade": "neutral",
         "icons": ["globe", "chevron", "triangle", "ring", "bolt"],
         "pattern": "halftone", "light": False,
+        "frame": {},
         "intro": "kickoff", "thumb": "duotone", "outro": "marquee",
     },
 ]
@@ -166,3 +178,8 @@ def apply_to_style(style, key: str, take_templates: bool = True) -> dict:
     if not take_templates:
         return {}
     return {"intro": t["intro"], "thumb": t["thumb"], "outro": t["outro"]}
+
+
+def apply_to_frame(frame: FrameSpec, key: str) -> FrameSpec:
+    """Merge theme pacing onto an independent copy of the current frame."""
+    return frame.merge(theme(key).get("frame") or {})
