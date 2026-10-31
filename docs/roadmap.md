@@ -48,7 +48,7 @@ Set "Corkbored" as one word, no "AI" badge: the name already says what it is, an
 
 ### Visual identity: three directions
 
-All three share: Inter for UI text, JetBrains Mono for timecodes and counts, one easing family (`cubic-bezier(.16,1,.3,1)`, the expo.out the motion doctrine prefers), and the Corkbored mark (a yellow sticky note with a black play mark, pinned with an orange push pin on cork; flat version for small sizes; files and build script in `docs/brand/`, readable at 16px, drawn in Pillow from the primitives `app/intro.py` already has so the favicon, app icon, slates and about screen share one source). They differ in mood, palette and display face. Fonts named are all open licence and most already ship in `resources/fonts`.
+All three share: Inter for UI text, JetBrains Mono for timecodes and counts, one easing family (`cubic-bezier(.16,1,.3,1)`, the expo.out the motion doctrine prefers), and the Corkbored mark (a yellow sticky note with a black play mark, pinned with an orange push pin on cork; flat version for small sizes; files and build script in `docs/brand/`, so the favicon, app icon, slates and about screen share one source). They differ in mood, palette and display face. Fonts named are all open licence and most already ship in `resources/fonts`.
 
 **A. Control Room** (dark, broadcast; evolves what exists)
 
