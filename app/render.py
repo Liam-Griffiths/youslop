@@ -508,60 +508,19 @@ def _essay_stage(source: str, accent: str, src: Path | None,
     )
 
 
-def _render_segment(
+def _segment_graph(
     project: Project, group: list[tuple[Slide, float]], seg_len: float,
-    index: int, out: Path, channel=None, chapter: tuple[str, str] | None = None,
-    threads: int = 0, size: tuple[int, int] = (WIDTH, HEIGHT),
-    fps: int = FPS, crf: int = 18, preset: str = "veryfast",
-    frames: tuple[int, int] | None = None, dip_out: bool = False,
-) -> Path:
-    """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
+    index: int, channel=None, chapter: tuple[str, str] | None = None,
+    size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
+    dip_out: bool = False,
+) -> tuple[list[str], str, str]:
+    """Return input args, filtergraph and output label for a photographic segment.
 
-    A group is one or more consecutive paragraphs sharing a picture. The first
-    slide in it supplies the visual; every slide in it can still put its own
-    title on screen, at its own moment inside the hold.
-
-    `style.format` decides how that picture is staged: the documentary cut
-    fills the frame and drifts across it, the essay cut sets the whole picture
-    inside a bordered slide and puts the narration on screen underneath, and
-    the board cut hands the whole segment to `app/board.py`, which draws it
-    rather than photographing it.
-
-    `size` and `fps` are the frame this segment is rendered at: the finished
-    1080p30 for a real render, a quarter of the frame at half the rate for the
-    in-app preview (`preview_segment`). Everything measured in pixels — the
-    essay card, the blur, the type cards — scales with `size`, so a preview is
-    the same picture seen smaller rather than a differently composed one.
+    Retains title PNG drawing and stage clip generation as side effects;
+    photographic formats never run ffmpeg here.
     """
     style = project.style
     w, h = size
-    if style.format.startswith("custom:"):
-        rendered = _render_custom_style(project, group, seg_len, out, size,
-                                        fps, crf)
-        if rendered is not None:
-            return rendered
-        # The style was deleted, or this paragraph has no filled spec yet:
-        # fall through to the documentary cut rather than abort the render.
-    if cuts.is_cut(style.format):
-        # The drawn cuts join on a hard cut, so `seg_len` carries one frame
-        # of overlap; the voice starts half of that in, plus the opening
-        # silence on the video's first paragraph.
-        lead_in = (cuts.transition_for(style) / 2
-                   + cuts.head_pad_for(project, group[0][0]))
-        return cuts.render_segment(
-            project, group, seg_len, out, channel=channel,
-            image_for=lambda s: _chosen(project, s)[0], size=size, fps=fps,
-            crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
-            chapter=chapter, frames=frames,
-            hold=max(0.9, min(3.2, audio_mod.gap_map(project).get(
-                group[-1][0].id, PARAGRAPH_GAP) - 0.12)))
-    if style.format == "board":
-        from . import board as board_mod
-        return board_mod.render_segment(
-            project, group, seg_len, out, channel=channel,
-            cache=project_dir(project.id) / "board",
-            image_for=lambda s: _chosen(project, s)[0],
-            crf=crf, extra=_reframe(size, fps))
     essay = style.format == "essay"
     slide = group[0][0]
     src, kind, focal = _chosen(project, slide)
@@ -735,6 +694,65 @@ def _render_segment(
         )
         n_inputs += 1
         last = "[vchap]"
+
+    return inputs, graph, last
+
+
+def _render_segment(
+    project: Project, group: list[tuple[Slide, float]], seg_len: float,
+    index: int, out: Path, channel=None, chapter: tuple[str, str] | None = None,
+    threads: int = 0, size: tuple[int, int] = (WIDTH, HEIGHT),
+    fps: int = FPS, crf: int = 18, preset: str = "veryfast",
+    frames: tuple[int, int] | None = None, dip_out: bool = False,
+) -> Path:
+    """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
+
+    A group is one or more consecutive paragraphs sharing a picture. The first
+    slide in it supplies the visual; every slide in it can still put its own
+    title on screen, at its own moment inside the hold.
+
+    `style.format` decides how that picture is staged: the documentary cut
+    fills the frame and drifts across it, the essay cut sets the whole picture
+    inside a bordered slide and puts the narration on screen underneath, and
+    the board cut hands the whole segment to `app/board.py`, which draws it
+    rather than photographing it.
+
+    `size` and `fps` are the frame this segment is rendered at: the finished
+    1080p30 for a real render, a quarter of the frame at half the rate for the
+    in-app preview (`preview_segment`). Everything measured in pixels — the
+    essay card, the blur, the type cards — scales with `size`, so a preview is
+    the same picture seen smaller rather than a differently composed one.
+    """
+    style = project.style
+    if style.format.startswith("custom:"):
+        rendered = _render_custom_style(project, group, seg_len, out, size,
+                                        fps, crf)
+        if rendered is not None:
+            return rendered
+        # The style was deleted, or this paragraph has no filled spec yet:
+        # fall through to the documentary cut rather than abort the render.
+    if cuts.is_cut(style.format):
+        # The drawn cuts join on a hard cut, so `seg_len` carries one frame
+        # of overlap; the voice starts half of that in, plus the opening
+        # silence on the video's first paragraph.
+        lead_in = (cuts.transition_for(style) / 2
+                   + cuts.head_pad_for(project, group[0][0]))
+        return cuts.render_segment(
+            project, group, seg_len, out, channel=channel,
+            image_for=lambda s: _chosen(project, s)[0], size=size, fps=fps,
+            crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
+            chapter=chapter, frames=frames,
+            hold=max(0.9, min(3.2, audio_mod.gap_map(project).get(
+                group[-1][0].id, PARAGRAPH_GAP) - 0.12)))
+    if style.format == "board":
+        from . import board as board_mod
+        return board_mod.render_segment(
+            project, group, seg_len, out, channel=channel,
+            cache=project_dir(project.id) / "board",
+            image_for=lambda s: _chosen(project, s)[0],
+            crf=crf, extra=_reframe(size, fps))
+    inputs, graph, last = _segment_graph(
+        project, group, seg_len, index, channel, chapter, size, fps, dip_out)
 
     ffutil.run([
         *inputs, "-filter_complex", graph, "-map", last,

@@ -1,0 +1,50 @@
+{
+  "id": "ptest0001",
+  "idea": "Test the photographic renderer",
+  "title": "Test film",
+  "voice_track": "kokoro",
+  "style": {
+    "format": "kenburns",
+    "picture_every": 1
+  },
+  "slides": [
+    {
+      "id": "s1",
+      "narration": "First we look at the picture.",
+      "title": "Opening",
+      "chosen_id": "c1",
+      "candidates": [
+        {
+          "id": "c1",
+          "provider": "fixture",
+          "kind": "image",
+          "local_path": "media/pic.jpg",
+          "focal": [
+            0.3,
+            0.6
+          ]
+        }
+      ],
+      "take": {
+        "path": "takes/kokoro/take_a.wav",
+        "duration": 2.5,
+        "synthetic": true,
+        "engine": "kokoro"
+      }
+    },
+    {
+      "id": "s2",
+      "narration": "What happens next?",
+      "take": {
+        "path": "takes/kokoro/take_b.wav",
+        "duration": 2.5,
+        "synthetic": true,
+        "engine": "kokoro"
+      }
+    },
+    {
+      "id": "s3",
+      "narration": "This paragraph has no recording yet."
+    }
+  ]
+}
