@@ -1,0 +1,12 @@
+{% extends '_base.html' %}
+{% block body %}
+<div class="clip title-safe" data-start="0" data-duration="{{ duration }}" data-anim="rise">
+  <h1>{{ vars.title }}</h1>
+  {% for title in titles %}<h2>{{ title }}</h2>{% endfor %}
+  <p>{{ narration }}</p>
+</div>
+{% if chapter and hold > 0.2 %}
+<div class="clip title-safe" data-start="{{ duration - hold }}" data-duration="{{ hold }}"
+     style="background:var(--bg)"><h1>{{ chapter[0] }}</h1></div>
+{% endif %}
+{% endblock %}

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import audio as audio_mod
-from . import cuts, ffutil, media, sysinfo, titles
+from . import cuts, ffutil, media, scenes, sysinfo, titles
 from . import shots as shots_mod
 from .config import (
     FPS, HEAD_PAD, HEIGHT, MUSIC_DIR, PARAGRAPH_GAP, TAIL_PAD, WIDTH,
@@ -845,6 +845,14 @@ def _render_segment(
     the same picture seen smaller rather than a differently composed one.
     """
     style = project.style
+    lead_in = (cuts.transition_for(style) / 2
+               + cuts.head_pad_for(project, group[0][0]))
+    hold = max(0.9, min(3.2, audio_mod.gap_map(project).get(
+        group[-1][0].id, PARAGRAPH_GAP) - 0.12))
+    if scenes.handles(style.format):
+        return scenes.render_segment(
+            project, group, seg_len, out, size=size, fps=fps, crf=crf,
+            chapter=chapter, lead_in=lead_in, hold=hold, channel=channel)
     if style.format.startswith("custom:"):
         rendered = _render_custom_style(project, group, seg_len, out, size,
                                         fps, crf)
@@ -856,15 +864,12 @@ def _render_segment(
         # The drawn cuts join on a hard cut, so `seg_len` carries one frame
         # of overlap; the voice starts half of that in, plus the opening
         # silence on the video's first paragraph.
-        lead_in = (cuts.transition_for(style) / 2
-                   + cuts.head_pad_for(project, group[0][0]))
         return cuts.render_segment(
             project, group, seg_len, out, channel=channel,
             image_for=lambda s: _chosen(project, s)[0], size=size, fps=fps,
             crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
             chapter=chapter, frames=frames,
-            hold=max(0.9, min(3.2, audio_mod.gap_map(project).get(
-                group[-1][0].id, PARAGRAPH_GAP) - 0.12)))
+            hold=hold)
     if style.format == "board":
         from . import board as board_mod
         return board_mod.render_segment(
@@ -900,7 +905,7 @@ def _slate_channel(project: Project):
     disk, which the callers report rather than guess around.
     """
     from . import channels
-    from .schema import Channel, IntroSpec, OutroSpec, Style
+    from .schema import Channel, FrameSpec, IntroSpec, OutroSpec, Style
 
     if project.channel_id:
         return channels.load_or_none(project.channel_id)
@@ -910,6 +915,7 @@ def _slate_channel(project: Project):
     return Channel(
         id="", name=project.title or "Untitled", tagline=project.subtitle,
         style=Style(**project.style.to_dict()),
+        frame=FrameSpec.from_dict(project.frame.to_dict()),
         intro=IntroSpec(**project.intro.to_dict()),
         outro=OutroSpec(**project.outro.to_dict()),
     )
@@ -1656,7 +1662,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         slides.append([row, d, _stat(root / take) if take else None])
     pic = _chosen(project, lead)[0]
     blob = json.dumps(
-        [PROXY_VERSION, index, slides, _stat(pic),
+        [PROXY_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
+         index, slides, _stat(pic),
          _segment_timing(project, groups, index), index == len(groups) - 1,
          chapter_card(project, nxt) if nxt else None,
          dataclasses.asdict(project.style), project.frame.to_dict(),
@@ -1821,9 +1828,11 @@ def _slate_key(project: Project, kind: str) -> str:
     # Not the whole channel: a standalone one is made up on the spot, with an
     # id and a timestamp that differ every time it is asked for.
     parts = ([channel.name, channel.tagline, dataclasses.asdict(channel.intro),
-              dataclasses.asdict(channel.outro), dataclasses.asdict(channel.style)]
+              dataclasses.asdict(channel.outro), dataclasses.asdict(channel.style),
+              channel.frame.to_dict()]
              if channel else None)
-    blob = json.dumps([PROXY_VERSION, kind, project.title, parts, extra, list(preview_size()), PREVIEW_FPS],
+    blob = json.dumps([PROXY_VERSION, scenes.SCENE_VERSION, kind, project.title,
+                       parts, extra, list(preview_size()), PREVIEW_FPS],
                       default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 

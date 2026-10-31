@@ -128,6 +128,8 @@ def needs_images(template: str) -> bool:
     for t in TEMPLATES:
         if t["key"] == template:
             return bool(t["needs_images"])
+    if template.startswith("scene:"):
+        return False
     return True          # unknown template falls back to columns, which does
 
 
@@ -2723,6 +2725,10 @@ _RENDERERS = {
 def render_intro(channel: Channel, video_title: str, out_path: Path,
                  progress: Progress = lambda m: None) -> float:
     """Render the slate to a silent mp4. Returns its duration in seconds."""
+    if channel.intro.template.startswith("scene:"):
+        from . import scenes
+        return scenes.render_card("intro", channel.intro.template[6:], channel,
+                                  video_title, out_path, progress)
     render = _RENDERERS.get(channel.intro.template, _render_columns)
     return render(channel, video_title, out_path, progress)
 

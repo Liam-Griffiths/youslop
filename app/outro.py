@@ -1189,6 +1189,10 @@ def render_outro(channel: Channel, video_title: str, out_path: Path,
                  backdrop: Path | None = None,
                  progress: Progress = lambda m: None) -> float:
     """Render the end screen to a silent mp4. Returns its duration in seconds."""
+    if channel.outro.template.startswith("scene:"):
+        from . import scenes
+        return scenes.render_card("outro", channel.outro.template[6:], channel,
+                                  video_title, out_path, progress)
     render = _RENDERERS.get(channel.outro.template, _render_twoup)
     return render(channel, video_title, out_path, backdrop, progress)
 

@@ -14,8 +14,8 @@ from urllib.parse import quote, unquote, urlsplit
 import jinja2
 from jinja2 import meta
 
-from . import channels, stage, store, themes
-from .config import STATIC_DIR
+from . import channels, cuts, ffutil, stage, store, themes
+from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
 SCENE_VERSION = 1
@@ -235,3 +235,50 @@ def capture(project, template, ctx, *, t, size) -> bytes:
 def handles(fmt: str) -> bool:
     path = (SCENE_DIR / fmt / 'segment.html').resolve()
     return path.is_relative_to(SCENE_DIR.resolve()) and path.is_file()
+
+
+def _encode(clip, out, seconds, size, fps, crf):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    ffutil.run(["-i", str(clip), "-vf", f"scale={size[0]}:{size[1]}",
+                "-t", f"{seconds:.3f}", "-r", str(fps),
+                *ffutil.video_args(out, crf=crf),
+                "-pix_fmt", "yuv420p", "-an", str(out)])
+
+
+def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
+                   fps=FPS, crf=18, chapter=None, lead_in=0.0, hold=0.0,
+                   channel=None) -> Path:
+    """Render a group on the full composition, then encode at the output size."""
+    ctx = context_base(project, channel)
+    ctx.update(slides=[{**asdict(slide), "duration": dur} for slide, dur in group],
+               narration="\n\n".join(slide.narration for slide, _ in group),
+               titles=[slide.title for slide, _ in group],
+               cues=(cuts.timed_cues(project, group, seg_len, lead_in)
+                     if cuts.is_cut(project.style.format) else []),
+               chapter=chapter, lead_in=lead_in, hold=hold)
+    clip = ensure_clip(project, f"{project.style.format}/segment.html", ctx,
+                       seconds=seg_len, size=(ctx['width'], ctx['height']), fps=fps)
+    _encode(clip, out, seg_len, size, fps, crf)
+    return out
+
+
+def render_card(kind, name, channel, video_title, out_path,
+                progress=lambda m: None) -> float:
+    """Shared scene dispatch for channel, standalone and preview cards."""
+    if kind not in ("intro", "outro"):
+        raise ValueError("unknown scene card kind")
+    # Card names are local template names, never arbitrary paths.
+    if not re.fullmatch(r"[\w-]+", name):
+        raise ValueError("invalid scene card name")
+    spec = getattr(channel, kind)
+    bounds = (2.5, 12.0) if kind == 'intro' else (5.0, 20.0)
+    seconds = max(bounds[0], min(bounds[1], spec.duration))
+    ctx = context_base(channel=channel)
+    ctx.update(card=asdict(spec), kind=kind)
+    ctx['vars']['title'] = video_title
+    # Keeping this cache alongside the output also covers synthetic solo channels.
+    clip = ensure_clip(out_path.parent, f"cards/{name}.html", ctx,
+                       seconds=seconds, size=(WIDTH, HEIGHT), fps=FPS)
+    progress(f"Scene {kind}: {seconds:.1f}s")
+    _encode(clip, out_path, seconds, (WIDTH, HEIGHT), FPS, 18)
+    return seconds
