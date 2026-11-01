@@ -489,7 +489,7 @@ async function toggleKind(sid) {
 // The strip under a slide only has room for a dozen options at thumbnail size.
 // This opens the full picker: type any term, ask for photos or clips, and judge
 // the hits large. Picking saves straight away, so you can keep searching.
-function openMediaSearch(sid, query = null) {
+function openMediaSearch(sid, query = null, onPick = null) {
   const s = state.project.slides.find((x) => x.id === sid);
   if (!s) return;
   const term = query ?? ((s.queries || [])[0] || s.visual_note || s.title || s.beat || '');
@@ -543,7 +543,8 @@ function openMediaSearch(sid, query = null) {
       el.onclick = () => {
         res.querySelectorAll('.pick').forEach((o) => o.classList.remove('sel'));
         el.classList.add('sel');
-        choose(sid, el.dataset.id);
+        if (onPick) Promise.resolve(onPick(el.dataset.id)).then(close).catch(e=>toast(e.message,true));
+        else choose(sid, el.dataset.id);
       };
     });
   };

@@ -4,7 +4,7 @@ function tlCameraRows() {
   return tlParas().filter(q => q.camera_edit).map(q => {
     // Source seconds at the ruler's scale, so pauses read at their real length.
     const c = q.camera_edit, width = Math.max(80, c.duration * TL.zoom);
-    const range = (r, i, suggested) => `<button type="button" class="tl-camera-cut ${suggested ? 'suggested' : ''}"
+    const range = (r, i, suggested) => `<button type="button" class="tl-camera-cut ${suggested ? 'suggested' : r.by==='auto' ? 'auto' : ''}"
       data-${suggested ? 'suggestion' : 'cut'}="${i}" style="left:${r.a/c.duration*100}%;width:${(r.b-r.a)/c.duration*100}%"
       title="${suggested ? 'Accept pause' : 'Restore cut'} ${r.a.toFixed(2)}–${r.b.toFixed(2)} seconds"
       aria-label="${suggested ? 'Accept pause' : 'Restore cut'} ${r.a.toFixed(2)}–${r.b.toFixed(2)} seconds">${suggested ? '+' : '×'}</button>`;
@@ -19,7 +19,9 @@ function tlCameraRows() {
       </div><span class="tl-camera-actions" style="left:${q.start*TL.zoom+width+6}px">
         <button type="button" class="btn sm ghost" data-suggest>Suggest pauses</button><button type="button" class="btn sm ghost" data-accept>Accept all</button>
         <label><input type="checkbox" data-punch ${c.punch ? 'checked' : ''}>Punch</label>
-      </span></div>`;
+      </span>
+      ${(c.overlays||[]).map((o,i)=>`<button class="tl-camera-overlay ${o.by==='auto'?'auto':''}" data-overlay="${i}"
+        style="left:${(q.start+o.at)*TL.zoom}px;width:${o.dur*TL.zoom}px" title="Drag / resize · 1 cutaway, 2 PIP, 3 split · P corner · Delete removes">${esc(o.kind)}<span class="tl-resize"></span></button>`).join('')}</div>`;
   }).join('');
 }
 
@@ -34,6 +36,7 @@ function tlWireCamera() {
     const q = tlParas().find(q => q.id === row.dataset.camera), c = q.camera_edit;
     const source = row.querySelector('.tl-camera-source'), key = TL.pid+':'+q.id;
     const save = patch => { tlCameraSuggestions.delete(key); tlSaveTiming({sid:q.id,id:q.id,kind:'paragraph'}, patch); };
+    tlWireCameraOverlays(row, q, save);
     let selection = null, cursor = 0, marker, cancelDrag;
     const paint = () => {
       if (!marker) { marker=document.createElement('i'); marker.className='tl-camera-selection'; source.append(marker); }
@@ -102,5 +105,77 @@ function tlWireCamera() {
     };
     row.querySelector('[data-accept]').onclick = () => save({camera_cuts:[...c.cuts,...(tlCameraSuggestions.get(key)||[]).map(r=>({...r,by:'hand'}))]});
     row.querySelector('[data-punch]').onchange = e => save({camera_punch:e.target.checked});
+  });
+}
+
+async function tlCameraAuto(sid = '', undo = false, suggest = false) {
+  const pid = TL.pid;
+  tlPause();
+  try {
+    const r = await api(`/api/projects/${pid}/camera-auto-edit`, {method:'POST', body:JSON.stringify({sid, undo, suggest})});
+    const job = await tlWaitJob(r.job);
+    if (TL.pid !== pid) return;
+    if (job.state !== 'done') throw Error(job.error);
+    if (suggest) {
+      const wrap=document.createElement('div'); wrap.className='modal';
+      wrap.innerHTML='<div class="modal-box"><strong>Suggested cutaways</strong><ul data-list></ul><button data-apply>Auto-edit · apply this paragraph</button><button data-close>Close</button></div>';
+      wrap.querySelector('[data-list]').innerHTML=Object.entries(job.result.proposals).flatMap(([id,items])=>items.map(item=>{
+        const candidate=state.project.slides.find(s=>s.id===id)?.candidates.find(c=>c.id===item.candidate_id);
+        return `<li>On “${esc(item.on||'')}”: ${esc(candidate?.title||'Unavailable picture')} · ${esc(String(item.dur||3))} s</li>`;
+      })).join('') || '<li>No cutaways suggested.</li>';
+      wrap.querySelector('[data-apply]').onclick=()=>{wrap.remove();tlCameraAuto(sid);};
+      wrap.querySelector('[data-close]').onclick=()=>wrap.remove(); document.body.append(wrap); return;
+    }
+    await tlRefreshProject();
+    const first = tlParas().find(q => job.result.changed.includes(q.id));
+    if (first) tlSeek(first.start, {ensure:false});
+    tlMsg(`Auto-edit: ${job.result.changed.length} paragraphs changed. Check: ${job.result.check.findings.length} findings.`);
+  } catch(e) { tlMsg(e.message); }
+}
+
+function tlCameraAdd(sid) {
+  const q = tlParas().find(q => q.id === sid), at = Math.max(0, Math.min(q.camera_edit.effective_duration-1/tlFps(), TL.cur-q.start));
+  tlModal(() => openMediaSearch(sid, null, async cid => {
+    await api(`/api/projects/${TL.pid}/slides/${sid}/camera-overlay-media/${encodeURIComponent(cid)}`, {method:'POST'});
+    tlSaveTiming({sid,id:sid,kind:'paragraph'}, {camera_overlays:[...(q.camera_edit.overlays||[]),
+      {at,dur:Math.min(3,q.camera_edit.effective_duration-at),kind:'cutaway',source:{candidate_id:cid},by:'hand'}]});
+  }));
+}
+
+function tlWireCameraOverlays(row, q, save) {
+  row.querySelectorAll('[data-overlay]').forEach(el => {
+    const index=+el.dataset.overlay, overlays=q.camera_edit.overlays, item=overlays[index];
+    const update = patch => save({camera_overlays:overlays.map((o,i)=>i===index?{...o,...patch,by:'hand'}:o)});
+    el.onkeydown = e => {
+      if (e.key === 'Delete') save({camera_overlays:overlays.filter((_,i)=>i!==index)});
+      else if (['1','2','3'].includes(e.key)) update({kind:['cutaway','pip','split'][+e.key-1]});
+      else if (e.key.toLowerCase() === 'p') { const corners=['bottom_right','bottom_left','top_left','top_right']; update({position:corners[(corners.indexOf(item.position||'bottom_right')+1)%4]}); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') update({at:Math.max(0,item.at+(e.key==='ArrowLeft'?-1:1)/tlFps())});
+      else return;
+      e.preventDefault(); e.stopPropagation();
+    };
+    el.onpointerdown = e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation(); tlPause(); el.focus(); el.setPointerCapture(e.pointerId);
+      const resize=!!e.target.closest('.tl-resize'), x=e.clientX;
+      let value, moved=false;
+      el.onpointermove = ev => {
+        moved ||= Math.abs(ev.clientX-x)>3;
+        const t=tlSnap(q.start+item.at+(resize?item.dur:0)+(ev.clientX-x)/TL.zoom,
+          q.word_times||[],tlFps(),6,TL.zoom,ev.altKey).t-q.start;
+        value=resize?Math.max(1/tlFps(),Math.min(q.camera_edit.effective_duration-item.at,t-item.at))
+          :Math.max(0,Math.min(q.camera_edit.effective_duration-item.dur,t));
+        el.style[resize?'width':'left']=`${(resize?value:q.start+value)*TL.zoom}px`;
+      };
+      const finish=cancel=>{
+        el.onpointermove=el.onpointerup=el.onpointercancel=el.onlostpointercapture=null;
+        document.removeEventListener('keydown',escape,true);
+        if(el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+        if(!cancel && moved) update({[resize?'dur':'at']:value}); else tlDraw();
+      };
+      const escape=ev=>{if(ev.key==='Escape'){ev.stopPropagation();finish(true);}};
+      document.addEventListener('keydown',escape,true);
+      el.onpointerup=()=>finish(false); el.onpointercancel=el.onlostpointercapture=()=>finish(true);
+    };
   });
 }

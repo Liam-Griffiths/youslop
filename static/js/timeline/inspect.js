@@ -73,6 +73,10 @@ function tlInspector() {
   if (sel.kind === 'paragraph' && slide) html += `<div class="tl-text">${esc(slide.narration)}</div>
     <button class="btn sm" id="tl-edit-text">Edit the words</button>
     <button class="btn sm" id="tl-split-here">Split here (S)</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
+  if (sel.kind === 'paragraph' && slide?.on_camera) html += `<button class="btn sm" onclick="tlCameraAdd('${esc(slide.id)}')">Add cutaway here</button>
+    <button class="btn sm" onclick="tlCameraAuto('${esc(slide.id)}',false,true)">Suggest cutaways</button>
+    <button class="btn sm" onclick="tlCameraAuto('${esc(slide.id)}')">Auto-edit · this paragraph</button>
+    <button class="btn sm" onclick="tlCameraAuto('${esc(slide.id)}',true)">Undo auto-edit · this paragraph</button>`;
   if (sel.kind === 'title' && slide) html += field('title', 'Title', slide.title)
     + timing('title_at', 'Arrival', para.timing.title_at.value) + timing('title_hold', 'Hold', para.timing.title_hold.value);
   if (sel.kind === 'chapter' && slide) html += field('chapter', 'Chapter', slide.chapter)

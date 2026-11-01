@@ -955,3 +955,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-camera-selection { position:absolute; top:0; height:100%; background:var(--accent-tint); outline:1px solid var(--accent); pointer-events:none; }
 .tl-camera-actions { position:absolute; top:6px; align-items:center; display:flex; gap:6px; white-space:nowrap; }
 .tl-camera-actions label { display:flex; gap:4px; align-items:center; font-size:13px; color:var(--ink-dim); }
+
+.tl-camera { min-height:90px; }
+.tl-camera-overlay { position:absolute; top:60px; height:25px; background:var(--raised); color:var(--ink); border:1px solid var(--cool); padding:0 8px; overflow:hidden; cursor:grab; }
+.tl-camera .auto { border-style:dashed; }

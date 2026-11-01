@@ -87,6 +87,8 @@ async function tlMount() {
       <label class="row" style="gap:6px;cursor:pointer" title="keep replaying the entry under the playhead">
         <input type="checkbox" id="tl-loop" style="width:auto" ${TL.loop ? 'checked' : ''}>
         <span class="mono tl-note">loop picture</span></label>
+      <button class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
+      <button class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>
       <button class="btn sm ghost" id="tl-all"
         title="draw every picture's proxy now instead of as you reach it">draw all</button>
     </div>

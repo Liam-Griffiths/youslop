@@ -12,7 +12,7 @@ def camera(project, *, raw=False, speech=1.0):
     slide.on_camera = True
     root = store.project_dir(project.id)
     take = dict(path='camera.wav', video='camera.mp4', duration=1.0,
-                video_start=speech, tail=0.5, focal=[0.4, 0.5], raw_path='raw.mkv')
+                video_start=speech, tail=0.5, focal=[0.4, 0.5], raw_path='raw.mkv' if raw else '')
     for name in ('camera.wav', 'camera.mp4', *(['raw.mkv'] if raw else [])):
         (root / name).write_bytes(b'synthetic placeholder')
     project.set_take(slide, CAMERA_TRACK, take)
@@ -57,7 +57,13 @@ def test_camera_bypasses_engines(project, monkeypatch, tmp_path, fmt):
     project.style.format = fmt
     commands = []
     monkeypatch.setattr(ffutil, 'dimensions', lambda path: (640, 360))
-    monkeypatch.setattr(ffutil, 'run', lambda args, **kw: commands.append(args))
+    def record(args, **kw):
+        args = list(args)
+        at = args.index('-filter_complex_script')
+        args[at:at+2] = ['-filter_complex', Path(args[at+1]).read_text()]
+        commands.append(args)
+    monkeypatch.setattr(ffutil, 'run', record)
+    project.style.captions_engine = 'pillow'
     def forbidden(*args, **kwargs):
         pytest.fail('Camera must not dispatch to scene, stage, or drawn cut')
     monkeypatch.setattr(scenes, 'render_segment', forbidden)

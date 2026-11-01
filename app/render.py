@@ -760,6 +760,7 @@ def _segment_graph(
     frame = project.frame
     w, h = size
     essay = style.format == "essay" and not group[0][0].on_camera
+    camera_captions = style.format == "essay" and group[0][0].on_camera
     slide = group[0][0]
     src, kind, focal = _chosen(project, slide)
     dip_in = False
@@ -841,6 +842,12 @@ def _segment_graph(
     n_inputs = inputs.count("-i")      # sources may take several inputs each
     last = base_label
 
+    if slide.on_camera:
+        from .camera_overlays import compose
+        inputs, graph, last = compose(project, slide, inputs, graph, last, size, fps,
+                                      prepare_only=prepare_only)
+        n_inputs = inputs.count('-i')
+
     # The host, if this channel has one: a still, pinned in a corner for the
     # whole segment. Under the captions in the stack, so it can never cover a
     # word if the two ever meet.
@@ -862,7 +869,7 @@ def _segment_graph(
 
     # Type over the picture. The documentary cut announces a chapter once per
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
-    if essay and style.captions_engine != 'pillow' and 'titles' not in hide:
+    if (essay or camera_captions) and style.captions_engine != 'pillow' and 'titles' not in hide:
         plan, offset = [], 0.0
         lead = cuts.transition_for(style) / 2 + cuts.head_pad_for(project, group[0][0])
         for n, (member, dur) in enumerate(group):
@@ -885,7 +892,7 @@ def _segment_graph(
 
     offset = 0.0
     for n, (member, dur) in enumerate(group):
-        if "titles" in hide or (essay and style.captions_engine != "pillow"):
+        if "titles" in hide or ((essay or camera_captions) and style.captions_engine != "pillow"):
             offset += dur
             continue
         if essay:
@@ -1246,7 +1253,7 @@ def _camera_source(project, slide, seg_len, size, fps):
         start = max(0.0, speech - lead)
         pre = speech - start
         pad = max(0.0, lead - pre)
-    if take.get("cuts"):
+    if take.get("cuts") or (take.get('punch', True) and any(o.get('kind') == 'cutaway' for o in take.get('overlays', []))):
         return ["-i", str(src)], _camera_cut_source(
             project, take, src, start + pre, lead, seg_len, size, fps)
     length = pre + float(take["duration"]) + float(take.get("tail", 0))
@@ -1261,7 +1268,15 @@ def _camera_source(project, slide, seg_len, size, fps):
 
 def _camera_cut_source(project, take, src, speech, lead, seg_len, size, fps):
     from .camera import target
-    ranges = kept_ranges(take)
+    ranges, offset, pieces = kept_ranges(take), 0., []
+    # A return from a cutaway is another camera edit, even without a pause cut.
+    from .camera_overlays import validate
+    returns = [o['at'] + o['dur'] for o in validate(take, take.get('overlays', [])) if o['kind'] == 'cutaway']
+    for a, b in ranges:
+        points = [a, *sorted(a + t - offset for t in returns if offset < t < offset + b - a), b]
+        pieces.extend(zip(points, points[1:]))
+        offset += b - a
+    ranges = pieces
     n = len(ranges)
     graph = ['setpts=PTS-STARTPTS,split=' + str(n)
              + ''.join(f'[ks{j}]' for j in range(n))]
@@ -1314,10 +1329,22 @@ def _camera_segment(project, group, seg_len, out, size, fps, *, channel=None,
     # only draws static cards once; the moving picture stays entirely in ffmpeg.
     inputs, graph, last = _segment_graph(project, group, seg_len, "set", channel,
                                         chapter, size, fps, last_line=last_line, hide=hide)
-    ffutil.run([*inputs, "-filter_complex", graph, "-map", last,
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix='camera-graph-', dir=out.parent) as work:
+        script = Path(work) / 'graph.txt'
+        script.write_text(graph)
+        args = [*inputs, "-filter_complex_threads", str(threads or 2),
+                "-filter_complex_script", str(script), "-map", last,
                 "-t", f"{seg_len:.3f}", "-r", str(fps),
                 *ffutil.video_args(out, crf=crf, preset=preset),
-                "-pix_fmt", "yuv420p", "-an", str(out)], threads=threads)
+                "-pix_fmt", "yuv420p", "-an", str(out)]
+        try:
+            ffutil.run(args, threads=threads)
+        except ffutil.FFError as exc:
+            if "Unrecognized option 'filter_complex_script'" not in str(exc):
+                raise
+            args[args.index('-filter_complex_script')] = '-/filter_complex'
+            ffutil.run(args, threads=threads)
     return out
 
 
@@ -1602,7 +1629,10 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
-        row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id]
+        overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(slide) or {}).get('overlays', [])} if slide.on_camera else set()
+        row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id or c['id'] in overlay_ids]
+        if overlay_ids:
+            row['overlay_files'] = [_stat(root / c['local_path']) for c in row['candidates'] if c.get('local_path')]
         take = slide.take or {}
         files = []
         for field in (("path", "video", "raw_path") if slide.on_camera else ("path", "video")):
@@ -2269,7 +2299,10 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     for s, d in group:
         row = dataclasses.asdict(s)
         # Search results nobody picked cannot change the picture on screen.
-        row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id]
+        overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(s) or {}).get('overlays', [])} if s.on_camera else set()
+        row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id or c['id'] in overlay_ids]
+        if overlay_ids:
+            row['overlay_files'] = [_stat(root / c['local_path']) for c in row['candidates'] if c.get('local_path')]
         take = (s.take or {}).get("path")
         slides.append([row, d, _stat(root / take) if take else None])
         if s.on_camera:
@@ -2815,7 +2848,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             if s.on_camera:
                 take = project.active_take(s) or {}
                 paras[-1]['camera_edit'] = {k: take.get(k, default) for k, default in
-                    [('duration', 0), ('cuts', []), ('words', []), ('punch', True)]}
+                    [('duration', 0), ('cuts', []), ('words', []), ('punch', True), ('overlays', [])]}
+                paras[-1]['camera_edit']['effective_duration'] = take_duration(take)
             pt += d
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)

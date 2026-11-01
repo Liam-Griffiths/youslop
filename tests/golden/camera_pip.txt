@@ -1,0 +1,8 @@
+-i
+camera.mp4
+-framerate
+15
+-i
+<DATA>/projects/ptest0001/art.png
+[0:v]null[base];[1:v]scale=960:540,crop=960:540:0:0,setsar=1,zoompan=z='1+0.1100*(on/14)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=15:s=480x270:fps=15,setsar=1,trim=duration=1.000000,setpts=PTS-STARTPTS+1.875000/TB[co0s];[base]split[co0base][co0cam];color=c=black:s=160x90:r=15,format=gray,geq=lum='if(lte(hypot(max(abs(X-W/2)-(W/2-7),0),max(abs(Y-H/2)-(H/2-7),0)),7),255,0)',trim=end_frame=1,loop=loop=-1:size=1[co0k];[co0cam]scale=160:90,format=rgba[co0r];[co0r][co0k]alphamerge[co0c];[co0s][co0c]overlay=W-w-9:H-h-9:shortest=1[co0layout];[co0base][co0layout]overlay=0:0:enable='gte(t,1.875000)*lt(t,2.875000)':eof_action=pass:repeatlast=0[co0]
+[co0]

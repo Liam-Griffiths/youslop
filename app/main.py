@@ -1105,7 +1105,7 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         p = _load(pid)
         s = _slide(p, sid)
         try:
-            if 'camera_cuts' in payload or 'camera_punch' in payload:
+            if any(k in payload for k in ('camera_cuts', 'camera_punch', 'camera_overlays')):
                 from .take_edits import validate_cuts
                 take = s.takes.get('camera')
                 if not take:
@@ -1116,6 +1116,13 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
                     raise edits.EditError(str(exc)) from exc
                 if 'camera_punch' in payload and not isinstance(payload['camera_punch'], bool):
                     raise edits.EditError('Camera punch must be a boolean')
+                from .camera_overlays import validate
+                try:
+                    overlays = validate({**take, 'cuts': clean}, payload.get('camera_overlays', take.get('overlays', [])))
+                except ValueError as exc:
+                    raise edits.EditError(str(exc)) from exc
+                if 'camera_overlays' in payload or 'overlays' in take:
+                    take['overlays'] = overlays
                 take['cuts'] = clean
                 if 'camera_punch' in payload:
                     take['punch'] = payload['camera_punch']
@@ -1145,6 +1152,33 @@ def camera_cut_suggestions(pid: str, sid: str) -> list[dict]:
     if not take:
         raise HTTPException(400, 'This paragraph has no camera take')
     return camera.suggest_cuts({**take, 'path': str(store.project_dir(pid) / take['path'])})
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/camera-overlay-media/{cid}")
+def camera_overlay_media(pid: str, sid: str, cid: str) -> dict:
+    s = _slide(_load(pid), sid)
+    candidate = next((c for c in s.candidates if c['id'] == cid), None)
+    if not candidate:
+        raise HTTPException(404, 'Unknown media candidate')
+    root = store.project_dir(pid)
+    path = candidate.get('local_path')
+    if not path or not (root / path).is_file():
+        path = 'media/' + media.download_to(media.upgrade(candidate), root / 'media')
+        with store.lock_for(pid):
+            fresh = _load(pid)
+            for c in _slide(fresh, sid).candidates:
+                if c['id'] == cid:
+                    c['local_path'] = path
+            store.save(fresh)
+    return {'local_path': path}
+
+
+@app.post("/api/projects/{pid}/camera-auto-edit")
+def camera_auto_edit(pid: str, payload: dict = Body(default={})) -> dict:
+    from . import camera_auto
+    _load(pid)
+    return {"job": jobs.start("camera auto-edit", pid,
+                             lambda progress: camera_auto.edit(pid, payload, progress))}
 
 
 @app.delete("/api/projects/{pid}/slides/{sid}")
