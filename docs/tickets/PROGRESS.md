@@ -96,7 +96,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.4 | Thumbnails as a scene | M | T2.4 | todo | |
 | T5.5 | 3D stage under CDP | M | T2.1 | todo | |
 | T5.6 | Resume a failed render | S | T0.5 | done | 2026-10-31 Codex; keyed segment cache, atomic publish, Resume button; owner: interrupt a real render and resume |
-| T5.7 | verify.py after render | S | T0.6 | todo | |
+| T5.7 | verify.py after render | S | T0.6 | done | 2026-10-31 Codex + review: fades/dips under 1s ignored, bitrate P2; real render reports one P2 |
 
 ## Phase 6: brand rollout
 

@@ -154,6 +154,13 @@ def cmd_check(args):
     return 1 if result["counts"]["P0"] else 0
 
 
+def cmd_verify(args):
+    from . import verify
+    result = verify.run(args.file)
+    _print_json(result)
+    return int(bool(result["counts"]["P0"]))
+
+
 def cmd_snapshot(args):
     result = _operation('snapshot', args.pid, {'sheet': args.sheet})
     root = store.project_dir(args.pid)
@@ -347,6 +354,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
+    sub.add_parser("verify").add_argument("file")
     command = sub.add_parser('render')
     command.add_argument('pid')
     mode = command.add_mutually_exclusive_group()
@@ -453,7 +461,7 @@ def main(argv=None):
     try:
         ensure_dirs()
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
-         "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
+         "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "block": cmd_block, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)

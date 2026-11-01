@@ -139,7 +139,8 @@ async function paintRender() {
     ${p.render && p.render.output ? `
       <h2>Last render</h2>
       ${videoTag(`/api/projects/${p.id}/file/${p.render.output}`,
-                 { scope: 'project', id: p.id, rel: p.render.output })}
+                 { scope: 'project', id: p.id, rel: p.render.output },
+                 'id="render-output" controls preload="metadata"')}
       <div class="row" style="margin-top:12px">
         <span class="mono" style="color:var(--ink-faint)">
           ${fmtTime(p.render.duration)} · ${p.render.size_mb} MB · ${p.render.slides} slides
@@ -150,9 +151,41 @@ async function paintRender() {
           open the folder</button>
         <a class="btn sm" href="/api/projects/${p.id}/download">download</a>
       </div>
+      ${p.render.verify ? p.render.verify.error
+        ? `<div class="mono">Verification unavailable: ${esc(p.render.verify.error)}</div>`
+        : `<details ontoggle="if(this.open) loadRenderVerification(this)">
+          <summary>Verified: ${p.render.verify.p0} P0, ${p.render.verify.p1} P1</summary>
+          <div class="verify-findings mono">Loading findings…</div>
+        </details>` : ''}
       ${await uploadPanel(p)}` : ''}
   `;
   tlMount();
+}
+
+async function loadRenderVerification(el) {
+  if (el.dataset.loaded) return;
+  const p = state.project;
+  const body = el.querySelector('.verify-findings');
+  try {
+    const report = await api(`/api/projects/${p.id}/file/${p.render.verify.path}`, { cache: 'no-store' });
+    body.innerHTML = report.error ? esc(report.error) : report.findings.length
+      ? report.findings.map((f) => `<div>
+        <button class="btn sm ghost" onclick="seekRenderFinding(${Number(f.t) || 0})">${fmtTime(f.t)}</button>
+        ${esc(f.severity)} · ${esc(f.kind)} · ${esc(f.detail)}</div>`).join('')
+      : 'No findings.';
+    el.dataset.loaded = '1';
+  } catch (err) {
+    body.textContent = `Could not load verification: ${err.message}`;
+  }
+}
+
+function seekRenderFinding(t) {
+  const player = $('#render-output');
+  if (!player) return;
+  const seek = () => { player.currentTime = Math.max(0, Math.min(t, player.duration || t)); };
+  if (player.readyState) seek();
+  else player.addEventListener('loadedmetadata', seek, { once: true });
+  player.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 // How this video opens and closes. In a channel both come from the channel,

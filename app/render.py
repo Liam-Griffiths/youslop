@@ -1873,12 +1873,54 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         "preview": preview,
         "music": music.name if music else "",
     }
+    result["verify"] = _verify_output(out_path, project, groups, durations,
+                                      group_indices, T, progress)
     if not preview:
         project.status = "rendered"
     project.render = result
     progress(f"Done: {result['output']} — {result['duration'] / 60:.1f} min, "
              f"{result['size_mb']} MB")
     return result
+
+
+def _verify_output(path, project, groups, durations, group_indices, T, progress):
+    """Use the mux's actual layout, including skipped takes and inserted clips."""
+    import json
+    from . import verify
+
+    report_path = project_dir(project.id) / "render" / "verify.json"
+    try:
+        segments, start = [], 0.0
+        for index, duration in enumerate(durations):
+            paragraphs = []
+            if index in group_indices:
+                gi = group_indices[index]
+                pt = start + T / 2 + (HEAD_PAD if gi == 0 else 0)
+                for slide, seconds in groups[gi]:
+                    paragraphs.append({"id": slide.id, "word_times": [
+                        {**w, "start": pt + w["start"], "end": pt + w["end"]}
+                        for w in (slide.take or {}).get("words", [])]})
+                    pt += seconds
+            # Joins switch pictures at the midpoint of their overlap.
+            segments.append({"start": start + T / 2, "duration": duration,
+                             "paragraphs": paragraphs})
+            start += duration
+        progress("Verifying the finished file")
+        report = verify.run(path, {"segments": segments}, project.frame)
+        summary = {"p0": report["counts"]["P0"], "p1": report["counts"]["P1"],
+                   "path": "render/verify.json"}
+    except Exception as exc:
+        # Analysis failure must not discard a successfully encoded file.
+        report = {"error": str(exc), "findings": []}
+        summary = {"error": str(exc), "path": "render/verify.json"}
+        progress(f"Verification unavailable: {exc}")
+    try:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
+    except OSError as exc:
+        summary = {"error": f"Could not save verification: {exc}"}
+        progress(summary["error"])
+    return summary
 
 
 # ------------------------------------------------------------- live preview
