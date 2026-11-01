@@ -775,9 +775,14 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
             inputs = [arg for clip in clips for arg in ('-i', str(clip))]
             graph = ''.join(f'[{i}:v]' for i in range(len(clips)))
             graph += f'concat=n={len(clips)}:v=1:a=0[v]'
+            join_extra = list(extra)
+            if '-vf' in join_extra:
+                index = join_extra.index('-vf')
+                if join_extra[index + 1].startswith('scale='):
+                    del join_extra[index:index + 2]
             ffutil.run([*inputs, '-filter_complex', graph, '-map', '[v]',
                         '-t', f'{seg_len:.3f}', *ffutil.video_args(out, crf=crf),
-                        *board_scenes.without_scale(extra), '-pix_fmt', 'yuv420p', '-an', str(out)])
+                        *join_extra, '-pix_fmt', 'yuv420p', '-an', str(out)])
         return out
 
     def stream():

@@ -13,7 +13,7 @@
 </filter></defs>
 {% for start,arrival in beats %}{% set order=loop.index0 %}
 {% if active_order is none or active_order == order %}
-<g class="clip" data-start="0" data-duration="{{ duration }}" data-track-index="{{ order }}" data-reveal-start="{{ start }}" data-arrival="{{ arrival }}" filter="url(#hand-wobble)">
+<g data-layer="beat-{{ order }}" data-motion="{{ 'none' if settled else 'wipe' }}" data-motion-ease="quad-out" data-motion-duration="{{ arrival }}" data-motion-feather="1" class="clip" data-start="{{ 0 if settled else start }}" data-duration="{{ duration - start }}" data-track-index="{{ order }}" data-reveal-start="{{ start }}" data-arrival="{{ arrival }}" filter="url(#hand-wobble)">
 {% set ns=namespace(skip=0) %}
 {% for m in marks if m.order == order %}
 {% if m.kind == 'text' %}<text data-text="mark-{{ order }}-{{ loop.index0 }}" x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>

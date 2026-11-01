@@ -78,21 +78,16 @@ def test_plate_overlays_group_offsets_hidden_and_legacy(project, tmp_path, monke
 
     def plates(p, ctx, **kwargs):
         calls.append((ctx, kwargs))
-        return [tmp_path / f'caption{i}.png' for i in range(len(ctx['phrases']))]
+        return tmp_path / 'captions.mov'
 
     monkeypatch.setattr(scenes, 'caption_plates', plates)
     monkeypatch.setattr(titles, 'render_caption', lambda *a, **k: pytest.fail('PNG scene caption'))
     group = [(first, 3), (second, 3)]
     inputs, graph, last = render._segment_graph(project, group, 6, 'set', size=(480, 270), last_line=True)
     assert len(calls) == 1
-    assert inputs.count(str(tmp_path / 'caption0.png')) == 1
-    assert inputs.count(str(tmp_path / 'caption1.png')) == 1
-    assert graph.count("enable='between(t,") == 2
-    assert 'eof_action=pass:repeatlast=0' in graph
-    assert '12.000000*pow(2,-10*' in graph  # Rise scales to quarter size.
-    assert 'trim=duration=2.000000' in graph
-    assert 'setpts=PTS-STARTPTS+3.000000/TB' in graph
-    assert last == '[vcap1]'
+    assert inputs.count(str(tmp_path / 'captions.mov')) == 1
+    assert 'overlay=0:0:eof_action=pass:repeatlast=0:format=auto' in graph
+    assert last == '[vcaptions]'
     plan = calls[0][0]['phrases']
     lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, first)
     assert plan[0]['t0'] == pytest.approx(lead + .1)
@@ -112,35 +107,26 @@ def test_plate_overlays_group_offsets_hidden_and_legacy(project, tmp_path, monke
     assert 'fade=t=in:st=3.000:d=0.14:alpha=1' in legacy
 
 
-def test_plate_cache_batch_and_prepare_only(project, tmp_path, monkeypatch):
+def test_caption_builder_cache_and_prepare_only(project, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app import scene_builder
     ctx = scenes.context_base(project)
-    ctx['phrases'] = [dict(text='Hello', t0=0, t1=2), dict(text='World', t0=2, t1=4),
-                      dict(text='Hello', t0=4, t1=6)]
+    ctx.update(duration=6, phrases=[dict(text='Hello', t0=0, t1=2), dict(text='World', t0=2, t1=4)])
     calls = []
-
-    def capture(items, directory, **kwargs):
-        calls.append(items)
-        return {item['clip']: b'mocked RGBA PNG' for item in items}
-
-    monkeypatch.setattr(stage, 'capture_stills', capture)
-    paths = scenes.caption_plates(tmp_path, ctx, size=(480, 270), render=False)
-    assert calls == [] and all(not p.exists() for p in paths)
-    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) == paths
-    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) == paths
-    assert len(calls) == 1 and len(calls[0]) == 2  # Deduplicate repeated text.
-    assert paths[0] == paths[2]
-    assert all(i['alpha'] and i['t'] == 2.5 and 'frames' not in i for i in calls[0])
-    assert all(i['size'] == (480, 270) for i in calls[0])
-    assert 'opacity: 1 !important' in paths[0].with_suffix('.html').read_text()
-    ctx['phrases'][0]['t0'] = 1
-    ctx['phrases'][0]['t1'] = 100  # Holds do not affect static content keys.
-    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) == paths
-    assert len(calls) == 1
+    def build(*args, **kwargs):
+        calls.append((args, kwargs))
+        args[3].write_bytes(b'mocked transparent clip')
+        return SimpleNamespace(path=args[3])
+    monkeypatch.setattr(scene_builder, 'render', build)
+    path = scenes.caption_plates(tmp_path, ctx, size=(480, 270), render=False)
+    assert not calls and not path.exists()
+    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) == path
+    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) == path
+    assert len(calls) == 1 and calls[0][0][2]['builder_alpha']
+    assert calls[0][1] == dict(seconds=6, size=(480, 270), fps=30, crf=17)
     ctx['phrases'][0]['text'] = 'Changed'
-    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270))[0] != paths[0]
-    assert len(calls) == 2 and len(calls[1]) == 1
-    assert scenes.caption_plates(tmp_path, ctx, size=(960, 540), render=False)[0] != paths[0]
-
+    assert scenes.caption_plates(tmp_path, ctx, size=(480, 270)) != path
+    assert len(calls) == 2
 
 
 def test_alpha_encoder_argv(tmp_path, monkeypatch):
@@ -265,3 +251,20 @@ def test_cdp_alpha_after_navigation_and_reset(tmp_path, monkeypatch):
     assert len(launches) == 1
     assert not any(method == 'Page.captureScreenshot' for method, _ in calls)
     assert sum(method == 'Page.navigate' for method, _ in calls) == 3
+
+
+def test_long_caption_segment_partitions_builder_screens(project):
+    from html.parser import HTMLParser
+    class Screens(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            row = dict(attrs)
+            if 'data-screen' in row:
+                screens.append((float(row['data-start']), float(row['data-duration'])))
+    ctx = scenes.context_base(project)
+    ctx.update(duration=130, phrases=[dict(text=f'Phrase {i}', t0=i*2+.1, t1=i*2+1.9)
+                                    for i in range(65)])
+    screens = []
+    html = scenes.render_html('essay/captions.html', ctx)
+    Screens().feed(html)
+    assert screens == [(0, 64.1), (64.1, 64), (128.1, pytest.approx(1.9))]
+    assert html.count('data-layer=') == 65

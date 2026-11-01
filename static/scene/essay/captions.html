@@ -19,10 +19,18 @@
 {% endblock %}
 {% block body %}
 {% for phrase in phrases %}
-<div class="clip caption" data-start="{{ phrase.t0 }}" data-duration="{{ phrase.t1 - phrase.t0 }}"
+{% set base = 0 if loop.index0 < 32 else phrases[(loop.index0 // 32) * 32].t0 %}
+{% if loop.index0 % 32 == 0 %}
+{% set end = phrases[loop.index0 + 32].t0 if loop.index0 + 32 < phrases | length else duration %}
+<div data-screen="captions-{{ loop.index0 // 32 }}" data-start="{{ base }}" data-duration="{{ end - base }}">
+{% endif %}
+{% set arrive = [phrase.t1 - phrase.t0, [0.001, frame.arrive_s] | max] | min %}
+<div data-layer="caption-{{ loop.index0 }}" data-bounds=".caption-plate" data-motion="rise"
+     data-motion-duration="{{ arrive }}" data-motion-exit="{{ arrive * ([0, frame.exit_ratio] | max) }}" class="clip caption" data-start="{{ phrase.t0 - base }}" data-duration="{{ phrase.t1 - phrase.t0 }}"
      data-track-index="1" data-anim="rise">
   <div class="caption-plate"><p data-text="caption-{{ loop.index0 }}" class="caption-text">{{ phrase.text }}</p></div>
 </div>
+{% if loop.index % 32 == 0 or loop.last %}</div>{% endif %}
 {% endfor %}
 {% endblock %}
 {% block script %}

@@ -113,7 +113,7 @@
     const css = getComputedStyle(el);
     const dur = Math.max(0, number(el.dataset.duration));
     const arrive = Math.min(dur, Math.max(0.001, builder ? number(el.dataset.motionDuration, spec.duration) : number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), spec.duration))));
-    const exit = builder ? 0 : Math.min(dur / 2, arrive * Math.max(0, number(el.dataset.animExit, number(css.getPropertyValue('--exit-ratio'), 0.5))));
+    const exit = builder ? Math.min(dur / 2, number(el.dataset.motionExit)) : Math.min(dur / 2, arrive * Math.max(0, number(el.dataset.animExit, number(css.getPropertyValue('--exit-ratio'), 0.5))));
     let targets = el;
     if (kind === 'words' && !builder) {
       const parts = el.textContent.split(/(\s+)/);
@@ -128,11 +128,11 @@
     const from = {...spec.from}, to = {...spec.to};
     delete from.wipe; delete to.wipe;
     if ('y' in from) from.y = number(el.dataset.motionY || el.dataset.animY, from.y);
-    if (builder && kind === 'words') { from.clipPath = 'inset(0 100% 0 0)'; to.clipPath = 'inset(0 0% 0 0)'; }
+    if (builder && ['words', 'wipe'].includes(kind)) { from.clipPath = 'inset(0 100% 0 0)'; to.clipPath = 'inset(0 0% 0 0)'; }
     const tl = gsap.timeline({paused: true, data: {start: builder ? number(el.dataset.start) + number(el.closest('[data-screen]')?.dataset.start) : clipStart(el)}});
     const stagger = kind === 'words' && !builder ? {amount: arrive * 0.4} : 0;
     tl.fromTo(targets, from, {...to, duration: kind === 'words' && !builder ? arrive * 0.6 : arrive, stagger,
-      ease: kind === 'pop' && !builder ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : el.dataset.animEase || easeNames[el.dataset.motionEase || spec.ease] || 'back.out(1.70158)'}, 0);
+      ease: kind === 'pop' && !builder ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : (builder ? easeNames[el.dataset.motionEase || spec.ease] : el.dataset.animEase || easeNames[spec.ease]) || 'back.out(1.70158)'}, 0);
     if (exit > 0) tl.to(targets, {opacity: 0, duration: exit, ease: 'power3.in'}, dur - exit);
     window.__timelines[`preset#${index}`] = tl;
   }

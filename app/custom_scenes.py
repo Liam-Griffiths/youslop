@@ -1,8 +1,6 @@
 """Positioned custom slides: capture each element once, animate with ffmpeg."""
 from __future__ import annotations
 
-import io
-import math
 from pathlib import Path
 import tempfile
 from urllib.parse import quote
@@ -10,7 +8,7 @@ import uuid
 
 from PIL import Image
 
-from . import board_scenes, custom_slide as custom, diagram, ffutil, scenes, stage, titles
+from . import board_scenes, custom_slide as custom, diagram, scene_builder, scenes, titles
 from .config import FPS, HEIGHT, WIDTH
 
 
@@ -51,9 +49,7 @@ def html_candidate(fragment, dest, spec, *, motion='reveal', seconds=custom.DEFA
     out = poster
     if motion != 'still':
         out = dest / (stem + '.mp4')
-        clip = scenes.ensure_clip(dest, 'slides/custom.html', ctx, seconds=seconds,
-                                  size=(WIDTH, HEIGHT), fps=FPS)
-        scenes._encode(clip, out, seconds, (WIDTH, HEIGHT), FPS, 17)
+        render(dest, ctx, None, out)
     return dict(id=stem, provider='custom', title='Custom HTML slide',
                 kind='image' if motion == 'still' else 'video',
                 local_path='media/' + out.name, thumb='media/' + poster.name,
@@ -103,6 +99,8 @@ def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5, *, measure_
         if 'color' in el:
             item['color'] = '#%02x%02x%02x' % titles._hex(el['color'])[:3]
         elements.append(item)
+    # Match Pillow's static-first, then reveal-order paint stack.
+    elements.sort(key=lambda el: (el['anim'] != 'none', el['order'] if el['anim'] != 'none' else 0))
     for key in custom.FONT_KEYS:
         ctx['fonts']['Custom' + key] = '/fonts/' + Path(custom._stack(key, hand)[0][0]).name
     ctx.update(elements=elements, ground_url=url(ground) if ground is not None else '', duration=seconds,
@@ -118,72 +116,6 @@ def still(spec, hand=custom.DEFAULT_HAND, media_root=None, grain=.5):
         return scenes.capture(root, 'slides/custom.html', ctx, t=0, size=(WIDTH, HEIGHT))
 
 
-def plates(root, ctx, size):
-    paths, items, boxes = [], [], {}
-    for index, el in enumerate(ctx['elements']):
-        plate_ctx = dict(ctx, plate=True, settled=True, active_index=index)
-        key, html, prepared = scenes._prepare(
-            root, 'slides/custom.html', plate_ctx, ctx['duration'], size, FPS,
-            ('custom-element-v1',))
-        out = html.with_suffix('.png')
-        # Crop in output pixels; the template keeps its 1080p composition.
-        sx, sy = size[0] / WIDTH, size[1] / HEIGHT
-        box = (math.floor(el['x'] * size[0]), math.floor(el['y'] * size[1]),
-               math.ceil(el['x'] * size[0] + el['_w'] * sx),
-               math.ceil(el['y'] * size[1] + el['_h'] * sy))
-        paths.append((out, box))
-        boxes[key] = box
-        if not out.exists() or not out.stat().st_size:
-            items.append(dict(clip=key, url_path=f'/scene/{{token}}/{html.name}',
-                              W=prepared['width'], H=prepared['height'], size=size,
-                              t=0, alpha=True))
-    if items:
-        directory = paths[0][0].parent
-        made = stage.capture_stills(items, directory, **ctx['asset_roots'])
-        for key, data in made.items():
-            with Image.open(io.BytesIO(data)) as image:
-                cropped = io.BytesIO()
-                image.crop(boxes[key]).save(cropped, format='PNG')
-            board_scenes._write(directory / f'{key}.png', cropped.getvalue())
-        if any(not p.exists() or not p.stat().st_size for p, _ in paths):
-            raise stage.StageError('Custom slide plates did not render')
-    return paths
-
-
 def render(root, ctx, ground, out, *, size=(WIDTH, HEIGHT), fps=FPS, crf=17):
-    paths = plates(root, ctx, size)
-    bg = board_scenes._asset(paths[0][0].parent, ground.resize(size))
-    inputs = ['-loop', '1', '-framerate', str(fps), '-i', str(bg)]
-    graph, last = [], '0:v'
-    # Pillow paints static elements first, then settles live beats in order.
-    indices = sorted(range(len(paths)), key=lambda i: (
-        ctx['elements'][i]['anim'] != 'none',
-        ctx['elements'][i]['order'] if ctx['elements'][i]['anim'] != 'none' else 0, i))
-    for i, index in enumerate(indices, 1):
-        path, box = paths[index]
-        el = ctx['elements'][index]
-        inputs += ['-loop', '1', '-framerate', str(fps), '-i', str(path)]
-        x, y = str(box[0]), str(box[1])
-        effect = 'format=rgba'
-        if el['anim'] != 'none':
-            start, arrival = el['start'], el['arrival']
-            progress = f'(1-pow(1-clip((T-{start})/{arrival},0,1),2))'
-            alpha = f'min(1,1.4*{progress})' if el['anim'] == 'pop' else progress
-            effect += (f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*{alpha}':"
-                       f"enable='between(t,{start},{start + arrival})'")
-            remaining = f'pow(1-clip((t-{start})/{arrival},0,1),2)'
-            if el['anim'] == 'rise':
-                y += f'+{46 * size[1] / HEIGHT}*{remaining}'
-            if el['anim'] in ('fly-left', 'fly-right'):
-                dx = (-240 if el['anim'] == 'fly-left' else 240) * size[0] / WIDTH
-                x += f'+({dx})*{remaining}'
-        graph.append(f'[{i}:v]{effect}[b{i}]')
-        graph.append(f"[{last}][b{i}]overlay=x='{x}':y='{y}':shortest=1:"
-                     f"enable='gte(t,{el['start']})'[v{i}]")
-        last = f'v{i}'
-    out.parent.mkdir(parents=True, exist_ok=True)
-    # Preview scaling is already applied to plates; never combine -vf with this graph.
-    ffutil.run([*inputs, '-filter_complex_threads', '1', '-filter_complex', ';'.join(graph),
-                '-map', f'[{last}]', '-t', str(ctx['duration']), '-r', str(fps),
-                *ffutil.video_args(out, crf=crf), '-pix_fmt', 'yuv420p', '-an', str(out)])
-    return out
+    return scene_builder.render(root, 'slides/custom.html', ctx, out,
+                                seconds=ctx['duration'], size=size, fps=fps, crf=crf).path

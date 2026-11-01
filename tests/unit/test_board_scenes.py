@@ -50,7 +50,7 @@ def test_templates_share_layout_timing_assets(project, slide, key):
     for order in range(sheet.beats):
         plate = scenes.render_html(f'board/{key}.html',
                                   {**ctx, 'active_order': order, 'plate': True, 'settled': True})
-        assert plate.count('<svg class="clip"') == 1
+        assert plate.count('data-layer=') == 1
         assert 'data-anim=' not in plate
         assert 'background:transparent!important' in plate
 
@@ -97,82 +97,25 @@ def test_diagram_and_missing_template_fallback(project, monkeypatch):
     assert not board_scenes.handles(project, 'bullets')
 
 
-def test_plate_capture_once_and_ffmpeg_holds(project, slide, tmp_path, monkeypatch):
-    sheet = board.build(slide, 'bullets', '#ffaa00', 'marker')
-    ctx = board_scenes.context(project, slide, 'bullets', sheet, small_ground(project), 'marker', 6, .5)
-    calls, argv = [], []
-
-    def capture(items, directory, **roots):
-        calls.extend(items)
-        probe = roots.pop('scene_probe')
-        assert roots == ctx['asset_roots']
-        assert all(item['size'] == (480, 270) and item['alpha'] for item in items)
-        data = io.BytesIO()
-        Image.new('RGBA', (480, 270), (255, 255, 255, 255)).save(data, format='PNG')
-        for item in items:
-            probe(None, None, item, 0)
-        return {item['clip']: data.getvalue() for item in items}
-
-    measured = []
-
-    def evaluate(cdp, session, js):
-        measured.append(js)
-        assert 'getBoundingClientRect()' in js
-        return {'result': {'value': [[139.2, 117.2, 543.1, 201.1],
-                                     [150, 130, 500, 190]]}}
-
-    monkeypatch.setattr(stage, '_evaluate', evaluate)
-    monkeypatch.setattr(stage, 'capture_stills', capture)
-    monkeypatch.setattr(board_scenes.ffutil, 'run', lambda args: argv.append(args))
-    for _ in range(2):
-        board_scenes.render(project, 'bullets', ctx, small_ground(project), tmp_path / 'out.mp4',
-                            crf=28, extra=('-vf', 'scale=480:270', '-r', '15'))
-    assert len(calls) == sheet.beats  # Cache hit, no new browser capture.
-    assert len(measured) == sheet.beats  # Measurement shares that capture.
-    for path, box in board_scenes.plates(project, 'bullets', ctx, (480, 270)):
-        assert box == [34, 29, 136, 51]  # union, scaled outwards
-        with Image.open(path) as image:
-            assert image.size == (102, 22)
-    graph = argv[0][argv[0].index('-filter_complex') + 1]
-    for start, duration in ctx['beats']:
-        assert f'(1-pow(1-clip((T-{start})/{duration},0,1),2))' in graph
-        assert f"enable='between(t,{start},{start+duration})'" in graph
-        assert f"enable='gte(t,{start})'" in graph
-    assert graph.count('geq=') == sheet.beats
-    assert graph.count('overlay=34:29:shortest=1') == sheet.beats
-    assert '*clip(((102+' in graph  # horizontal ramp in crop coordinates
-    assert '/0.3,0,1)' in graph  # Pillow's initial text opacity ramp
-    assert 'fade=' not in graph
-    assert '-vf' not in argv[0]
-    assert argv[0][argv[0].index('-t') + 1] == '6'
-
-
-@pytest.mark.parametrize('kinds,photo,wipe', [
-    (['text', 'stroke'], False, True),
-    (['stroke'], False, True),
-    (['wash'], False, False),
-    ([], True, False),
-    (['stroke'], True, False),  # split's divider and print share a beat
-])
-def test_cropped_reveal_by_beat_kind(project, tmp_path, monkeypatch, kinds, photo, wipe):
-    path, box = tmp_path / 'plate.png', [35, 30, 135, 50]
-    ctx = dict(beats=[(.75, .4)], duration=3,
-               marks=[dict(order=0, kind=kind, size=60) for kind in kinds],
-               photos=[dict(order=0)] if photo else [])
-    monkeypatch.setattr(board_scenes, 'plates', lambda *a: [(path, box)])
-    argv = []
-    monkeypatch.setattr(board_scenes.ffutil, 'run', lambda args: argv.append(args))
-    board_scenes.render(project, 'bullets', ctx, small_ground(project), tmp_path / 'out.mp4',
-                        crf=28, extra=('-vf', 'scale=480:270'))
-    graph = argv[0][argv[0].index('-filter_complex') + 1]
-    assert 'overlay=35:30:shortest=1' in graph
-    assert ('geq=' in graph) == wipe
-    assert ('fade=t=in:st=0.75:d=0.4:alpha=1' in graph) == (not wipe)
-    if wipe:
-        assert '(T-0.75)/0.4' in graph
-        assert "enable='between(t,0.75,1.15)'" in graph
-        assert "enable='gte(t,0.75)'" in graph
-        assert '100+' in graph  # width is the crop's 100px, never 480 or 1920
+@pytest.mark.parametrize('key', KEYS + ['diagram'])
+def test_builder_wrapper(project, slide, tmp_path, monkeypatch, key):
+    from types import SimpleNamespace
+    from app import scene_builder
+    sheet = board.build(slide, key, '#ffaa00', 'marker')
+    ctx = board_scenes.context(project, slide, key, sheet, small_ground(project), 'marker', 6, .5)
+    calls = []
+    out = tmp_path / 'out.mp4'
+    monkeypatch.setattr(scene_builder, 'render', lambda *a, **kw:
+                        calls.append((a, kw)) or SimpleNamespace(path=out))
+    assert board_scenes.render(project, key, ctx, None, out, crf=28,
+                              extra=('-vf', 'scale=480:270')) == out
+    assert calls == [((project, f'board/{key}.html', ctx, out),
+                      dict(seconds=6, size=(1920, 1080), fps=30, crf=28,
+                           extra=('-vf', 'scale=480:270')))]
+    html = scenes.render_html(f'board/{key}.html', ctx)
+    assert html.count('data-layer=') == sheet.beats
+    assert 'data-motion-ease="quad-out"' in html
+    assert 'data-motion-feather=' in html
 
 
 def test_capture_stills_forwards_probe(tmp_path, monkeypatch):
@@ -243,11 +186,3 @@ def test_segment_scene_dispatch(project, slide, tmp_path, monkeypatch, key):
     assert board.render_segment(project, [(slide, 2)], 3, out) == out
     assert calls == [key]
     assert out.read_bytes() == b'clip'
-
-
-def test_missing_plate_is_an_error(project, slide, monkeypatch):
-    sheet = board.build(slide, 'bullets', '#ffaa00', 'marker')
-    ctx = board_scenes.context(project, slide, 'bullets', sheet, small_ground(project), 'marker', 6, .5)
-    monkeypatch.setattr(stage, 'capture_stills', lambda *a, **kw: {})
-    with pytest.raises(stage.StageError, match='Board plates did not render'):
-        board_scenes.plates(project, 'bullets', ctx, (480, 270))

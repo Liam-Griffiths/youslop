@@ -46,11 +46,21 @@ _PROBE = r"""(() => {
  const screens = [...document.querySelectorAll('[data-screen]')].map(e => ({
    id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration), camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
  const rows = layers.map((e,i) => {
-   const r=e.getBoundingClientRect();
+   let r=e.getBoundingClientRect();
+   const painted = e.dataset.bounds ? [...e.querySelectorAll(e.dataset.bounds)] :
+     (e instanceof SVGElement ? [...e.querySelectorAll('text,path,rect,polyline,circle,image')] : []);
+   if (painted.length) {
+     const boxes=painted.map(n=>{ const b=n.getBoundingClientRect();
+       const pad=n instanceof SVGElement ? parseFloat(getComputedStyle(n).strokeWidth)/2+2 : 0;
+       return [b.left-pad,b.top-pad,b.right+pad,b.bottom+pad]; });
+     r={left:Math.min(...boxes.map(b=>b[0])),top:Math.min(...boxes.map(b=>b[1])),
+        right:Math.max(...boxes.map(b=>b[2])),bottom:Math.max(...boxes.map(b=>b[3]))};
+   }
    return {id:e.dataset.layer, index:i, screen:e.closest('[data-screen]')?.dataset.screen || '',
      start:Number(e.dataset.start || 0), duration:Number(e.dataset.duration || root.dataset.duration),
      motion:e.dataset.motion || 'none', arrival:Number(e.dataset.motionDuration || 0.6),
-     ease:e.dataset.motionEase, y:e.dataset.motionY, capture:e.dataset.capture,
+     ease:e.dataset.motionEase, y:e.dataset.motionY, feather:Number(e.dataset.motionFeather || 1),
+     exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
  });
  const clone = document.body.cloneNode(true);
@@ -101,7 +111,7 @@ def _plan(data, seconds, fps):
 
 def _plates(project, template, ctx, seconds, size, fps, stats):
     key, html, ctx = scenes._prepare(project, template, ctx, seconds, size, fps,
-                                    ('builder-v1', MOTIONS))
+                                    ('builder-v2', MOTIONS))
     manifest = html.with_suffix('.layers.json')
     if manifest.exists():
         data = json.loads(manifest.read_text())
@@ -132,6 +142,8 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                 _value(cdp, session, 'Object.values(window.__timelines).forEach(t=>t.progress(1))')
             css = ('[data-layer], [data-layer] *, [data-screen], [data-screen] * {visibility:hidden!important}' if selector is None else
                    f'html,body {{background:transparent!important}} body * {{visibility:hidden!important}} {selector}, {selector} * {{visibility:visible!important}}')
+            if selector and time is None and layer.get('exit', 0) > 0:
+                css += f' {selector} {{opacity:1!important}}'
             _value(cdp, session, f'window.__isolate.textContent={json.dumps(css)}')
             raw = base64.b64decode(cdp.send('Page.captureScreenshot',
                                           dict(format='png', fromSurface=True), session)['data'])
@@ -236,10 +248,19 @@ def _compile(data, screen, size, fps, directory):
         inputs += ['-i', layer['path']]
         m, alpha = _motion(layer), _motion(layer, 'T')
         w, h = layer['box'][2]-layer['box'][0], layer['box'][3]-layer['box'][1]
+        # Soft nib stays in crop coordinates; never evaluate geq on the ground.
+        wipe = f"lte(X/W,{alpha['wipe']})"
+        if layer['motion'] == 'wipe':
+            feather = max(1, layer.get('feather', 1) * size[0]/data['width'])
+            wipe = (f"clip({alpha['wipe']}/0.3,0,1)*"
+                    f"clip((({w}+{2*feather})*{alpha['wipe']}-X)/{2*feather},0,1)")
         # Scale/alpha/wipe evaluate only the small crop. Reuse decoded still pixels.
         effect = (f"loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba,"
-                  f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip({alpha['opacity']},0,1)*lte(X/W,{alpha['wipe']})':enable='between(t,{layer['start']},{layer['start']+layer['arrival']})',"
+                  f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip({alpha['opacity']},0,1)*{wipe}':enable='between(t,{layer['start']},{layer['start']+layer['arrival']})',"
                   f"scale=w='max(1,iw*{m['scale']})':h='max(1,ih*{m['scale']})':eval=frame")
+        exit_s = min(layer.get('exit', 0), layer['duration']/2)
+        if exit_s > 0:
+            effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"
         if layer.get('frames'):
             # A concat demuxer sequence is confined to the declared arrival, then holds its settled plate.
             sequence = directory / f'frames-{i}.txt'
@@ -252,12 +273,15 @@ def _compile(data, screen, size, fps, directory):
         y = f"{layer['box'][1]}+{sy}*{m['y']}+({h}-overlay_h)/2"
         if layer.get('frames'):
             x, y = str(layer['box'][0]), str(layer['box'][1])
-        graph.append(f"[{last}][l{i}]overlay=x='{x}':y='{y}':enable='gte(t,{layer['start']})*lt(t,{layer['start']+layer['duration']})':eof_action=repeat[v{i}]")
+        graph.append(f"[{last}][l{i}]overlay=x='{x}':y='{y}':enable='gte(t,{layer['start']})*lt(t,{layer['start']+layer['duration']})':eof_action=repeat:format=auto[v{i}]")
         last = f'v{i}'
     keys = screen.get('camera', data.get('camera', []))
     x, y, z = _camera(keys, f'(on/{fps}+{screen["start"]})')
     x, y = f'({x})*{size[0]/data["width"]}', f'({y})*{size[1]/data["height"]}'
-    graph.append(f"[{last}]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={size[0]}x{size[1]}:fps={fps},format=yuv420p[out]")
+    if data.get('alpha'):
+        graph.append(f'[{last}]format=rgba[out]')
+    else:
+        graph.append(f"[{last}]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={size[0]}x{size[1]}:fps={fps},format=yuv420p[out]")
     text = ';\n'.join(graph)
     if len(text.encode()) >= 65536:
         raise ValueError('screen graph exceeds 64 KB; add screen boundaries')
@@ -275,7 +299,7 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
         del extra[i:i+2]
     stats = dict(captures=0, cache_hits=0, layers=0, passes=0, largest_graph_bytes=0, captured_frames=0)
     data = _plates(project, template, ctx, seconds, size, fps, stats)
-    data.update(width=ctx['width'], height=ctx['height'])
+    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
     screens = _plan(data, seconds, fps)
     stats['layers'] = len(data['layers'])
     out = Path(out)
@@ -290,7 +314,7 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
             count = round((screen['start']+screen['duration'])*fps)-round(screen['start']*fps)
             args = [*inputs, '-filter_complex_threads', '1', '-filter_complex_script', str(script),
                 '-map', '[out]', '-frames:v', str(count), '-r', str(fps),
-                *ffutil.video_args(out, crf=crf), *extra, '-an', str(part)]
+                *(['-c:v', 'png', '-pix_fmt', 'rgba'] if data.get('alpha') else ffutil.video_args(out, crf=crf)), *extra, '-an', str(part)]
             try:
                 ffutil.run(args)
             except ffutil.FFError as exc:

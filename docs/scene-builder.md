@@ -1,8 +1,8 @@
 # Scene builder
 
 `app.scene_builder.render(project, template, ctx, out, seconds=..., size=...,
-fps=..., crf=..., extra=...)` returns `Result(path, stats)`. Nothing uses it
-implicitly: renderer migrations belong to T2.9/T2.10.
+fps=..., crf=..., extra=...)` returns `Result(path, stats)`. Captions, boards,
+diagrams and custom-slide format wrappers use this entry point.
 
 Chromium loads one page, probes settled bounds and computed styles, then captures
 one cropped RGBA PNG per layer plus a shared ground. Content-addressed plates
@@ -37,6 +37,7 @@ word arrivals, never one per word/letter.
 | rise | fade, y 48 → 0 | expo-out |
 | fly-left / fly-right | fade, x ±240 → 0 | expo-out |
 | scale-in | fade, scale .85 → 1 | expo-out |
+| wipe | soft horizontal ink wipe, initial opacity ramp | quad-out |
 | words | rise and horizontal wipe | expo-out |
 | blur-in | blur 16 → 0 in browser; fade + scale in encode | expo-out |
 | pop | opacity overshoot, clamped | back-out |
@@ -61,3 +62,18 @@ settled plate. Root `data-budget` defaults to .1 of segment frames, summed acros
 windows, rounded up per window. Exceeding it fails before screenshots and names
 the layer. Stats report screenshots, cache hits, layers, screen passes, largest
 graph bytes and window frames requested. Debug logs include the same stats.
+
+Board SVG layers use their painted child bounds (including stroke padding).
+`data-bounds="<selector>"` can select painted descendants for a CSS layer whose
+paint extends outside its own box, as with the translated caption plate.
+`data-motion-feather` sets the wipe nib width in composition pixels;
+`data-motion-exit` adds a final alpha fade (seconds, capped at half the hold).
+Settled captures ignore the exit opacity. `ctx.builder_alpha=True` emits RGBA
+PNG-in-MOV for overlays, without a camera transform; normal clips remain opaque.
+
+Captions, board/diagram and custom-slide wrappers now call the builder. Captions
+use screens of at most 32 phrases and one alpha overlay in the picture graph.
+Board ink uses wipe; photos/washes retain fades. Diagrams now use that same wipe
+instead of per-frame path-length capture. JSON slides keep their SVG baselines,
+static-first paint order and quadratic ease; pop uses the shared back-out preset.
+Sanitised HTML stays one static layer; its `data-start` metadata remains inert.

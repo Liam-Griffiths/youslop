@@ -23,12 +23,16 @@
 {% endblock %}
 {% block body %}
 {% if custom_html | default('') %}
+<div data-layer="html" data-motion="none" data-start="0" data-duration="{{ duration }}" style="position:absolute;inset:0;">
 {{ custom_html | clean_html(html_sources | default(())) | safe }}
+</div>
 {% else %}
 {% if not plate %}<div class="custom-ground"></div>{% endif %}
 {% for el in elements %}
 {% if active_index is none or active_index == loop.index0 %}
-<div class="clip custom-element" data-start="{{ 0 if settled else el.start }}"
+<div data-layer="element-{{ loop.index0 }}" data-motion="{{ 'none' if settled else el.anim }}"
+     data-motion-duration="{{ el.arrival if el.arrival > 0 else 0.001 }}" data-motion-ease="{{ 'back-out' if el.anim == 'pop' else 'quad-out' }}" data-motion-y="46"
+     class="clip custom-element" data-start="{{ 0 if settled else el.start }}"
      data-duration="{{ duration if settled else duration - el.start }}" data-track-index="{{ loop.index0 }}"
      {% if not settled %}data-anim="{{ el.anim }}" data-anim-dur="{{ el.arrival }}" data-anim-exit="0" data-anim-ease="power1.out" data-anim-y="46"{% endif %}
      style="left:{{ el.x * 100 }}%;top:{{ el.y * 100 }}%;width:{{ el.w * 100 }}%;height:{{ el.h * 100 }}%;">

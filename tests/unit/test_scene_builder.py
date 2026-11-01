@@ -23,7 +23,7 @@ def scene(count=3, seconds=5):
 def mocked(tmp_path, monkeypatch):
     data = scene()
     image = io.BytesIO()
-    Image.new('RGBA', (48, 28), (255, 0, 0, 255)).save(image, format='PNG')
+    Image.new('RGBA', (48, 28), (255, 0, 0, 128)).save(image, format='PNG')
     calls = []
     class CDP:
         def send(self, method, args, session):
@@ -105,19 +105,26 @@ def test_window_budget_before_capture(mocked, tmp_path):
     assert not calls
 
 
-def test_encode_one_tiny_mocked_segment(mocked, tmp_path, monkeypatch):
+@pytest.mark.parametrize('alpha', [False, True])
+def test_encode_one_tiny_mocked_segment(mocked, tmp_path, monkeypatch, alpha):
     data, _ = mocked
     data.update(scene(len(b.MOTIONS), 1))
     for layer, motion in zip(data['layers'], b.MOTIONS):
         layer['motion'] = motion
     data['layers'][0].update(capture='frames', arrival=.1)
-    data['camera'] = [dict(t=0,zoom=1), dict(t=1,zoom=1.2,x=10,y=5)]
+    data['camera'] = [] if alpha else [dict(t=0,zoom=1), dict(t=1,zoom=1.2,x=10,y=5)]
     monkeypatch.setattr(b.ffutil, 'run', REAL_RUN)
-    result = b.render(tmp_path, 'test.html', dict(width=192,height=112), tmp_path/'tiny.mp4',
+    result = b.render(tmp_path, 'test.html', dict(width=192,height=112, builder_alpha=alpha), tmp_path/('tiny.mov' if alpha else 'tiny.mp4'),
                       seconds=1, size=(48,28), fps=30, crf=28)
     assert result.path.stat().st_size > 0
     assert result.stats['captured_frames'] == 3
     assert b.ffutil.dimensions(result.path) == (48,28)
+    if alpha:
+        frame = tmp_path / 'frame.png'
+        REAL_RUN(['-i', str(result.path), '-frames:v', '1', str(frame)])
+        with Image.open(frame) as image:
+            assert image.mode == 'RGBA' and image.getpixel((47, 27))[3] == 128
+
 
 
 def test_limit_and_flatten_settled_layers(mocked, tmp_path):
@@ -137,3 +144,19 @@ def test_limit_and_flatten_settled_layers(mocked, tmp_path):
     stats = dict(captures=0, cache_hits=0, captured_frames=0)
     b._plates(tmp_path, 'test.html', dict(width=192,height=112), 5, (48,28), 30, stats)
     assert stats['captures'] == 0 and stats['cache_hits'] == 50
+
+
+def test_soft_wipe_and_caption_exit_compile_on_crop(mocked, tmp_path):
+    data, _ = mocked
+    data.update(scene(1))
+    data['layers'][0].update(motion='wipe', start=.5, duration=4, arrival=.4,
+                             feather=20, exit=.2, ease='quad-out')
+    stats = dict(captures=0, cache_hits=0, captured_frames=0)
+    plates = b._plates(tmp_path, 'test.html', dict(width=192,height=112), 5, (48,28), 30, stats)
+    plates.update(width=192, height=112, alpha=True)
+    _, graph = b._compile(plates, dict(id='', start=0, duration=5), (48,28), 30, tmp_path)
+    assert '((5+10.0)*' in graph and '/10.0,0,1)' in graph  # five-pixel crop, scaled nib
+    assert '/0.3,0,1)' in graph and '/0.4,0,1)' in graph
+    assert "enable='between(t,0.5,0.9)'" in graph
+    assert 'fade=t=out:st=4.3:d=0.2:alpha=1' in graph
+    assert 'format=auto' in graph and 'zoompan' not in graph

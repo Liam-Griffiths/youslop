@@ -19,7 +19,7 @@ from . import channels, cuts, ffutil, sanitise, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
-SCENE_VERSION = 3
+SCENE_VERSION = 4
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
 ASSETS_URLS = {kind: f"/scene/{{token}}/{kind}/" for kind in ('project', 'channel')}
@@ -287,39 +287,22 @@ def ensure_clip(project, template, ctx, *, seconds, size, fps, key_extra=()) -> 
     return out
 
 
-def caption_plates(project, ctx, *, size, render=True) -> list[Path]:
-    """Cache settled RGBA plates by content, capturing misses in one browser.
-
-    Timing belongs to ffmpeg. Each page holds one phrase, so its cache key is
-    independent of the phrase's position or hold in the segment.
-    """
-    from . import titles
-    paths, items = [], {}
-    for phrase in ctx['phrases']:
-        plate_ctx = {**ctx, 'settled': True, 'phrases': [dict(text=phrase['text'], t0=0, t1=5)],
-                     'caption_size': titles.CAPTION_CAP, 'caption_lines': titles.CAPTION_LINES}
-        key, html, prepared = _prepare(project, 'essay/captions.html', plate_ctx,
-                                       5, size, FPS, ('settled-caption-rgba',))
-        out = html.with_suffix('.png')
-        paths.append(out)
-        if render and (not out.exists() or not out.stat().st_size):
-            items[key] = dict(clip=key, url_path=f'/scene/{{token}}/{html.name}',
-                              W=prepared['width'], H=prepared['height'], size=size,
-                              t=2.5, alpha=True)
-    if items:
-        directory = paths[0].parent
-        made = stage.capture_stills(list(items.values()), directory,
-                                    **ctx.get('asset_roots', {}))
-        for key, data in made.items():
-            out = directory / f'{key}.png'
-            # Different segment workers can discover the same content miss.
-            with tempfile.NamedTemporaryFile(dir=directory, suffix='.part.png', delete=False) as f:
-                temporary = Path(f.name)
-                f.write(data)
-            temporary.replace(out)
-        if any(not path.exists() or not path.stat().st_size for path in paths):
-            raise stage.StageError('Caption plates did not render')
-    return paths
+def caption_plates(project, ctx, *, size, render=True, fps=FPS) -> Path:
+    """Prepare/cache one transparent builder clip for the segment's captions."""
+    from . import scene_builder, titles
+    seconds = ctx.get('duration', max(p['t1'] for p in ctx['phrases']))
+    ctx = dict(ctx, caption_size=titles.CAPTION_CAP, caption_lines=titles.CAPTION_LINES,
+               builder_alpha=True)
+    key, html, _ = _prepare(project, 'essay/captions.html', ctx, seconds, size, fps,
+                            ('builder-captions-v1', scene_builder.MOTIONS))
+    out = html.with_suffix('.mov')
+    if render and (not out.exists() or not out.stat().st_size):
+        # Parallel workers publish complete clips atomically.
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='captions-') as tmp:
+            clip = scene_builder.render(project, 'essay/captions.html', ctx,
+                Path(tmp) / 'captions.mov', seconds=seconds, size=size, fps=fps, crf=17)
+            clip.path.replace(out)
+    return out
 
 
 def measure_captions(project, texts, *, render=True) -> list[dict | None]:

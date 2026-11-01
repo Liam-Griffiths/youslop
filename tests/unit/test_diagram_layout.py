@@ -79,37 +79,22 @@ def test_scene_contract_and_board_dispatch(project, tmp_path, monkeypatch, kind)
         assert html.count('<rect ') == 3
     calls = []
     monkeypatch.setattr(board, '_ground_for', lambda *a: ground)
-    monkeypatch.setattr(diagram_scenes, 'render', lambda *a, **kw: calls.append((a, kw)))
+    monkeypatch.setattr(board_scenes, 'render', lambda *a, **kw: calls.append((a, kw)))
     board.render_segment(project, [(slide, 5)], 5, tmp_path / 'clip.mp4')
     assert len(calls) == 1
-    assert calls[0][0][1]['beats'] == ctx['beats']
+    assert calls[0][0][2]['beats'] == ctx['beats']
     project.style.board_engine = 'pillow'
     assert not board_scenes.handles(project, 'diagram')
 
 
-def test_motion_capture_only_arrivals_cache_and_preview_scale(project, tmp_path, monkeypatch):
+def test_diagram_builder_wrapper(tmp_path, monkeypatch):
     ctx, ground = diagram_scenes.context(tmp_path, spec(), '#ffaa00', 'marker', 10, grain=0)
-    captures, commands = [], []
-
-    def render(items, directory):
-        captures.extend(items)
-        for item in items:
-            (directory / (item['clip'] + '.mov')).write_bytes(b'motion')
-
-    monkeypatch.setattr(stage, 'render_scene', render)
-    monkeypatch.setattr(diagram_scenes.ffutil, 'run', lambda args: commands.append(args))
-    for _ in range(2):
-        diagram_scenes.render(tmp_path, ctx, ground, tmp_path / 'out.mp4',
-                              extra=('-vf', 'scale=480:270', '-r', '15'))
-    assert len(captures) == len(ctx['beats'])
-    assert all(i['frames'] <= 18 and i['size'] == (480, 270) and i['alpha'] for i in captures)
-    assert sum(i['frames'] for i in captures) < 10 * dg.FPS
-    assert '-vf' not in commands[0]
-    graph = commands[0][commands[0].index('-filter_complex') + 1]
-    assert graph.count('tpad=stop_mode=clone') == len(ctx['beats'])
-    for start, _ in ctx['beats']:
-        assert f'setpts=PTS+{start}/TB' in graph
-    assert commands[0][commands[0].index('-t') + 1] == '10'
+    calls = []
+    monkeypatch.setattr(board_scenes, 'render', lambda *a, **kw: calls.append((a, kw)) or a[4])
+    out = tmp_path / 'out.mp4'
+    assert diagram_scenes.render(tmp_path, ctx, ground, out, extra=('-vf', 'scale=480:270')) == out
+    assert calls == [((tmp_path, 'diagram', ctx, ground, out),
+                      dict(crf=18, extra=('-vf', 'scale=480:270')))]
 
 
 def test_preview_and_standalone_flag(monkeypatch):
@@ -122,13 +107,6 @@ def test_preview_and_standalone_flag(monkeypatch):
     assert len(calls) == 1
     assert diagram_preview({'spec': spec(), 'engine': 'pillow'}).body.startswith(b'\x89PNG')
     assert len(calls) == 1
-
-
-def test_missing_motion_is_error(tmp_path, monkeypatch):
-    ctx, ground = diagram_scenes.context(tmp_path, spec(), '#ffaa00', 'marker', 5, grain=0)
-    monkeypatch.setattr(stage, 'render_scene', lambda *a: {})
-    with pytest.raises(stage.StageError, match='Diagram motion did not render'):
-        diagram_scenes.render(tmp_path, ctx, ground, tmp_path / 'out.mp4')
 
 
 @pytest.mark.parametrize('motion', ['still', 'reveal'])

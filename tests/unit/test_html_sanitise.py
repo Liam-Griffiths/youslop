@@ -3,6 +3,8 @@ from contextlib import contextmanager
 import io
 
 from PIL import Image
+from types import SimpleNamespace
+
 import pytest
 
 from app import custom_scenes, llm, render, sanitise, scenes, script_gen, stage
@@ -155,7 +157,8 @@ def test_html_render_and_candidate_motion(project, tmp_path, monkeypatch):
     project.slides = [Slide(id='html', custom_html=GOOD)]
     calls = []
     monkeypatch.setattr(render, 'project_dir', lambda pid: tmp_path)
-    monkeypatch.setattr(scenes, 'ensure_clip', lambda *a, **kw: calls.append(kw) or tmp_path / 'clip.mp4')
+    monkeypatch.setattr(custom_scenes.scene_builder, 'render', lambda *a, **kw:
+                        calls.append(kw) or SimpleNamespace(path=a[3]))
     monkeypatch.setattr(scenes, '_encode', lambda *a: None)
     monkeypatch.setattr(scenes, 'capture', lambda *a, **kw: b'fake png')
     root = tmp_path / 'media'
@@ -163,7 +166,7 @@ def test_html_render_and_candidate_motion(project, tmp_path, monkeypatch):
     cand = custom_scenes.html_candidate(GOOD, root, {}, seconds=4)
     assert cand['kind'] == 'video' and cand['custom_html'] == GOOD and cand['duration'] == 4
     render._render_custom_style(project, [(project.slides[0], 4)], 5, tmp_path / 'out.mp4', (480, 270), 15)
-    assert calls[-1] == dict(seconds=5, size=(480, 270), fps=15)
+    assert calls[-1] == dict(seconds=5, size=(480, 270), fps=15, crf=17)
     project.slides[0].custom_html = '<img src="https://evil/x">'
     with pytest.raises(sanitise.UnsafeHTML):
         render._render_custom_style(project, [(project.slides[0], 4)], 5, tmp_path / 'out.mp4')

@@ -7,7 +7,11 @@
 <div class="board" style="--margin:{{ margin }}px;--body-x:{{ body.x }}px;--body-y:{{ body.y }}px;--body-w:{{ body.w }}px;--body-h:{{ body.h }}px;{% if not plate %}--board-ground:url('{{ ground_url }}'){% endif %}">
 {% for start, arrival in beats %}{% set order=loop.index0 %}
 {% if active_order is none or active_order == order %}
-<svg class="clip" data-start="{{ 0 if settled else start }}" data-duration="{{ duration }}" data-track-index="{{ order }}" viewBox="0 0 1920 1080"
+{% set ink=marks | selectattr('order', 'equalto', order) | rejectattr('kind', 'equalto', 'wash') | list %}
+{% set photo=photos | selectattr('order', 'equalto', order) | list %}
+<svg data-layer="beat-{{ order }}" data-motion="{{ 'none' if settled else ('wipe' if ink and not photo else 'fade') }}"
+     data-motion-duration="{{ arrival }}" data-motion-ease="quad-out"
+     data-motion-feather="{{ ([1] + (ink | selectattr('kind', 'equalto', 'text') | map(attribute='size') | list)) | max * 0.22 }}" class="clip" data-start="{{ 0 if settled else start }}" data-duration="{{ duration - start }}" data-track-index="{{ order }}" viewBox="0 0 1920 1080"
      {% if not settled %}data-anim="fade" data-anim-dur="{{ arrival }}" data-anim-exit="0"{% endif %}>
 {% for p in photos if p.order == order %}<image href="{{ p.url }}" x="{{ p.x }}" y="{{ p.y }}" width="{{ p.w }}" height="{{ p.h }}"/>{% endfor %}
 {% for m in marks if m.order == order %}

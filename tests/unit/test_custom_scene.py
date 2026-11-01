@@ -99,46 +99,23 @@ def test_text_baselines_match_pillow_top_anchor(tmp_path, face, size, width, hei
     assert 'line-height:' not in html
 
 
-def test_element_capture_once_cached_and_preview_graph(tmp_path, monkeypatch):
+def test_elements_use_builder(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app import scene_builder
     ctx, ground = custom_scenes.context(tmp_path, spec(), 6, grain=0)
-    captures, commands = [], []
-
-    def capture(items, directory, **roots):
-        captures.extend(items)
-        assert roots == ctx['asset_roots']
-        assert all(i['size'] == (480, 270) and i['alpha'] and i['t'] == 0 for i in items)
-        data = io.BytesIO()
-        Image.new('RGBA', (480, 270), 'red').save(data, 'PNG')
-        for item in items:
-            html = (directory / (item['clip'] + '.html')).read_text()
-            assert len(Clips(html).clips) == 1
-            assert 'data-anim=' not in html
-            assert 'background:transparent!important' in html
-        return {i['clip']: data.getvalue() for i in items}
-
-    monkeypatch.setattr(stage, 'capture_stills', capture)
-    monkeypatch.setattr(custom_scenes.ffutil, 'run', lambda args: commands.append(args))
-    for _ in range(2):
-        custom_scenes.render(tmp_path, ctx, ground, tmp_path / 'out.mp4', size=(480, 270), fps=15)
-    assert len(captures) == len(ctx['elements'])
-    assert '-vf' not in commands[0]
-    graph = commands[0][commands[0].index('-filter_complex') + 1]
-    assert graph.count('overlay=') == len(ctx['elements'])
-    assert graph.count('geq=') == len(ctx['elements']) - 1
-    assert '+(-60.0)*pow(' in graph and '+(60.0)*pow(' in graph
-    assert '+11.5*pow(' in graph and 'min(1,1.4*' in graph
-    assert commands[0][commands[0].index('-t') + 1] == '6'
-    assert commands[0][commands[0].index('-r') + 1] == '15'
-    for path, box in custom_scenes.plates(tmp_path, ctx, (480, 270)):
-        with Image.open(path) as image:
-            assert image.size == (box[2] - box[0], box[3] - box[1])
-
-
-def test_missing_capture_is_error(tmp_path, monkeypatch):
-    ctx, _ = custom_scenes.context(tmp_path, spec(), 6, grain=0)
-    monkeypatch.setattr(stage, 'capture_stills', lambda *a, **kw: {})
-    with pytest.raises(stage.StageError, match='Custom slide plates did not render'):
-        custom_scenes.plates(tmp_path, ctx, (480, 270))
+    out = tmp_path / 'out.mp4'
+    calls = []
+    monkeypatch.setattr(scene_builder, 'render', lambda *a, **kw:
+                        calls.append((a, kw)) or SimpleNamespace(path=out))
+    assert custom_scenes.render(tmp_path, ctx, ground, out, size=(480, 270), fps=15) == out
+    assert calls == [((tmp_path, 'slides/custom.html', ctx, out),
+                      dict(seconds=6, size=(480, 270), fps=15, crf=17))]
+    clips = Clips(scenes.render_html('slides/custom.html', ctx)).clips
+    assert [c['data-motion'] for c in clips] == [e['anim'] for e in ctx['elements']]
+    assert [c['data-motion-ease'] for c in clips] == [
+        'back-out' if e['anim'] == 'pop' else 'quad-out' for e in ctx['elements']]
+    assert ctx['elements'][0]['anim'] == 'none'
+    assert [e['order'] for e in ctx['elements'][1:]] == sorted(e['order'] for e in ctx['elements'][1:])
 
 
 def test_schema_default_fallback_unknown_fields(project):

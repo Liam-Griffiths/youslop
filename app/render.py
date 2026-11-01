@@ -528,9 +528,7 @@ def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
         from . import custom_scenes
         root = project_dir(project.id) / 'media'
         ctx = custom_scenes.html_context(root, slide.custom_html, spec, seg_len, project)
-        clip = scenes.ensure_clip(root, 'slides/custom.html', ctx, seconds=seg_len, size=size, fps=fps)
-        scenes._encode(clip, out, seg_len, size, fps, crf)
-        return out
+        return custom_scenes.render(root, ctx, None, out, size=size, fps=fps, crf=crf)
     if not spec.get("elements"):
         style = slide_styles.get(slide_styles.id_from_format(project.style.format))
         if not style:
@@ -865,29 +863,14 @@ def _segment_graph(
             offset += dur
         if plan:
             ctx = scenes.context_base(project, channel)
-            ctx.update(phrases=plan)
-            plates = scenes.caption_plates(project, ctx, size=size, render=not prepare_only)
-            for c, (phrase, plate) in enumerate(zip(plan, plates)):
-                start, end = phrase['t0'], phrase['t1']
-                hold = end - start
-                arrive = min(hold, max(.001, frame.arrive_s))
-                exit_s = min(hold / 2, arrive * max(0, frame.exit_ratio))
-                inputs += _still_input(plate, fps)
-                # Process only the phrase's hold, then shift it into segment time.
-                # eof_action=pass releases each plate after its own short stream.
-                graph += (
-                    f';[{n_inputs}:v]format=rgba,{HOLD_STILL},trim=duration={hold:.6f},'
-                    f'fade=t=in:st=0:d={arrive:.6f}:alpha=1'
-                    + (f',fade=t=out:st={hold - exit_s:.6f}:d={exit_s:.6f}:alpha=1'
-                       if exit_s > 0 else '')
-                    + f',setpts=PTS-STARTPTS+{start:.6f}/TB[cap{c}]'
-                    f";{last}[cap{c}]overlay=x=0:y='if(lt(t,{start + arrive:.6f}),"
-                    f"{48 * h / HEIGHT:.6f}*pow(2,-10*(t-{start:.6f})/{arrive:.6f}),0)':"
-                    f"enable='between(t,{start:.6f},{end:.6f})':"
-                    f'eof_action=pass:repeatlast=0:format=auto[vcap{c}]'
-                )
-                n_inputs += 1
-                last = f'[vcap{c}]'
+            ctx.update(phrases=plan, duration=seg_len)
+            clip = scenes.caption_plates(project, ctx, size=size, fps=fps,
+                                         render=not prepare_only)
+            inputs += ['-i', str(clip)]
+            graph += (f';{last}[{n_inputs}:v]overlay=0:0:'
+                      'eof_action=pass:repeatlast=0:format=auto[vcaptions]')
+            n_inputs += 1
+            last = '[vcaptions]'
 
     offset = 0.0
     for n, (member, dur) in enumerate(group):
