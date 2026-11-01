@@ -246,6 +246,21 @@ def cmd_doctrine(args):
         print(doctrine.motion(), end='')
 
 
+def cmd_footage(args):
+    from . import footage
+    if args.footage_cmd == 'list':
+        _print_json([{'id': s.id, 'path': s.path, 'copied': s.copied,
+                      'files': len(s.files)} for s in footage.list_shoots()])
+    elif args.footage_cmd == 'status':
+        _print_json(footage.status(args.shoot))
+    else:
+        _guard_write()
+        progress = lambda message: print(message, file=sys.stderr, flush=True)
+        shoot = footage.import_shoot(args.path, copy=args.copy, progress=progress)
+        # jobs uses daemon threads; the CLI must finish the worker before exiting.
+        _print_json(footage.process_shoot(shoot.id, progress))
+
+
 def cmd_learning(args):
     from . import channels, learning
     if args.cmd == 'format' and args.action == 'list':
@@ -328,6 +343,13 @@ def main(argv=None):
     catalog_sub.add_parser("list")
     catalog_sub.add_parser("search").add_argument("query")
     catalog_sub.add_parser("fetch").add_argument("name")
+    command = sub.add_parser('footage')
+    footage_sub = command.add_subparsers(dest='footage_cmd', required=True)
+    child = footage_sub.add_parser('import', help='Import or resume a shoot from the same path')
+    child.add_argument('path')
+    child.add_argument('--copy', action='store_true', help='Copy sources into app storage (default: link)')
+    footage_sub.add_parser('list')
+    footage_sub.add_parser('status').add_argument('shoot')
     for name, action, value in [('rule', 'add', 'text'), ('look', 'reject', 'token'), ('format', 'save', 'name')]:
         command = sub.add_parser(name)
         actions = command.add_subparsers(dest='action', required=True)
@@ -344,7 +366,7 @@ def main(argv=None):
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog,
+         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
