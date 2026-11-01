@@ -99,7 +99,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.3d | Drawn cut to scene: Group Chat | L | T5.3c | done | Group Chat on the builder: warm 2.9 s (Pillow 2.2 s); cold ~5-6 s misses 2x target, follow-up noted; bubble alignment, background blur, position-free plate keys |
 | T5.3e | Drawn cut to scene: Casefile | L | T5.3d | done | Casefile on the builder: cold 7.5 s, warm 4.0 s (Pillow 3.9 s); cork, lamp, greyscale prints, cards |
 | T5.4 | Thumbnails as a scene | M | T2.4 | done | 2026-11-01 Codex (2 rounds); 12 templates match Pillow; ~1 s per thumbnail; Pillow fallback |
-| T5.5 | 3D stage under CDP | M | T2.1 | todo | |
+| T5.5 | 3D stage under CDP | M | T2.1 | done | 2026-11-01 Codex; revised for the builder: push unchanged (SSIM 1.0), __seek still SSIM 0.995, title overlay +1 s |
 | T5.6 | Resume a failed render | S | T0.5 | done | 2026-10-31 Codex; keyed segment cache, atomic publish, Resume button; owner: interrupt a real render and resume |
 | T5.7 | verify.py after render | S | T0.6 | done | 2026-10-31 Codex + review: fades/dips under 1s ignored, bitrate P2; real render reports one P2 |
 
