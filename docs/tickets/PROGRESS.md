@@ -11,6 +11,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 01:55 PDT:** owner made the scene builder the priority. T2.8 and T2.9 done. Codex 5-hour window at 89% (weekly 45%); paused until it resets (~04:45 PDT), then T2.10, T5.3a on the builder, T12.3. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > **2026-11-01 ~05:10 PST:** window reset; T2.10, T5.3a–e done (all drawn cuts on the builder; each preview within ~2x Pillow, Group Chat cold ~2.5x, see its log). Builder fixes along the way: parallel passes, cheap probe signatures, stills filtered once, ground overflow, media blur. Next: T12.3 batches 2–4, T5.4, T5.5, T6.3.
 > **2026-11-01 ~06:30 PST:** T12.3 batches 2 and 3 done (27 core blocks). Codex 5-hour window at 92% (weekly 60%); paused until it resets (~08:40 PST), then T12.3 batch 4, T5.4, T5.5, T6.3.
+> **2026-11-01 ~09:40 PST:** window reset at 08:24; T12.3 batch 4 (31 core blocks, contact sheet `docs/blocks/core-v1.png`), T5.4, T5.5 and T6.3 done. Codex 5-hour window ~25%, weekly ~63%. Queue empty apart from owner decisions: T9.1 sign-off, house-read opt-in (T10.2/T10.4/T10.7), T1.7 mastering, T6.4 visual review.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -109,7 +110,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T6.1 | Instrument design tokens and fonts | S | T0.4 | done | 2026-10-31 Codex; Instrument tokens, Archivo/Space Grotesk switch; owner: pick a face from compare/ shots, check desktop window |
 | T6.2 | Mark, favicon and app icon | S | T0.4 | done | 2026-10-31 Codex; cork/post-it mark in header, favicon, icons regenerated; owner: check launcher icon |
-| T6.3 | Copy, README and mockup | S | T6.1, T6.2 | todo | |
+| T6.3 | Copy, README and mockup | S | T6.1, T6.2 | done | 2026-11-01 Codex; README, copy pass, scene card defaults for new channels; mockup side-by-side moved to T6.4 |
+| T6.4 | Review studio against the mockup | S | T6.3 | todo | owner visual review of Home, Script, Render, Settings |
 
 ## Phase 7: camera (piece to camera)
 
