@@ -1438,6 +1438,19 @@ def plan_cues(pid: str, payload: dict = Body(default={})) -> dict:
     return {"job": jobs.start("cues", pid, work)}
 
 
+@app.get("/api/projects/{pid}/slides/{sid}/camera.jpg")
+def camera_thumbnail(pid: str, sid: str) -> FileResponse:
+    p = _load(pid)
+    slide = _slide(p, sid)
+    if not slide.on_camera:
+        raise HTTPException(404, "This paragraph is not on camera")
+    try:
+        path = render.camera_thumbnail(p, slide)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(path, media_type="image/jpeg")
+
+
 @app.get("/api/projects/{pid}/slides/{sid}/cut.png")
 def cut_preview(pid: str, sid: str, t: float = 0.5) -> Response:
     """One frame of this paragraph in the video's cut, `t` of the way in."""

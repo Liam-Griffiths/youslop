@@ -168,6 +168,7 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
     so a chapter that began mid-picture would have its card land in the middle
     of the previous section instead of on the boundary.
     """
+    # Each camera paragraph is a shot of its own, even beside explicit holds.
     every = max(1, min(8, int(every or 1)))
     runs: list[list["Slide"]] = []
     n = 0
@@ -175,7 +176,8 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
         mode = getattr(slide, "picture_mode", "auto")
         if (getattr(slide, "chapter", "") or "").strip():
             mode = "new"
-        if not runs or mode == "new" or (mode != "hold" and n >= every):
+        if (not runs or slide.on_camera or runs[-1][-1].on_camera
+                or mode == "new" or (mode != "hold" and n >= every)):
             runs.append([])
             n = 0
         runs[-1].append(slide)

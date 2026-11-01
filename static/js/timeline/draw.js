@@ -6,6 +6,7 @@ function tlStepFor(zoom) {
 }
 
 function tlThumb(seg) {
+  if (seg.kind === 'camera') return `/api/projects/${TL.pid}/slides/${seg.lead}/camera.jpg?v=${seg.camera_stamp}`;
   const s = state.project.slides.find((x) => x.id === seg.lead);
   const c = s && s.candidates.find((x) => x.id === s.chosen_id);
   return c ? thumbUrl(c) : '';
@@ -45,7 +46,7 @@ function tlDraw() {
         ${bad ? 'bad' : ''}" data-seg="${s.index}"
         style="left:${s.start * z}px;width:${Math.max(2, s.duration * z - 2)}px;
         ${img ? `background-image:url('${esc(img)}')` : ''}">
-        <span class="tl-tag">${tlLabel(s)}${s.problems.length ? ' ⚠' : ''}${s.estimated ? ' ~' : ''}</span>
+        <span class="tl-tag">${s.kind === 'camera' ? '📹 ' : ''}${tlLabel(s)}${s.problems.length ? ' ⚠' : ''}${s.estimated ? ' ~' : ''}</span>
         <i class="tl-dot" title="${s.ready ? 'proxy drawn' : s.have ? 'out of date' : 'not drawn yet'}"></i>
       </button>`;
   }).join('');

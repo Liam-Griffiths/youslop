@@ -328,7 +328,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
             continue
         seg_len = seg_lens[i + slide_at]
         total = cuts.frame_count(seg_len, FPS)
-        n = 1 if scene_cut else max(1, round(total / (CHUNK_SECONDS * FPS)))
+        n = 1 if scene_cut or group[0][0].on_camera else max(1, round(total / (CHUNK_SECONDS * FPS)))
         split[i] = n
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
@@ -419,6 +419,11 @@ def _stage_clips(project: Project, groups, seg_lens: list[float], size: tuple[in
                  fps: int, progress: Progress, preview: bool) -> None:
     """Draw every 3D shot the cut needs before the segments are composed.
     Refuses a real render with shots missing; a preview shows a slate."""
+    groups_and_lengths = [(g, seg_lens[i]) for i, g in enumerate(groups) if not g[0][0].on_camera]
+    groups = [g for g, _length in groups_and_lengths]
+    seg_lens = [length for _g, length in groups_and_lengths]
+    if not groups:
+        return
     st = shots_mod.status(project)
     missing = shots_mod.missing_shots(project, groups)
     if missing and not preview:
@@ -753,11 +758,11 @@ def _segment_graph(
     style = project.style
     frame = project.frame
     w, h = size
-    essay = style.format == "essay"
+    essay = style.format == "essay" and not group[0][0].on_camera
     slide = group[0][0]
     src, kind, focal = _chosen(project, slide)
     dip_in = False
-    if style.format == "stage" and shots_mod.is_3d(slide):
+    if not slide.on_camera and style.format == "stage" and shots_mod.is_3d(slide):
         # The shot, drawn by the stage at exactly this segment's length and
         # frame size; a paragraph with no solved shot gets the slate.
         clip = shots_mod.ensure_clips(project, [(slide, seg_len)], size, fps).get(slide.id)
@@ -774,7 +779,11 @@ def _segment_graph(
     chain: list[str] = []
     pre_graph = ""            # set by sources that need more than one input
 
-    if src is None:
+    if slide.on_camera:
+        inputs, camera_chain = _camera_source(project, slide, seg_len, size, fps)
+        chain.append(camera_chain)
+        grade = vig = ""  # The shared camera look already includes these.
+    elif src is None:
         # Nothing picked or the download failed: a graded slate keeps the cut
         # intact rather than aborting the whole render.
         inputs += ["-f", "lavfi", "-i",
@@ -1032,6 +1041,10 @@ def _render_segment(
     override = _chapter_override(project, group)
     if override is not None:
         hold = min(audio_mod.gap_map(project)[group[-1][0].id], max(0.0, override))
+    if group[0][0].on_camera:
+        return _camera_segment(project, group, seg_len, out, size, fps,
+                               channel=channel, chapter=chapter, threads=threads,
+                               crf=crf, preset=preset, last_line=last_line, hide=hide)
     if not cuts.is_cut(style.format) and scenes.handles(style.format):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
@@ -1183,27 +1196,87 @@ def _build_intro(project: Project, progress: Progress,
 
 
 # ------------------------------------------------------------------ presenter
-def _render_presenter(project: Project, seg_len: float, out: Path) -> Path:
-    """Cut the camera clip to length and put it in the video's house style."""
-    pres = project.presenter
-    src = project_dir(project.id) / pres.path
-    style = project.style
-    crop, _ = _cover_crop(src, WIDTH, HEIGHT, pres.focal or None)
-
-    chain = [crop, f"fps={FPS}"]
+def _camera_look(style, focal, size, src, fps) -> str:
+    """The presenter's existing crop, grade and light vignette, unchanged."""
+    crop, _ = _cover_crop(src, *size, focal)
+    chain = [crop, f"fps={fps}"]
     if style.grade in GRADES:
-        # A face is the one thing that must not look processed, so the grade is
-        # applied at half strength and Ken Burns never touches it.
         chain.append(GRADES[style.grade])
     vig = _vignette(style.vignette * 0.6)
     if vig:
         chain.append(vig)
     chain.append("format=yuv420p")
+    return ','.join(chain)
+
+
+def _camera_source(project, slide, seg_len, size, fps):
+    """Align picture speech to the voice's lead-in, then keep real tail frames."""
+    take = project.active_take(slide) or {}
+    root = project_dir(project.id)
+    video = root / take.get("video", "")
+    if not take.get("video") or not video.is_file():
+        raise ValueError(f"Camera picture missing for paragraph {slide.id}")
+    lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, slide)
+    raw = root / take.get("raw_path", "")
+    start, pre, pad = 0.0, 0.0, lead
+    src = video
+    if take.get("raw_path") and raw.is_file():
+        src = raw
+        speech = float(take.get("video_start", (take.get("trimmed") or [0])[0]
+                                + float(take.get("av_offset", 0))))
+        start = max(0.0, speech - lead)
+        pre = speech - start
+        pad = max(0.0, lead - pre)
+    length = pre + float(take["duration"]) + float(take.get("tail", 0))
+    chain = (f"setpts=PTS-STARTPTS,trim=start={start:.6f}:duration={length:.6f},"
+             f"setpts=PTS-STARTPTS,"
+             f"tpad=start_mode=clone:start_duration={pad:.6f}:"
+             f"stop_mode=clone:stop_duration={seg_len:.6f},"
+             + _camera_look(project.style, take.get("focal"), size, src, fps))
+    return ["-i", str(src)], chain
+
+
+def camera_thumbnail(project, slide) -> Path:
+    """Cache one frame of the trimmed camera video, independent of proxies."""
+    import hashlib
+    take = project.active_take(slide) or {}
+    src = project_dir(project.id) / take.get("video", "")
+    if not take.get("video") or not src.is_file():
+        raise ValueError("Camera picture missing")
+    key = hashlib.sha1(str((src, _stat(src))).encode()).hexdigest()[:16]
+    out = project_dir(project.id) / "cache" / f"camera_{slide.id}_{key}.jpg"
+    if not out.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        ffutil.run(["-i", str(src), "-frames:v", "1", "-vf", "scale=240:-2",
+                    "-an", str(out)])
+    return out
+
+
+def _camera_segment(project, group, seg_len, out, size, fps, *, channel=None,
+                    chapter=None, threads=0, crf=18, preset="veryfast",
+                    last_line=False, hide=frozenset()):
+    # Camera footage uses photographic titles/cards in every format. This graph
+    # only draws static cards once; the moving picture stays entirely in ffmpeg.
+    inputs, graph, last = _segment_graph(project, group, seg_len, "set", channel,
+                                        chapter, size, fps, last_line=last_line, hide=hide)
+    ffutil.run([*inputs, "-filter_complex", graph, "-map", last,
+                "-t", f"{seg_len:.3f}", "-r", str(fps),
+                *ffutil.video_args(out, crf=crf, preset=preset),
+                "-pix_fmt", "yuv420p", "-an", str(out)], threads=threads)
+    return out
+
+
+def _render_presenter(project: Project, seg_len: float, out: Path) -> Path:
+    """Cut the camera clip to length and put it in the video's house style."""
+    pres = project.presenter
+    src = project_dir(project.id) / pres.path
+    style = project.style
+    chain = _camera_look(style, pres.focal or None, (WIDTH, HEIGHT), src, FPS)
 
     ffutil.run([
         "-ss", f"{max(0.0, pres.trim_start):.3f}", "-i", str(src),
         "-t", f"{seg_len:.3f}",
-        "-filter_complex", f"[0:v]{','.join(chain)}[v]", "-map", "[v]",
+        "-filter_complex", f"[0:v]{chain}[v]", "-map", "[v]",
         "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
         "-pix_fmt", "yuv420p", "-an", str(out),
     ])
@@ -1477,7 +1550,7 @@ def _segment_key(project, group, settings) -> str:
         row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id]
         take = slide.take or {}
         files = []
-        for field in ("path", "video"):
+        for field in (("path", "video", "raw_path") if slide.on_camera else ("path", "video")):
             path = root / take[field] if take.get(field) else None
             digest = None
             if path and path.is_file():
@@ -1578,7 +1651,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # download_chosen anything wider fetches images the cut never shows and is
     # what was getting renders rate-limited.
     lead_slides = list({s.id: s for group in groups
-                        for s in [_picture_source(project, group[0][0])]}.values())
+                        for s in [_picture_source(project, group[0][0])] if not s.on_camera}.values())
     failed = media.download_chosen(project, progress, only=lead_slides)
     if failed:
         progress(f"{len(failed)} asset(s) could not be downloaded; those slides "
@@ -2141,6 +2214,10 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id]
         take = (s.take or {}).get("path")
         slides.append([row, d, _stat(root / take) if take else None])
+        if s.on_camera:
+            camera = project.active_take(s) or {}
+            slides[-1].append([_stat(root / camera[k]) if camera.get(k) else None
+                               for k in ("video", "raw_path")])
     pic = _chosen(project, lead)[0]
     blob = json.dumps(
         [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
@@ -2212,7 +2289,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
             and keyfile.exists() and keyfile.read_text() == key):
         return result()
 
-    if download and media.download_chosen(project, progress, only=[_picture_source(project, lead)]):
+    if download and not lead.on_camera and media.download_chosen(project, progress, only=[_picture_source(project, lead)]):
         progress("That picture could not be downloaded; this is the graded "
                  "slate the render would fall back to")
 
@@ -2677,7 +2754,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
-        if not _picture_source(project, lead).chosen_id:
+        if not lead.on_camera and not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
         missing = sum(1 for s, _d in group if not s.take)
         if missing:
@@ -2685,13 +2762,15 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                             " (estimated length)")
         # Only the documentary cut holds one frame; every other format redraws
         # as the paragraphs change, so a long run there is not a still picture.
-        if dur > 25 and project.style.format == "kenburns":
+        if not lead.on_camera and dur > 25 and project.style.format == "kenburns":
             problems.append(f"the same picture holds for {dur:.0f}s")
         out, _keyfile = _proxy_paths(project, lead, hide)
         segments.append({
             "ref": str(i), "type": "picture", "n": i + 1, "group": i, "lead": lead.id,
             "start": round(t, 3), "duration": round(dur, 3), "skip": round(T / 2, 3),
-            "kind": kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
+            "kind": "camera" if lead.on_camera else kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
+            **({"camera_stamp": _stat(project_dir(project.id) / (project.active_take(lead) or {}).get("video", ""))}
+               if lead.on_camera else {}),
             "ready": _proxy_ready(project, groups, i, channel, hide),
             # Something to play, even if the script has moved on since.
             "have": out.exists() and out.stat().st_size > 0,

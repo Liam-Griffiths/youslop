@@ -527,8 +527,14 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
     root = project_dir(project.id)
     wanted = {s.id for s in slides}
     fill = fill or {}
-    takes = [(s, s.take if (s.take and s.take.get("path")) else None) for s in project.slides
-             if s.id in wanted and ((s.take and s.take.get("path")) or s.id in fill)]
+    takes = []
+    for slide in project.slides:
+        take = project.active_take(slide)
+        # Legacy in-memory projects may not have been through sync_takes yet.
+        if not slide.takes and not slide.on_camera:
+            take = slide.take
+        if slide.id in wanted and ((take and take.get("path")) or slide.id in fill):
+            takes.append((slide, take if (take and take.get("path")) else None))
     if not takes:
         raise ValueError("Nothing recorded yet.")
 
