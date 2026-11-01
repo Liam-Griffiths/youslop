@@ -69,6 +69,9 @@ def test_each_rule_positive_and_negative(code, monkeypatch):
         sb['frame']['banned'] = ['creep']
     elif code == 'timeline_problem':
         sb['segments'][0]['problems'] = ['no picture chosen']
+    elif code == 'number_match':
+        sb['paragraphs'][0].update(narration='There are 72 residents.',
+            block_cues=[{'block': 'number_slam', 'vars': {'value': 68}}])
     result = _fire(code, sb)
     assert result and all(f.code == code for f in result)
     assert all(set(f.to_dict()) == {'code', 'level', 't', 'slide_id', 'msg', 'fix'} for f in result)
@@ -100,6 +103,8 @@ def test_each_rule_positive_and_negative(code, monkeypatch):
         sb['frame']['banned'] = ['spin']
     elif code == 'timeline_problem':
         sb['segments'][0]['problems'] = []
+    elif code == 'number_match':
+        sb['paragraphs'][0]['block_cues'][0]['vars']['value'] = 72
     assert _fire(code, sb) == []
 
 

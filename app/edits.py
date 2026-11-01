@@ -92,6 +92,25 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
         # empty one clears them back to drawing from the narration.
         cues = dict(s.cues or {})
         for key, value in payload["cues"].items():
+            if key == 'blocks':
+                from . import blocks
+                if not isinstance(value, list) or any(not isinstance(c, dict) for c in value):
+                    raise EditError('Block cues are a list of objects.')
+                library, clean = blocks.discover(), []
+                for cue in value:
+                    ref = cue.get('block')
+                    if not isinstance(ref, str) or ref not in library:
+                        raise EditError(f'No such block: {ref}')
+                    try:
+                        variables = blocks.validate_vars(library[ref]['meta'], cue.get('vars', {}))
+                    except ValueError as exc:
+                        raise EditError(str(exc)) from exc
+                    clean.append(dict(block=ref, vars=variables))
+                if clean:
+                    cues[key] = clean
+                else:
+                    cues.pop(key, None)
+                continue
             if key not in cuts_mod.BY_KEY:
                 raise EditError(f"No such cut: {key}")
             if value and not isinstance(value, list):

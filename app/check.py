@@ -352,12 +352,46 @@ def sponsor_music(sb, frame, ctx):
             for slot, t, sid in _sponsor_reads(sb)]
 
 
+def number_match(sb, frame, ctx):
+    from . import blocks, core_data_blocks, data_numbers
+    out, library = [], None
+    for p in sb['paragraphs']:
+        cues = p.get('block_cues', []) + [c for c in p.get('cues', []) if c.get('block')]
+        if not cues:
+            continue
+        if library is None:
+            library = blocks.discover()
+        numbers, dates, headlines = [], [], []
+        for cue in cues:
+            ref = cue.get('block')
+            if ref not in core_data_blocks.IDS:
+                continue
+            meta = library[ref]['meta']
+            values = blocks.validate_vars(meta, cue.get('vars', {}))
+            ns, ds, hs = data_numbers.shown(meta, values, ref)
+            numbers.extend(ns)
+            dates.extend(ds)
+            headlines.extend(hs)
+        spoken = data_numbers.extract(p['narration'])
+        bad = [s['text'] for s in spoken if (not s['year'] or dates) and
+               not any(data_numbers.matches(s, n) for n in (dates if s['year'] else numbers))]
+        nonyears = [s for s in spoken if not s['year']]
+        bad += [h['text'] for h in headlines if nonyears and
+                not any(data_numbers.matches(s, h) for s in nonyears)]
+        if bad and (numbers or dates):
+            out.append(_finding('number_match', 'P1', p['start'], p['id'],
+                f'Numbers disagree: narration [{", ".join(s["text"] for s in spoken)}]; '
+                f'block [{", ".join(n["text"] for n in numbers + dates)}]. '
+                f'Unmatched: {", ".join(dict.fromkeys(bad))}.', 'words', instruction='check data'))
+    return out
+
+
 Rule = Callable[[dict, FrameSpec, Ctx], list[Finding]]
 RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_stretch,
                     overlay_budget, small_text, text_overflow, unreadable_line, anchor_off,
                     same_device_twice, last_line_short, silent_film, open_loop_unpaid,
                     banned_used, timeline_problem, sponsor_early_long, sponsor_count,
-                    sponsor_disclosure, sponsor_question, sponsor_music]
+                    sponsor_disclosure, sponsor_question, sponsor_music, number_match]
 
 
 def _scene_text(project, sb, ctx, groups, measure):

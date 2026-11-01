@@ -1,12 +1,15 @@
 """Local Corkbored blocks. Discovery and validation never start a browser."""
 from __future__ import annotations
 
+import csv
+from datetime import date
 import hashlib
+import io
 import json
 import math
 from pathlib import Path
 import re
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 import jinja2
 
@@ -58,6 +61,72 @@ def _file(root, name):
     return target
 
 
+def parse_csv(text, columns):
+    """Header keys or labels map to declared columns; validation handles cells."""
+    reader = csv.reader(io.StringIO(text), strict=True)
+    try:
+        header = next(reader)
+        aliases = {name: c['key'] for c in columns for name in (c['key'], c.get('label', c['key']))}
+        keys = [aliases.get(h.strip()) for h in header]
+        if None in keys or len(set(keys)) != len(keys) or set(keys) != {c['key'] for c in columns}:
+            raise ValueError('CSV: headers must name each column once (key or label)')
+        rows = []
+        for i, cells in enumerate(reader, 1):
+            if not cells:
+                continue
+            if len(cells) != len(keys):
+                raise ValueError(f'CSV row {i}: expected {len(keys)} columns')
+            rows.append(dict(zip(keys, (c.strip() for c in cells))))
+        return rows
+    except (StopIteration, csv.Error) as exc:
+        raise ValueError(f'CSV: invalid table: {exc}') from exc
+
+
+def _table(value, spec, key, unit):
+    columns = spec.get('columns', [])
+    if len({c['key'] for c in columns}) != len(columns):
+        raise ValueError(f'{key}: duplicate column keys')
+    if isinstance(value, str) and columns:
+        value = parse_csv(value, columns)
+    _check(value, {'type': 'array'}, key)
+    result = []
+    for i, row in enumerate(value, 1):
+        label = f'{key} row {i}'
+        if not isinstance(row, dict):
+            raise ValueError(f'{label}: expected rows of scalar cells')
+        row = dict(row)
+        for col in columns:
+            name, kind = col['key'], col['type']
+            cell = row.get(name)
+            where = f'{label} column {name}'
+            if kind == 'number' and isinstance(cell, str):
+                cell = cell.strip()
+                suffix = col.get('unit', unit)
+                _check(suffix, {'type': 'string'}, f'{where} unit')
+                if suffix and cell.casefold().endswith(suffix.casefold()):
+                    cell = cell[:-len(suffix)].strip()
+                cell = cell.removesuffix('%').strip().replace(',', '')
+                try:
+                    cell = float(cell)
+                except ValueError as exc:
+                    raise ValueError(f'{where}: expected number') from exc
+            _check(cell, {'type': 'number' if kind == 'number' else 'string'}, where)
+            if kind == 'date':
+                try:
+                    if not re.fullmatch(r'\d{4}', cell):
+                        date.fromisoformat(cell)
+                    elif not 1 <= int(cell) <= 9999:
+                        raise ValueError()
+                except ValueError as exc:
+                    raise ValueError(f'{where}: expected ISO date or year') from exc
+            row[name] = cell
+        for name, cell in row.items():
+            if not isinstance(cell, (str, int, float, bool, type(None))) or isinstance(cell, float) and not math.isfinite(cell):
+                raise ValueError(f'{label} column {name}: expected scalar cell')
+        result.append(row)
+    return result
+
+
 def validate_vars(meta, values):
     _check(values, {'type': 'object'}, 'variables')
     unknown = values.keys() - meta['variables'].keys()
@@ -67,6 +136,8 @@ def validate_vars(meta, values):
     for key, spec in meta['variables'].items():
         value = values.get(key, spec['default'])
         kind = spec['type']
+        if kind == 'table':
+            value = _table(value, spec, key, values.get('unit', meta['variables'].get('unit', {}).get('default', '')))
         rule = {'type': 'number' if kind == 'number' else 'array' if kind == 'table' else 'string'}
         if kind == 'text':
             if 'max_length' not in spec:
@@ -84,12 +155,24 @@ def validate_vars(meta, values):
         if kind in ('image', 'clip') and value and (not value.startswith(('/static/', '/scene/')) or
                 '..' in unquote(value) or '\\' in unquote(value)):
             raise ValueError(f'{key}: expected local /static/ or /scene/ reference')
-        if kind == 'table' and any(not isinstance(row, dict) or any(
-                not isinstance(v, (str, int, float, bool, type(None))) or
-                isinstance(v, float) and not math.isfinite(v) for v in row.values()) for row in value):
-            raise ValueError(f'{key}: expected rows of scalar cells')
         result[key] = value
     return result
+
+
+def source_line(research, narration):
+    """Research keeps sourced facts; use only an existing attribution."""
+    facts = [f for f in research.get('facts', []) if f.get('source') or f.get('url')]
+    if not facts:
+        return ''
+    cited = next((f for f in facts if any(str(f[k]) in narration for k in ('url', 'source') if f.get(k))), None)
+    citation = re.search(r'\[(\d+)\]', narration)
+    if cited is None and citation:
+        original = research.get('facts', [])
+        n = int(citation[1]) - 1
+        if 0 <= n < len(original) and original[n] in facts:
+            cited = original[n]
+    fact = cited or facts[0]
+    return 'Source: ' + (fact.get('source') or urlsplit(fact['url']).netloc)
 
 
 def discover():
@@ -145,6 +228,11 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
         raise ValueError(f'unknown block: {block_id}')
     meta, root = block['meta'], block['root']
     values = validate_vars(meta, values or {})
+    if block_id in core_data_blocks.IDS and not values.get('source') and context:
+        values['source'] = source_line(context.get('research', {}), context.get('narration', ''))
+        limit = meta['variables']['source']['max_length']
+        if len(values['source']) > limit:
+            values['source'] = values['source'][:limit-1] + '…'
     if aspect not in meta['aspects']:
         raise ValueError(f'{block_id}: unsupported aspect {aspect}')
     rule = meta['duration']
@@ -212,6 +300,9 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
 
 
 def render(block_id, vars=None, aspect='16:9', seconds=None, *, project=None, context=None):
+    if hasattr(project, 'research'):
+        context = {**(scenes.context_base(project) if context is None else context), 'research': project.research}
+        project = paths.data_root() / 'projects' / project.id
     template, ctx = prepare(block_id, vars, aspect, seconds, context=context)
     owner = project if project is not None else paths.data_root() / '.cache/blocks'
     size, fps = (ctx['width'], ctx['height']), ctx.get('fps', 30)

@@ -233,3 +233,109 @@ def test_authoring_preview_bundle(library, monkeypatch):
     assert cli.main(['block','preview','user/preview','--out',str(target)]) == 0
     assert {p.name for p in target.iterdir()} == {'preview.png','sheet.png','preview.mp4'}
     assert times == [1.5, 0, .5, 1, 1.5, 2, 2.5]
+
+
+def test_typed_csv_and_legacy_tables():
+    columns = [dict(key='name', label='Name', type='text'),
+               dict(key='count', label='Trips', type='number', unit='million'),
+               dict(key='date', type='date')]
+    meta = {'variables': {'rows': dict(type='table', default=[], columns=columns)}}
+    rows = blocks.validate_vars(meta, {'rows': 'date,Name,Trips\n2024,Rail,"1,200 million"\n2025-01-01,Bus,68%\n'})['rows']
+    assert rows == [dict(date='2024', name='Rail', count=1200),
+                    dict(date='2025-01-01', name='Bus', count=68)]
+    assert blocks.validate_vars({'variables': {'rows': dict(type='table', default=[{'old': True}])}}, {})['rows'] == [{'old': True}]
+    for value, error in [([dict(name='Rail', count='oops', date='2024')], 'row 1 column count'),
+                         ([dict(name='Rail', count=True, date='2024')], 'row 1 column count'),
+                         ([dict(name='Rail', count=2, date='2024-99-99')], 'row 1 column date'),
+                         ([dict(name='Rail', count=float('inf'), date='2024')], 'row 1 column count'),
+                         ('Name,Name,date\na,b,2024', 'headers'),
+                         ('Name,Trips,date\na,2', 'row 1')]:
+        with pytest.raises(ValueError, match=error):
+            blocks.validate_vars(meta, {'rows': value})
+    _, ctx = blocks.prepare('bar_chart', {'rows': 'Label,Value\nRail,72\nBus,54'})
+    assert ctx['vars']['rows'][0]['value'] == 72
+
+
+@pytest.mark.parametrize('text,value,unit,ref,bad', [
+    ('72 million trips.', 72, 'million trips', 'number_slam', False),
+    ('72 million trips.', 68, 'million trips', 'number_slam', True),
+    ('68 percent.', 68, '', 'percentage_ring', False),
+    ('68%.', 72, '', 'percentage_ring', True),
+    ('72 residents.', 72.4, 'residents', 'number_slam', False),
+    ('72 residents.', 73, 'residents', 'number_slam', True),
+    ('Roughly 1,200 residents.', 1100, 'residents', 'number_slam', True),
+    ('Roughly 1,200 residents.', 1180, 'residents', 'number_slam', False),
+    ('72.4 residents.', 72.44, 'residents', 'number_slam', False),
+    ('About 70 residents.', 72, 'residents', 'number_slam', False),
+    ('70 residents.', 72, 'residents', 'number_slam', True),
+    ('In 2024, 1,200 residents.', 1200, 'residents', 'number_slam', False),
+    ('-12.5 residents.', -12.5, 'residents', 'number_slam', False),
+])
+def test_number_match(text, value, unit, ref, bad):
+    from app import check
+    values = {'value': value}
+    if ref == 'number_slam':
+        values['unit'] = unit
+        values['decimals'] = '2'
+    sb = {'paragraphs': [dict(id='s1', start=1.5, narration=text,
+                             block_cues=[dict(block=ref, vars=values)])]}
+    findings = check.number_match(sb, None, None)
+    assert bool(findings) == bad
+    if bad:
+        assert findings[0].level == 'P1' and findings[0].slide_id == 's1'
+        assert str(value) in findings[0].msg and 'narration [' in findings[0].msg
+
+
+def test_number_match_headline_years_and_multiple_blocks():
+    from app import check
+    p = dict(id='s1', start=0, narration='54 million trips in 2024.', block_cues=[
+        dict(block='bar_chart', vars={'rows': [{'label': 'A', 'value': 72}, {'label': 'B', 'value': 54}]})])
+    assert '72' in check.number_match({'paragraphs': [p]}, None, None)[0].msg
+    p['narration'] = '72 million trips and 54 million trips in 2024.'
+    assert check.number_match({'paragraphs': [p]}, None, None) == []
+    p['block_cues'].append(dict(block='date_timeline', vars={}))
+    assert check.number_match({'paragraphs': [p]}, None, None) == []
+    p['narration'] = '72 million trips in 2025.'
+    assert '2025' in check.number_match({'paragraphs': [p]}, None, None)[0].msg
+    p['narration'] = 'A growing network.'
+    assert check.number_match({'paragraphs': [p]}, None, None) == []
+
+
+def test_research_source_defaults(library):
+    research = {'facts': [{'source': 'First report', 'url': 'https://first.example/a'},
+                          {'source': 'Second report', 'url': 'https://second.example/b'}]}
+    context = scenes.context_base()
+    context.update(research=research, narration='As reported [2].')
+    assert blocks.prepare('bar_chart', {'source': ''}, context=context)[1]['vars']['source'] == 'Source: Second report'
+    context['narration'] = 'See https://second.example/b'
+    assert blocks.prepare('bar_chart', {'source': ''}, context=context)[1]['vars']['source'] == 'Source: Second report'
+    context['narration'] = 'No citation.'
+    assert blocks.prepare('bar_chart', {'source': ''}, context=context)[1]['vars']['source'] == 'Source: First report'
+    assert 'illustrative sample data' in blocks.prepare('bar_chart', context=context)[1]['vars']['source']
+    assert blocks.prepare('bar_chart', {'source': 'My source'}, context=context)[1]['vars']['source'] == 'My source'
+    assert blocks.source_line({'facts': [{'url': 'https://example.org/report'}]}, '') == 'Source: example.org'
+    assert blocks.source_line({}, '') == ''
+
+
+def test_saved_block_cue_checked_without_mutation(project, monkeypatch):
+    from app import check, ffutil, llm, storyboard
+    monkeypatch.setattr(ffutil, 'run', lambda *a, **k: pytest.fail('render invoked'))
+    monkeypatch.setattr(llm, 'complete_json', lambda *a, **k: pytest.fail('LLM invoked'))
+    slide = project.slides[0]
+    slide.narration = 'There are 72 residents.'
+    storyboard.apply(project, {'paragraphs': {slide.id: {'cues': {
+        'blocks': [{'block': 'number_slam', 'vars': {'value': 68}}]}}}})
+    before = project.to_dict()
+    sb = storyboard.build(project)
+    assert sb['paragraphs'][0]['block_cues'] == slide.cues['blocks']
+    sb['paragraphs'][0]['block_cues'][0]['vars']['value'] = 99
+    assert slide.cues['blocks'][0]['vars']['value'] == 68
+    findings = [f for f in check.run(project)['findings'] if f['code'] == 'number_match']
+    assert len(findings) == 1 and findings[0]['level'] == 'P1'
+    assert '72' in findings[0]['msg'] and '68' in findings[0]['msg']
+    assert project.to_dict() == before
+    with pytest.raises(ValueError, match='No such block'):
+        storyboard.apply(project, {'paragraphs': {slide.id: {'cues': {'blocks': [{'block': 'missing'}]}}}})
+    assert project.to_dict() == before
+    storyboard.apply(project, {'paragraphs': {slide.id: {'cues': {'blocks': []}}}})
+    assert 'blocks' not in slide.cues

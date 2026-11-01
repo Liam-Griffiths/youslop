@@ -48,6 +48,8 @@ def build(project) -> dict:
                          "duration": take.get("duration", 0.0),
                          "words": deepcopy(take.get("words", []))},
             })
+            if slide.cues.get('blocks'):
+                paragraphs[-1]['block_cues'] = deepcopy(slide.cues['blocks'])
     if cuts.is_cut(project.style.format):
         by_id = {p["id"]: p for p in paragraphs}
         groups = render._picture_groups(project, render._slide_durations(project, True))

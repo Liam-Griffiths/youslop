@@ -34,6 +34,33 @@ or `var(--token)`; `image`/`clip` accept local `/static/` or `/scene/` URLs
 `enum` requires nonempty string `choices`. Unknown supplied variables, wrong
 types, nonfinite numbers and out-of-range values fail before capture.
 
+Tables may declare `columns: [{key, label, type, unit}]`, with `type` one of
+`text`, `number`, `date` (ISO date or four-digit year). Labels and units are
+optional. Declared cells are required; errors name the row (one-based) and
+column. Undeclared scalar cells are retained for backwards compatibility.
+A typed table also accepts a CSV string in `validate_vars`/`prepare`/CLI vars:
+the header maps keys or labels, in any order. Quote comma-separated numbers
+such as `"1,200"`; number cells strip thousands separators, a trailing `%` or
+the column unit (falling back to the block's `unit`). Untyped tables keep their
+original array-of-objects contract, including free-form legacy date-timeline
+labels. That timeline's existing `date` field is treated as a date column for
+year checks. The T12.5 form will supply CSV input.
+
+Save block cues as `slide.cues['blocks'] = [{"block": "bar_chart", "vars": {...}}]`.
+The storyboard exposes them as `block_cues`; `check.run` compares each
+paragraph's digit numbers to its data blocks, including units, percentages
+and dates. Integer claims must match exactly; decimals match at the spoken
+precision, and `about 70` permits rounding to tens. Years compare only to date
+columns. A missing spoken value or an unsaid headline when other numbers are
+spoken raises P1. This is a deterministic check, not a semantic fact check;
+spelled-out numbers and relation/label interpretation require human review.
+Existing cut rendering is unchanged; block selection/render wiring belongs to
+T12.5. Standalone sample source wording stays intact. For a data block with an
+explicitly empty `source`, pass `research` and paragraph `narration` in the scene
+context: preparation chooses a cited sourced fact (URL, source name or `[n]`),
+then the first available fact. `render(project=Project, context=...)` also passes
+project research. No research means no invented attribution.
+
 `duration` uses `mode: fixed` with `seconds`, `mode: range` with `min`/`max`
 (and an optional `default` preview length; otherwise 5 s clamped to the range),
 or `mode: from_words` with `variable`, `words_per_minute`, `min` and `max`.

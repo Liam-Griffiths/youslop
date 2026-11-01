@@ -38,10 +38,10 @@ def test_zero_series_and_common_scale(ref):
     ('date_timeline', dict(rows=[dict(date='x'*13, label='A')]*2), 'date'),
     ('bar_chart', dict(rows=[dict(label='x'*19, value=1)]), 'label'),
     ('bar_chart', dict(rows=[dict(label='A', value=-1)]), 'value'),
-    ('bar_chart', dict(rows=[dict(label='A', value='3')]), 'value'),
+    ('bar_chart', dict(rows=[dict(label='A', value='three')]), 'value'),
     ('bar_chart', dict(rows=[dict(label='A', value=True)]), 'value'),
     ('bar_chart', dict(rows=[dict(label='A', value=1000000)]), 'value'),
-    ('bar_chart', dict(rows=[dict(label='A', value=float('nan'))]), 'scalar'),
+    ('bar_chart', dict(rows=[dict(label='A', value=float('nan'))]), 'column value'),
     ('bar_race', dict(rows=[dict(label='A', first=1, middle=2, last=3)]*2), 'unique'),
     ('percentage_ring', dict(value=101), 'maximum'),
 ])
