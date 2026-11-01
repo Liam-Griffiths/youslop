@@ -160,7 +160,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T11.1 | Shoots: import and proxies | M | T0.5 | done | 2026-10-31 Codex; footage import (link or copy), proxies + sprites, resumable; sources untouched |
-| T11.2 | Shot detection into clips | M | T11.1 | todo |  |
+| T11.2 | Shot detection into clips | M | T11.1 | done | 2026-10-31 Codex; scene+motion+silence shots on proxies, wired into import; owner: time a 20-min shoot |
 | T11.3 | Quality signals and duplicates | S | T11.2 | todo |  |
 | T11.4 | Auto labels for clips | M | T11.2, T3.2 | todo | token budget shown before a run |
 | T11.5 | Footage logger UI | M | T11.2, T9.3 | todo |  |

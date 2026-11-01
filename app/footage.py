@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 import threading
 import time
@@ -46,20 +47,36 @@ class SourceFile:
 
 
 @dataclass
+class Clip:
+    id: str
+    file: str                         # SourceFile.id; times are in its proxy.
+    in_s: float = 0.0
+    out_s: float = 0.0
+    thumbs: list[str] = field(default_factory=list)  # Relative to shoot directory.
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> Clip:
+        return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class Shoot:
     id: str
     path: str = ''
     copied: bool = False
     added_at: float = 0.0
     files: list[SourceFile] = field(default_factory=list)
+    clips: list[Clip] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, raw: dict) -> Shoot:
-        values = {k: v for k, v in raw.items() if k in cls.__dataclass_fields__ and k != 'files'}
-        return cls(**values, files=[SourceFile.from_dict(f) for f in raw.get('files', [])])
+        values = {k: v for k, v in raw.items()
+                  if k in cls.__dataclass_fields__ and k not in {'files', 'clips'}}
+        return cls(**values, files=[SourceFile.from_dict(f) for f in raw.get('files', [])],
+                   clips=[Clip.from_dict(c) for c in raw.get('clips', [])])
 
 
 def _key(value: str) -> str:
@@ -181,7 +198,8 @@ def status(shoot_id: str) -> dict:
         files.append({**asdict(source), 'proxy': str(proxy), 'sprite': str(sprite),
                       'ready': _complete(proxy) and _complete(sprite)})
     return {'id': shoot.id, 'path': shoot.path, 'copied': shoot.copied,
-            'total': len(files), 'ready': sum(f['ready'] for f in files), 'files': files}
+            'total': len(files), 'ready': sum(f['ready'] for f in files), 'files': files,
+            'clips': [asdict(c) for c in shoot.clips]}
 
 
 def process_shoot(shoot_id: str, progress: Progress = lambda m: None) -> dict:
@@ -239,4 +257,131 @@ def process_shoot(shoot_id: str, progress: Progress = lambda m: None) -> dict:
 def start_processing(shoot_id: str) -> str:
     """Background entry point for app callers; progress is available in jobs."""
     load(shoot_id)
-    return jobs.start('footage', shoot_id, lambda progress: process_shoot(shoot_id, progress))
+    return jobs.start('footage', shoot_id, lambda progress: process_and_detect(shoot_id, progress))
+
+
+def process_and_detect(shoot_id: str, progress: Progress = lambda m: None) -> dict:
+    """Proxies, then shots. Detection runs only when every proxy is ready."""
+    result = process_shoot(shoot_id, progress)
+    if result['ready'] == result['total']:
+        detect_shots(shoot_id, progress=progress)
+        progress(f"Done: {result['ready']}/{result['total']} ready")
+    return status(shoot_id)
+
+
+# Analysis thresholds are deliberately independent of the original camera format.
+SCENE_THRESHOLD = 0.3
+MOTION_THRESHOLD = 2.0  # Mean absolute luma difference, 0..255, sampled each second.
+MIN_CLIP_S = 1.5
+MAX_CLIP_S = 20.0
+_NUMBER = r'[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?'
+
+
+def _shot_signals(proxy: Path) -> tuple[float, float, list[float], list[tuple[float, float]], list[float]]:
+    """Decode only the viewing proxy; retain full frame timing for hard cuts."""
+    info = ffutil.probe(proxy)
+    video = next(s for s in info['streams'] if s.get('codec_type') == 'video')
+    duration = float(video.get('duration') or info['format']['duration'])
+    fps = float(Fraction(video.get('avg_frame_rate') or video['r_frame_rate']))
+    if not (math.isfinite(duration) and math.isfinite(fps) and duration > 0 and fps > 0):
+        raise ValueError('Proxy must have a positive duration and frame rate')
+    log = ffutil.run(['-loglevel', 'info', '-i', str(proxy), '-an', '-vf',
+                      f"scale=160:-2,select='gt(scene,{SCENE_THRESHOLD})',showinfo",
+                      '-fps_mode', 'vfr', '-f', 'null', '-'])
+    cuts = [float(t) for t in re.findall(r'pts_time:(' + _NUMBER + ')', log)]
+    log = ffutil.run(['-loglevel', 'info', '-i', str(proxy), '-an', '-vf',
+                      'fps=1,scale=64:36,format=yuv420p,tblend=all_mode=difference,'
+                      'signalstats,metadata=print:key=lavfi.signalstats.YAVG',
+                      '-f', 'null', '-'])
+    motion = []
+    timestamp = 0.0
+    for line in log.splitlines():
+        match = re.search(r'pts_time:(' + _NUMBER + ')', line)
+        if match:
+            timestamp = float(match[1])
+        match = re.search(r'lavfi.signalstats.YAVG=(' + _NUMBER + ')', line)
+        if match:
+            motion.append((timestamp, float(match[1])))
+    silence = []
+    if any(s.get('codec_type') == 'audio' for s in info['streams']):
+        log = ffutil.run(['-loglevel', 'info', '-i', str(proxy), '-vn', '-af',
+                          'silencedetect=noise=-35dB:d=0.7', '-f', 'null', '-'])
+        # Both edges can mark a change of subject in a continuous camera take.
+        silence = [float(t) for t in re.findall(r'silence_(?:start|end): (' + _NUMBER + ')', log)]
+    return duration, fps, cuts, motion, silence
+
+
+def _shot_boundaries(duration: float, fps: float, cuts: list[float],
+                     motion: list[tuple[float, float]], silence: list[float],
+                     min_s: float, max_s: float) -> list[float]:
+    """Prefer hard cuts over softer signals, merge tiny spans, then cap holds."""
+    def frame(t):
+        return round(t * fps) / fps
+
+    edges = [0.0, duration]
+    transitions = [t for (_, previous), (t, energy) in zip(motion, motion[1:])
+                   if (previous < MOTION_THRESHOLD) != (energy < MOTION_THRESHOLD)]
+    for candidates in (cuts, transitions, silence):
+        for t in sorted(set(frame(t) for t in candidates)):
+            if 0 < t < duration and all(abs(t - edge) >= min_s - 1e-8 for edge in edges):
+                edges.append(t)
+    edges.sort()
+    result = [0.0]
+    for end in edges[1:]:
+        while end - result[-1] > max_s + 1e-8:
+            start = result[-1]
+            low = start + max(min_s, max_s * .65)
+            high = min(start + max_s, end - min_s)
+            choices = [(energy, -t) for t, energy in motion if low <= t <= high]
+            split = -min(choices)[1] if choices else high
+            # Round down so a frame-aligned split cannot exceed the maximum.
+            split = math.floor((split + 1e-8) * fps) / fps
+            result.append(split)
+        result.append(end)
+    return result
+
+
+def detect_shots(shoot_id: str, *, min_s: float = MIN_CLIP_S, max_s: float = MAX_CLIP_S,
+                 progress: Progress = lambda m: None) -> list[Clip]:
+    """Synchronous, offline worker, called after process_shoot has made proxies.
+
+    Repeated detection retains IDs for unchanged ranges. Manifest updates happen
+    per source only after all its thumbnails are complete; originals stay offline.
+    """
+    if not (math.isfinite(min_s) and math.isfinite(max_s) and 0 < min_s <= max_s / 2):
+        raise ValueError('Require 0 < min_s <= max_s / 2, with finite limits')
+    with _PROCESS_LOCK:
+        shoot = load(shoot_id)
+        for source in shoot.files:
+            progress(f'Detecting shots: {source.id}')
+            proxy, _ = _outputs(shoot, source)
+            if not _complete(proxy):
+                raise ValueError(f'Process proxy first: {source.id}')
+            duration, fps, cuts, motion, silence = _shot_signals(proxy)
+            if min_s < 1 / fps:
+                raise ValueError('min_s must be at least one proxy frame')
+            edges = _shot_boundaries(duration, fps, cuts, motion, silence, min_s, max_s)
+            old = {(c.in_s, c.out_s): c for c in shoot.clips if c.file == source.id}
+            clips = []
+            for start, end in zip(edges, edges[1:]):
+                clip = old.get((start, end)) or Clip('c' + uuid.uuid4().hex[:12], source.id, start, end)
+                thumbs = []
+                for index, t in enumerate((start, (start + end) / 2, max(start, end - 1 / fps))):
+                    out = shoot_dir(shoot.id) / 'thumbs' / f'{_key(clip.id)}-{index}.jpg'
+                    out.parent.mkdir(exist_ok=True)
+                    if not _complete(out):
+                        temporary = out.with_suffix('.part.jpg')
+                        ffutil.run(['-ss', str(t), '-i', str(proxy), '-an', '-vf',
+                                    'scale=160:90:force_original_aspect_ratio=decrease,'
+                                    'pad=160:90:(ow-iw)/2:(oh-ih)/2',
+                                    '-frames:v', '1', '-update', '1', str(temporary)])
+                        with Image.open(temporary) as img:
+                            img.verify()
+                        temporary.replace(out)
+                    thumbs.append(str(out.relative_to(shoot_dir(shoot.id))))
+                clip.thumbs = thumbs
+                clips.append(clip)
+            shoot.clips = [c for c in shoot.clips if c.file != source.id] + clips
+            _save(shoot)
+        progress(f'Done: {len(shoot.clips)} clips')
+        return shoot.clips

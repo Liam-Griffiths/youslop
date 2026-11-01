@@ -258,7 +258,7 @@ def cmd_footage(args):
         progress = lambda message: print(message, file=sys.stderr, flush=True)
         shoot = footage.import_shoot(args.path, copy=args.copy, progress=progress)
         # jobs uses daemon threads; the CLI must finish the worker before exiting.
-        _print_json(footage.process_shoot(shoot.id, progress))
+        _print_json(footage.process_and_detect(shoot.id, progress))
 
 
 def cmd_learning(args):
