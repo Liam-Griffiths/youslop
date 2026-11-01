@@ -12,6 +12,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 ~05:10 PST:** window reset; T2.10, T5.3a–e done (all drawn cuts on the builder; each preview within ~2x Pillow, Group Chat cold ~2.5x, see its log). Builder fixes along the way: parallel passes, cheap probe signatures, stills filtered once, ground overflow, media blur. Next: T12.3 batches 2–4, T5.4, T5.5, T6.3.
 > **2026-11-01 ~06:30 PST:** T12.3 batches 2 and 3 done (27 core blocks). Codex 5-hour window at 92% (weekly 60%); paused until it resets (~08:40 PST), then T12.3 batch 4, T5.4, T5.5, T6.3.
 > **2026-11-01 ~09:40 PST:** window reset at 08:24; T12.3 batch 4 (31 core blocks, contact sheet `docs/blocks/core-v1.png`), T5.4, T5.5 and T6.3 done. Codex 5-hour window ~25%, weekly ~63%. Queue empty apart from owner decisions: T9.1 sign-off, house-read opt-in (T10.2/T10.4/T10.7), T1.7 mastering, T6.4 visual review.
+> **2026-11-01 ~11:00 PST:** since then: T12.4, T12.6, T7.1, T7.2 (review fix: browser WebM has no duration), T7.3, T7.6, T8.1, T8.2, T11.7 done. Codex 5-hour window ~85%, weekly ~73%; next T7.4, T8.3 (step 3 needs the owner) after the reset (~13:50 PST).
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -122,7 +123,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T7.3 | Camera paragraphs in the render | M | T7.1, T0.5 | done | 2026-11-01 Codex; synthetic A/V sync within a preview frame; owner: real webcam paragraph by eye and ear |
 | T7.4 | Trims and jump cuts on camera takes | M | T7.3, T4.4 | todo | |
 | T7.5 | Cutaways and layouts over camera | M | T7.4, T2.4 | todo | includes the Auto-edit button |
-| T7.6 | Camera look and checks | S | T7.3, T1.5 | todo | |
+| T7.6 | Camera look and checks | S | T7.3, T1.5 | done | 2026-11-01 Codex; bounded look matching, deterministic checks; owner: two differently lit real takes |
 | T7.7 | Talking-head videos end to end | S | T7.2, T7.3, T7.4 | todo | |
 | T7.8 | Long-take import (stretch goal) | L | T7.1, T7.2, T7.4 | todo | stretch; opt-in speech recognition |
 
