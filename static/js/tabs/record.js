@@ -1,6 +1,7 @@
 
 // ------------------------------------------------------------------ record
 function paintRecord() {
+  if (cameraMode()) return paintCameraRecord();
   const p = state.project;
   const i = Math.min(state.rec.index, p.slides.length - 1);
   state.rec.index = i;
@@ -24,6 +25,7 @@ function paintRecord() {
       <span>paragraph ${i + 1}</span>
     </div>
 
+    ${recordModeSwitch()}
     ${voiceBar(p, track)}
 
     <div class="row" style="margin:14px 0 0;gap:6px">
@@ -738,6 +740,7 @@ async function voiceOneSlide() {
 }
 
 function jumpTake(delta) {
+  if (cameraMode()) return cameraJump(state.rec.index + delta);
   if (state.rec.recording) return;
   const n = state.rec.index + delta;
   if (n < 0 || n >= state.project.slides.length) return;
@@ -891,6 +894,7 @@ async function chooseMic(deviceId) {
 }
 
 function stopStream() {
+  stopCamera();
   const r = state.rec;
   if (r.recorder && r.recording) { try { r.recorder.stop(); } catch {} }
   r.recording = false;
@@ -901,6 +905,7 @@ function stopStream() {
 }
 
 async function toggleRec() {
+  if (cameraMode()) return toggleCameraRec();
   const r = state.rec;
   if (r.recording) { r.recorder.stop(); return; }
   let stream;
@@ -965,6 +970,7 @@ async function restoreEarlierTake(n) {
 }
 
 function playTake(track) {
+  if (cameraMode()) return reviewCamera();
   track = track || recTrack();
   const slide = state.project.slides[state.rec.index];
   if (!(slide.takes || {})[track]) return;
@@ -982,10 +988,10 @@ function syncVoiceCounts() {
   for (const s of p.slides) for (const k of Object.keys(s.takes || {})) counts[k] = (counts[k] || 0) + 1;
   p.voice_tracks = counts;
   if (!p.voice_track) {
-    const first = Object.keys(counts)[0];
+    const first = Object.keys(counts).find((track) => track !== 'camera');
     if (first) p.voice_track = first;
   }
-  for (const s of p.slides) s.take = (s.takes || {})[p.voice_track] || null;
+  for (const s of p.slides) s.take = (s.takes || {})[s.on_camera ? 'camera' : p.voice_track] || null;
   p.recorded_count = p.slides.filter((s) => s.take).length;
 }
 const trackLabel = (t) => ({ mic: 'Your mic', kokoro: 'Local voice',
@@ -1073,6 +1079,7 @@ async function recleanTakes() {
 }
 
 async function dropTake() {
+  if (cameraMode()) return toast("Use Retake to record again; earlier camera takes are kept.");
   const slide = state.project.slides[state.rec.index];
   const res = await api(`/api/projects/${state.project.id}/slides/${slide.id}/take`
     + `?track=${encodeURIComponent(recTrack())}`, { method: 'DELETE' });

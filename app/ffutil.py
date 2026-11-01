@@ -346,6 +346,26 @@ def probe(path: str | Path) -> dict:
     return json.loads(proc.stdout)
 
 
+def stream_end(path: str | Path, kind: str = "v") -> float:
+    """Last packet end time of the first `kind` stream, for containers that
+    carry no duration (browser MediaRecorder WebM writes none)."""
+    proc = subprocess.run(
+        [FFPROBE, "-v", "error", "-select_streams", f"{kind}:0",
+         "-show_entries", "packet=pts_time,duration_time", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise FFError(f"ffprobe failed on {path}: {proc.stderr.strip()[:300]}")
+    end = 0.0
+    for line in proc.stdout.splitlines():
+        parts = [x for x in line.split(",") if x and x != "N/A"]
+        try:
+            end = max(end, sum(float(x) for x in parts[:2]))
+        except ValueError:
+            continue
+    return end
+
+
 def duration(path: str | Path) -> float:
     info = probe(path)
     d = (info.get("format") or {}).get("duration")

@@ -105,6 +105,7 @@ if MACOS:
         icon=ICON,
         bundle_identifier="dev.corkbored.app",
         info_plist={
+            "NSCameraUsageDescription": "Corkbored records you on camera for the video you are making.",
             "NSMicrophoneUsageDescription": "Corkbored records your narration for the video you are making.",
             "CFBundleShortVersionString": "0.1.0",
             "CFBundleVersion": "1",

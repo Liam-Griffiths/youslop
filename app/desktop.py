@@ -13,7 +13,8 @@ either has no API to call at all, or hangs forever on a permission prompt that
 never appears, because the webview has no native UI of its own to show one
 with. Each platform's fix is its own function below.
 
-**Only the macOS path has been run on real hardware.** It is proven working —
+**Only the macOS microphone path has been run on real hardware.** Camera
+permissions on all platforms still need a real-device check —
 see the spike in the packaging plan: `NSMicrophoneUsageDescription` in the
 bundle's `Info.plist`, `AVCaptureDevice` asked for authorisation once the
 event loop is already running (asking before it starts means the system
@@ -47,8 +48,8 @@ def _log(message: str) -> None:
 
 
 # ------------------------------------------------------------- macOS (WebKit)
-def _patch_macos_microphone() -> None:
-    """Make this process able to ask for the microphone at all, and answer
+def _patch_macos_media() -> None:
+    """Make this process able to ask for camera and microphone access, and answer
     WebKit's permission request with a grant once the page asks.
 
     Two separate problems, each with its own fix:
@@ -82,6 +83,10 @@ def _patch_macos_microphone() -> None:
         info["NSMicrophoneUsageDescription"] = (
             f"{brand.NAME} records your narration for the video you are making.")
 
+    if not info.get("NSCameraUsageDescription"):
+        info["NSCameraUsageDescription"] = (
+            f"{brand.NAME} records you on camera for the video you are making.")
+
     selector = ("webView:requestMediaCapturePermissionForOrigin:"
                "initiatedByFrame:type:decisionHandler:")
     delegate_cls = cocoa.BrowserView.BrowserDelegate
@@ -96,21 +101,23 @@ def _patch_macos_microphone() -> None:
     ])
 
 
-def _request_macos_microphone() -> None:
-    """Ask TCC for the microphone. Must run after the run loop has started —
+def _request_macos_media() -> None:
+    """Ask TCC for camera and microphone access after the run loop has started —
     asked any earlier, the system prompt has nowhere to appear and the call
     silently does nothing (confirmed by testing both orders)."""
     try:
         import AVFoundation
     except ImportError:
         return
-    AVFoundation.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
-        "soun", lambda ok: _log(f"microphone authorisation: {bool(ok)}"))
+    for media, label in ((AVFoundation.AVMediaTypeAudio, "microphone"),
+                         (AVFoundation.AVMediaTypeVideo, "camera")):
+        AVFoundation.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+            media, lambda ok, label=label: _log(f"{label} authorisation: {bool(ok)}"))
 
 
 # --------------------------------------------------------- Linux (WebKitGTK)
-def _patch_linux_microphone() -> None:
-    """Auto-grant WebKitGTK's microphone permission dialog.
+def _patch_linux_media() -> None:
+    """Auto-grant WebKitGTK's camera and microphone permission dialog.
 
     **Unverified** — written from the documented WebKitGTK API
     (`WebKitWebView::permission-request`, `WebKitUserMediaPermissionRequest`)
@@ -131,6 +138,8 @@ def _patch_linux_microphone() -> None:
 
     def _on_permission(webview, request, *_a):
         if isinstance(request, WebKit2.UserMediaPermissionRequest):
+            if not (request.props.is_for_audio_device or request.props.is_for_video_device):
+                return False
             request.allow()
             return True
         return False
@@ -141,17 +150,17 @@ def _patch_linux_microphone() -> None:
         for _ in range(100):
             for inst in list(gtk_platform.BrowserView.instances.values()):
                 webview = getattr(inst, "webview", None)
-                if webview is not None and not getattr(webview, "_corkbored_mic_patched", False):
+                if webview is not None and not getattr(webview, "_corkbored_media_patched", False):
                     webview.connect("permission-request", _on_permission)
-                    webview._corkbored_mic_patched = True
+                    webview._corkbored_media_patched = True
             time.sleep(0.2)
 
     threading.Thread(target=_attach, daemon=True).start()
 
 
 # -------------------------------------------------------- Windows (WebView2)
-def _patch_windows_microphone() -> None:
-    """Auto-grant WebView2's microphone permission.
+def _patch_windows_media() -> None:
+    """Auto-grant WebView2's camera and microphone permission.
 
     **Unverified** — written from the documented WebView2 API
     (`CoreWebView2.PermissionRequested`, `CoreWebView2PermissionKind.Microphone`)
@@ -170,7 +179,8 @@ def _patch_windows_microphone() -> None:
         return
 
     def _on_permission(sender, args):
-        if args.PermissionKind == CoreWebView2PermissionKind.Microphone:
+        if args.PermissionKind in (CoreWebView2PermissionKind.Microphone,
+                                  CoreWebView2PermissionKind.Camera):
             args.State = CoreWebView2PermissionState.Allow
             args.Handled = True
 
@@ -180,21 +190,21 @@ def _patch_windows_microphone() -> None:
                 gui = getattr(win, "gui", None)
                 core = getattr(gui, "webview", None)
                 core = getattr(core, "CoreWebView2", None) if core else None
-                if core is not None and not getattr(win, "_corkbored_mic_patched", False):
+                if core is not None and not getattr(win, "_corkbored_media_patched", False):
                     core.PermissionRequested += _on_permission
-                    win._corkbored_mic_patched = True
+                    win._corkbored_media_patched = True
             time.sleep(0.2)
 
     threading.Thread(target=_attach, daemon=True).start()
 
 
-def _patch_microphone() -> None:
+def _patch_media() -> None:
     if sys.platform == "darwin":
-        _patch_macos_microphone()
+        _patch_macos_media()
     elif sys.platform.startswith("linux"):
-        _patch_linux_microphone()
+        _patch_linux_media()
     elif sys.platform == "win32":
-        _patch_windows_microphone()
+        _patch_windows_media()
 
 
 # -------------------------------------------------------------------- window
@@ -283,11 +293,11 @@ def main(open_in_browser: bool = False) -> None:
         webbrowser.open(url)
         return
 
-    _patch_microphone()
+    _patch_media()
     window = wv.create_window(brand.NAME, url, width=1360, height=900, min_size=(960, 640))
     window.events.closing += _confirm_quit
     _install_folder_dialog(window)
-    wv.start(_request_macos_microphone if sys.platform == "darwin" else (lambda: None),
+    wv.start(_request_macos_media if sys.platform == "darwin" else (lambda: None),
             menu=_menu(), private_mode=False,
             icon=str(resource_root() / "resources" / "icon_1024.png"))
 

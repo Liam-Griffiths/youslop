@@ -242,3 +242,18 @@ def test_variable_rate_input(synthetic, tmp_path, monkeypatch):
     meta = camera.process_camera_take(raw, wav, mp4)
     assert meta['fps'] == 30
     assert abs(ffutil.duration(mp4) - .8 - meta['tail']) <= 1 / 30
+
+
+def test_browser_recording_without_container_duration(synthetic, tmp_path, monkeypatch):
+    # Chromium's MediaRecorder WebM has no duration in the format or streams.
+    original = ffutil.probe
+    def bare(path):
+        info = original(path)
+        if Path(path) == synthetic:
+            info['format'].pop('duration', None)
+            for s in info['streams']:
+                s.pop('duration', None)
+        return info
+    monkeypatch.setattr(ffutil, 'probe', bare)
+    meta = camera.process_camera_take(synthetic, tmp_path / 'o.wav', tmp_path / 'o.mp4')
+    assert meta['duration'] > 0 and meta['tail'] >= 0

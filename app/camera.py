@@ -39,9 +39,14 @@ def process_camera_take(raw: Path, out_wav: Path, out_mp4: Path,
     if video_start < 0:
         raise ValueError("The first spoken audio precedes the camera picture")
     # Stream duration is relative to its own start, unlike format.duration.
-    video_duration = float(video.get("duration") or
-                           (float(info["format"]["duration"]) -
-                            float(video.get("start_time") or 0)))
+    fmt_duration = (info.get("format") or {}).get("duration")
+    if video.get("duration"):
+        video_duration = float(video["duration"])
+    elif fmt_duration:
+        video_duration = float(fmt_duration) - float(video.get("start_time") or 0)
+    else:
+        # Browser recordings carry no duration at all; read the packets.
+        video_duration = ffutil.stream_end(raw, "v") - float(video.get("start_time") or 0)
     if end + offset > video_duration + 1 / 30:
         raise ValueError("The camera picture ends before the spoken audio")
     tail = max(0.0, min(TAIL_S, video_duration - end - offset))

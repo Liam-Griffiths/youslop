@@ -933,3 +933,15 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
   background: var(--panel); color: var(--dim); border: 1px solid var(--line); }
 .tl-snap-guide { position: absolute; top: 0; bottom: 0; width: 1px;
   background: var(--cool); pointer-events: none; z-index: 5; }
+
+/* Record tab camera: only the live image is mirrored, never the recording. */
+.camera-frame { position: relative; aspect-ratio: 16/9; background: #000; overflow: hidden; }
+#camera-live { width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+.camera-thirds { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to right, transparent 33.2%, #ffffff55 33.3%, transparent 33.5%, transparent 66.5%, #ffffff55 66.6%, transparent 66.8%),
+    linear-gradient(to bottom, transparent 33.2%, #ffffff55 33.3%, transparent 33.5%, transparent 66.5%, #ffffff55 66.6%, transparent 66.8%); }
+.camera-headroom { position: absolute; top: 15%; width: 100%; border-top: 1px dashed #fff8; pointer-events: none; }
+.camera-prompter { position: absolute; top: 0; left: 10%; right: 10%; height: 30%; padding: 10px;
+  overflow: auto; background: #000b; color: white; line-height: 1.4; white-space: pre-wrap; }
+.camera-countdown { position: absolute; top: 45%; left: 48%; font-size: 64px; color: white; }
+.camera-drop { border: 1px dashed var(--line); padding: 12px; margin-bottom: 12px; }
