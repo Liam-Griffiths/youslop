@@ -695,6 +695,7 @@ def new_channel(name: str, concept: str = "") -> Channel:
 class SponsorSlot:
     id: str = field(default_factory=lambda: _uid("sp"))
     sponsor_id: str = ""
+    paid: bool = False
     variant: str = "short"          # short | long
     placement: str = "mid"          # pre | mid | end
     after_slide_id: str = ""

@@ -41,6 +41,30 @@ def placements(project, plan, pre=0.0):
     return result
 
 
+def suggest_slots(project):
+    """Suggest anchors in unsponsored body time without modifying the project."""
+    from .render import _slide_durations
+    plan = _slide_durations(project, True)
+    if not plan:
+        return []
+    boundaries, t = [], HEAD_PAD
+    for slide, seconds in plan:
+        t += seconds
+        boundaries.append((slide.id, round(t, 3)))
+    pre = next((b for b in boundaries if b[1] >= project.frame.hook_s), boundaries[-1])
+    chapters = [boundaries[i - 1] for i, (slide, _) in enumerate(plan)
+                if i and slide.chapter.strip()]
+    candidates = chapters or boundaries[:-1] or boundaries
+    runtime = t - HEAD_PAD
+    def rank(boundary):
+        fraction = (boundary[1] - HEAD_PAD) / runtime
+        return (max(.35 - fraction, 0, fraction - .50), abs(fraction - .425))
+    mid = min(candidates, key=rank)
+    return [dict(placement=kind, after_slide_id=sid, at_s=seconds)
+            for kind, (sid, seconds) in zip(('pre', 'mid', 'end'),
+                                           (pre, mid, boundaries[-1]))]
+
+
 def pads(placements):
     return {sid: sum(duration(slot) for slot in slots) for sid, slots in placements.items()}
 

@@ -2513,9 +2513,11 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
         t += lay["outro"]["length"]
     for n, seg in enumerate(segments):
         seg["index"] = n
+    from . import sponsors
     size = preview_size()
     pres = project.presenter
     return {
+        "sponsor_suggestions": sponsors.suggest_slots(project),
         "layers": _layers(project, segments),
         "segments": segments, "total": round(t, 3), "fps": PREVIEW_FPS,
         "width": size[0], "height": size[1],

@@ -185,3 +185,108 @@ def test_invalid_anchor_leaves_cut_unchanged(cut):
     cut.sponsors[0].after_slide_id = "missing"
     assert render.timeline(cut) == before
     assert render._picture_source(cut, cut.slides[1]) is cut.slides[1]
+
+
+def test_suggestions_are_pure_and_shared(cut):
+    cut.frame.hook_s = 20
+    before = deepcopy(cut.to_dict())
+    suggestions = sponsors.suggest_slots(cut)
+    assert [s['after_slide_id'] for s in suggestions] == ['s1', 's0', 's2']
+    assert [s['placement'] for s in suggestions] == ['pre', 'mid', 'end']
+    assert render.timeline(cut)['sponsor_suggestions'] == suggestions
+    assert cut.to_dict() == before
+    cut.sponsors = [slot()]
+    assert sponsors.suggest_slots(cut) == suggestions
+    cut.slides = []
+    assert sponsors.suggest_slots(cut) == []
+    assert render.timeline(cut)['sponsor_suggestions'] == []
+
+
+def test_suggestion_chapter_preference_and_fallback(cut):
+    cut.slides = [Slide(id=f's{i}', narration='Text.', gap_override=0,
+                        take={'duration': 10}) for i in range(10)]
+    cut.slides[5].chapter = 'Middle'
+    assert sponsors.suggest_slots(cut)[1]['after_slide_id'] == 's4'
+    cut.slides[5].chapter = ''
+    assert sponsors.suggest_slots(cut)[1]['after_slide_id'] == 's3'
+    cut.frame.hook_s = 1000
+    assert sponsors.suggest_slots(cut)[0]['after_slide_id'] == 's9'
+    cut.slides = cut.slides[:1]
+    assert {s['after_slide_id'] for s in sponsors.suggest_slots(cut)} == {'s0'}
+
+
+@pytest.mark.parametrize('code', ['sponsor_early_long', 'sponsor_count',
+                                  'sponsor_disclosure', 'sponsor_question', 'sponsor_music'])
+def test_sponsor_rules_positive_negative(cut, code):
+    from app import check
+    cut.sponsors = [slot()]
+    if code == 'sponsor_early_long':
+        cut.sponsors[0].variant = 'long'
+    elif code == 'sponsor_count':
+        cut.sponsors.append(SponsorSlot(id='second', after_slide_id='s1'))
+    elif code == 'sponsor_disclosure':
+        cut.sponsors[0].paid = True
+    elif code == 'sponsor_question':
+        cut.slides[0].narration = 'Why? '
+    elif code == 'sponsor_music':
+        cut.style.music_db = -3
+        cut.style.sponsor_music_db = 4
+    sb = storyboard.build(cut)
+    sb['music'] = True
+    rule = getattr(check, code)
+    result = rule(sb, cut.frame, check._ctx(sb))
+    assert len(result) == 1 and result[0].code == code
+    assert result[0].slide_id in {'s0', 's1'}
+    assert result[0].fix['kind'] in {'none', 'style'}
+    if code == 'sponsor_early_long':
+        next(s for s in sb['segments'] if s['type'] == 'sponsor')['start'] = 60
+    elif code == 'sponsor_count':
+        sb['sponsors'][1]['variant'] = 'long'
+    elif code == 'sponsor_disclosure':
+        sb['sponsors'][0]['vars']['made'] = 'Paid promotion'
+    elif code == 'sponsor_question':
+        sb['paragraphs'][0]['narration'] = 'The answer.'
+    elif code == 'sponsor_music':
+        sb['style']['sponsor_music_db'] = 3  # equal gain is not louder
+    assert rule(sb, cut.frame, check._ctx(sb)) == []
+    cut.sponsors[0].enabled = False
+    sb = storyboard.build(cut)
+    sb['music'] = True
+    assert rule(sb, cut.frame, check._ctx(sb)) == []
+
+
+def test_paid_roundtrip_and_custom_disclosure(cut):
+    from app import check
+    cut.sponsors = [slot(paid=True)]
+    assert Project.from_dict(cut.to_dict()).sponsors[0].paid
+    assert not SponsorSlot.from_dict({}).paid
+    cut.sponsors[0].vars['made'] = 'Sponsored by Example'
+    sb = storyboard.build(cut)
+    assert check.sponsor_disclosure(sb, cut.frame, check._ctx(sb)) == []
+    sb['sponsors'][0]['template'] = 'custom.html'
+    assert len(check.sponsor_disclosure(sb, cut.frame, check._ctx(sb))) == 1
+
+
+def test_check_run_includes_sponsors(cut, monkeypatch):
+    from app import check
+    cut.sponsors = [slot(paid=True, variant='long')]
+    monkeypatch.setattr(render, 'pick_music', lambda _: None)
+    result = check.run(cut)
+    codes = {f['code'] for f in result['findings']}
+    assert {'sponsor_disclosure', 'sponsor_early_long'} <= codes
+    cut.sponsors[0].after_slide_id = 'missing'
+    assert not any(f['code'].startswith('sponsor_') for f in check.run(cut)['findings'])
+
+
+def test_music_absent_and_preceding_reads_shift_check_time(cut):
+    from app import check
+    cut.sponsors = [slot(), SponsorSlot(id='later', variant='long', after_slide_id='s1')]
+    cut.sponsors[0].take['duration'] = 60
+    cut.style.music_db = 2
+    sb = storyboard.build(cut)
+    sb['music'] = False
+    assert check.sponsor_music(sb, cut.frame, check._ctx(sb)) == []
+    assert check.sponsor_early_long(sb, cut.frame, check._ctx(sb)) == []
+    sb['music'] = True
+    sb['style']['sponsor_music_db'] = 0
+    assert len(check.sponsor_music(sb, cut.frame, check._ctx(sb))) == 2

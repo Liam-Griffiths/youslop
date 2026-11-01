@@ -151,7 +151,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T10.2 | Sponsor library on channels | S | T10.1 | todo | open: house read opt-in or opt-out |
 | T10.3 | Sponsor scene templates: short and long | M | T10.1, T2.3 | done | 2026-10-31 Codex (2 rounds); short/long + vertical templates, dark card ink, copy fits; frames in compare/ |
 | T10.4 | Writing and voicing the read | S | T10.2 | todo |  |
-| T10.5 | Placement suggestions and checks | S | T10.1, T1.5 | todo |  |
+| T10.5 | Placement suggestions and checks | S | T10.1, T1.5 | done | 2026-10-31 Codex; suggest_slots (pre/mid/end) + 5 sponsor checks; paid flag for disclosure |
 | T10.6 | Sponsors in the editor | M | T10.1, T9.10 or T4.4 | todo |  |
 | T10.7 | Description, chapters and YouTube flags | S | T10.1, T10.2 | todo |  |
 

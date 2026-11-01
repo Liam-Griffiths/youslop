@@ -68,6 +68,7 @@ def build(project) -> dict:
     return {"version": 1,
             "project": {"id": project.id, "title": project.title,
                         "format": project.style.format, "duration": timeline["total"]},
+            "sponsors": [slot.to_dict() for slot in project.sponsors],
             "style": asdict(project.style), "frame": project.frame.to_dict(),
             "segments": segments, "paragraphs": paragraphs}
 

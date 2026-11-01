@@ -274,11 +274,68 @@ def timeline_problem(sb, frame, ctx):
             if not (s.get('lead') in dead and msg.startswith('the same picture holds for '))]
 
 
+def _sponsor_reads(sb):
+    slots = {s['id']: s for s in sb.get('sponsors', []) if s.get('enabled', True)}
+    previous = ''
+    for seg in sb['segments']:
+        if seg['type'] == 'picture' and seg.get('paragraphs'):
+            previous = seg['paragraphs'][-1]['id']
+        if seg['type'] == 'sponsor' and seg.get('sponsor') in slots:
+            yield slots[seg['sponsor']], seg['start'], previous
+
+
+def sponsor_early_long(sb, frame, ctx):
+    return [_finding('sponsor_early_long', 'P1', t, sid,
+                     'Move the long sponsor read after the first 60 seconds.')
+            for slot, t, sid in _sponsor_reads(sb) if slot['variant'] == 'long' and t < 60]
+
+
+def sponsor_count(sb, frame, ctx):
+    seen, out = set(), []
+    for slot, t, sid in _sponsor_reads(sb):
+        variant = slot['variant']
+        if variant in seen:
+            out.append(_finding('sponsor_count', 'P2', t, sid,
+                                f'Use at most one {variant} sponsor read by default.'))
+        seen.add(variant)
+    return out
+
+
+def sponsor_disclosure(sb, frame, ctx):
+    import re
+    bundled = {'sponsor/' + name + '.html' for name in
+               ('house_short', 'short', 'short_vertical', 'long', 'long_vertical')}
+    return [_finding('sponsor_disclosure', 'P1', t, sid,
+                     'The paid sponsor needs visible disclosure (for example “Paid promotion”).')
+            for slot, t, sid in _sponsor_reads(sb) if slot.get('paid') and
+            (slot.get('template') not in bundled or not re.search(
+                r'\b(paid|sponsored|advertisement)\b',
+                slot.get('vars', {}).get('made', ''), re.IGNORECASE))]
+
+
+def sponsor_question(sb, frame, ctx):
+    paras = {p['id']: p for p in sb['paragraphs']}
+    return [_finding('sponsor_question', 'P2', t, sid,
+                     'A sponsor follows a question; keep its answer before the read.')
+            for slot, t, sid in _sponsor_reads(sb)
+            if paras.get(sid, {}).get('narration', '').rstrip().endswith('?')]
+
+
+def sponsor_music(sb, frame, ctx):
+    style = sb.get('style', {})
+    if not sb.get('music') or style.get('music_db', -17.5) + style.get('sponsor_music_db', -6) <= 0:
+        return []
+    return [_finding('sponsor_music', 'P1', t, sid,
+                     'Music is louder than the voice during the sponsor read.', 'style')
+            for slot, t, sid in _sponsor_reads(sb)]
+
+
 Rule = Callable[[dict, FrameSpec, Ctx], list[Finding]]
 RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_stretch,
                     overlay_budget, small_text, unreadable_line, anchor_off,
                     same_device_twice, last_line_short, silent_film, open_loop_unpaid,
-                    banned_used, timeline_problem]
+                    banned_used, timeline_problem, sponsor_early_long, sponsor_count,
+                    sponsor_disclosure, sponsor_question, sponsor_music]
 
 
 def run(project) -> dict:
