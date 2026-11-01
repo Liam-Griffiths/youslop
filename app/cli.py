@@ -255,7 +255,8 @@ def cmd_block(args):
         print(block_authoring.new(args.id))
         print(f'id: user/{args.id}  (use this with block check / preview)')
     elif args.block_cmd == 'check':
-        errors = block_authoring.check(args.id, static_only=args.static_only)
+        errors = block_authoring.check(args.id, static_only=args.static_only,
+            report=lambda aspect, stats: print(f'{aspect}: {json.dumps(stats, sort_keys=True)}'))
         if errors:
             raise ValueError('\n'.join(errors))
         print('Static lint passed; browser checks skipped' if args.static_only else 'Block checks passed')

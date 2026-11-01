@@ -424,10 +424,10 @@ def render_card(kind, name, channel, video_title, out_path,
     if kind == 'intro':
         ctx.update(intro_context(channel))
     # Keeping this cache alongside the output also covers synthetic solo channels.
-    clip = ensure_clip(out_path.parent, f"cards/{name}.html", ctx,
-                       seconds=seconds, size=(WIDTH, HEIGHT), fps=FPS)
+    from . import scene_builder
+    scene_builder.render(out_path.parent, f"cards/{name}.html", ctx, out_path,
+                         seconds=seconds, size=(WIDTH, HEIGHT), fps=FPS, crf=18)
     progress(f"Scene {kind}: {seconds:.1f}s")
-    _encode(clip, out_path, seconds, (WIDTH, HEIGHT), FPS, 18)
     return seconds
 
 

@@ -76,4 +76,7 @@ use screens of at most 32 phrases and one alpha overlay in the picture graph.
 Board ink uses wipe; photos/washes retain fades. Diagrams now use that same wipe
 instead of per-frame path-length capture. JSON slides keep their SVG baselines,
 static-first paint order and quadratic ease; pop uses the shared back-out preset.
-Sanitised HTML stays one static layer; its `data-start` metadata remains inert.
+Sanitised HTML without explicit layers stays one static layer. Its allowlisted
+layer declarations now drive the builder; `data-start` without a layer remains inert.
+Blocks, intro/outro cards, chapter tails and block preview videos use this builder.
+`inspect(...)` captures and compiles without encoding, for block checks and stats.

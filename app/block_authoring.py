@@ -6,12 +6,11 @@ import io
 import json
 from pathlib import Path
 import re
-import shutil
 import tempfile
 
 from PIL import Image
 
-from . import blocks, scenes, stage
+from . import blocks, scene_builder, scenes, stage
 
 TEMPLATE = '''{% extends "_base.html" %}
 {% block head %}
@@ -24,9 +23,9 @@ h1 { font:700 64px/1.15 Inter,sans-serif; overflow-wrap:anywhere; width:100%; }
 </style>
 {% endblock %}
 {% block body %}
-<!-- Use a runtime preset, not a running or repeating timeline. -->
+<!-- One layer per panel or line; motion is compiled by the builder. -->
 <div class="copy clip" data-start="0" data-duration="{{ duration }}"
- data-anim="rise"><h1 data-var-text="title">{{ vars.title }}</h1></div>
+ data-layer="copy" data-motion="rise"><h1 data-var-text="title">{{ vars.title }}</h1></div>
 {% endblock %}
 '''
 
@@ -118,7 +117,7 @@ def _pixels(encoded):
         return im.convert('RGBA').tobytes()
 
 
-def check(block_id, *, static_only=False):
+def check(block_id, *, static_only=False, report=lambda aspect, stats: None):
     errors = lint(block_id)
     if errors or static_only:
         return errors
@@ -126,6 +125,13 @@ def check(block_id, *, static_only=False):
     with tempfile.TemporaryDirectory(prefix='corkbored-check-') as directory:
         for aspect in meta['aspects']:
             template, ctx = blocks.prepare(block_id, samples(meta), aspect)
+            try:
+                stats = scene_builder.inspect(Path(directory), template, ctx, seconds=ctx['duration'],
+                    size=(ctx['width']//4, ctx['height']//4), fps=ctx['fps'])
+                report(aspect, stats)
+            except ValueError as exc:
+                errors.append(f'{aspect}: {exc}')
+                continue
             html = Path(directory) / 'block.html'
             html.write_text(scenes.render_html(template, ctx))
             def probe(cdp, session, item, t):
@@ -167,6 +173,6 @@ def preview(block_id, out, *, aspect='16:9', values=None, seconds=None, hero=Non
             path.write_bytes(scenes.capture(root, template, ctx, t=t, size=size))
             rows.append(dict(path=path, t=t, why=block_id))
         sheet(rows, out / 'sheet.png', cols=3)
-        clip = scenes.ensure_clip(root, template, ctx, seconds=duration, size=size, fps=ctx['fps'])
-        shutil.copyfile(clip, out / 'preview.mp4')
+        scene_builder.render(root, template, ctx, out / 'preview.mp4',
+                             seconds=duration, size=size, fps=ctx['fps'], crf=18)
     return out

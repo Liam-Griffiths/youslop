@@ -175,3 +175,35 @@ def test_html_render_and_candidate_motion(project, tmp_path, monkeypatch):
 def test_documented_class_allowlist():
     doc = (scenes.SCENE_DIR / 'slides/classes.md').read_text()
     assert all('| ' + name + ' |' in doc for name in sanitise.CLASSES)
+
+
+@pytest.mark.parametrize('attrs', [
+    'data-layer="../bad"', 'data-layer="&#116;itle"', 'data-layer="title%20x"',
+    'data-layer="title" data-motion="url(evil)"',
+    'data-layer="title" data-motion="rise;alert(1)"',
+    'data-layer="title" data-motion="f&#97;de"',
+    'data-layer="title" data-capture="frames"',
+    'data-layer="title" data-motion-y="100"',
+    'data-layer="title" data-duration="NaN"',
+    'data-layer="title" data-duration="0"',
+    'data-layer="title" data-duration="-1"',
+    'data-layer="title" data-duration="1e3"',
+    'data-layer="title" data-duration="&#49;"',
+    'data-motion="rise"', 'data-duration="2"',
+])
+def test_reject_unsafe_builder_attributes(attrs):
+    with pytest.raises(sanitise.UnsafeHTML):
+        sanitise.clean(f'<h1 {attrs}>Title</h1>')
+
+
+def test_layer_structure_and_allowlisted_presets():
+    for motion in sanitise.MOTIONS:
+        fragment = f'<h1 data-layer="title" data-start="0.2" data-duration="4" data-motion="{motion}">Title</h1>'
+        assert sanitise.clean(fragment) == fragment
+    for fragment in (
+        '<section data-layer="panel"><h1 data-layer="title">Nested</h1></section>',
+        '<h1 data-layer="same">One</h1><p data-layer="same">Two</p>',
+        ''.join(f'<p data-layer="l{i}">Text</p>' for i in range(49)),
+    ):
+        with pytest.raises(sanitise.UnsafeHTML):
+            sanitise.clean(fragment)

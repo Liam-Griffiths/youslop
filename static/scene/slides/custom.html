@@ -23,9 +23,9 @@
 {% endblock %}
 {% block body %}
 {% if custom_html | default('') %}
-<div data-layer="html" data-motion="none" data-start="0" data-duration="{{ duration }}" style="position:absolute;inset:0;">
+{% if 'data-layer=' not in custom_html %}<div data-layer="html" data-motion="none" data-start="0" data-duration="{{ duration }}" style="position:absolute;inset:0;">{% endif %}
 {{ custom_html | clean_html(html_sources | default(())) | safe }}
-</div>
+{% if 'data-layer=' not in custom_html %}</div>{% endif %}
 {% else %}
 {% if not plate %}<div class="custom-ground"></div>{% endif %}
 {% for el in elements %}

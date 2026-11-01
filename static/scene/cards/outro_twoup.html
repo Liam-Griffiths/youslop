@@ -17,7 +17,7 @@
 {% block body %}
 {% block identity %}
 <section class="title-safe">
-  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">
+  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-layer="layer-1" data-motion="rise">
     <h1 data-var-text="channel_name"></h1>
     {% if vars.tagline %}<p data-var-text="tagline"></p>{% endif %}
     {% if card.handle %}<div class="handle">{{ card.handle }}</div>{% endif %}
@@ -25,10 +25,10 @@
   </div>
 </section>
 {% endblock %}
-<div class="cta clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">{{ cta }}</div>
+<div class="cta clip" data-start="0" data-duration="{{ duration }}" data-layer="layer-2" data-motion="rise">{{ cta }}</div>
 {% for plate in plates %}
 <div class="plate clip" style="--plate-x:{{ plate.x }}px;--plate-y:{{ plate.y }}px;--plate-w:{{ plate.width }}px;--plate-h:{{ plate.height }}px"
-     data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0"><span>{{ plate.label }}</span></div>
+     data-start="0" data-duration="{{ duration }}" data-layer="plate-{{ loop.index }}" data-motion="rise"><span>{{ plate.label }}</span></div>
 {% endfor %}
-{% if card.show_video_title %}<p class="episode clip" data-var-text="title" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0"></p>{% endif %}
+{% if card.show_video_title %}<p class="episode clip" data-var-text="title" data-start="0" data-duration="{{ duration }}" data-layer="layer-4" data-motion="rise"></p>{% endif %}
 {% endblock %}

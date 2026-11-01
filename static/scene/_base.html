@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en" data-composition-id="{{ composition_id | default('scene') }}"
       data-width="{{ width }}" data-height="{{ height }}"
-      data-duration="{{ duration }}" data-fps="{{ fps }}" data-seed="{{ seed | default(1) }}"
+      data-budget="{{ budget | default(0.1) }}" data-duration="{{ duration }}" data-fps="{{ fps }}" data-seed="{{ seed | default(1) }}"
       style="--arrive-s:{{ frame.arrive_s }};--exit-ratio:{{ frame.exit_ratio }};--bg:{{ palette.ground }};--ink:{{ palette.ink }};--fg:{{ palette.ink }};--brand:{{ palette.accent }};--accent-2:{{ palette.accent2 }};--font-display:Archivo;--accent:{{ palette.accent }};--accent2:{{ palette.accent2 }}">
 <head>
   <meta charset="utf-8">

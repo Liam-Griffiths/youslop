@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 import jinja2
 
-from . import paths, scenes
+from . import paths, scene_builder, scenes
 from .config import STATIC_DIR
 
 BUILTIN_DIR = STATIC_DIR / 'blocks'
@@ -163,6 +163,7 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
     if context is None:
         ctx['vars'].update(meta.get('default_colors', {}))
     ctx['safe_areas'] = meta['safe_areas']
+    ctx['budget'] = meta.get('budget', 0.1)
     ctx.update(width={'16:9':1920, '9:16':1080, '1:1':1080}[aspect],
                height={'16:9':1080, '9:16':1920, '1:1':1080}[aspect], duration=seconds,
                block_assets_root=str(root.resolve()))
@@ -204,6 +205,12 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
 
 def render(block_id, vars=None, aspect='16:9', seconds=None, *, project=None, context=None):
     template, ctx = prepare(block_id, vars, aspect, seconds, context=context)
-    return scenes.ensure_clip(project if project is not None else paths.data_root() / '.cache/blocks',
-                              template, ctx, seconds=ctx['duration'],
-                              size=(ctx['width'], ctx['height']), fps=ctx.get('fps', 30))
+    owner = project if project is not None else paths.data_root() / '.cache/blocks'
+    size, fps = (ctx['width'], ctx['height']), ctx.get('fps', 30)
+    _, html, ctx = scenes._prepare(owner, template, ctx, ctx['duration'], size, fps,
+                                  ('block-builder-v1', scene_builder.MOTIONS))
+    out = html.with_suffix('.mp4')
+    if not out.exists():
+        scene_builder.render(owner, template, ctx, out, seconds=ctx['duration'],
+                             size=size, fps=fps, crf=18)
+    return out

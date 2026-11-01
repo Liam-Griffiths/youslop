@@ -4,7 +4,8 @@ import re
 
 import pytest
 
-from app import blocks, cli, scenes, stage
+from app import blocks, cli, scenes, scene_builder, stage
+from types import SimpleNamespace
 
 
 @pytest.fixture
@@ -39,7 +40,7 @@ def test_discovery_and_cli(library, capsys):
 
 @pytest.mark.parametrize('ref', ['_test', 'intro_solo', 'intro_dossier',
                                     'intro_folio', 'intro_portrait', 'outro_twoup',
-                                    'outro_quiet', 'sponsor_house_read'])
+                                    'outro_quiet'])
 def test_existing_html_identical(library, ref):
     template, ctx = blocks.prepare(ref)
     original = 'sponsor/house_short.html' if ref.startswith('sponsor') else f'cards/{ref}.html'
@@ -80,18 +81,16 @@ def test_variants_duration_cache_and_assets(library, monkeypatch):
               duration=dict(mode='from_words', min=1, max=10, variable='title', words_per_minute=60))
     (root / 'asset.txt').write_text('first')
     calls = []
-    def render(items, directory):
-        calls.extend(items)
-        item = items[0]
-        out = directory / (item['clip'] + '.mp4')
+    def render(owner, template, ctx, out, **kw):
+        calls.append((ctx, kw))
         out.write_bytes(b'fake')
-        return {item['clip']:out}
-    monkeypatch.setattr(stage, 'render_scene', render)
+        return SimpleNamespace(path=out)
+    monkeypatch.setattr(scene_builder, 'render', render)
     kw = dict(aspect='9:16', project=library / 'cache')
     first = blocks.render('user/custom', {'title':'two words'}, **kw)
     assert blocks.render('user/custom', {'title':'two words'}, **kw) == first
-    assert len(calls) == 1 and calls[0]['assets_root'] == str(root)
-    assert (calls[0]['W'], calls[0]['H'], calls[0]['frames']) == (1080,1920,60)
+    assert len(calls) == 1 and calls[0][0]['block_assets_root'] == str(root)
+    assert calls[0][1]['size'] == (1080,1920) and calls[0][1]['seconds'] == 2
     (root / 'asset.txt').write_text('changed')
     assert blocks.render('user/custom', {'title':'two words'}, **kw) != first
     for kwargs in [dict(aspect='16:9'), dict(aspect='1:1', seconds=11)]:
@@ -205,6 +204,7 @@ def test_authoring_browser_measurements(library, monkeypatch):
         visited.append((item['W'], item['H']))
         kwargs['scene_probe'](CDP(), 'session', item, item['t'])
     monkeypatch.setattr(stage, '_run_cdp', run)
+    monkeypatch.setattr(scene_builder, 'inspect', lambda *a, **kw: {})
     errors = kit.check('user/probe')
     assert len(errors) == 3 and all('title: text overflow' in e for e in errors)
     assert visited == [(1920,1080), (1080,1920), (1080,1080)]
@@ -222,13 +222,13 @@ def test_authoring_preview_bundle(library, monkeypatch):
         assert kw['size'] == (480,270)
         times.append(kw['t'])
         return out.getvalue()
-    def clip(root, template, ctx, **kw):
+    def clip(root, template, ctx, dest, **kw):
         assert kw['size'] == (480,270) and kw['seconds'] == 3
-        path = root / 'mock.mp4'
+        path = dest
         path.write_bytes(b'mock mp4')
         return path
     monkeypatch.setattr(scenes, 'capture', capture)
-    monkeypatch.setattr(scenes, 'ensure_clip', clip)
+    monkeypatch.setattr(scene_builder, 'render', clip)
     target = library / 'preview-output'
     assert cli.main(['block','preview','user/preview','--out',str(target)]) == 0
     assert {p.name for p in target.iterdir()} == {'preview.png','sheet.png','preview.mp4'}

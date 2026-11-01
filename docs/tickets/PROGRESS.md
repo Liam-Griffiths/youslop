@@ -52,7 +52,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | compatibility only (catalog is temporary, see T12.7) |
 | T2.8 | Scene builder: layers, motion as data, one compositor | L | T2.4, T5.1, T5.2a, T5.2c | done | 2026-11-01 Codex + review; 60s/40 layers in 7.3s (vs ~2min every-frame), 22KB graph |
 | T2.9 | Move captions, boards, diagrams, custom slides onto the builder | M | T2.8 | done | 2026-11-01 Codex + review; board 7.2s, essay 10.9s cold / 6.7s warm; four compositors deleted |
-| T2.10 | Blocks, cards and HTML slides through the builder | M | T2.8 | todo | |
+| T2.10 | Blocks, cards and HTML slides through the builder | M | T2.8 | done | Blocks/cards/HTML on builder; lower third 1.55 s at 1080p; zoompan skipped without camera |
 | T2.7c | Quarantine the third-party catalog | S | T2.7 | done | 2026-10-31 Codex; off by default, metadata allowlist hides previews; UI gating waits for a catalog UI |
 
 ## Phase 3: review loop and agent surface

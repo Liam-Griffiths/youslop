@@ -6,7 +6,7 @@
 <main class="intro-card {% block variant %}signal{% endblock %}">
   <section class="intro-layout title-safe">
     {% block portrait %}{% endblock %}
-    <div class="intro-copy clip" data-start="0" data-duration="{{ duration }}" data-anim="rise">
+    <div class="intro-copy clip" data-start="0" data-duration="{{ duration }}" data-layer="layer-1" data-motion="rise" data-motion-exit="{{ frame.arrive_s * frame.exit_ratio }}">
       {% block metadata %}{% endblock %}
       {% if vars.tagline %}<p class="kicker" data-var-text="tagline"></p>{% endif %}
       <h1 data-var-text="channel_name" style="font-size:{{ [210, [54, 4000 / ([1, vars.channel_name | length] | max)] | max] | min }}px"></h1>

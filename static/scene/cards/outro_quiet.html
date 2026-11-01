@@ -13,10 +13,10 @@
 {% endblock %}
 {% block identity %}
 <section class="title-safe" style="top:220px">
-  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">
+  <div class="identity clip" data-start="0" data-duration="{{ duration }}" data-layer="quiet-identity" data-motion="rise">
     <h1 data-var-text="channel_name"></h1>
     {% if card.handle %}<div class="handle">{{ card.handle }}</div>{% endif %}
   </div>
 </section>
-{% if card.subscribe %}<div class="quiet-subscribe clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-exit="0">Subscribe</div>{% endif %}
+{% if card.subscribe %}<div class="quiet-subscribe clip" data-start="0" data-duration="{{ duration }}" data-layer="subscribe" data-motion="rise">Subscribe</div>{% endif %}
 {% endblock %}

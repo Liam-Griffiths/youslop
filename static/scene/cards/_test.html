@@ -1,6 +1,6 @@
 {% extends '_base.html' %}
 {% block body %}
-<div class="clip title-safe" data-start="0" data-duration="{{ duration }}" data-anim="rise">
+<div class="clip title-safe" data-start="0" data-duration="{{ duration }}" data-layer="layer-1" data-motion="rise" data-motion-exit="{{ frame.arrive_s * frame.exit_ratio }}">
   <h1>{{ vars.channel_name }}</h1><h2>{{ vars.title }}</h2><p>{{ vars.tagline }}</p>
 </div>
 {% endblock %}

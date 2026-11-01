@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app import board, ffutil, outro, render, scenes
+from app import scene_builder, board, ffutil, outro, render, scenes
 from app.schema import Channel
 
 
@@ -24,7 +24,7 @@ def test_plate_geometry_and_template(key, slots, expected):
     assert outro.max_slots(channel.outro.template) == 2
     html = scenes.render_html('cards/outro_' + key + '.html', ctx)
     assert scenes.lint(html) == []
-    assert 'data-anim-exit="0"' in html
+    assert 'data-motion="rise"' in html and 'data-motion-exit=' not in html
     assert r'A \u003cchannel\u003e' in html
 
 
@@ -41,7 +41,7 @@ def test_chapter_after_render(project, tmp_path, monkeypatch, fmt, chapter, seco
         calls.append('picture')
         return out
 
-    def clip(owner, template, ctx, **kwargs):
+    def clip(owner, template, ctx, out, **kwargs):
         calls.append('chapter')
         assert template == 'cards/chapter.html'
         assert ctx['vars']['title'] == 'Next'
@@ -55,7 +55,7 @@ def test_chapter_after_render(project, tmp_path, monkeypatch, fmt, chapter, seco
 
     monkeypatch.setattr(board, 'render_segment', picture)
     monkeypatch.setattr(render, '_render_custom_style', picture)
-    monkeypatch.setattr(scenes, 'ensure_clip', clip)
+    monkeypatch.setattr(scene_builder, 'render', clip)
     monkeypatch.setattr(render, '_overlay_tail', overlay)
     assert render._render_segment(project, [(project.slides[0], seconds)], seconds,
                                   0, out, chapter=chapter, size=(480, 270), fps=15) == out
@@ -91,7 +91,7 @@ def test_scene_outro_dispatch(tmp_path, monkeypatch, name):
     channel.outro.template = 'scene:' + name
     channel.outro.duration = 7
 
-    def ensure(owner, template, ctx, **kwargs):
+    def ensure(owner, template, ctx, out, **kwargs):
         assert template == 'cards/' + name + '.html'
         assert ctx['vars']['title'] == 'Episode'
         assert ctx['card']['duration'] == kwargs['seconds'] == 7
@@ -99,6 +99,6 @@ def test_scene_outro_dispatch(tmp_path, monkeypatch, name):
         assert scenes.lint(scenes.render_html(template, {**ctx, 'duration': 7})) == []
         return tmp_path / 'cached.mp4'
 
-    monkeypatch.setattr(scenes, 'ensure_clip', ensure)
+    monkeypatch.setattr(scene_builder, 'render', ensure)
     monkeypatch.setattr(scenes, '_encode', lambda *a, **kw: None)
     assert outro.render_outro(channel, 'Episode', tmp_path / 'preview.webm') == 7

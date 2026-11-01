@@ -983,8 +983,13 @@ def _chapter_tail(project, out, chapter, seg_len, hold, size, fps, crf, threads,
     if chapter and seg_len > hold + 0.2:
         ctx = scenes.context_base(project, channel)
         ctx['vars'].update(title=chapter[0], kicker=chapter[1])
-        card = scenes.ensure_clip(project, 'cards/chapter.html', ctx,
-                                  seconds=hold, size=size, fps=fps)
+        from . import scene_builder
+        _, html, ctx = scenes._prepare(project, 'cards/chapter.html', ctx, hold, size, fps,
+                                      ('chapter-builder-v1', scene_builder.MOTIONS, crf))
+        card = html.with_suffix('.mp4')
+        if not card.exists():
+            scene_builder.render(project, 'cards/chapter.html', ctx, card,
+                                 seconds=hold, size=size, fps=fps, crf=crf)
         _overlay_tail(out, card, seg_len - hold, crf=crf, threads=threads)
     return out
 

@@ -58,7 +58,7 @@ _PROBE = r"""(() => {
    }
    return {id:e.dataset.layer, index:i, screen:e.closest('[data-screen]')?.dataset.screen || '',
      start:Number(e.dataset.start || 0), duration:Number(e.dataset.duration || root.dataset.duration),
-     motion:e.dataset.motion || 'none', arrival:Number(e.dataset.motionDuration || 0.6),
+     motion:e.dataset.motion || e.dataset.anim || 'none', arrival:Number(e.dataset.motionDuration || 0.6),
      ease:e.dataset.motionEase, y:e.dataset.motionY, feather:Number(e.dataset.motionFeather || 1),
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
@@ -280,12 +280,32 @@ def _compile(data, screen, size, fps, directory):
     x, y = f'({x})*{size[0]/data["width"]}', f'({y})*{size[1]/data["height"]}'
     if data.get('alpha'):
         graph.append(f'[{last}]format=rgba[out]')
+    elif not keys:
+        # No camera: zoompan is the costliest node at full size, so skip it.
+        graph.append(f'[{last}]format=yuv420p[out]')
     else:
         graph.append(f"[{last}]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={size[0]}x{size[1]}:fps={fps},format=yuv420p[out]")
     text = ';\n'.join(graph)
     if len(text.encode()) >= 65536:
         raise ValueError('screen graph exceeds 64 KB; add screen boundaries')
     return inputs, text
+
+
+def inspect(project, template, ctx, *, seconds, size, fps):
+    """Capture and compile an authoring check, returning stats without encoding."""
+    stats = dict(captures=0, cache_hits=0, layers=0, passes=0,
+                 largest_graph_bytes=0, captured_frames=0)
+    data = _plates(project, template, ctx, seconds, size, fps, stats)
+    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
+    with tempfile.TemporaryDirectory(prefix='builder-check-') as work:
+        for screen in _plan(data, seconds, fps):
+            _, graph = _compile(data, screen, size, fps, Path(work))
+            stats['passes'] += 1
+            stats['largest_graph_bytes'] = max(stats['largest_graph_bytes'], len(graph.encode()))
+    stats['layers'] = len(data['layers'])
+    # Include requested windows even when all their plates were cached.
+    stats['captured_frames'] = sum(len(layer.get('frames', [])) for layer in data['layers'])
+    return stats
 
 
 def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
@@ -312,7 +332,7 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
             script.write_text(graph)
             part = directory / f'{n}{out.suffix}'
             count = round((screen['start']+screen['duration'])*fps)-round(screen['start']*fps)
-            args = [*inputs, '-filter_complex_threads', '1', '-filter_complex_script', str(script),
+            args = [*inputs, '-filter_complex_threads', str(ffutil._default_threads()), '-filter_complex_script', str(script),
                 '-map', '[out]', '-frames:v', str(count), '-r', str(fps),
                 *(['-c:v', 'png', '-pix_fmt', 'rgba'] if data.get('alpha') else ffutil.video_args(out, crf=crf)), *extra, '-an', str(part)]
             try:

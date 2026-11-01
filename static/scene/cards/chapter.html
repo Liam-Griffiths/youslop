@@ -8,7 +8,7 @@
 </style>
 {% endblock %}
 {% block body %}
-<section class="chapter title-safe clip" data-start="0" data-duration="{{ duration }}" data-anim="fade">
+<section class="chapter title-safe clip" data-start="0" data-duration="{{ duration }}" data-layer="layer-1" data-motion="fade" data-motion-exit="{{ frame.arrive_s * frame.exit_ratio }}">
   {% if vars.kicker %}<p data-var-text="kicker"></p>{% endif %}
   <h1 data-var-text="title"></h1>
 </section>

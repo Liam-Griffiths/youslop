@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app import audio, cuts, ffutil, intro, outro, render, scenes
+from app import scene_builder, audio, cuts, ffutil, intro, outro, render, scenes
 from app.config import HEAD_PAD, PARAGRAPH_GAP
 from app.schema import Channel
 
@@ -73,18 +73,18 @@ def test_card_dispatch_and_duration(tmp_path, monkeypatch, kind):
     getattr(channel, kind).duration = 100
     commands = []
 
-    def ensure(owner, template, ctx, **kwargs):
+    def ensure(owner, template, ctx, out, **kwargs):
         assert template == 'cards/_test.html'
         assert ctx['vars']['title'] == 'Episode'
         assert ctx['card']['template'] == 'scene:_test'
         assert scenes.lint(scenes.render_html(template, {**ctx, 'duration': kwargs['seconds']})) == []
         return tmp_path / 'cache.mp4'
 
-    monkeypatch.setattr(scenes, 'ensure_clip', ensure)
+    monkeypatch.setattr(scene_builder, 'render', ensure)
     monkeypatch.setattr(ffutil, 'run', lambda args: commands.append(args))
     renderer = intro.render_intro if kind == 'intro' else outro.render_outro
     assert renderer(channel, 'Episode', tmp_path / 'preview.webm') == (12 if kind == 'intro' else 20)
-    assert 'libvpx-vp9' in commands[0]
+    assert commands == []  # the builder owns final encoding
     assert not intro.needs_images('scene:_test')
 
 

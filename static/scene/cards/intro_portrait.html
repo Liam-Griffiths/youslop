@@ -3,6 +3,6 @@
 {% block portrait %}
 {% if portrait_url %}
 <img class="cast-portrait clip" src="{{ portrait_url }}" alt="Channel portrait"
-     data-start="0" data-duration="{{ duration }}" data-anim="fade">
+     data-start="0" data-duration="{{ duration }}" data-layer="portrait" data-motion="fade" data-motion-exit="{{ frame.arrive_s * frame.exit_ratio }}">
 {% endif %}
 {% endblock %}

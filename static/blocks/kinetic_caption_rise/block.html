@@ -1,7 +1,7 @@
 {% extends "_blocks/chapter/text_base.html" %}
 {% block body %}
 {% if vars.picture %}<img class="picture" data-var-src="picture" src="{{ vars.picture }}" alt="">{% endif %}
-<section class="copy kinetic rise clip" data-start="0" data-duration="{{ duration }}" data-anim="fade" data-anim-dur=".35">
-<div class="caption-panel"><h1 class="display caption clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-dur=".35" data-var-text="title">{{ vars.title }}</h1></div>
+<section class="copy kinetic rise clip" data-start="0" data-duration="{{ duration }}" data-layer="layer-1" data-motion="rise" data-motion-duration=".35">
+<div class="caption-panel"><h1 class="display caption" data-var-text="title">{{ vars.title }}</h1></div>
 </section>
 {% endblock %}

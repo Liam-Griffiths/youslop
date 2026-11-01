@@ -43,6 +43,13 @@
   {% if sponsor.url|length >= 40 and width > height %}
   .url { left:120px; width:1100px; }
   {% endif %}
+  {% if builder | default(false) %}
+  .card { background:none; background-image:none; box-shadow:none; }
+  .card-paper { position:absolute; inset:-50px; }
+  .card-paper::before { content:''; position:absolute; inset:50px; background:#FBF8F1;
+    box-shadow:10px 22px 30px rgba(42,20,4,0.5);
+    background-image:linear-gradient(transparent 128px,#E7A2A2 128px,#E7A2A2 131px,transparent 131px); }
+  {% endif %}
   {% if width < height %}
   #board { left:-96px; top:-96px; height:2200px; width:3911px; }
   .note { left:270px; top:80px; width:540px; height:540px; }
@@ -53,11 +60,16 @@
   {% endif %}
 </style>
 {% endblock %}
+{% macro layer(id, motion, start=0, arrival=0.6) -%}
+{% set start = [duration - 0.001, start] | min %}
+{% if builder | default(false) %}data-layer="{{ id }}" data-motion="{{ motion }}" data-start="{{ start }}" data-duration="{{ [0.001, duration-start] | max }}" data-motion-duration="{{ arrival }}" data-motion-exit="0.35"{% endif %}
+{%- endmacro %}
 {% block body %}
 <img id="board" src="/static/brand/cork-1920.jpg" alt="">
 
-<div class="note" id="note">
+<div class="note" id="note" {{ layer("note", "rise", 0.05) }}>
   {% if sponsor.logo %}<img class="logo" src="{{ sponsor.logo }}" alt="{{ sponsor.name }}">{% endif %}
+  {% if not sponsor.logo or not builder | default(false) %}
   <svg viewBox="0 0 64 64" {% if sponsor.logo %}style="visibility:hidden"{% endif %}>
     <defs>
       <linearGradient id="n" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#FFE987"/><stop offset="1" stop-color="#FFD43B"/></linearGradient>
@@ -70,28 +82,31 @@
       <path id="play" d="M26.9 24.9 L26.9 41.6 L40 33.25 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.1" stroke-linejoin="round"/>
     </g>
   </svg>
+  {% endif %}
 </div>
-<svg class="pin" id="notepin" style="position:absolute;left:418px;top:326px;width:84px;height:84px;overflow:visible" viewBox="-42 -42 84 84">
+<svg class="pin" id="notepin" {{ layer("note-pin", "scale-in", 0.62, 0.35) }} style="position:absolute;left:418px;top:326px;width:84px;height:84px;overflow:visible" viewBox="-42 -42 84 84">
   <defs><radialGradient id="ph" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#FFB08A"/><stop offset="0.35" stop-color="#FF5A1F"/><stop offset="1" stop-color="#B8320A"/></radialGradient></defs>
   <ellipse cx="12" cy="16" rx="22" ry="9" fill="#2a1404" opacity="0.35"/>
   <circle r="24" fill="url(#ph)"/><ellipse cx="-7" cy="-8" rx="7" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-30 -7 -8)"/>
 </svg>
 
 <div class="card" id="card">
-  <svg class="pin" id="cardpin" viewBox="-42 -42 84 84">
+  {% if builder | default(false) %}<div class="card-paper" {{ layer("paper", "fly-right", [0.2, b.made-0.25] | max, 0.7) }}></div>{% endif %}
+  <svg class="pin" id="cardpin" {{ layer("card-pin", "scale-in", b.brand+0.1, 0.3) }} viewBox="-42 -42 84 84">
     <ellipse cx="12" cy="16" rx="22" ry="9" fill="#2a1404" opacity="0.35"/>
     <circle r="24" fill="url(#ph)"/><ellipse cx="-7" cy="-8" rx="7" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-30 -7 -8)"/>
   </svg>
   <div class="card-copy">
-    <div class="made" id="made">{{ sponsor.made }}</div>
-    <div class="brand" id="brand">{{ sponsor.name }}</div>
-    <div class="learn" id="learn">{{ sponsor.learn }}</div>
-    <div class="link" id="link">{{ sponsor.link }}{% if sponsor.code %} · {{ sponsor.code }}{% endif %}</div>
+    <div class="made" id="made" {{ layer("made", "rise", b.made+0.15, 0.45) }}>{{ sponsor.made }}</div>
+    <div class="brand" id="brand" {{ layer("brand", "pop", [0, b.brand-0.05] | max, 0.45) }}>{{ sponsor.name }}</div>
+    <div class="learn" id="learn" {{ layer("learn", "rise", b.learn, 0.5) }}>{{ sponsor.learn }}</div>
+    <div class="link" id="link" {{ layer("link", "fly-left", [0, b.link-0.1] | max, 0.45) }}>{{ sponsor.link }}{% if sponsor.code %} · {{ sponsor.code }}{% endif %}</div>
   </div>
 </div>
-<div class="url" id="url">{{ sponsor.url }}</div>
+<div class="url" id="url" {{ layer("url", "rise", b.link+0.5, 0.5) }}>{{ sponsor.url }}</div>
 {% endblock %}
 {% block script %}
+{% if not builder | default(false) %}
 <script>
   (() => {
     const D = {{ duration }};
@@ -118,4 +133,5 @@
     window.__timelines['sponsor-house-short'] = tl;
   })();
 </script>
+{% endif %}
 {% endblock %}

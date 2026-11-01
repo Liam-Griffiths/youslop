@@ -1,5 +1,6 @@
 {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Corkbored block v1", "type": "object", "required": ["id", "name", "kind", "version", "licence", "aspects", "duration", "variables", "fonts", "assets", "beats", "safe_areas"],
 "properties": {
+"budget": {"type": "number", "minimum": 0, "maximum": 1},
 "id": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_-]*$"},
 "name": {"type": "string", "minLength": 1},
 "kind": {"enum": ["intro", "outro", "chapter", "sponsor", "test", "segment"]},

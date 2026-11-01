@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app import channels, intro, main, render, scenes, stage
+from app import scene_builder, channels, intro, main, render, scenes, stage
 from app.schema import Channel
 
 
@@ -36,7 +36,7 @@ def test_intro_dispatch_and_duration(tmp_path, monkeypatch, name, duration, expe
     ch.intro.images = ['intro/face.png']
     assert ch.intro.template in {t['key'] for t in main.intro_templates()}
 
-    def ensure(owner, template, ctx, **kw):
+    def ensure(owner, template, ctx, out, **kw):
         assert template == 'cards/intro_' + name + '.html'
         assert kw['seconds'] == expected
         assert ctx['vars']['title'] == 'Episode'
@@ -45,11 +45,11 @@ def test_intro_dispatch_and_duration(tmp_path, monkeypatch, name, duration, expe
         html = scenes.render_html(template, {**ctx, 'duration': expected})
         assert scenes.lint(html) == []
         assert r'A \u003cseries\u003e' in html
-        assert 'data-anim="rise"' in html
-        assert 'data-anim-exit="0"' not in html
+        assert 'data-motion="rise"' in html
+        assert 'data-motion-exit=' in html
         return tmp_path / 'cache.mp4'
 
-    monkeypatch.setattr(scenes, 'ensure_clip', ensure)
+    monkeypatch.setattr(scene_builder, 'render', ensure)
     monkeypatch.setattr(scenes, '_encode', lambda *a, **kw: None)
     assert intro.render_intro(ch, 'Episode', tmp_path / 'preview.webm') == expected
     assert intro.SOLO_DEFAULT == 'signal'

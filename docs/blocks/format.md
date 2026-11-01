@@ -49,8 +49,8 @@ insets (normally .10 and .05), exposed to templates as `safe_areas`; the
 existing base CSS supplies `.title-safe` and `.action-safe` at those defaults.
 
 `block.html` is a strict, autoescaped Jinja scene extending `_base.html`.
-Custom includes use `_blocks/<registry-id>/<file>` names. Runtime stays
-unchanged: composition id/width/height/duration attributes, timed `.clip`
+Custom includes use `_blocks/<registry-id>/<file>` names. The scene contract retains
+composition id/width/height/duration attributes, timed `.clip`
 children, `window.__vars`, `data-var-text`/`data-var-src`, paused GSAP timelines,
 `__ready` and `__seek(t)`. Use the vendored GSAP and local `/fonts/` only;
 remote resources and nondeterministic scene code fail lint. Relative assets
@@ -58,7 +58,7 @@ resolve through the existing token-protected scene asset host. HTML, metadata,
 local assets and shared runtime dependencies participate in cache invalidation.
 
 `blocks.render(id, vars, aspect, seconds, project=..., context=...)` validates
-and delegates to `scenes.ensure_clip`; `prepare` exposes the same template and
+and delegates to `scene_builder.render`; `prepare` exposes the same template and
 context for `scenes.render_html` or `capture`. The CLI supports `block list`,
 `block show <id>` and `block preview <id> --aspect 9:16 --t 1.5` (quarter size,
 with optional `--vars values.json`, `--seconds`, `--out`). Built-in wrappers
@@ -73,7 +73,10 @@ browser checks as skipped. Full `block check user/my-title` also measures text
 bounds, title safety (portrait excludes the top 15%, bottom 20% and right 15%
 for Shorts controls), opaque text contrast (WCAG 3:1 large / 4.5:1 normal), and
 pixel equality after seeking away and back. It uses wide, unbroken W samples
-and reports the variable name on text failures. Gradient/image backgrounds
+and reports the variable name on text failures. It also captures builder plates and
+compiles each pass without encoding a video, reporting captures, cache hits, layers,
+passes, largest graph bytes and capture-window frames per aspect. An exceeded
+capture budget fails before builder screenshots. Gradient/image backgrounds
 need reviewer contrast judgement; the automated calculation uses the nearest
 opaque ancestor colour. Measure at the midpoint after fonts and runtime ready.
 
@@ -83,3 +86,19 @@ quarter-size `preview.mp4`. Default copy is locally authored metadata copy;
 `--vars` can replace it. Use a short block or `--seconds` within its duration
 rules. For compatibility, an `--out frame.png` path still captures just one
 PNG. No preview is fetched or written into the block directory by default.
+
+Blocks declare independently moving panels or lines with unique `data-layer` ids,
+`data-start`, `data-duration` and `data-motion`. The preset names match the former
+`data-anim` vocabulary (a declared layer also accepts `data-anim` as an alias):
+none, fade, rise, fly-left, fly-right, scale-in, wipe,
+words, blur-in, pop. Use `data-motion-duration` for arrival seconds and
+`data-motion-exit` for a final alpha fade; default is no exit. Layers cannot nest.
+Kinetic words use one panel wipe, never per-word elements or ffmpeg nodes.
+See [scene builder](../scene-builder.md) for screens, bounds and parameters.
+
+Optional metadata `budget` is a fraction from 0 to 1 (default 0.1), copied to the
+composition's `data-budget`. Only a layer explicitly marked `data-capture="frames"`
+may request frame captures, confined to its arrival window. The summed windows,
+rounded up individually, must fit the budget. Built-ins declare no frame windows.
+The sponsor block replaces its legacy rotations and board breathing with beat-timed
+panel/text presets; standalone sponsor templates retain their existing timelines.

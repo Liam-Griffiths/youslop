@@ -7,7 +7,8 @@ from urllib.parse import unquote
 TAGS = frozenset('section h1 h2 p ul li img span figure figcaption strong em'.split())
 CLASSES = frozenset(('cb-slide cb-row cb-stack cb-card cb-title cb-number '
                      'cb-label cb-accent cb-muted cb-center cb-photo').split())
-ATTRS = frozenset('class src alt data-text data-start'.split())
+ATTRS = frozenset('class src alt data-text data-start data-duration data-layer data-motion'.split())
+MOTIONS = frozenset('none fade rise fly-left fly-right scale-in wipe words blur-in pop'.split())
 _START = re.compile(r'''<[a-z][a-z0-9]*(?:\s+[a-z][a-z0-9-]*\s*=\s*(?:"[^"<]*"|'[^'<]*'))*\s*/?>''', re.I)
 _VALUES = re.compile(r'''[a-z][a-z0-9-]*\s*=\s*("[^"<]*"|'[^'<]*')''', re.I)
 _IMAGE = re.compile(r'/scene/\{token\}/project/scenes/board-[0-9a-f]{40}\.png')
@@ -22,6 +23,7 @@ class _San(HTMLParser):
     def __init__(self, sources):
         super().__init__(convert_charrefs=False)
         self.sources, self.out, self.stack = set(sources), [], []
+        self.layers, self.layer_stack = set(), []
 
     def handle_starttag(self, tag, attrs):
         raw = self.get_starttag_text()
@@ -43,21 +45,35 @@ class _San(HTMLParser):
             if (_DANGEROUS.search(decoded) or '\\' in decoded or
                     any(ord(c) < 32 or ord(c) == 127 for c in decoded)):
                 raise UnsafeHTML('Unsafe attribute value')
-            if key in ('src', 'class', 'data-start'):
+            if key in ('src', 'class', 'data-start', 'data-duration', 'data-layer', 'data-motion'):
                 if '&' in original or '%' in original:
                     raise UnsafeHTML('Encoded structural attribute')
             if key == 'class' and (not value.split() or not set(value.split()) <= CLASSES):
                 raise UnsafeHTML('Unsupported class')
             if key == 'src' and (tag != 'img' or not _IMAGE.fullmatch(value) or value not in self.sources):
                 raise UnsafeHTML('Image must be an already-resolved project image')
-            if key == 'data-start' and not re.fullmatch(r'(?:0|[1-9][0-9]{0,3})(?:\.[0-9]{1,6})?', value):
-                raise UnsafeHTML('data-start must be finite nonnegative seconds')
+            if key in ('data-start', 'data-duration') and not re.fullmatch(r'(?:0|[1-9][0-9]{0,3})(?:\.[0-9]{1,6})?', value):
+                raise UnsafeHTML(f'{key} must be finite nonnegative seconds')
+            if key == 'data-duration' and float(value) <= 0:
+                raise UnsafeHTML('data-duration must be positive')
+            if key == 'data-layer' and not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', value):
+                raise UnsafeHTML('Invalid layer id')
+            if key == 'data-motion' and value not in MOTIONS:
+                raise UnsafeHTML('Unsupported motion')
             kept.append(f' {key}="{html.escape(value, quote=True)}"')
+        layer = dict(attrs).get('data-layer')
+        if layer:
+            if layer in self.layers or any(self.layer_stack) or len(self.layers) >= 48:
+                raise UnsafeHTML('Duplicate, nested or too many layers')
+            self.layers.add(layer)
+        elif seen & {'data-duration', 'data-motion'}:
+            raise UnsafeHTML('Motion and duration require data-layer')
         if tag == 'img' and 'src' not in seen:
             raise UnsafeHTML('Image needs a resolved source')
         self.out.append('<' + tag + ''.join(kept) + '>')
         if tag != 'img':
             self.stack.append(tag)
+            self.layer_stack.append(bool(layer))
 
     def handle_startendtag(self, tag, attrs):
         if tag != 'img':
@@ -67,6 +83,7 @@ class _San(HTMLParser):
     def handle_endtag(self, tag):
         if not self.stack or self.stack.pop() != tag:
             raise UnsafeHTML('Unbalanced closing tag')
+        self.layer_stack.pop()
         self.out.append(f'</{tag}>')
 
     def handle_data(self, data):
