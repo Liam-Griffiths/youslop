@@ -134,7 +134,7 @@ def research(pid, payload, progress):
     return {"research": dossier}
 
 def check(pid, payload, progress):
-    return checks.run(store.load(pid))
+    return checks.run(store.load(pid), measure=True)
 
 def snapshot(pid, payload, progress):
     with PROXY_LOCKS.setdefault(pid, threading.Lock()):
@@ -158,7 +158,7 @@ def fix(pid, payload, progress):
 
 
 def render_check(project, payload):
-    result = checks.run(project)
+    result = checks.run(project, measure=True)
     if not result["ok"] and not payload.get("force"):
         return {"error": "Render blocked by P0 issues.", "check": result}
 

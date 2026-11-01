@@ -1,4 +1,4 @@
-"""Storyboard checks; essay geometry uses one optional browser dry capture."""
+"""Storyboard checks with optional cached browser text geometry."""
 from dataclasses import asdict, dataclass
 from typing import Callable
 
@@ -121,7 +121,7 @@ def first_word_collision(sb, frame, ctx):
                  l['start'] + (0.14 if l['type'] == 'caption' and
                               sb.get('style', {}).get('captions_engine', 'scene') == 'pillow'
                               else frame.arrive_s))
-                for l in ctx.lines if l['type'] != 'cue']
+                for l in ctx.lines if l['type'] not in {'cue', 'scene'}]
     if any(a <= t < b for a, b in windows):
         return [_finding('first_word_collision', 'P1', t, sid,
                          'The first spoken word overlaps a sting, chapter card or title arrival.', 'timing')]
@@ -158,8 +158,7 @@ def overlay_budget(sb, frame, ctx):
 
 
 def small_text(sb, frame, ctx):
-    # TODO(T5.2e): scenes report their own fitted size.
-    out = []
+    out, scene_small = [], {}
     for line in ctx.lines:
         if line['type'] == 'caption':
             if sb.get('style', {}).get('captions_engine', 'scene') != 'pillow':
@@ -167,29 +166,43 @@ def small_text(sb, frame, ctx):
                 if metrics is None:
                     continue  # Chromium unavailable: geometry needs reviewer verification.
                 size = metrics['size']
-                if metrics['overflow']:
-                    out.append(_finding('small_text', 'P1', line['start'], line['slide_id'],
-                                        'Caption exceeds three lines at the minimum font size.',
-                                        'words', instruction='shorten'))
             else:
                 font, _ = titles._fit_caption(line['text'], titles.CAPTION_MAX_W)
                 size = font.size
+        elif line['type'] == 'scene':
+            size = line['metrics']['px']
         elif line['type'] == 'title':
             size = round(1080 * (frame.title_height_pct_min + frame.title_height_pct_max) / 200 / .72)
         else:
             continue
         if size < frame.title_height_pct_min / 100 * 1080:
+            if line['type'] == 'scene':
+                # A scene reports every text element; one finding per paragraph.
+                worst = scene_small.setdefault(line['slide_id'], [line['start'], size, 0])
+                worst[1], worst[2] = min(worst[1], size), worst[2] + 1
+                continue
             out.append(_finding('small_text', 'P1', line['start'], line['slide_id'],
                                 f'Text fits at only {size}px; font size approximates visible letter height.',
                                 'words', instruction='shorten'))
+    for sid, (start, size, count) in scene_small.items():
+        lines = f' ({count} text elements)' if count > 1 else ''
+        out.append(_finding('small_text', 'P1', start, sid,
+                            f'Text fits at only {size}px{lines}; font size approximates visible letter height.',
+                            'words', instruction='shorten'))
     return out
+
+
+def text_overflow(sb, frame, ctx):
+    return [_finding('text_overflow', 'P1', line['start'], line['slide_id'],
+                     'Text overflows its rendered box or the frame.', 'words', instruction='shorten')
+            for line in ctx.lines if line.get('metrics', {}).get('overflow')]
 
 
 def unreadable_line(sb, frame, ctx):
     return [_finding('unreadable_line', 'P1', l['start'], l['slide_id'],
                      'The text disappears before there is time to read it.', 'timing',
                      min_hold=frame.title_hold_base_s + frame.title_hold_per_word_s * len(l['text'].split()))
-            for l in ctx.lines if l['end'] - l['start'] + 1e-6 <
+            for l in ctx.lines if l['type'] != 'scene' and l['end'] - l['start'] + 1e-6 <
             frame.title_hold_base_s + frame.title_hold_per_word_s * len(l['text'].split())]
 
 
@@ -235,9 +248,10 @@ def same_device_twice(sb, frame, ctx):
 
 
 def last_line_short(sb, frame, ctx):
-    if not ctx.lines:
+    lines = [line for line in ctx.lines if line['type'] != 'scene']
+    if not lines:
         return []
-    line = ctx.lines[-1]
+    line = lines[-1]
     if line['end'] - line['start'] + 1e-6 < frame.last_line_min_s:
         return [_finding('last_line_short', 'P1', line['start'], line['slide_id'],
                          'The final line needs more time to land.', 'timing', min_hold=frame.last_line_min_s)]
@@ -340,13 +354,76 @@ def sponsor_music(sb, frame, ctx):
 
 Rule = Callable[[dict, FrameSpec, Ctx], list[Finding]]
 RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_stretch,
-                    overlay_budget, small_text, unreadable_line, anchor_off,
+                    overlay_budget, small_text, text_overflow, unreadable_line, anchor_off,
                     same_device_twice, last_line_short, silent_film, open_loop_unpaid,
                     banned_used, timeline_problem, sponsor_early_long, sponsor_count,
                     sponsor_disclosure, sponsor_question, sponsor_music]
 
 
-def run(project) -> dict:
+def _scene_text(project, sb, ctx, groups, measure):
+    from . import board, board_scenes, custom_scenes, scenes, store
+    fmt = project.style.format
+    requests, owners = [], []
+    for seg, group in zip(_pictures(sb), groups):
+        _, _, length = render._segment_timing(project, groups, seg['group'])
+        offset = seg['start'] - seg['skip']
+        if fmt == 'board' and project.style.board_engine != 'pillow':
+            previous, spent = '', 0
+            for n, (slide, dur) in enumerate(group):
+                source, _, _ = render._chosen(project, slide)
+                cache = store.project_dir(project.id) / 'board'
+                if not measure and source and source.suffix.lower() in {'.mp4', '.mov', '.webm', '.mkv', '.m4v'}:
+                    source = cache / f'poster_{source.stem}.jpg'
+                image = board._load_photo(source, cache)
+                index = next(i for i, s in enumerate(project.slides) if s.id == slide.id)
+                key = board.pick(slide, image is not None, previous, index)
+                previous = key
+                seconds = length - spent if n == len(group) - 1 else min(dur, length - spent)
+                if seconds <= .05:
+                    continue
+                if board_scenes.handles(project, key):
+                    hand = project.style.board_hand or board.dg.DEFAULT_HAND
+                    sheet = board.build(slide, key, project.style.accent, hand, image)
+                    scene = board_scenes.context(project, slide, key, sheet, None, hand,
+                        seconds, max(.18, min(1.2, project.style.board_settle)))
+                    requests.append((f'board/{key}.html', scene, 0))
+                    owners.append((slide.id, offset + spent, seconds))
+                spent += seconds
+        elif fmt.startswith('custom:'):
+            slide = group[0][0]
+            root = store.project_dir(project.id) / 'media'
+            if slide.custom_html:
+                scene = custom_scenes.html_context(root, slide.custom_html, slide.custom, length, project)
+            elif project.style.custom_engine != 'pillow':
+                from . import slide_styles
+                style = slide_styles.get(slide_styles.id_from_format(fmt))
+                spec = slide.custom if (slide.custom or {}).get('elements') else style.spec if style else {}
+                if not spec:
+                    continue
+                scene, _ = custom_scenes.context(root, spec, length,
+                    hand=project.style.board_hand or 'marker', measure_only=True)
+            else:
+                continue
+            requests.append(('slides/custom.html', scene, 0))
+            owners.append((slide.id, offset, length))
+        elif scenes.handles(fmt):
+            scene = scenes.context_base(project)
+            lead = seg['skip'] + cuts.head_pad_for(project, group[0][0])
+            scene.update(slides=[dict(asdict(slide), duration=dur) for slide, dur in group],
+                         narration='\n\n'.join(s.narration for s, _ in group),
+                         titles=[s.title for s, _ in group], duration=length,
+                         cues=cuts.timed_cues(project, group, length, lead) if cuts.is_cut(fmt) else [],
+                         chapter=None, lead_in=lead, hold=0)
+            requests.append((f'{fmt}/segment.html', scene, 0))
+            owners.append((group[0][0].id, offset, length))
+    for (sid, offset, duration), rows in zip(owners, scenes.measure_many(project, requests, render=measure)):
+        for row in rows:
+            start = offset + row.get('start', 0)
+            ctx.lines.append(dict(type='scene', start=start, end=offset + duration,
+                                  slide_id=sid, metrics=row))
+
+
+def run(project, measure=False) -> dict:
     from .learning import effective_frame
     frame = effective_frame(project)
     sb = storyboard.build(project)
@@ -381,12 +458,17 @@ def run(project) -> dict:
             if seg['type'] == 'intro':
                 sb['sting_end'] = end
     ctx = _ctx(sb)
+    from . import scenes, stage
+    can_measure = measure and bool(stage.browser())
     if project.style.format == 'essay' and project.style.captions_engine != 'pillow':
-        from . import scenes, stage
         lines = [line for line in ctx.lines if line['type'] == 'caption']
-        if lines and stage.browser():
-            for line, metrics in zip(lines, scenes.measure_captions(project, [l['text'] for l in lines])):
-                line['metrics'] = metrics
+        if lines:
+            for line, metrics in zip(lines, scenes.measure_captions(
+                    project, [l['text'] for l in lines], render=can_measure)):
+                if metrics is not None:
+                    line['metrics'] = metrics
+    else:
+        _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
     findings.sort(key=lambda f: (int(f.level[1]), f.t))
     counts = {level: sum(f.level == level for f in findings) for level in ('P0', 'P1', 'P2')}

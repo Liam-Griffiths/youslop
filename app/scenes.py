@@ -321,31 +321,56 @@ def caption_plates(project, ctx, *, size, render=True) -> list[Path]:
     return paths
 
 
-def measure_captions(project, texts) -> list[dict]:
-    """Measure all plates in one 360px dry capture, in composition pixels."""
-    ctx = context_base(project)
+def measure_captions(project, texts, *, render=True) -> list[dict | None]:
+    """Measure settled caption text, retaining the legacy metrics field names."""
     from . import titles
-    ctx.update(caption_size=titles.CAPTION_CAP, caption_lines=titles.CAPTION_LINES)
-    ctx['phrases'] = [dict(text=text, t0=0, t1=5) for text in texts]
-    key, html, ctx = _prepare(project, 'essay/captions.html', ctx, 5, (360, 202.5), FPS,
-                              ('caption-geometry',))
-    cached = html.with_suffix('.measure.json')
-    if cached.exists():
-        return json.loads(cached.read_text())
-    measured = []
+    ctx = context_base(project)
+    ctx.update(caption_size=titles.CAPTION_CAP, caption_lines=titles.CAPTION_LINES, settled=True)
+    requests = [('essay/captions.html',
+                 dict(ctx, phrases=[dict(text=text, t0=0, t1=5)]), 0) for text in texts]
+    rows = measure_many(project, requests, render=render)
+    return [dict(page[0], size=page[0]['px']) if page else None for page in rows]
 
-    def probe(cdp, session, item, t):
-        result = stage._evaluate(cdp, session, """Array.from(document.querySelectorAll('.caption-text'), el => ({
-            size: parseFloat(getComputedStyle(el).fontSize),
-            overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1
-        }))""")
-        measured.extend(result['result']['value'])
 
-    # Keep the 16:9 composition exact: 360x202.5 is a CDP scale, not a new layout.
-    stage.capture_one(html, ctx['width'], ctx['height'], 0, (360, 202.5),
-                      **ctx.get('asset_roots', {}), scene_probe=probe)
-    cached.write_text(json.dumps(measured))
-    return measured
+def measure_many(project, requests, *, render=True):
+    """Cache scene geometry by clip content and time; batch all missing pages.
+
+    Requests are (template, context, earliest_time). render=False reads only
+    cached results, so Timeline checks never start Chromium.
+    """
+    paths, items, roots = [], {}, None
+    for template, ctx, t in requests:
+        if not math.isfinite(t) or t < 0:
+            raise ValueError('measurement time must be finite and nonnegative')
+        key, html, prepared = _prepare(project, template, ctx, ctx.get('duration', 5),
+                                       (ctx['width'], ctx['height']), ctx.get('fps', FPS))
+        cached = html.with_name(f'{key}_{t}.text-v1.json')
+        paths.append(cached)
+        if render and not cached.exists():
+            clip = cached.stem
+            items[clip] = dict(clip=clip, url_path=f'/scene/{{token}}/{html.name}',
+                               W=prepared['width'], H=prepared['height'],
+                               size=(prepared['width'] / 4, prepared['height'] / 4), t=t)
+            current = dict(prepared.get('asset_roots', {}),
+                           assets_root=prepared.get('block_assets_root', str(html.parent.parent)))
+            if roots is not None and roots != current:
+                raise ValueError('measurement pages must share asset roots')
+            roots = current
+    if items:
+        directory = paths[0].parent
+        measured = stage.measure_many(list(items.values()), directory, **roots)
+        for clip, rows in measured.items():
+            with tempfile.NamedTemporaryFile(mode='w', dir=directory, suffix='.part', delete=False) as f:
+                temporary = Path(f.name)
+                json.dump(rows, f)
+            temporary.replace(directory / (clip + '.json'))
+        if any(not path.exists() for path in paths):
+            raise stage.StageError('Scene text measurements missing')
+    return [json.loads(path.read_text()) if path.exists() else [] for path in paths]
+
+
+def measure(project, template, ctx, t):
+    return measure_many(project, [(template, ctx, t)])[0]
 
 
 def capture(project, template, ctx, *, t, size) -> bytes:

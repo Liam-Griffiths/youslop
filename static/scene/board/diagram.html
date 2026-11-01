@@ -16,7 +16,7 @@
 <g class="clip" data-start="0" data-duration="{{ duration }}" data-track-index="{{ order }}" data-reveal-start="{{ start }}" data-arrival="{{ arrival }}" filter="url(#hand-wobble)">
 {% set ns=namespace(skip=0) %}
 {% for m in marks if m.order == order %}
-{% if m.kind == 'text' %}<text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
+{% if m.kind == 'text' %}<text data-text="mark-{{ order }}-{{ loop.index0 }}" x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
 {% elif m.node_box %}<rect x="{{ m.node_box[0] }}" y="{{ m.node_box[1] }}" width="{{ m.node_box[2] }}" height="{{ m.node_box[3] }}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>{% set ns.skip=3 %}
 {% elif ns.skip > 0 %}{% set ns.skip=ns.skip-1 %}
 {% elif m.kind == 'stroke' %}<path d="M {% for x,y in m.pts %}{{ x }},{{ y }} {% if not loop.last %}L {% endif %}{% endfor %}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>

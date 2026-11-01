@@ -22,6 +22,7 @@ import base64
 import http.server
 import itertools
 import json
+import math
 import os
 import queue
 import secrets
@@ -614,6 +615,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
                 _evaluate(cdp, session, seek_js.format(t=t))
                 if scene_probe is not None:
                     scene_probe(cdp, session, item, t)
+                if item.get("measure_only"):
+                    continue
                 png = base64.b64decode(cdp.send("Page.captureScreenshot", {
                     "format": "png", "fromSurface": True}, session)["data"])
                 if out_dir is None:
@@ -710,3 +713,65 @@ def capture_one(url_path, W, H, t, size, *, assets_root=None,
                     "assets_root": str(assets_root) if assets_root is not None else None, "items": [dict(
         url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None, scene_probe=scene_probe)
     return run.thumbs["snapshot"]
+
+
+# Seek each element independently: later beats may be hidden at the first beat.
+_TEXT_MEASURE = """(async () => {
+    const rows = [];
+    for (const e of document.querySelectorAll('[data-text]')) {
+        let start = 0, arrive = 0;
+        for (let c = e; c; c = c.parentElement) {
+            if (c === e || c.matches('.clip')) start += Number(c.dataset.start || 0);
+            if (c.dataset.revealStart) start += Number(c.dataset.revealStart);
+            const css = getComputedStyle(c);
+            if (c.dataset.anim || c.dataset.arrival) arrive = Math.max(arrive,
+                Number(c.dataset.arrival || c.dataset.animDur || css.getPropertyValue('--arrive-s') || 0));
+        }
+        const t = Math.max(MEASURE_TIME, start + arrive);
+        await window.__seek(t);
+        const r = e.getBoundingClientRect(), css = getComputedStyle(e);
+        const painted = e.matches('svg') ? [...e.querySelectorAll('text')].map(c => c.getBoundingClientRect()) : [r];
+        let overflow = e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1;
+        // SVG text has no CSS scroll box. Compare painted bounds to clipping
+        // ancestors and the composition instead (also catches off-frame HTML).
+        for (let c = e.parentElement; c; c = c.parentElement) {
+            const style = getComputedStyle(c), b = c.getBoundingClientRect();
+            if (c === document.documentElement || /hidden|clip|auto|scroll/.test(style.overflow)) {
+                overflow ||= painted.some(r => r.left < b.left - 1 || r.right > b.right + 1 ||
+                            r.top < b.top - 1 || r.bottom > b.bottom + 1);
+            }
+        }
+        rows.push({id:e.dataset.text, ...r.toJSON(), px:parseFloat(css.fontSize), overflow, start, t});
+    }
+    return rows;
+})()"""
+
+
+def measure_many(items, scene_root, *, assets_root=None, project_root=None, channel_root=None):
+    """Measure local pages in one managed browser, without screenshots."""
+    measured = {}
+
+    def probe(cdp, session, item, t):
+        result = _evaluate(cdp, session, _TEXT_MEASURE.replace('MEASURE_TIME', repr(t)))
+        measured[item['clip']] = result['result']['value']
+
+    if items:
+        _run_cdp(dict(items=[dict(i, measure_only=True) for i in items],
+                      scene_root=str(scene_root) if scene_root is not None else None,
+                      assets_root=str(assets_root) if assets_root is not None else None,
+                      project_root=project_root, channel_root=channel_root),
+                 lambda m: None, scene_probe=probe)
+    return measured
+
+
+def measure(url_path, W, H, t, **roots) -> list[dict]:
+    """Report text geometry in composition pixels at each element's landing."""
+    if not math.isfinite(t) or t < 0:
+        raise ValueError('measurement time must be finite and nonnegative')
+    root = None
+    if Path(url_path).is_file():
+        from urllib.parse import quote
+        path = Path(url_path).resolve()
+        root, url_path = path.parent, '/scene/{token}/' + quote(path.name)
+    return measure_many([dict(clip='measure', url_path=str(url_path), W=W, H=H,
+                              size=(W / 4, H / 4), t=t)], root, **roots)['measure']

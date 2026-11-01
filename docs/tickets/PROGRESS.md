@@ -87,7 +87,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.2b | Diagrams as SVG scenes | M | T5.2a | done | 2026-11-01 Codex; stills match Pillow; owner: boxes are cleaner rectangles than Pillow's pen corners |
 | T5.2c | Custom slides through a scene template | S | T5.2a | done | 2026-11-01 Codex, 2 rounds; text baselines now match Pillow |
 | T5.2d | Custom slides written as sanitised HTML | M | T5.2c | done | 2026-11-01 Codex (high); allowlist rebuild, reject-not-strip, CSP; reviewer probes all rejected |
-| T5.2e | Real text measurement for scenes | S | T5.2a, T1.5 | todo | |
+| T5.2e | Real text measurement for scenes | S | T5.2a, T1.5 | done | 2026-11-01 Codex + review; overflow caught on real Chromium; small_text one per paragraph; owner: board body text is 33-40px |
 | T5.3a | Drawn cut to scene: Loudmouth | L | T2.4, T0.6 | todo | first; sets template conventions |
 | T5.3b | Drawn cut to scene: Flameboat | L | T5.3a | todo | |
 | T5.3c | Drawn cut to scene: Ticker | L | T5.3b | todo | |

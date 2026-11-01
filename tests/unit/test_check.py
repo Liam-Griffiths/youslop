@@ -48,6 +48,9 @@ def test_each_rule_positive_and_negative(code, monkeypatch):
         sb['segments'][0]['duration'] = 16
     elif code == 'overlay_budget':
         sb['frame'].update(overlays_per_hook=2, overlays_per_90_s=2)
+    elif code == 'text_overflow':
+        sb['segments'][0]['cards'] = [dict(start=1, end=4, text='Long', slide_id='s1',
+                                            metrics={'overflow': True})]
     elif code == 'small_text':
         sb['project']['format'] = 'essay'
         monkeypatch.setattr(titles, '_fit_caption', lambda *a: (SimpleNamespace(size=26), []))
@@ -79,6 +82,8 @@ def test_each_rule_positive_and_negative(code, monkeypatch):
         sb['segments'][0]['duration'] = 15
     elif code == 'overlay_budget':
         sb['frame'].update(overlays_per_hook=1, overlays_per_90_s=1)
+    elif code == 'text_overflow':
+        sb['segments'][0]['cards'][0]['metrics']['overflow'] = False
     elif code == 'small_text':
         monkeypatch.setattr(titles, '_fit_caption', lambda *a: (SimpleNamespace(size=70), []))
     elif code in {'unreadable_line', 'last_line_short'}:

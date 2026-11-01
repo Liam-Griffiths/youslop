@@ -72,7 +72,7 @@ def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=N
     ctx['fonts'].update(BoardHand='/fonts/' + Path(dg.hand_stack(hand)[0][0]).name,
                         BoardMono='/fonts/' + Path(titles.MONO_STACK[0][0]).name)
     ctx.update(board=board.content(slide), marks=marks, photos=photos,
-               ground_url=url(_asset(directory, ground)),
+               ground_url=url(_asset(directory, ground)) if ground is not None else '',
                margin=board.MARGIN, body=asdict(board.BODY),
                beats=board.reveal_plan(sheet, seconds, settle),
                active_order=None, plate=False, settled=False, duration=seconds,

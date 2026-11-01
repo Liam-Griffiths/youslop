@@ -21,7 +21,7 @@
 {% for phrase in phrases %}
 <div class="clip caption" data-start="{{ phrase.t0 }}" data-duration="{{ phrase.t1 - phrase.t0 }}"
      data-track-index="1" data-anim="rise">
-  <div class="caption-plate"><p class="caption-text">{{ phrase.text }}</p></div>
+  <div class="caption-plate"><p data-text="caption-{{ loop.index0 }}" class="caption-text">{{ phrase.text }}</p></div>
 </div>
 {% endfor %}
 {% endblock %}

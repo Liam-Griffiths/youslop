@@ -11,7 +11,7 @@
      {% if not settled %}data-anim="fade" data-anim-dur="{{ arrival }}" data-anim-exit="0"{% endif %}>
 {% for p in photos if p.order == order %}<image href="{{ p.url }}" x="{{ p.x }}" y="{{ p.y }}" width="{{ p.w }}" height="{{ p.h }}"/>{% endfor %}
 {% for m in marks if m.order == order %}
-{% if m.kind == 'text' %}<text class="{{ 'mono' if m.font == 'mono' else 'hand' }}" x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
+{% if m.kind == 'text' %}<text data-text="mark-{{ order }}-{{ loop.index0 }}" class="{{ 'mono' if m.font == 'mono' else 'hand' }}" x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
 {% elif m.kind == 'wash' %}<circle cx="{{ m.pts[0][0] }}" cy="{{ m.pts[0][1] }}" r="{{ m.radius }}" fill="{{ m.color }}" opacity="{{ m.alpha }}"/>
 {% else %}<polyline points="{% for x,y in m.pts %}{{ x }},{{ y }} {% endfor %}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>{% endif %}
 {% endfor %}</svg>

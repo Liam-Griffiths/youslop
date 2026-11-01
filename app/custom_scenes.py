@@ -61,7 +61,7 @@ def html_candidate(fragment, dest, spec, *, motion='reveal', seconds=custom.DEFA
                 custom=spec, custom_html=ctx['custom_html'])
 
 
-def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5):
+def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5, *, measure_only=False):
     spec = custom.normalise(spec)
     root = Path(root).resolve()
     directory = scenes._directory(root)
@@ -72,7 +72,7 @@ def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5):
         path = board_scenes._asset(directory, image)
         return scenes.ASSETS_URLS['project'] + quote(path.relative_to(root).as_posix())
 
-    ground = diagram.ground(spec['background'] or diagram.GROUND, grain)
+    ground = None if measure_only else diagram.ground(spec['background'] or diagram.GROUND, grain)
     orders = sorted({el['order'] for el in spec['elements'] if el['anim'] != 'none'})
     plan = diagram.schedule(len(orders), seconds, spec['reveal'])
     elements = []
@@ -105,7 +105,7 @@ def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5):
         elements.append(item)
     for key in custom.FONT_KEYS:
         ctx['fonts']['Custom' + key] = '/fonts/' + Path(custom._stack(key, hand)[0][0]).name
-    ctx.update(elements=elements, ground_url=url(ground), duration=seconds,
+    ctx.update(elements=elements, ground_url=url(ground) if ground is not None else '', duration=seconds,
                settled=False, plate=False, active_index=None)
     return ctx, ground
 

@@ -167,7 +167,7 @@ def test_shared_render(project, monkeypatch, capsys):
         main.preview_segment(project.id, 'missing')
     assert error.value.status_code == 404
     assert cli.main(['render', project.id, '--section', 'missing']) == 1
-    monkeypatch.setattr(ops.checks, 'run', lambda p: {'ok': False, 'counts': {'P0': 1}})
+    monkeypatch.setattr(ops.checks, 'run', lambda p, **kw: {'ok': False, 'counts': {'P0': 1}})
     monkeypatch.setattr(ops.renderer, 'render', lambda *a, **kw: pytest.fail('Blocked render'))
     assert cli.main(['render', project.id, '--full', '--yes']) == 1
     assert 'Render blocked by P0' in capsys.readouterr().out

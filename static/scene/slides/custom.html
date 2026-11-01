@@ -34,7 +34,7 @@
      style="left:{{ el.x * 100 }}%;top:{{ el.y * 100 }}%;width:{{ el.w * 100 }}%;height:{{ el.h * 100 }}%;">
   <div class="custom-content" style="opacity:{{ el.opacity }};">
   {% if el.type == 'text' %}
-    <svg class="custom-text font-{{ el.font }} size-{{ el.size }}" width="100%" height="100%" viewBox="0 0 {{ el._w }} {{ el._h }}" preserveAspectRatio="none" style="font-family:Custom{{ el.font }};font-size:{{ el.font_size }}px;text-align:{{ el.align }};fill:{{ el.color }};">
+    <svg data-text="element-{{ loop.index0 }}" class="custom-text font-{{ el.font }} size-{{ el.size }}" width="100%" height="100%" viewBox="0 0 {{ el._w }} {{ el._h }}" preserveAspectRatio="none" style="font-family:Custom{{ el.font }};font-size:{{ el.font_size }}px;text-align:{{ el.align }};fill:{{ el.color }};">
       {% for line in el.text_lines %}<text x="{{ el.text_x }}%" y="{{ line.baseline }}" text-anchor="{{ el.text_anchor }}" dominant-baseline="alphabetic">{{ line.text }}</text>{% endfor %}
     </svg>
   {% elif el.type == 'image' %}
@@ -48,5 +48,16 @@
 </div>
 {% endif %}
 {% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block script %}
+{% if custom_html | default('') %}
+<script>
+// HTML fragments may predate measurement metadata. Mark their text boxes.
+for (const [i, el] of [...document.querySelectorAll('h1,h2,p,li,figcaption,.cb-number,.cb-label')].entries()) {
+  if (!el.hasAttribute('data-text')) el.dataset.text = `custom-${i}`;
+}
+</script>
 {% endif %}
 {% endblock %}

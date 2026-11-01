@@ -161,24 +161,19 @@ def test_alpha_encoder_argv(tmp_path, monkeypatch):
 
 def test_geometry_one_dry_capture_and_check(project, monkeypatch):
     calls = []
-    def capture(path, W, H, t, size, **kwargs):
-        calls.append(size)
-        class CDP:
-            def send(self, method, params, session):
-                assert method == 'Runtime.evaluate'
-                return {'result': {'value': [dict(size=43.2, overflow=False), dict(size=43.2, overflow=True)]}}
-        kwargs['scene_probe'](CDP(), 'session', {}, 0)
-        return b'png'
-    monkeypatch.setattr(stage, 'capture_one', capture)
+    def measure(items, root, **kwargs):
+        calls.append(len(items))
+        return {item['clip']: [dict(px=43.2, overflow=bool(i))] for i, item in enumerate(items)}
+    monkeypatch.setattr(stage, 'measure_many', measure)
     texts = ['Good', 'Too much text']
     metrics = scenes.measure_captions(project, texts)
     assert scenes.measure_captions(project, texts) == metrics
-    assert calls == [(360, 202.5)]
+    assert calls == [2]
     ctx = check.Ctx([], [], [dict(type='caption', start=0, end=4, slide_id='s', text=t, metrics=m)
                             for t, m in zip(texts, metrics)])
     monkeypatch.setattr(titles, '_fit_caption', lambda *a: pytest.fail('Pillow scene geometry'))
-    findings = check.small_text({'style': {'captions_engine': 'scene'}}, project.frame, ctx)
-    assert len(findings) == 1 and 'three lines' in findings[0].msg
+    findings = check.text_overflow({}, project.frame, ctx)
+    assert len(findings) == 1 and findings[0].code == 'text_overflow'
 
 
 def test_schema_defaults_and_legacy_round_trip(project):
@@ -193,14 +188,16 @@ def test_check_scene_measurement_wiring(project, monkeypatch):
     project.style.format = 'essay'
     calls = []
     monkeypatch.setattr(stage, 'browser', lambda: 'mock-chromium')
-    def measure(p, texts):
+    def measure(p, texts, *, render=True):
+        if not render:
+            return []
         calls.append(texts)
         return [dict(size=43.2, overflow=True) for _ in texts]
     monkeypatch.setattr(scenes, 'measure_captions', measure)
     monkeypatch.setattr(titles, '_fit_caption', lambda *a: pytest.fail('Pillow scene geometry'))
-    result = check.run(project)
+    result = check.run(project, measure=True)
     assert len(calls) == 1
-    assert sum(f['code'] == 'small_text' for f in result['findings']) == len(calls[0])
+    assert sum(f['code'] == 'text_overflow' for f in result['findings']) == len(calls[0])
     monkeypatch.setattr(stage, 'browser', lambda: None)
     assert not any(f['code'] == 'small_text' for f in check.run(project)['findings'])
     assert len(calls) == 1
@@ -222,6 +219,8 @@ def test_cdp_alpha_after_navigation_and_reset(tmp_path, monkeypatch):
                 return {'sessionId': 'session'}
             if method == 'Page.captureScreenshot':
                 return {'data': base64.b64encode(b'png').decode()}
+            if method == 'Runtime.evaluate' and 'const rows = []' in params['expression']:
+                return {'result': {'value': [dict(id='caption', px=62, overflow=False)]}}
             return {}
         def clear_events(self):
             pass
@@ -257,4 +256,12 @@ def test_cdp_alpha_after_navigation_and_reset(tmp_path, monkeypatch):
         f'phrase{i}': b'png' for i in range(3)}
     assert len(launches) == 1
     assert sum(method == 'Page.captureScreenshot' for method, _ in calls) == 3
+    assert sum(method == 'Page.navigate' for method, _ in calls) == 3
+
+    calls.clear()
+    launches.clear()
+    measured = stage.measure_many(plates, tmp_path)
+    assert len(measured) == 3 and measured['phrase0'][0]['px'] == 62
+    assert len(launches) == 1
+    assert not any(method == 'Page.captureScreenshot' for method, _ in calls)
     assert sum(method == 'Page.navigate' for method, _ in calls) == 3
