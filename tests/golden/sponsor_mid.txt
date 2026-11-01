@@ -1,0 +1,13 @@
+[0:v]tpad=stop_mode=clone:stop_duration=0.1333[p0];
+[1:v]tpad=stop_mode=clone:stop_duration=0.1333[p1];
+[2:v]tpad=stop_mode=clone:stop_duration=0.1333[p2];
+[3:v]tpad=stop_mode=clone:stop_duration=0.1333[p3];
+[p0][p1]xfade=transition=custom:expr='if(gt(P,0.5),A,B)':duration=0.550:offset=17.784[x1];
+[x1][p2]xfade=transition=custom:expr='if(gt(P,0.5),A,B)':duration=0.550:offset=23.784[x2];
+[x2][p3]xfade=transition=fadeblack:duration=0.550:offset=40.968[vout];
+[4:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad,atrim=duration=58.188[voicepad];
+[5:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,atrim=duration=6.000,asetpts=N/SR/TB,adelay=17784|17784[sponsor0];
+[voicepad][sponsor0]amix=inputs=2:duration=longest:normalize=0[sponsorvoice];
+[6:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,atrim=duration=58.188,loudnorm=I=-16.0:TP=-2.0:LRA=11,volume=-17.5dB,volume=-6.0dB:enable='between(t,17.784,23.784)',afade=t=in:st=0.000:d=3,afade=t=out:st=53.188:d=5.000[bed];
+[sponsorvoice][bed]amix=inputs=2:duration=longest:normalize=0[mix];
+[mix]loudnorm=I=-14.0:TP=-1.0:LRA=11[aout]

@@ -23,8 +23,9 @@ def build(project) -> dict:
         for para in seg["paragraphs"]:
             slide = slides[para["id"]]
             path, _kind, _focal = render._chosen(project, slide)
-            candidate = next((c for c in slide.candidates
-                              if c["id"] == slide.chosen_id), {})
+            source = render._picture_source(project, slide)
+            candidate = next((c for c in source.candidates
+                              if c["id"] == source.chosen_id), {})
             take = slide.take or {}
             paragraphs.append({
                 "id": slide.id, "index": para["index"], "start": para["start"],

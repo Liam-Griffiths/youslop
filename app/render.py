@@ -75,7 +75,7 @@ def _join_for(prev_group, next_group, frame) -> str:
     return choose('join', [n for n in candidates if n in JOIN_XFADE or n in NAMED_XFADES], frame)
 
 
-def _join_graph(seg_lens, T, groups, frame, slide_at):
+def _join_graph(seg_lens, T, groups, frame, slide_at, *, group_indices=None, sponsor_indices=()):
     """Join files with the same overlap regardless of the transition cause."""
     pad = f"tpad=stop_mode=clone:stop_duration={4 / FPS:.4f}"
     if len(seg_lens) == 1:
@@ -86,13 +86,15 @@ def _join_graph(seg_lens, T, groups, frame, slide_at):
         prev = "[p0]"
         for i in range(1, len(seg_lens)):
             label = "[vout]" if i == len(seg_lens) - 1 else f"[x{i}]"
-            group_index = i - slide_at
+            group_index = group_indices.get(i, -1) if group_indices is not None else i - slide_at
             from .learning import choose
             join = (_join_for(groups[group_index - 1], groups[group_index], frame)
                     if 0 < group_index < len(groups) else choose("join", ["fade", *JOIN_XFADE], frame))
             # Stage dips already fade inside their segments; avoid a second dip.
             if join == "dip" and _dips_into(groups, group_index):
                 join = choose("join", ["fade", "cut"], frame)
+            if i in sponsor_indices or i - 1 in sponsor_indices:
+                join = "cut"
             transition = JOIN_XFADE.get(join, f"transition={join}")
             parts.append(
                 f"{prev}[p{i}]xfade={transition}:duration={T:.3f}:"
@@ -259,7 +261,36 @@ def _picture_groups(project: Project,
     """
     by_id = {s.id: d for s, d in plan}
     runs = group_slides([s for s, _d in plan], project.style.picture_every)
-    return [[(s, by_id[s.id]) for s in run] for run in runs if run]
+    boundaries = _sponsor_placements(project, plan)
+    groups = []
+    for run in runs:
+        group = []
+        for slide in run:
+            group.append((slide, by_id[slide.id]))
+            if slide.id in boundaries:
+                groups.append(group)
+                group = []
+        if group:
+            groups.append(group)
+    return groups
+
+
+def _sponsor_placements(project, plan):
+    from . import sponsors
+    intro = _slate_state(project, "intro") if project.sponsors else None
+    return sponsors.placements(project, plan, intro["length"] if intro else 0.0)
+
+
+def _sponsor_audio(project, entries, inputs, next_idx, lead=0.0):
+    """Append read inputs in the same order the audio graph indexes them."""
+    from . import sponsors
+    audio = []
+    for slot, start in entries:
+        if (slot.take or {}).get("path"):
+            inputs += ["-i", str(project_dir(project.id) / slot.take["path"])]
+            audio.append((next_idx, start + lead, sponsors.duration(slot)))
+            next_idx += 1
+    return audio, next_idx
 
 
 CHUNK_SECONDS = 20.0
@@ -399,8 +430,20 @@ def is_lead(project: Project, slide: Slide) -> bool:
     return any(run and run[0] == slide.id for run in project.picture_runs())
 
 
+def _picture_source(project: Project, slide: Slide) -> Slide:
+    """A sponsor may split a held picture, but the resumed asset stays put."""
+    if any(slot.enabled for slot in project.sponsors):
+        placed = _sponsor_placements(project, _slide_durations(project, True))
+        for run in group_slides(project.slides, project.style.picture_every):
+            for index, member in enumerate(run):
+                if member.id == slide.id and any(s.id in placed for s in run[:index]):
+                    return run[0]
+    return slide
+
+
 def _chosen(project: Project, slide: Slide) -> tuple[Path | None, str, list[float]]:
     """The slide's downloaded asset, its kind, and its focal point if one is set."""
+    slide = _picture_source(project, slide)
     cand = next((c for c in slide.candidates if c["id"] == slide.chosen_id), None)
     if not cand or not cand.get("local_path"):
         return None, "image", []
@@ -1199,7 +1242,7 @@ def _sting_branch(idx: int, offset: float, length: float, intro,
 def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
                  presenter: tuple[int, float, float, float] | None = None,
                  sting: list[tuple[int, float, float, Any, str]] | None = None,
-                 music_fade: float = 5.0) -> str:
+                 music_fade: float = 5.0, sponsor_audio=(), sponsor_windows=()) -> str:
     """Voice (narration + any camera clip) plus a music bed.
 
     The camera clip's audio joins the *voice* bus rather than sitting alongside
@@ -1236,6 +1279,17 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
         voice_src = "[voicepad]"
         voice = f"{nar}{fmt},apad,atrim=duration={total:.3f}[voicepad];"
 
+    if sponsor_audio:
+        branches = []
+        for k, (idx, offset, length) in enumerate(sponsor_audio):
+            delay = round(offset * 1000)
+            branches.append(f"[{idx}:a]{fmt},atrim=duration={length:.3f},asetpts=N/SR/TB,"
+                            f"adelay={delay}|{delay}[sponsor{k}];")
+        voice += "".join(branches) + voice_src + "".join(
+            f"[sponsor{k}]" for k in range(len(sponsor_audio))) + (
+            f"amix=inputs={1 + len(sponsor_audio)}:duration=longest:normalize=0[sponsorvoice];")
+        voice_src = "[sponsorvoice]"
+
     # One entry per sting — the slate's and the end card's — each (input index,
     # when it starts, how long its picture runs, the spec it is windowed by, and
     # "intro" or "outro").
@@ -1253,7 +1307,7 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
                     f"[mix]loudnorm=I={project.frame.voice_lufs:.1f}:TP=-1.0:LRA=11[aout]")
         return voice + f"{voice_src}loudnorm=I={project.frame.voice_lufs:.1f}:TP=-1.0:LRA=11[aout]"
 
-    mus = f"[{n_video + 1 + (1 if presenter else 0) + len(stings)}:a]"
+    mus = f"[{n_video + 1 + (1 if presenter else 0) + len(stings) + len(sponsor_audio)}:a]"
     fade = max(0.5, min(18.0, music_fade))
     fade_out_at = max(0.5, total - fade)
 
@@ -1264,6 +1318,10 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
     opening = next((s for s in stings if s[4] == "intro"), None)
     if opening:
         bed_in_at = max(0.0, opening[1] + opening[2] - 0.35)
+
+    sponsor_duck = "".join(
+        f"volume={project.style.sponsor_music_db:.1f}dB:enable='between(t,{start:.3f},{start + length:.3f})',"
+        for start, length in sponsor_windows)
 
     # Normalise the bed to the same loudness the voice takes were normalised to
     # before attenuating it. Without this, music_db is an offset from
@@ -1276,6 +1334,7 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
         f"atrim=duration={total:.3f},"
         f"loudnorm=I={vlufs:.1f}:TP=-2.0:LRA=11,"
         f"volume={project.style.music_db:.1f}dB,"
+        + sponsor_duck +
         f"afade=t=in:st={bed_in_at:.3f}:d=3,"
         f"afade=t=out:st={fade_out_at:.3f}:d={fade:.3f}[bed];"
         # The bed sits at a fixed level under the voice. It used to be
@@ -1346,11 +1405,18 @@ def render(project: Project, progress: Progress = lambda m: None,
     if problems:
         progress("Preview: " + "; ".join(problems))
 
+    if not preview:
+        for slots in _sponsor_placements(project, plan).values():
+            for slot in slots:
+                if not (slot.take or {}).get("path"):
+                    raise ValueError(f"Sponsor {slot.id} has no recorded take")
+
     # Only the lead of each picture group ever reaches the screen — the rest of
     # the group holds that same picture rather than fetching its own. Handing
     # download_chosen anything wider fetches images the cut never shows and is
     # what was getting renders rate-limited.
-    lead_slides = [group[0][0] for group in groups]
+    lead_slides = list({s.id: s for group in groups
+                        for s in [_picture_source(project, group[0][0])]}.values())
     failed = media.download_chosen(project, progress, only=lead_slides)
     if failed:
         progress(f"{len(failed)} asset(s) could not be downloaded; those slides "
@@ -1515,6 +1581,39 @@ def render(project: Project, progress: Progress = lambda m: None,
                     "-pix_fmt", "yuv420p", "-an", str(held)])
         seg_paths.append(held)
 
+    from . import sponsors
+    placed = _sponsor_placements(project, plan)
+    base_paths, base_durations, base_lens = seg_paths, durations, seg_lens
+    seg_paths, durations, seg_lens = [], [], []
+    group_indices, sponsor_indices, sponsor_entries, old_to_new = {}, set(), [], {}
+    group_at = {slide_at + i: i for i in range(len(groups))}
+    for old, (path, dur, length) in enumerate(zip(base_paths, base_durations, base_lens)):
+        old_to_new[old] = len(seg_paths)
+        seg_paths.append(path)
+        durations.append(dur)
+        seg_lens.append(length)
+        if old not in group_at:
+            continue
+        gi = group_at[old]
+        group_indices[len(seg_paths) - 1] = gi
+        for slot in placed.get(groups[gi][-1][0].id, []):
+            seconds = sponsors.duration(slot)
+            start = sum(durations)
+            ctx = scenes.context_base(project, seg_channel)
+            ctx.update(slot.vars)
+            ctx["vars"] = {**ctx["vars"], **slot.vars}
+            ctx.update(script=slot.script, variant=slot.variant)
+            clip = scenes.ensure_clip(project, slot.template, ctx,
+                                      seconds=seconds + T, size=(WIDTH, HEIGHT), fps=FPS)
+            sponsor_indices.add(len(seg_paths))
+            sponsor_entries.append((slot, start))
+            seg_paths.append(clip)
+            durations.append(seconds)
+            seg_lens.append(seconds + T)
+    total = sum(durations) + T
+    if pres_src:
+        pres_offset = sum(durations[:old_to_new[pres_index]])
+
     # ------------------------------------------------------ final assembly
     # Input order is load-bearing: the filtergraph refers to inputs by index, so
     # they are appended in one place and the index is tracked as we go.
@@ -1561,6 +1660,7 @@ def render(project: Project, progress: Progress = lambda m: None,
         progress(f"End card sting: {spec._spec.sting_filename or sting_file.name}"
                  f" (starting at {outro_offset:.1f}s)")
 
+    sponsor_audio, next_idx = _sponsor_audio(project, sponsor_entries, inputs, next_idx, T / 2)
     if music:
         # -stream_loop -1 runs the bed round for as long as the video needs; the
         # graph then trims it to length. A five minute track under a twenty-five
@@ -1583,7 +1683,8 @@ def render(project: Project, progress: Progress = lambda m: None,
     # over a frozen picture. The padding is overlapped by the next segment or
     # trimmed by -t, so it never shows.
     from .learning import effective_frame
-    video_graph = _join_graph(seg_lens, T, groups, effective_frame(project), slide_at)
+    video_graph = _join_graph(seg_lens, T, groups, effective_frame(project), slide_at,
+                              group_indices=group_indices, sponsor_indices=sponsor_indices)
 
     # An end screen is long enough that where the bed gives out is a decision,
     # so the card carries the fade length; without one the default stands.
@@ -1595,7 +1696,9 @@ def render(project: Project, progress: Progress = lambda m: None,
 
     graph = video_graph + ";" + _audio_graph(project, len(seg_paths), total,
                                              bool(music), presenter_audio, sting_audio,
-                                             music_fade)
+                                             music_fade, sponsor_audio,
+                                             [(start + T / 2, sponsors.duration(slot))
+                                              for slot, start in sponsor_entries])
 
     safe = "".join(c if c.isalnum() or c in " -_" else "" for c in (project.title or "video"))
     out_name = (safe.strip().replace(" ", "_") or "video")[:60] + (
@@ -1742,6 +1845,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     blob = json.dumps(
         [PROXY_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
          index, slides, _stat(pic),
+         [c for c in _picture_source(project, lead).candidates
+          if c["id"] == _picture_source(project, lead).chosen_id],
          _segment_timing(project, groups, index), index == len(groups) - 1,
          chapter_card(project, nxt) if nxt else None,
          nxt.chapter_hold if nxt else None,
@@ -1806,7 +1911,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
             and keyfile.exists() and keyfile.read_text() == key):
         return result()
 
-    if download and media.download_chosen(project, progress, only=[lead]):
+    if download and media.download_chosen(project, progress, only=[_picture_source(project, lead)]):
         progress("That picture could not be downloaded; this is the graded "
                  "slate the render would fall back to")
 
@@ -2015,8 +2120,17 @@ def _layout(project: Project) -> dict:
     body = [_segment_timing(project, groups, i)[0] for i in range(len(groups))]
     pre = intro["length"] if intro else 0.0
     total = pre + sum(body) + (outro["length"] if outro else 0.0)
+    from . import sponsors
+    placed = _sponsor_placements(project, _slide_durations(project, True))
+    entries, t = [], pre
+    for group, seconds in zip(groups, body):
+        t += seconds
+        for slot in placed.get(group[-1][0].id, []):
+            entries.append((slot, t))
+            t += sponsors.duration(slot)
+    total += sum(sponsors.duration(slot) for slot, _ in entries)
     return {"groups": groups, "T": T, "intro": intro, "outro": outro,
-            "body": body, "pre": pre, "total": total}
+            "body": body, "pre": pre, "total": total, "sponsors": entries}
 
 
 def _mix_paths(project: Project) -> tuple[Path, Path]:
@@ -2077,7 +2191,9 @@ def _mix_key(project: Project, lay: dict) -> str:
          audio_mod.paragraph_gaps(project),
          str(music), _stat(music),
          {role: [str(f), _stat(f), _sting_params(spec)] for role, (f, spec) in stings.items()},
-         project.style.music_db, project.voice.target_lufs,
+         project.style.music_db, project.voice.target_lufs, project.style.sponsor_music_db,
+         [[dataclasses.asdict(slot), start, _stat(root / slot.take["path"])
+           if (slot.take or {}).get("path") else None] for slot, start in lay["sponsors"]],
          float(card.outro.music_fade) if card else 5.0],
         default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
@@ -2086,7 +2202,8 @@ def _mix_key(project: Project, lay: dict) -> str:
 def _mix_state(project: Project, lay: dict) -> dict:
     music = pick_music(project)
     sting = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
-    audible = bool(music or sting or any(s.take for s in project.slides))
+    audible = bool(music or sting or any(s.take for s in project.slides)
+                   or any(slot.take for slot, _ in lay["sponsors"]))
     out, keyfile = _mix_paths(project)
     key = _mix_key(project, lay) if audible else ""
     have = out.exists() and out.stat().st_size > 0
@@ -2142,6 +2259,7 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
                             lay["outro"]["length"], stings["outro"][1], "outro"))
         inputs += ["-i", str(stings["outro"][0])]
         n += 1
+    sponsor_audio, n = _sponsor_audio(project, lay["sponsors"], inputs, n)
     music = pick_music(project, progress)
     if music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
@@ -2150,7 +2268,9 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
         card = _slate_channel(project)
         if card:
             music_fade = float(card.outro.music_fade)
-    graph = _audio_graph(project, 0, total, bool(music), None, sting_audio, music_fade)
+    from . import sponsors
+    graph = _audio_graph(project, 0, total, bool(music), None, sting_audio, music_fade,
+                         sponsor_audio, [(start, sponsors.duration(slot)) for slot, start in lay["sponsors"]])
     progress("Mixing the sound for the whole cut"
              + (f" with the bed “{music.stem}”" if music else ", narration only"))
     ffutil.run([*inputs, "-filter_complex", graph, "-map", "[aout]",
@@ -2249,7 +2369,7 @@ def timeline(project: Project) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
-        if not lead.chosen_id:
+        if not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
         missing = sum(1 for s, _d in group if not s.take)
         if missing:
@@ -2271,6 +2391,19 @@ def timeline(project: Project) -> dict:
             "path": f"cache/{out.name}",
         })
         t += dur
+        from . import sponsors
+        for slot, start in lay["sponsors"]:
+            if abs(start - t) > 0.001:
+                continue
+            seconds = sponsors.duration(slot)
+            segments.append({"ref": f"sponsor:{slot.id}", "type": "sponsor", "n": 0,
+                             "group": -1, "lead": "", "start": round(t, 3),
+                             "duration": seconds, "skip": 0.0, "paragraphs": [],
+                             "sponsor": slot.id, "script": slot.script, "variant": slot.variant,
+                             "kind": "scene", "problems": [] if slot.take else ["sponsor not recorded"],
+                             "ready": False, "have": False, "estimated": not bool(slot.take),
+                             "stamp": 0, "path": ""})
+            t += seconds
     if lay["outro"]:
         segments.append(slate_row("outro", lay["outro"], t))
         t += lay["outro"]["length"]

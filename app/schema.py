@@ -331,6 +331,7 @@ class Style:
     transition: float = 0.55        # crossfade seconds
     # Midpoint of FrameSpec.music_under_min_db / music_under_max_db; bed is loudness-matched first.
     music_db: float = -17.5         # dB below the narration
+    sponsor_music_db: float = -6.0  # further attenuation during a sponsor read
     title_font: str = ""            # resolved automatically when empty
     accent: str = "#E8C36A"
     # The second colour. Flat-black-and-one-gold templates ignore it; the
@@ -690,6 +691,36 @@ def new_channel(name: str, concept: str = "") -> Channel:
 
 
 @dataclass
+class SponsorSlot:
+    id: str = field(default_factory=lambda: _uid("sp"))
+    sponsor_id: str = ""
+    variant: str = "short"          # short | long
+    placement: str = "mid"          # pre | mid | end
+    after_slide_id: str = ""
+    at_s: float | None = None
+    script: str = ""
+    take: dict | None = None
+    history: list[dict] = field(default_factory=list)
+    template: str = "sponsor/house_short.html"
+    vars: dict = field(default_factory=dict)
+    enabled: bool = True
+
+    def set_take(self, take: dict | None) -> None:
+        if self.take and (not take or self.take.get("path") != take.get("path")):
+            self.history.append({**deepcopy(self.take),
+                                 "narration": self.take.get("narration", self.script),
+                                 "retired_at": time.time(), "reason": "rerecord"})
+        self.take = {**deepcopy(take), "narration": take.get("narration", self.script)} if take else None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SponsorSlot":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class Project:
     id: str
     idea: str
@@ -745,6 +776,7 @@ class Project:
     # Cleared the moment a run completes.
     draft: dict = field(default_factory=dict)
     slides: list[Slide] = field(default_factory=list)
+    sponsors: list[SponsorSlot] = field(default_factory=list)
     style: Style = field(default_factory=Style)
     frame: FrameSpec = field(default_factory=FrameSpec)
     voice: Voice = field(default_factory=Voice)
@@ -811,6 +843,7 @@ class Project:
             "test": self.test,
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
+            "sponsors": [s.to_dict() for s in self.sponsors],
             "style": self.style.to_dict(),
             "frame": self.frame.to_dict(),
             "voice": self.voice.to_dict(),
@@ -917,12 +950,13 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"frame", "slides", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"frame", "slides", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
+            sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],
             frame=FrameSpec.from_dict(d.get("frame") or {}),
             style=style,
             voice=voice,

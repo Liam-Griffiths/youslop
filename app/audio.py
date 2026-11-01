@@ -501,8 +501,10 @@ def build_narration(project: Project, out_path: Path, lead_in: float,
     id to the seconds of silence to leave for a paragraph with no take, which is
     how the timeline preview keeps unrecorded paragraphs in their place.
     """
+    from . import render, sponsors
+    pads = sponsors.pads(render._sponsor_placements(project, render._slide_durations(project, True)))
     return _concat_takes(project, project.slides, out_path,
-                         head=lead_in + HEAD_PAD, tail=TAIL_PAD, fill=fill)
+                         head=lead_in + HEAD_PAD, tail=TAIL_PAD, fill=fill, extra_gaps=pads)
 
 
 def build_slice(project: Project, slides: list, out_path: Path,
@@ -519,7 +521,7 @@ def build_slice(project: Project, slides: list, out_path: Path,
 
 def _concat_takes(project: Project, slides: list, out_path: Path,
                   head: float, tail: float,
-                  fill: dict[str, float] | None = None) -> float:
+                  fill: dict[str, float] | None = None, extra_gaps=None) -> float:
     from .store import project_dir
 
     root = project_dir(project.id)
@@ -534,6 +536,7 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
     filters: list[str] = []
     labels: list[str] = []
     gaps = gap_map(project)
+    gaps = {sid: gap + (extra_gaps or {}).get(sid, 0.0) for sid, gap in gaps.items()}
 
     for i, (slide, take) in enumerate(takes):
         if take:

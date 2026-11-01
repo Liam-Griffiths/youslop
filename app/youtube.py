@@ -352,9 +352,17 @@ def chapter_points(project: Project) -> tuple[list[dict], bool]:
         if shaped and p["t"] - shaped[-1]["t"] < CHAPTER_MIN_GAP:
             continue
         shaped.append(p)
+    # Keep sponsor markers even for short reads, without folding away the
+    # chapter that resumes immediately afterwards. Publishing checks own the
+    # platform's minimum chapter length (T10.7).
+    shaped.extend({"t": seg["start"], "title": "Sponsor", "text": seg["script"],
+                   "sponsor": seg["sponsor"]}
+                  for seg in tl["segments"] if seg["type"] == "sponsor")
+    shaped.sort(key=lambda p: p["t"])
     for p in shaped:
         p["start"] = _stamp(p["t"])
-    return shaped, all(s.take for s in project.slides)
+    return shaped, all(s.take for s in project.slides) and all(
+        not seg["estimated"] for seg in tl["segments"] if seg["type"] == "sponsor")
 
 
 def build_description(project: Project, progress: Callable[[str], None] = lambda m: None) -> dict:
