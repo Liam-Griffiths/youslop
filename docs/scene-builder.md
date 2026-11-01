@@ -93,3 +93,11 @@ with the desired easing. Use a world screen to capture strips outside the frame.
 `data-path='[{"t":0,"x":0,"y":0},{"t":1,"x":100,"y":20,"ease":"cubic-out"}]'`
 adds translation in composition pixels, in screen-local time, compiled in ffmpeg.
 Each path has at most 48 keys and shares the camera easing vocabulary.
+
+`data-clip='[left,top,right,bottom]'` clips a translated layer to a rectangle in
+composition coordinates (for example a scrolling chat viewport). It masks the
+small plate in ffmpeg, after motion; capture the complete unclipped layer.
+`data-media` on a `data-layer` makes a native ffmpeg image/video layer, skipping
+its screenshot; it accepts the same focal/dim/time/video attributes as screen
+media, with dim defaulting to 1. Static sources hold their first frame. Native
+layers support fades, translation paths and clipping; keep their scale at 1.

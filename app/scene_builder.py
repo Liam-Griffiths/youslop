@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import math
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
@@ -54,9 +55,9 @@ _PROBE = r"""(() => {
  const screens = [...document.querySelectorAll('[data-screen]')].map(e => ({
    id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration),
    world:e.dataset.world === 'true', signature:[e.outerHTML,style(e)],
-   media:[...e.querySelectorAll('[data-media]')].map(n=>{const r=n.getBoundingClientRect();return {
+   media:[...e.querySelectorAll('[data-media]:not([data-layer])')].map(n=>{const r=n.getBoundingClientRect();return {
      path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime),
-     dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), box:[r.left,r.top,r.right,r.bottom]};}),
+     dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), blur:Number(n.dataset.mediaBlur || 0), box:[r.left,r.top,r.right,r.bottom]};}),
    camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
  const row = (e,i,ground=false) => {
    let r=e.getBoundingClientRect();
@@ -83,6 +84,9 @@ _PROBE = r"""(() => {
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      steps:JSON.parse(e.dataset.steps || '[]'),
      atlas:Number(e.dataset.atlas || 1), pathKeys:JSON.parse(e.dataset.path || '[]'),
+     clip:JSON.parse(e.dataset.clip || 'null'), native:e.dataset.media || '',
+     video:e.dataset.video==='true', time:Number(e.dataset.mediaTime || 0),
+     dim:Number(e.dataset.mediaDim ?? 1), focal:JSON.parse(e.dataset.mediaFocal || '[0.5,0.5]'), blur:Number(e.dataset.mediaBlur || 0),
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
  };
  const rows = layers.map(row);
@@ -92,6 +96,18 @@ _PROBE = r"""(() => {
  return {layers:rows, grounds, screens, rules, ground:[clone.outerHTML,style(document.body)],
    camera:JSON.parse(root.dataset.camera || '[]'), budget:Number(root.dataset.budget || 0.1)};
 })()"""
+
+
+_PLACED = re.compile(r'(?<![\w-])(left|top)\s*:\s*-?[\d.]+px\s*;?\s*')
+
+
+def _unplaced(signature):
+    """The signature without the root element's own left/top (its position)."""
+    if not isinstance(signature, list) or not signature or not isinstance(signature[0], str):
+        return signature
+    markup, *rest = signature
+    head, sep, tail = markup.partition('>')
+    return [_PLACED.sub('', head) + sep + tail, *rest]
 
 
 def _value(cdp, session, js):
@@ -155,6 +171,9 @@ def _plan(data, seconds, fps):
                 raise ValueError(f'layer {name}: invalid {key}')
         if layer['duration'] <= 0 or layer['arrival'] <= 0 or layer['start'] >= screen['duration']:
             raise ValueError(f'layer {name}: invalid timing')
+        clip = layer.get('clip')
+        if clip is not None and (len(clip) != 4 or not all(math.isfinite(v) for v in clip) or clip[2] <= clip[0] or clip[3] <= clip[1]):
+            raise ValueError(f'layer {name}: invalid clip rectangle')
         if layer.get('capture') == 'frames':
             used += math.ceil(min(layer['arrival'], layer['duration']) * fps)
             if used > math.floor(seconds * fps * data['budget']):
@@ -221,7 +240,7 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
         asset_hash = [scenes._asset_hash(), _hash(data.pop('rules', []))]
 
         def plate_path(signature):
-            path = html.parent / ('layer-' + _hash(['v5', template, signature, size, asset_hash]) + '.png')
+            path = html.parent / ('layer-' + _hash(['v6', template, signature, size, asset_hash]) + '.png')
             data['files'].append(str(path))
             return path
 
@@ -273,7 +292,17 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                 if box[2] <= box[0] or box[3] <= box[1]:
                     raise ValueError(f"layer {layer.get('id', 'ground')}: empty bounds")
                 layer['box'] = box
-                path = plate_path([layer['signature'], box, density])
+                if layer.get('clip'):
+                    layer['clip'] = [v*(dx if i%2==0 else dy) for i,v in enumerate(layer['clip'])]
+                if layer.get('native'):
+                    layer['path'] = layer['native']
+                    data['files'].append(layer['path'])
+                    continue
+                # Pixels depend on content, size and sub-pixel phase, not on where the
+                # plate sits: a chat bubble scrolled to a new place reuses its plate.
+                phase = [round(x0*dx % 1, 3), round(y0*dy % 1, 3),
+                         round((x1-x0)*dx, 3), round((y1-y0)*dy, 3)]
+                path = plate_path([_unplaced(layer['signature']), phase, box[2]-box[0], box[3]-box[1], density])
                 layer['path'] = str(path)
                 if path.exists() or str(path) in pending:
                     stats['cache_hits'] += 1
@@ -321,6 +350,8 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                 screen['ground_path'] = str(path)
                 for layer in [l for l in data['layers'] if l['screen'] == screen['id']]:
                     layer['box'] = [v-origin[i%2] for i,v in enumerate(layer['box'])]
+                    if layer.get('clip'):
+                        layer['clip'] = [v-origin[i%2] for i,v in enumerate(layer['clip'])]
                     layer['steps'] = [(t, edge*density) for t,edge in layer.get('steps', [])]
                 for media in screen.get('media', []):
                     media['box'] = [round(v*density)-origin[i%2] for i,v in enumerate(media['box'])]
@@ -395,8 +426,12 @@ def _media_filter(media, w, h):
     dim = float(media.get('dim', .53))
     dim = '.53' if dim == .53 else f'{dim:g}'
     x, y = (max(0, min(1, float(v))) for v in media.get('focal', [.5, .5]))
+    blur = float(media.get('blur') or 0)
+    # Soft background: shrink by `blur`, soften, scale back (cheap at the small size).
+    soften = (f'scale={max(2, round(w/blur))}:{max(2, round(h/blur))}:flags=area,gblur=sigma=1.5,'
+              f'scale={w}:{h}:flags=bicubic,' if blur > 1 else '')
     return (f'scale={w}:{h}:force_original_aspect_ratio=increase,'
-            f'crop={w}:{h}:(iw-ow)*{x}:(ih-oh)*{y},'
+            f'crop={w}:{h}:(iw-ow)*{x}:(ih-oh)*{y},{soften}'
             f'colorchannelmixer=rr={dim}:gg={dim}:bb={dim}')
 
 
@@ -412,6 +447,8 @@ def _compile(data, screen, size, fps, directory):
         layer['steps'] = [(t-screen.get('offset', 0), edge) for t,edge in layer.get('steps', [])]
         shift = screen.get('offset', 0)+(screen['start'] if source['screen'] == '' else 0)
         layer['pathKeys'] = [dict(k, t=k['t']-shift) for k in layer.get('pathKeys', [])]
+        if layer.get('native') and layer.get('video'):
+            layer['time'] += screen.get('offset', 0)
         if layer['start'] < screen['duration'] and layer['start']+layer['duration'] > 0:
             layers.append(layer)
     # Flatten the settled prefix in paint order. Foreground layers retain their order.
@@ -450,7 +487,7 @@ def _compile(data, screen, size, fps, directory):
                 arrival=.001, motion='none', path=screen['ground_path'], box=[0,0,*text.size])]+layers
         else:
             ground.alpha_composite(text)
-    while not world and layers and layers[0]['motion'] != 'atlas' and not layers[0].get('pathKeys') and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
+    while not world and layers and not layers[0].get('native') and not layers[0].get('clip') and layers[0]['motion'] != 'atlas' and not layers[0].get('pathKeys') and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
         layer = layers.pop(0)
         with Image.open(layer['path']) as plate:
             ground.alpha_composite(plate.convert('RGBA'), tuple(layer['box'][:2]))
@@ -490,6 +527,18 @@ def _compile(data, screen, size, fps, directory):
         if layer.get('video'):
             inputs[-2:] = ['-stream_loop','-1','-ss',str(layer['time']),'-i',layer['path']]
             effect = f'setpts=PTS-STARTPTS,{_media_filter(layer, w, h)},format=rgba'
+        elif layer.get('native'):
+            effect = f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),{_media_filter(layer,w,h)},format=rgba'
+        if layer.get('native') or layer.get('clip'):
+            # Clip in screen coordinates after translation, on the small plate.
+            sx, sy = (world['density'], world['density']) if world else (size[0]/data['width'],size[1]/data['height'])
+            mx,my = _camera(layer['pathKeys'], 'T', world=True)[:2] if layer.get('pathKeys') else (alpha['x'],alpha['y'])
+            mask = alpha['opacity'] if layer.get('native') else '1'
+            if layer.get('clip'):
+                x0,y0,x1,y1 = layer['clip']
+                px,py = f"X+{layer['box'][0]}+{sx}*({mx})+({w}-W)/2",f"Y+{layer['box'][1]}+{sy}*({my})+({h}-H)/2"
+                mask += f'*gte({px},{x0})*lt({px},{x1})*gte({py},{y0})*lt({py},{y1})'
+            effect += f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({mask})'"
         exit_s = min(layer.get('exit', 0), layer['duration']/2)
         if exit_s > 0:
             effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"

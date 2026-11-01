@@ -311,3 +311,12 @@ def test_batched_plates_match_single_capture_bytes(pixel_browser, tmp_path, monk
     data['layers'][0]['start'] = .1
     _, timing_stats = plates(tmp_path/'batch')
     assert timing_stats['screenshots'] == timing_stats['captures'] == 0
+
+
+def test_plate_key_ignores_root_position_only():
+    from app.scene_builder import _unplaced
+    a = _unplaced(['<p class="x" style="left:12.5px; top:-3px;width:40px"><b style="left:4px">a</b></p>', [1]])
+    b = _unplaced(['<p class="x" style="left:900px;top:20.25px; width:40px"><b style="left:4px">a</b></p>', [1]])
+    c = _unplaced(['<p class="x" style="left:12.5px;top:-3px;width:40px"><b style="left:5px">a</b></p>', [1]])
+    assert a == b and a != c
+    assert _unplaced({'kind': 'ground'}) == {'kind': 'ground'}

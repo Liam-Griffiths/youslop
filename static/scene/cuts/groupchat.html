@@ -1,0 +1,100 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="/static/scene/cuts/groupchat.css">{% endblock %}
+{% block body %}
+<main id="page" class="look-{{ look }}" style="{% for k,v in palette.items() if k in ['panel','header','them','them_ink','me','me_ink','muted','input'] %}--{{ k }}:{{ v }};{% endfor %}">
+{% for s in screens %}
+<section class="clip screen" data-screen="{{ s.id }}" data-world="true" data-start="{{ s.start }}" data-duration="{{ s.duration }}" data-camera='{{ s.camera|tojson }}'>
+{% if s.source %}<i class="media" data-media="{{ s.source }}" data-video="{{ (s.video and s.cutaway)|lower }}" data-media-time="{{ s.media_time }}" data-media-dim="{{ 1 if s.cutaway else 0.41 }}" data-media-blur="{{ 1 if s.cutaway else 8 }}" data-media-focal='{{ [s.cue.get("focus") and {"left":0.2,"center":0.5,"right":0.8}[s.cue.focus] or 0.5,0.45]|tojson }}'></i>{% endif %}
+{% if not s.cutaway %}
+<div class="chrome" data-ground><i class="shadow-bounds"></i><div class="panel"></div><header><i class="avatar" style="background:{{ avatar }}">{{ title[:1]|upper }}</i><b>{{ title }}</b><small>{{ 'online' if senders <= 1 else (senders+1) ~ ' people' }}</small></header><footer><span>Message</span><b>↑</b></footer></div>
+<div class="viewport"></div>
+<div class="measure">
+{% for item in s['items'] %}<article class="tile {{ 'mine' if item.get('from')=='me' else 'theirs' }} {{ item.kind }}">
+{% if item.name %}<div class="sender" style="color:{{ item.color }}">{{ item.name }}</div>{% endif %}
+{% if item.kind=='msg' %}<div class="bubble"><p class="copy">{{ item.text }}</p></div>
+{% elif item.kind=='photo' %}<div class="photo">{{ '' if item.source else 'Photo' }}</div>
+{% else %}<p class="notice-copy">{{ item.text }}</p>{% endif %}</article>{% endfor %}
+</div>
+{% elif not s.hidden and s.cue.get('caption') %}<div class="caption" data-ground>{{ s.cue.caption }}</div>{% endif %}
+</section>{% endfor %}
+</main>
+{% endblock %}
+{% block script %}<script>
+window.__ready=window.__ready.then(()=>{
+  Object.values(window.__timelines).forEach(t=>t.progress(1));
+  document.documentElement.style.overflow='visible';document.body.style.overflow='visible';
+  const page=document.querySelector('#page'),screens={{ screens|tojson }},cardAt={{ card_at|tojson }};
+  let serial=0;
+  function mark(el,screen,moving=false,fade=false,dy=0){
+    if(!moving){el.dataset.ground='';screen.querySelector('.viewport').append(el);return;}
+    Object.assign(el.dataset,{layer:`gc${serial++}`,start:0,duration:screen.dataset.duration,
+      motion:fade?'fade':'none',motionDuration:.28,motionEase:'cubic-out',clip:'[440,154,1480,950]',
+      path:JSON.stringify([{t:0,x:0,y:dy},{t:.28,x:0,y:0,ease:'cubic-out'}])});screen.append(el);
+  }
+  function at(el,x,y,w,h){Object.assign(el.style,{position:'absolute',left:`${x}px`,top:`${y}px`,width:`${w}px`,height:`${h}px`});return el;}
+  [...page.children].forEach((screen,si)=>{
+    const s=screens[si];if(s.cutaway)return;
+    const originals=[...screen.querySelectorAll('.tile')],viewport=screen.querySelector('.viewport');
+    // Measure with CSS, then split only moving text into row plates.
+    // Shrink each wrapped message to its longest line, as a phone does.
+    screen.querySelectorAll('.copy').forEach(copy=>{const r=document.createRange();r.selectNodeContents(copy);
+      const w=Math.max(0,...[...r.getClientRects()].map(b=>b.width));if(w)copy.style.width=`${Math.ceil(w)+1}px`;});
+    const tiles=originals.map((el,i)=>{
+      const box=el.getBoundingClientRect();return {el,item:s.items[i],w:box.width+10,h:box.height+14};
+    });
+    let y=934-(s.typing?90:0);const arriving=s.phase==='arrival',last=tiles.at(-1),scroll=arriving&&last?last.h:0;
+    tiles.reverse().forEach((tile,ri)=>{
+      y-=tile.h;const incoming=arriving&&ri===0,x=tile.item.kind==='notice'?440:tile.el.classList.contains('mine')?1446-tile.w:474;
+      const dy=scroll+(incoming?30:0),moving=arriving;
+      if(y+tile.h+dy<154)return;
+      const origin=tile.el.getBoundingClientRect();
+      function paint(el,r){at(el,x+r.left-origin.left,y+r.top-origin.top,r.width,r.height);mark(el,screen,moving,incoming,dy);}
+      const name=tile.el.querySelector('.sender');if(name)paint(name.cloneNode(true),name.getBoundingClientRect());
+      const bubble=tile.el.querySelector('.bubble');
+      if(bubble){
+        const bg=document.createElement('div');bg.className='bubble-plate '+(tile.item.from==='me'?'mine':'theirs');paint(bg,bubble.getBoundingClientRect());
+        const copy=tile.el.querySelector('.copy'),groups=new Map(),range=document.createRange(),node=copy.firstChild;
+        for(let i=0;i<node.length;i++){
+          range.setStart(node,i);range.setEnd(node,i+1);const r=range.getBoundingClientRect(),key=Math.round(r.top);
+          if(!groups.has(key))groups.set(key,{text:'',left:r.left,right:r.right});const row=groups.get(key);row.text+=node.data[i];row.right=Math.max(row.right,r.right);
+        }
+        let line=0;groups.forEach(r=>{const row=document.createElement('p');row.className='text-row '+(tile.item.from==='me'?'mine':'theirs');row.textContent=r.text;
+          paint(row,{left:r.left,top:copy.getBoundingClientRect().top+line++*52,width:r.right-r.left+2,height:52});});
+      }else{
+        const body=tile.el.querySelector('.photo,.notice-copy'),clone=body.cloneNode(true);paint(clone,body.getBoundingClientRect());
+        if(tile.item.source){delete clone.dataset.ground;if(!moving){clone.remove();screen.append(clone);Object.assign(clone.dataset,{layer:`gc${serial++}`,start:0,duration:s.duration,motion:'none',clip:'[440,154,1480,950]'});}
+          Object.assign(clone.dataset,{media:tile.item.source,mediaDim:1});}
+      }
+      if(!moving&&ri===0&&tile.item.from==='me'){
+        const delivered=document.createElement('p');delivered.className='delivered';delivered.textContent='Delivered';at(delivered,1200,y+tile.h-4,236,28);mark(delivered,screen);
+      }
+    });
+    screen.querySelector('.measure').remove();
+    if(s.typing){
+      const typing=document.createElement('div');typing.className='typing';at(typing,474,852,130,74);typing.dataset.ground='';viewport.append(typing);
+      for(let j=0;j<3;j++){
+        const dot=document.createElement('i');dot.className='dot';at(dot,501+j*29,880,18,18);
+        const keys=Array.from({length:13},(_,i)=>{const t=s.duration*i/12;return {t,x:0,y:-3*(1+Math.sin((t+s.elapsed)*9-j*.9))};});
+        Object.assign(dot.dataset,{layer:`gc${serial++}`,start:0,duration:s.duration,motion:'none',path:JSON.stringify(keys)});screen.append(dot);
+      }
+    }
+  });
+  if(cardAt!==null&&page.lastElementChild){
+    const last=page.lastElementChild,card=last.cloneNode(true),duration={{ duration }}-cardAt;
+    Object.assign(card.dataset,{screen:'chapter',start:cardAt,duration});
+    card.dataset.camera=JSON.stringify([{...JSON.parse(last.dataset.camera).at(-1),t:cardAt}]);
+    card.querySelectorAll('[data-layer]').forEach(el=>{
+      if(el.classList.contains('dot')){el.remove();return;}
+      delete el.dataset.path;el.dataset.motion='none';el.dataset.duration=duration;el.dataset.layer=`gc${serial++}`;
+      if(!el.dataset.media){delete el.dataset.layer;el.dataset.ground='';card.querySelector('.viewport')?.append(el);}
+    });
+    card.querySelectorAll('[data-media]').forEach(el=>el.dataset.mediaTime=Number(el.dataset.mediaTime||0)+cardAt-Number(last.dataset.start));
+    const wash=document.createElement('div');wash.className='chapter-wash';Object.assign(wash.dataset,{layer:`gc${serial++}`,duration,motion:'fade',motionDuration:.4,motionEase:'cubic-out'});
+    const heading=document.createElement('div');heading.className='chapter-card';
+    const label=document.createElement('p');label.textContent='NEW CHAPTER';label.className='chapter-label';heading.append(label);
+    {{ chapter_rows|tojson }}.forEach(row=>{const p=document.createElement('p');p.textContent=row;p.style.fontSize='{{ chapter_size }}px';heading.append(p);});
+    Object.assign(heading.dataset,{layer:`gc${serial++}`,start:.15,duration:Math.max(.001,duration-.15),motion:'fade',motionDuration:.4,motionEase:'cubic-out'});
+    card.append(wash,heading);page.append(card);
+  }
+});
+</script>{% endblock %}
