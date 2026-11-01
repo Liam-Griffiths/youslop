@@ -117,7 +117,7 @@ def test_preview_and_lint(library, monkeypatch):
     root = blocks.USER_DIR / 'custom'
     add_block(root, aspects={'9:16':'block.html'})
     (root / 'block.html').write_text('{% extends "_base.html" %}{% block body %}<script>Date.now()</script>{% endblock %}')
-    with pytest.raises(ValueError, match='Date.now'):
+    with pytest.raises(ValueError, match='unsafe block tag: script'):
         blocks.render('user/custom', aspect='9:16', project=library / 'cache')
     (root / 'block.html').write_text('{% extends "_base.html" %}')
     def capture(*args, **kwargs):
@@ -154,7 +154,7 @@ def test_remote_resources_refused(library, monkeypatch, resource):
     add_block(root)
     (root / 'block.html').write_text('{% extends "_base.html" %}{% block head %}' + resource + '{% endblock %}')
     monkeypatch.setattr(stage, 'render_scene', lambda *a, **k: pytest.fail('browser invoked'))
-    with pytest.raises(ValueError, match='remote block resource'):
+    with pytest.raises(ValueError, match='unsafe block'):
         blocks.render('user/remote', project=library / 'cache')
 
 
@@ -181,7 +181,7 @@ def test_authoring_scaffold_and_static_checks(library, monkeypatch, capsys):
     assert kit.samples(blocks.discover()['user/my-title']['meta']) == {'title':'W'*80}
     (root / 'block.html').write_text(kit.TEMPLATE.replace('{% block body %}',
         '{% block body %}<script>Date.now()</script>'))
-    assert any('Date.now' in error for error in kit.lint('user/my-title'))
+    assert any('unsafe block tag: script' in error for error in kit.lint('user/my-title'))
 
 
 def test_authoring_browser_measurements(library, monkeypatch):
@@ -339,3 +339,170 @@ def test_saved_block_cue_checked_without_mutation(project, monkeypatch):
     assert project.to_dict() == before
     storyboard.apply(project, {'paragraphs': {slide.id: {'cues': {'blocks': []}}}})
     assert 'blocks' not in slide.cues
+
+
+@pytest.mark.parametrize('failures', [0, 1, 3])
+def test_describe_block_retries_and_storage(library, monkeypatch, failures):
+    from copy import deepcopy
+    from app import block_authoring as kit, block_creation, llm
+    root = kit.new('receipt')
+    meta = json.loads((root / 'block.json').read_text())
+    meta.update(budget=0, duration=dict(mode='range', min=1, max=10))
+    original = (root / 'block.html').read_text()
+    if failures == 0:
+        (blocks.USER_DIR / 'receipt-2').mkdir()  # Even empty existing ids are reserved.
+    calls, checked = [], []
+    def complete(prompt, **kwargs):
+        calls.append(prompt)
+        assert kwargs['retries'] == 0
+        llm._record_usage('mock-model', {'input_tokens': 20, 'output_tokens': 10})
+        return {'block.html': kit.TEMPLATE, 'block.json': deepcopy(meta)}
+    def check(ref, *, report):
+        assert ref not in {key for key in blocks.discover() if not key.startswith('user/draft_')}
+        checked.append(ref)
+        for aspect in meta['aspects']:
+            report(aspect, dict(captured_frames=0, layers=1, passes=1))
+        return ['title: text overflow'] if len(checked) <= failures else []
+    monkeypatch.setattr(llm, 'complete_json', complete)
+    monkeypatch.setattr(kit, 'lint', lambda ref: [])
+    monkeypatch.setattr(kit, 'check', check)
+    result = block_creation.describe('A receipt with a total')
+    assert len(calls) == min(failures + 1, 3)
+    assert (root / 'block.html').read_text() == original
+    if failures == 3:
+        assert result['id'] is None and result['errors'] == ['title: text overflow']
+        assert list(blocks.USER_DIR.iterdir()) == [root]
+    else:
+        assert result['id'] == ('user/receipt-3' if failures == 0 else 'user/receipt-2')
+        saved = blocks.discover()[result['id']]['meta']
+        assert saved['origin']['description'] == 'A receipt with a total'
+        assert saved['origin']['model'] == llm.MODEL_SCRIPT
+        assert len(saved['origin']['token_usage']) == len(calls)
+        assert saved['origin']['created_at']
+        if failures:
+            assert 'title: text overflow' in calls[1]
+    assert blocks.STAGED.get() == ()
+
+
+@pytest.mark.parametrize('stats', [dict(captured_frames=1, layers=1, passes=1),
+                                    dict(captured_frames=0, layers=13, passes=1),
+                                    dict(captured_frames=0, layers=1, passes=2), {}])
+def test_describe_builder_budget_rejection(library, monkeypatch, stats):
+    from app import block_authoring as kit, block_creation, llm
+    root = kit.new('source')
+    meta = json.loads((root / 'block.json').read_text())
+    meta.update(id='generated', budget=0, duration=dict(mode='range', min=1, max=10))
+    monkeypatch.setattr(llm, 'complete_json', lambda *a, **k: {'block.html':kit.TEMPLATE, 'block.json':meta.copy()})
+    def check(ref, *, report):
+        for aspect in meta['aspects']:
+            report(aspect, stats)
+        return []
+    monkeypatch.setattr(kit, 'check', check)
+    monkeypatch.setattr(kit, 'lint', lambda ref: [])
+    result = block_creation.describe('A small panel')
+    assert result['id'] is None and any('builder' in e for e in result['errors'])
+    assert not (blocks.USER_DIR / 'generated').exists()
+
+
+@pytest.mark.parametrize('payload', [
+    '{% include "/etc/passwd" %}', '{% import "_base.html" as x %}',
+    '{% macro x() %}bad{% endmacro %}', '{{ vars.__class__ }}',
+    '{{ vars["__class__"] }}', '{{ width.__class__ }}', '{{ data.x.items() }}',
+    '{{ cycler.__init__.__globals__ }}', '{% extends "cards/chapter.html" %}',
+    '<script>alert(1)</script>', '<iframe src="data:text/html,bad"></iframe>',
+    '<style/><!--</style><script>alert(1)</script>-->',
+    '<img src="/fonts/a.ttf" onerror="alert(1)">', '<img src="file:///etc/passwd">',
+    '<img src="//evil.test/a.png">', '<img src="/static/private.png">',
+    '<img src="data:image/svg+xml;base64,PHN2Zz4=">',
+    '<style>div{background:url(/scene/{token}/assets/../private.png)}</style>',
+    '<style>@import "https://evil.test/a.css";</style>',
+    r'<style>div{background:u\72l(https://evil.test/a)}</style>',
+    '<div data-composition-src="/static/evil.html"></div>',
+    '<img data-var-src="title" src="/fonts/a.ttf">',
+])
+def test_user_block_sandbox(library, monkeypatch, payload):
+    from app import block_authoring as kit
+    root = kit.new('unsafe')
+    source = '{% extends "_base.html" %}{% block body %}' + payload + '{% endblock %}'
+    (root / 'block.html').write_text(source)
+    monkeypatch.setattr(scene_builder, 'render', lambda *a, **k: pytest.fail('render invoked'))
+    with pytest.raises((ValueError, __import__('jinja2').TemplateError)):
+        blocks.render('user/unsafe')
+
+
+def test_block_creation_routes_and_channel_persistence(library, monkeypatch):
+    from app import main, jobs, channels, block_creation
+    from app.schema import Channel
+    monkeypatch.setattr(channels, 'CHANNELS_DIR', library / 'channels')
+    channels.save(Channel(id='ctest', name='Test'))
+    add_block(blocks.USER_DIR / 'mine')
+    assert main.add_channel_block('ctest', {'id':'user/mine'})['blocks'] == ['user/mine']
+    main.add_channel_block('ctest', {'id':'user/mine'})
+    assert channels.load('ctest').blocks == ['user/mine']
+    assert Channel.from_dict({'id':'old', 'name':'Old', 'unknown':1}).blocks == []
+    result = dict(id='user/mine', errors=[], usage=[])
+    monkeypatch.setattr(block_creation, 'describe', lambda *a: result)
+    monkeypatch.setattr(jobs, 'start', lambda kind, pid, fn: (kind, pid, fn(lambda m: None)))
+    assert main.describe_block({'description':'My panel'})['job'] == ('create block', '', result)
+    assert any(b['id'] == 'user/mine' for b in main.list_blocks())
+
+
+def test_usage_capture_reads_provider_envelope(monkeypatch):
+    from app import llm
+    payload = dict(result='{}', usage=dict(input_tokens=12, output_tokens=7))
+    monkeypatch.setattr(llm.subprocess, 'run', lambda *a, **k:
+                        SimpleNamespace(returncode=0, stdout=json.dumps(payload)))
+    with llm.capture_usage() as usage:
+        assert llm._complete_cli('mock', '', 'mock-model', 1, False) == '{}'
+        with llm.capture_usage() as nested:
+            llm._record_usage('nested', {'output_tokens':1})
+        assert nested == [dict(model='nested', usage={'output_tokens':1})]
+    assert usage == [dict(model='mock-model', usage=payload['usage'])]
+
+
+def test_user_media_paths_are_confined_and_normalized(library):
+    from app import block_authoring as kit
+    root = kit.new('media')
+    (root / 'picture.png').write_bytes(b'local asset')
+    source = '{% extends "_base.html" %}{% block body %}<img data-media=\'picture.png\'>{% endblock %}'
+    (root / 'block.html').write_text(source)
+    template, ctx = blocks.prepare('user/media')
+    assert f'data-media="{root}/picture.png"' in scenes.render_html(template, ctx)
+    (root / 'picture.png').unlink()  # Only this test's disposable non-audio fixture.
+    (library / 'private.png').write_bytes(b'private')
+    (root / 'picture.png').symlink_to(library / 'private.png')
+    with pytest.raises(ValueError, match='unsafe block resource'):
+        scenes.render_html(template, ctx)
+
+
+def test_generated_script_rejected_before_checker(library, monkeypatch):
+    from app import block_authoring as kit, block_creation, llm
+    root = kit.new('source')
+    meta = json.loads((root / 'block.json').read_text())
+    meta.update(id='malicious', budget=0, duration=dict(mode='range', min=1, max=10))
+    source = kit.TEMPLATE.replace('{% block body %}', '{% block body %}<script>alert(1)</script>')
+    monkeypatch.setattr(llm, 'complete_json', lambda *a, **k: {'block.html':source, 'block.json':meta.copy()})
+    monkeypatch.setattr(kit, 'check', lambda *a, **k: pytest.fail('unsafe code reached checker'))
+    assert block_creation.describe('A panel')['id'] is None
+    assert list(blocks.USER_DIR.iterdir()) == [root]
+
+
+def test_user_block_sandbox_allows_plain_text_and_builder_attributes(library, monkeypatch):
+    from app import block_authoring as kit
+    root = kit.new('handles')
+    (root / 'block.html').write_text(
+        '{% extends "_base.html" %}{% block body %}<p class="clip" data-layer="a" data-start="0" '
+        'data-duration="1" data-motion="rise" data-motion-duration="0.4" data-capture="frames">'
+        'Follow @fieldnotes at https://field.example</p>{% endblock %}')
+    rendered = []
+    monkeypatch.setattr(scene_builder, 'render', lambda *a, **k: rendered.append(1))
+    blocks.render('user/handles', {'title': 'Visit https://field.example @fieldnotes'})
+    assert rendered
+
+
+def test_user_block_variable_rejects_css_resources(library, monkeypatch):
+    from app import block_authoring as kit
+    kit.new('vars')
+    monkeypatch.setattr(scene_builder, 'render', lambda *a, **k: pytest.fail('render invoked'))
+    with pytest.raises(ValueError):
+        blocks.render('user/vars', {'title': 'url(https://evil.test/a.png)'})

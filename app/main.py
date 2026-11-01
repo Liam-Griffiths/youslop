@@ -66,6 +66,36 @@ app.add_api_route('/footage/export', footage_export_ui.export_dialog,
 app.add_api_route('/footage/export', footage_export_ui.export_selected,
                   methods=['POST'], response_class=HTMLResponse)
 
+@app.get('/api/blocks')
+def list_blocks() -> list[dict]:
+    from . import blocks
+    return [dict(id=key, name=item['meta']['name'], origin=item['meta'].get('origin'))
+            for key, item in blocks.discover().items()]
+
+
+@app.post('/api/blocks/describe')
+def describe_block(payload: dict = Body(...)) -> dict:
+    from .block_creation import describe
+    description = payload.get('description')
+    if not isinstance(description, str) or not 1 <= len(description.strip()) <= 4000:
+        raise HTTPException(400, 'Describe a block in 1–4000 characters.')
+    return {'job': jobs.start('create block', '', lambda pr: describe(description, pr))}
+
+
+@app.post('/api/channels/{cid}/blocks')
+def add_channel_block(cid: str, payload: dict = Body(...)) -> dict:
+    from . import blocks
+    block_id = payload.get('id')
+    if not isinstance(block_id, str) or block_id not in blocks.discover():
+        raise HTTPException(400, 'Unknown block.')
+    with channels.lock_for(cid):
+        channel = _channel(cid)
+        if block_id not in channel.blocks:
+            channel.blocks.append(block_id)
+        channels.save(channel)
+    return channel.to_dict()
+
+
 # Set by run.sh whenever the server is bound past loopback. Everything here can
 # read, edit and delete projects, so a second machine has to bring the token;
 # requests from this machine are never challenged, so local use is unchanged.

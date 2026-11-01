@@ -640,6 +640,7 @@ class Channel:
     voice: Voice = field(default_factory=Voice)
     narrator: Narrator = field(default_factory=Narrator)
     formats: list[dict] = field(default_factory=list)
+    blocks: list[str] = field(default_factory=list)
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, the series
     music: str = ""                 # the bed new videos start on; "" = none
     intro: IntroSpec = field(default_factory=IntroSpec)
@@ -658,7 +659,7 @@ class Channel:
             "tone": self.tone, "style": self.style.to_dict(),
             "frame": self.frame.to_dict(),
             "voice": self.voice.to_dict(), "narrator": self.narrator.to_dict(),
-            "lexicon": self.lexicon, "formats": self.formats,
+            "lexicon": self.lexicon, "formats": self.formats, "blocks": self.blocks,
             "music": self.music, "intro": self.intro.to_dict(),
             "outro": self.outro.to_dict(), "avatar": self.avatar.to_dict(),
             "thumb_template": self.thumb_template,

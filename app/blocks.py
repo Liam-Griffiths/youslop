@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from contextvars import ContextVar
 from datetime import date
 import hashlib
 import io
@@ -20,6 +21,7 @@ BUILTIN_DIR = STATIC_DIR / 'blocks'
 USER_DIR = paths.data_root() / 'blocks'
 PACKS_DIR = paths.data_root() / 'packs'
 SCHEMA = paths.resource_root() / 'docs/blocks/block.schema.json'
+STAGED = ContextVar('staged_blocks', default=())
 
 
 def _check(value, rule, label):
@@ -179,6 +181,7 @@ def discover():
     """Fresh scan; namespaced ids cannot shadow built-ins. Invalid blocks fail closed."""
     candidates = [(p.parent, '') for p in sorted(BUILTIN_DIR.glob('*/block.json'))]
     candidates += [(p.parent, 'user/') for p in sorted(USER_DIR.glob('*/block.json'))]
+    candidates += [(p, 'user/') for p in STAGED.get()]
     for manifest in sorted(PACKS_DIR.glob('*/pack.json')):
         pack = json.loads(manifest.read_text())
         if pack.get('id') != manifest.parent.name or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,47}', pack['id']):
@@ -218,6 +221,9 @@ class Loader(jinja2.BaseLoader):
             if template.startswith(prefix):
                 path = _file(block['root'], template[len(prefix):])
                 source = path.read_text()
+                if key.startswith('user/'):
+                    from .block_sandbox import parse
+                    parse(source)
                 return source, str(path), lambda: False
         raise jinja2.TemplateNotFound(template)
 

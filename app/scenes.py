@@ -82,7 +82,11 @@ def render_html(template: str, ctx: dict) -> str:
     if template.startswith('sponsor/'):
         from .sponsors import scene_context
         ctx = {**ctx, **scene_context(ctx)}
-    html = env.get_template(template).render(**ctx)
+    if template.startswith('_blocks/user/'):
+        from .block_sandbox import render
+        html = render(env.loader.get_source(env, template)[0], ctx)
+    else:
+        html = env.get_template(template).render(**ctx)
     # Cached HTML lives elsewhere; resolve relative component/script URLs as
     # they were authored in the template directory.
     parent = Path(template).parent.as_posix()
@@ -213,7 +217,7 @@ def _asset_hash() -> str:
     h = hashlib.sha1()
     # Templates link their own stylesheets (e.g. cuts/loudmouth.css), so every
     # scene stylesheet is part of the key, not just the base one.
-    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / 'motion.json', VENDOR_GSAP,
+    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / 'user_fit.js', SCENE_DIR / 'motion.json', VENDOR_GSAP,
                  *sorted(SCENE_DIR.rglob('*.css'))):
         h.update(path.read_bytes())
     return h.hexdigest()

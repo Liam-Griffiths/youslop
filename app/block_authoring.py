@@ -61,9 +61,12 @@ def lint(block_id):
     meta = block['meta']
     errors = []
     for aspect in meta['aspects']:
-        template, ctx = blocks.prepare(block_id, samples(meta), aspect)
-        errors.extend(f'{aspect}: {e}' for e in scenes.lint(
-            scenes.render_html(template, ctx), asset_root=ctx['block_assets_root']))
+        try:
+            template, ctx = blocks.prepare(block_id, samples(meta), aspect)
+            errors.extend(f'{aspect}: {e}' for e in scenes.lint(
+                scenes.render_html(template, ctx), asset_root=ctx['block_assets_root']))
+        except ValueError as exc:
+            errors.append(f'{aspect}: {exc}')
     return errors
 
 
@@ -94,6 +97,7 @@ MEASURE = r'''(() => {
      String(window.__vars[k]) === el.textContent.trim()) || el.tagName,
    r = el.getBoundingClientRect(), p = el.parentElement,
    b = p.getBoundingClientRect(), css = getComputedStyle(el);
+   if (parseFloat(css.fontSize) < MIN_TYPE) errors.push(key+': type smaller than 44px');
    if (el.scrollWidth > el.clientWidth+1 || el.scrollHeight > el.clientHeight+1 ||
        r.left < b.left-1 || r.right > b.right+1 || r.top < b.top-1 || r.bottom > b.bottom+1)
      errors.push(key+': text overflow');
@@ -146,7 +150,8 @@ def check(block_id, *, static_only=False, report=lambda aspect, stats: None):
             html = Path(directory) / 'block.html'
             html.write_text(scenes.render_html(template, ctx))
             def probe(cdp, session, item, t):
-                found = stage._evaluate(cdp, session, MEASURE.replace('SAFE', str(meta['safe_areas']['title'])))
+                found = stage._evaluate(cdp, session, MEASURE.replace('SAFE', str(meta['safe_areas']['title']))
+                    .replace('MIN_TYPE', '44' if meta.get('origin') else '0'))
                 errors.extend(f'{aspect}: {e}' for e in found['result']['value'])
                 def shot():
                     return _pixels(cdp.send('Page.captureScreenshot',

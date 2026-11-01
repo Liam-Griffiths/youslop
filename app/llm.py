@@ -12,6 +12,8 @@ way, which is the point — `script_gen.py` and `research.py` write "opus" or
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json
 import logging
 import re
@@ -28,6 +30,23 @@ from .config import (
 )
 
 log = logging.getLogger(f"{brand.SLUG}.llm")
+_USAGE = ContextVar('llm_usage', default=None)
+
+
+@contextmanager
+def capture_usage():
+    records = []
+    token = _USAGE.set(records)
+    try:
+        yield records
+    finally:
+        _USAGE.reset(token)
+
+
+def _record_usage(model, usage):
+    records = _USAGE.get()
+    if records is not None:
+        records.append(dict(model=model, usage=usage or {}))
 
 
 class LLMError(RuntimeError):
@@ -214,6 +233,7 @@ def _complete_cli(
     payload = _envelope(proc.stdout)
     if payload is None:
         raise LLMError(f"Unparseable CLI envelope: {proc.stdout[:400]}")
+    _record_usage(model, payload.get('usage'))
 
     if payload.get("is_error"):
         said = str(payload.get("result"))
@@ -304,6 +324,7 @@ def _complete_api(
     except anthropic.APIConnectionError as exc:
         raise LLMUnavailable(f"Could not reach the Anthropic API: {exc}") from exc
 
+    _record_usage(response.model, response.usage.model_dump())
     if response.stop_reason == "refusal":
         raise LLMError("Claude declined to answer this prompt.")
 
@@ -362,7 +383,10 @@ def _complete_ollama(
     if response.status_code != 200:
         raise LLMError(f"Ollama error {response.status_code}: {response.text[:400]}")
 
-    text = (response.json().get("message") or {}).get("content", "").strip()
+    payload = response.json()
+    _record_usage(payload.get('model', OLLAMA_MODEL),
+                  dict(input_tokens=payload.get('prompt_eval_count', 0), output_tokens=payload.get('eval_count', 0)))
+    text = (payload.get("message") or {}).get("content", "").strip()
     if not text:
         raise LLMError("Ollama returned an empty response")
     return text
@@ -419,6 +443,7 @@ def _complete_openai_compat(
                        f"{response.text[:400]}")
 
     try:
+        _record_usage(model, response.json().get('usage'))
         text = response.json()["choices"][0]["message"]["content"] or ""
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise LLMError(f"Unexpected {cfg['label']} reply: {response.text[:300]}") from exc
