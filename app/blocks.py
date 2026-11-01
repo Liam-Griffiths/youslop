@@ -158,6 +158,10 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
         raise ValueError(f'{block_id}: duration violates {rule}')
     ctx = scenes.context_base() if context is None else dict(context)
     ctx['vars'] = {**ctx.get('vars', {}), **values}
+    # Authored defaults apply to standalone discovery/preview only. A supplied
+    # scene context carries the channel's resolved colours and takes priority.
+    if context is None:
+        ctx['vars'].update(meta.get('default_colors', {}))
     ctx['safe_areas'] = meta['safe_areas']
     ctx.update(width={'16:9':1920, '9:16':1080, '1:1':1080}[aspect],
                height={'16:9':1080, '9:16':1920, '1:1':1080}[aspect], duration=seconds,

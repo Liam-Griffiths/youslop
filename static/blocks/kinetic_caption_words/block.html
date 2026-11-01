@@ -1,0 +1,7 @@
+{% extends "_blocks/chapter/text_base.html" %}
+{% block body %}
+{% if vars.picture %}<img class="picture" data-var-src="picture" src="{{ vars.picture }}" alt="">{% endif %}
+<section class="copy kinetic words clip" data-start="0" data-duration="{{ duration }}" data-anim="fade" data-anim-dur=".45">
+<div class="caption-panel"><h1 class="display caption clip" data-start="0" data-duration="{{ duration }}" data-anim="words" data-anim-dur=".45" data-var-text="title">{{ vars.title }}</h1></div>
+</section>
+{% endblock %}

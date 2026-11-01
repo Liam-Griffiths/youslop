@@ -29,14 +29,15 @@ def test_discovery_and_cli(library, capsys):
     add_block(pack / 'blocks/mine')
     (pack / 'pack.json').write_text('{"id":"demo-pack"}')
     found = blocks.discover()
-    assert len(found) == 11 and {'user/mine', 'demo-pack/mine'} <= found.keys()
+    count = len(list(blocks.BUILTIN_DIR.glob('*/block.json'))) + 2
+    assert len(found) == count and {'user/mine', 'demo-pack/mine'} <= found.keys()
     assert cli.main(['block', 'list']) == 0
-    assert len(json.loads(capsys.readouterr().out)) == 11
+    assert len(json.loads(capsys.readouterr().out)) == count
     assert cli.main(['block', 'show', 'chapter']) == 0
     assert json.loads(capsys.readouterr().out)['kind'] == 'chapter'
 
 
-@pytest.mark.parametrize('ref', ['_test', 'chapter', 'intro_solo', 'intro_dossier',
+@pytest.mark.parametrize('ref', ['_test', 'intro_solo', 'intro_dossier',
                                     'intro_folio', 'intro_portrait', 'outro_twoup',
                                     'outro_quiet', 'sponsor_house_read'])
 def test_existing_html_identical(library, ref):

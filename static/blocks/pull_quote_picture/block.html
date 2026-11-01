@@ -1,0 +1,8 @@
+{% extends "_blocks/chapter/text_base.html" %}
+{% block body %}
+{% if vars.picture %}<img class="picture" data-var-src="picture" src="{{ vars.picture }}" alt="">{% endif %}
+<section class="copy pull panel clip" data-start="0" data-duration="{{ duration }}" data-anim="rise" data-anim-dur=".45">
+<blockquote class="quotation" data-var-text="title">{{ vars.title }}</blockquote>
+<p class="support" data-var-text="subtitle">{{ vars.subtitle }}</p>
+</section>
+{% endblock %}

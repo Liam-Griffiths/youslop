@@ -8,7 +8,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
 > Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
-> **Codex limit, 2026-10-31 20:00 PDT:** the 5-hour window is at 87% (weekly 31%). Paused until it resets (~23:20 PDT), then resuming with T12.3 (core blocks) and T10.2/T10.4/T10.7 once the house-read decision is made.
+> **Codex limit, 2026-10-31 23:20 PDT:** the 5-hour window reset; resumed with T12.3 (core blocks, batch 1 text). T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -176,7 +176,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T12.1 | Corkbored block format and local registry | M | T2.3, T2.7c | done | 2026-10-31 Codex; clean-room block format + registry, 9 built-in blocks wrap our templates; fixed preview default length |
 | T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
-| T12.3 | Core block set v1 | L | T12.2 | todo | ~30 blocks, 16:9 and 9:16, four batches |
+| T12.3 | Core block set v1 | L | T12.2 | doing | 2026-10-31 batch 1 (12 text blocks) done, browser checks pass; paused for Phase 5 |
 | T12.4 | Data blocks from tables | M | T12.3 | todo | number-match check |
 | T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |
 | T12.6 | Make a block from a description | M | T12.2 | todo | model writes a reusable block once |

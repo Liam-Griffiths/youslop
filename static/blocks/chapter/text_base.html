@@ -1,0 +1,52 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+@font-face { font-family: InstrumentDisplay; src:url('/fonts/Archivo-Variable.ttf'); font-weight:100 900; font-stretch:62% 125%; font-display:block; }
+/* Runtime injects channel variables. Standalone defaults live in block.json. */
+:root { --panel:color-mix(in srgb,var(--bg) 95%,var(--ink)); --line:color-mix(in srgb,var(--bg) 90%,var(--ink)); --dim:color-mix(in srgb,var(--bg) 35%,var(--ink)); }
+.copy { position:absolute; left:12%; right:12%; top:18%; bottom:18%; display:flex; flex-direction:column; justify-content:center; gap:28px; }
+.copy > * { flex-shrink:0; min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.display,.speaker { font-family:InstrumentDisplay,sans-serif; font-weight:800; font-stretch:62%; letter-spacing:-.01em; line-height:1.06; text-transform:uppercase; }
+.display { font-size:96px; }
+.support { font:500 32px/1.4 Inter,sans-serif; color:var(--dim); }
+.label { font:500 26px/1.4 Inter,sans-serif; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+.picture { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.panel,.caption-panel { background:var(--panel); padding:36px; border:2px solid var(--line); }
+.opening { border-top:6px solid var(--accent); }
+.chapter { text-align:center; align-items:center; }
+.chapter::after { content:''; width:96px; height:6px; background:var(--accent); }
+.chapter .display { font-size:{{ 54 if vars.title|length > 100 else 86 }}px; }
+.chapter .label { font-size:{{ 22 if vars.kicker|default('')|length > 60 else 26 }}px; }
+.lower { top:auto; bottom:13%; right:30%; gap:12px; padding:28px 36px; background:var(--panel); }
+.lower .speaker { font-size:64px; }
+.lower .support { font-size:28px; }
+.rule { border-top:5px solid var(--accent); }
+.stack { padding:0 0 0 24px; border-left:6px solid var(--accent); background:transparent; gap:4px; }
+.stack > * { padding:16px 24px; background:var(--panel); }
+.quotation { margin:0; font:800 64px/1.15 InstrumentDisplay,sans-serif; font-stretch:62%; border-left:6px solid var(--accent); padding-left:32px; }
+.quote .support { padding-left:38px; }
+.pull { top:auto; bottom:16%; right:25%; }
+.pull .quotation { font-size:58px; }
+.headline .label { border-bottom:2px solid var(--line); padding-bottom:24px; }
+.ending { text-align:center; }
+.ending .support { border-top:2px solid var(--line); padding-top:28px; }
+.kinetic { top:30%; bottom:30%; }
+.caption-panel { border-left:6px solid var(--accent); }
+.caption { font-size:88px; }
+@media (orientation:portrait) {
+ .copy { left:12%; right:18%; top:18%; bottom:23%; gap:32px; }
+ .display { font-size:80px; }
+ .support { font-size:30px; }
+ .lower { top:auto; bottom:24%; padding:28px; gap:12px; }
+ .lower .speaker { font-size:60px; }
+ .lower .support { font-size:28px; }
+ .stack { padding:0 0 0 20px; }
+ .chapter .display { font-size:{{ 48 if vars.title|length > 100 else 80 }}px; }
+ .quotation { font-size:60px; padding-left:24px; }
+ .pull { top:auto; bottom:24%; padding:28px; }
+ .pull .quotation { font-size:54px; }
+ .kinetic { top:26%; bottom:26%; }
+ .caption { font-size:76px; }
+}
+</style>
+{% endblock %}

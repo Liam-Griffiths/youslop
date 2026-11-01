@@ -7,6 +7,12 @@ optional for discovery and never written into installed packs by the app.
 The normative metadata schema is [block.schema.json](block.schema.json).
 Unknown metadata keys are ignored; declared fields and variable defaults are
 validated with the schema vocabulary implemented in `app/blocks.py`.
+Optional `default_colors` maps CSS variable names to hex colours for standalone
+block previews (the Text set uses Instrument). Passing a scene `context` to
+`prepare`/`render` preserves its resolved channel colours instead. Text blocks
+use the channel's `bg`, `ink` and `accent`; `panel`, `line` and `dim` can also
+be supplied, otherwise they derive from the channel ground and ink. Display
+type loads `/fonts/Archivo-Variable.ttf` locally at weight 800, stretch 62%.
 
 Built-ins live in `static/blocks/<id>/`; user blocks in `<data>/blocks/<id>/`
 are addressed as `user/<id>`. Installed packs supply
