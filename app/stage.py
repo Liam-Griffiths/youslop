@@ -135,6 +135,9 @@ def _handler(run: _Run):
                 if target == root or not target.is_relative_to(root):
                     return "/nonexistent"
                 return str(target)
+            if path.startswith("/fonts/packs/"):
+                from .packs import font_path
+                return str(font_path(unquote(path)) or '/nonexistent')
             if path.startswith("/fonts/"):
                 root = (paths.resource_root() / "resources" / "fonts").resolve()
                 target = (root / unquote(path[len("/fonts/"):])).resolve()
@@ -142,7 +145,7 @@ def _handler(run: _Run):
             if path.startswith("/models/"):
                 p = Path(path)
                 try:
-                    return str(models3d.glb_path(p.stem))
+                    return str(models3d.glb_path(unquote(path[len("/models/"):]).removesuffix(".glb")))
                 except models3d.ModelError:
                     return "/nonexistent"
             if path.startswith("/static/"):

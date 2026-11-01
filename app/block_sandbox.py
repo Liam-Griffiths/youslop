@@ -29,10 +29,10 @@ def parse(source):
         if not isinstance(node, allowed):
             raise ValueError(f'unsafe Jinja: {type(node).__name__}')
         if isinstance(node, nodes.Name) and (node.name.startswith('_') or
-                node.name not in {'vars', 'width', 'height', 'duration', 'data', *aliases}):
+                node.name not in {'vars', 'width', 'height', 'duration', 'data', 'fonts', *aliases}):
             raise ValueError(f'unsafe Jinja name: {node.name}')
         if isinstance(node, nodes.Getattr) and (node.attr.startswith('_') or
-                not isinstance(node.node, nodes.Name) or node.node.name not in {'vars', 'data'}):
+                not isinstance(node.node, nodes.Name) or node.node.name not in {'vars', 'data', 'fonts'}):
             raise ValueError('unsafe Jinja attribute access')
         if isinstance(node, nodes.Getitem) and (not isinstance(node.arg, nodes.Const) or
                 isinstance(node.arg.value, str) and node.arg.value.startswith('_')):
@@ -57,6 +57,8 @@ class Resources(HTMLParser):
         if re.fullmatch(r'data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+', value):
             return
         if re.fullmatch(r'/fonts/[\w-]+\.(?:ttf|otf|woff2?)', value):
+            return
+        if re.fullmatch(r'/fonts/packs/[a-z0-9][a-z0-9-]{1,47}/[\w-]+\.(?:ttf|otf|woff2)', value):
             return
         prefix = '/scene/{token}/assets/'
         name = value[len(prefix):] if value.startswith(prefix) else value

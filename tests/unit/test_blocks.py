@@ -4,14 +4,14 @@ import re
 
 import pytest
 
-from app import blocks, cli, scenes, scene_builder, stage
+from app import blocks, cli, scenes, scene_builder, stage, packs
 from types import SimpleNamespace
 
 
 @pytest.fixture
 def library(tmp_path, monkeypatch):
     monkeypatch.setattr(blocks, 'USER_DIR', tmp_path / 'blocks')
-    monkeypatch.setattr(blocks, 'PACKS_DIR', tmp_path / 'packs')
+    monkeypatch.setattr(packs, 'PACKS_DIR', tmp_path / 'packs')
     return tmp_path
 
 
@@ -26,12 +26,12 @@ def add_block(root, **updates):
 
 def test_discovery_and_cli(library, capsys):
     add_block(blocks.USER_DIR / 'mine')
-    pack = blocks.PACKS_DIR / 'demo-pack'
+    pack = packs.PACKS_DIR / 'demo-pack'
     add_block(pack / 'blocks/mine')
-    (pack / 'pack.json').write_text('{"id":"demo-pack"}')
+    (pack / 'pack.json').write_text('{"id":"demo-pack","name":"Demo pack","version":"1.0.0","author":"Fixture","licence":"CC0"}')
     found = blocks.discover()
     count = len(list(blocks.BUILTIN_DIR.glob('*/block.json'))) + 2
-    assert len(found) == count and {'user/mine', 'demo-pack/mine'} <= found.keys()
+    assert len(found) == count and {'user/mine', 'pack/demo-pack/mine'} <= found.keys()
     assert cli.main(['block', 'list']) == 0
     assert len(json.loads(capsys.readouterr().out)) == count
     assert cli.main(['block', 'show', 'chapter']) == 0

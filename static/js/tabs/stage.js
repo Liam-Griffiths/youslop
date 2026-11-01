@@ -528,8 +528,8 @@ async function openModelIntake(mid) {
       </div>
 
       <div class="row" style="margin-top:14px">
-        <button class="btn primary" id="mi-confirm">${m.confirmed ? 'save' : 'confirm model'}</button>
-        <span class="mono" style="color:var(--ink-faint)">saves front, size and look</span>
+        <button class="btn primary" id="mi-confirm">${m.read_only ? 'Copy to my library' : m.confirmed ? 'save' : 'confirm model'}</button>
+        <span class="mono" style="color:var(--ink-faint)">${m.read_only ? 'Pack model · read-only' : 'saves front, size and look'}</span>
       </div>`;
     $('#mi-title', wrap).oninput = (e) => { draft.title = e.target.value; };
     $('#mi-axis', wrap).onchange = (e) => { draft.size_axis = e.target.value; paintSide(); };
@@ -539,6 +539,7 @@ async function openModelIntake(mid) {
       paintSide();
     };
     $('#mi-confirm', wrap).onclick = save;
+    if (m.read_only) wrap.querySelectorAll('#mi-side input, #mi-side select, #mi-side button:not(#mi-confirm)').forEach((el) => { el.disabled = true; });
   };
 
   window.miTurn = (deg) => { draft.heading = ((draft.heading + deg) % 360 + 360) % 360; ctl && ctl.update(live()); paintSide(); };
@@ -569,6 +570,10 @@ async function openModelIntake(mid) {
     const btn = $('#mi-confirm', wrap);
     btn.disabled = true;
     try {
+      if (m.read_only) {
+        const copy = await api(`/api/models/${mid}/copy`, { method: 'POST' });
+        close(); openModelIntake(copy.id); return;
+      }
       m = await api(`/api/models/${mid}`, { method: 'PATCH', body: JSON.stringify({
         ...draft, measured: ctl ? ctl.measured() : m.measured, confirmed: true }) });
 
@@ -587,7 +592,7 @@ async function openModelIntake(mid) {
     // First sight (or an analysis from an older intake): work out what kind of
     // model this is, keep the measurement and a thumbnail straight away.
     const stale = !m.analysis || m.analysis.version !== S3.VERSION;
-    if (stale || !m.measured) {
+    if (!m.read_only && (stale || !m.measured)) {
       paintSide();
       await new Promise((ok) => setTimeout(ok, 30));          // let "Measuring…" paint
       const patch = { measured: ctl.measured() };

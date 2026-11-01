@@ -136,7 +136,7 @@ SOLO_DEFAULT = SOLO_TEMPLATE_KEYS[0]
 
 def needs_images(template: str) -> bool:
     """Does this template need a cast before it can render?"""
-    for t in TEMPLATES:
+    for t in all_templates():
         if t["key"] == template:
             return bool(t["needs_images"])
     if template.startswith("scene:"):
@@ -2838,3 +2838,11 @@ def mux_sting(channel: Channel, video: Path, slate_len: float,
     progress(f"Sting over the preview: {channel.intro.music_filename or src.name}"
              f", from {start:.1f}s for {span:.1f}s")
     return True
+
+
+def all_templates():
+    from . import packs
+    return TEMPLATES + [dict(key='scene:' + item['ref'], label=item['meta']['name'],
+                            needs_images=False, max_slots=0, wants_backdrop=False, cta='Watch next')
+                        for pack in packs.scan() for item in pack.blocks()
+                        if item['meta']['kind'] == 'intro']

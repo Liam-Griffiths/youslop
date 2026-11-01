@@ -85,7 +85,7 @@ async function paintRender() {
             <option value="" ${!p.music ? 'selected' : ''}>— none —</option>
             <option value="__auto__" ${p.music === '__auto__' ? 'selected' : ''}>— pick one for me —</option>
             ${music.map((m) => `<option ${m.name === p.music ? 'selected' : ''}
-              value="${esc(m.name)}">${esc(m.name)}</option>`).join('')}
+              value="${esc(m.name)}">${esc(m.label || m.name)}</option>`).join('')}
           </select></label>
         <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
           ${!p.music

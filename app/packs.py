@@ -1,0 +1,172 @@
+"""Read-only content packs. Manifest/security errors disable a pack; bad items stay isolated."""
+from dataclasses import dataclass, field
+import json
+from pathlib import Path
+import re
+import stat
+import threading
+
+import jinja2
+
+from . import paths
+
+PACKS_DIR = paths.data_root() / 'packs'
+_CACHE = {}
+_LOCK = threading.RLock()
+_ID = r'[a-z0-9][a-z0-9-]{1,47}'
+_SUFFIXES = {'themes': {'.json'}, 'music': {'.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg'},
+             'fonts': {'.woff2', '.ttf', '.otf'}}
+
+
+def _json(path):
+    value = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(value, dict):
+        raise ValueError(f'{path.name}: expected object')
+    return value
+
+
+@dataclass
+class Pack:
+    id: str
+    name: str = ''
+    version: str = ''
+    author: str = ''
+    licence: str = ''
+    licence_url: str = ''
+    description: str = ''
+    path: Path = Path('.')
+    problems: list = field(default_factory=list)
+    item_problems: dict = field(default_factory=dict)
+    items: dict = field(default_factory=dict, repr=False)
+
+    def themes(self): return self.items.get('themes', []) if not self.problems else []
+    def blocks(self): return self.items.get('blocks', []) if not self.problems else []
+    def music(self): return self.items.get('music', []) if not self.problems else []
+    def models(self): return self.items.get('models', []) if not self.problems else []
+    def fonts(self): return self.items.get('fonts', []) if not self.problems else []
+
+
+def _validate(meta, root):
+    problems = []
+    if not re.fullmatch(_ID, str(meta.get('id', ''))) or meta.get('id') != root.name:
+        problems.append('id must match the folder and pack id pattern')
+    for key in ('name', 'version', 'author', 'licence'):
+        if not isinstance(meta.get(key), str) or not meta[key].strip():
+            problems.append(f'missing or invalid {key}')
+    for key in ('licence_url', 'description', 'corkbored'):
+        if key in meta and not isinstance(meta[key], str):
+            problems.append(f'invalid {key}')
+    for path in [root, *root.rglob('*')]:
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode) or not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+            problems.append(f'forbidden link or special file: {path.name}')
+        elif path.is_file() and (mode & 0o111 or path.suffix.lower() in
+                                {'.py', '.pyc', '.js', '.mjs', '.cjs', '.exe', '.sh', '.dll', '.so'}):
+            problems.append(f'forbidden code/executable: {path.name}')
+    return problems
+
+
+def _load(root):
+    pack = Pack(id=root.name, path=root)
+    try:
+        meta = _json(root / 'pack.json')
+        pack.problems = _validate(meta, root)
+        for key in ('name', 'version', 'author', 'licence', 'licence_url', 'description'):
+            setattr(pack, key, meta.get(key, ''))
+        if pack.problems:
+            return pack
+        from . import blocks, scenes, block_sandbox, block_authoring, themes
+        groups = {k: sorted((root / k).glob('*')) for k in (*_SUFFIXES, 'blocks', 'models')}
+        credits = _json(root / 'music/credits.json') if (root / 'music/credits.json').exists() else {}
+        for kind, entries in groups.items():
+            for path in entries:
+                if kind in _SUFFIXES and path.suffix.lower() not in _SUFFIXES[kind]:
+                    continue
+                if kind == 'music' and path.name == 'credits.json':
+                    continue
+                key = path.stem if kind == 'themes' else path.name
+                ref = f'{pack.id}/{key}'
+                item = dict(ref=ref, path=path, pack=pack.name, label=f'{key} · {pack.name}')
+                try:
+                    if kind in _SUFFIXES and not path.is_file():
+                        raise ValueError('expected a file')
+                    if kind == 'fonts' and not re.fullmatch(r'[\w-]+\.(?:ttf|otf|woff2)', key):
+                        raise ValueError('invalid font filename')
+                    if kind == 'themes':
+                        data = _json(path)
+                        base = themes.THEMES[0]
+                        for name, default in base.items():
+                            if name != 'key' and (name not in data or not isinstance(data[name], type(default))):
+                                raise ValueError(f'theme: missing or invalid {name}')
+                        for name in ('accent', 'accent2', 'ground', 'ink'):
+                            if not re.fullmatch(r'#[0-9a-fA-F]{6}', data[name]):
+                                raise ValueError(f'invalid colour: {name}')
+                        item['value'] = {**data, 'key': ref, 'pack': pack.name,
+                                         'label': f'{data["label"]} · {pack.name}'}
+                    elif kind == 'blocks':
+                        item['ref'] = f'pack/{ref}'
+                        block = dict(meta=blocks.validate_folder(path), root=path, version=pack.version)
+                        context = scenes.context_base(include_packs=False)
+                        context['fonts'].update({f'pack:{pack.id}/{f.name}': f'/fonts/packs/{pack.id}/{f.name}'
+                                                 for f in groups['fonts'] if f.is_file()})
+                        for aspect in block['meta']['aspects']:
+                            _, ctx = blocks.prepare(item['ref'], block_authoring.samples(block['meta']), aspect,
+                                context=context, _block=block)
+                            source = blocks._file(path, block['meta']['aspects'][aspect]).read_text()
+                            html = block_sandbox.render(source, ctx)
+                            errors = scenes.lint(html, asset_root=path)
+                            if errors:
+                                raise ValueError('; '.join(errors))
+                        item['meta'] = {**block['meta'], 'name': f'{block["meta"]["name"]} · {pack.name}'}
+                    elif kind == 'models':
+                        data = _json(path / 'manifest.json')
+                        if not data.get('confirmed') or not (path / 'model.glb').is_file():
+                            raise ValueError('model requires confirmed manifest and model.glb')
+                        item['value'] = {**data, 'id': ref, 'pack': pack.name, 'read_only': True,
+                                         'title': f'{data.get("title", key)} · {pack.name}'}
+                    elif kind == 'music':
+                        credit = credits.get(path.name, {})
+                        if not isinstance(credit, dict) or any(not isinstance(v, str) for v in credit.values()):
+                            raise ValueError('invalid track credits')
+                        item['credits'] = credit
+                        item['label'] = f'{credit.get("title", key)} · {pack.name}'
+                    pack.items.setdefault(kind, []).append(item)
+                except (OSError, ValueError, KeyError, TypeError, jinja2.TemplateError) as exc:
+                    pack.item_problems[item['ref']] = [str(exc)]
+    except (OSError, ValueError, TypeError) as exc:
+        pack.problems.append(str(exc))
+    return pack
+
+
+def scan(*, force=False):
+    """Nested stat signatures catch in-place item edits as well as folder changes."""
+    with _LOCK:
+        result = []
+        for root in sorted(PACKS_DIR.glob('*')):
+            if not root.is_dir() and not root.is_symlink():
+                continue
+            try:
+                signature = tuple((str(p.relative_to(root)), p.lstat().st_mtime_ns,
+                                   p.lstat().st_size, p.lstat().st_mode)
+                                  for p in [root, *sorted(root.rglob('*'))])
+                cached = _CACHE.get(root)
+                if force or cached is None or cached[0] != signature:
+                    _CACHE[root] = (signature, _load(root))
+                result.append(_CACHE[root][1])
+            except OSError as exc:
+                result.append(Pack(id=root.name, path=root, problems=[str(exc)]))
+        return result
+
+
+def resolve(ref, kind=None):
+    for pack in scan():
+        for group in ([kind] if kind else ('themes', 'blocks', 'music', 'models', 'fonts')):
+            for item in pack.items.get(group, []) if not pack.problems else []:
+                if item['ref'] == ref:
+                    return item.get('value', item['path'])
+    return None
+
+
+def font_path(url):
+    match = re.fullmatch(r'/fonts/packs/(' + _ID + r')/([\w-]+\.(?:ttf|otf|woff2))', url)
+    return resolve('/'.join(match.groups()), 'fonts') if match else None

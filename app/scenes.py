@@ -39,7 +39,7 @@ env.globals['motion_presets'] = json.loads((SCENE_DIR / 'motion.json').read_text
 log = logging.getLogger(__name__)
 
 
-def context_base(project=None, channel=None) -> dict:
+def context_base(project=None, channel=None, *, include_packs=True) -> dict:
     if channel is None and project is not None and project.channel_id:
         channel = channels.load_or_none(project.channel_id)
     style = project.style if project else channel.style if channel else Style()
@@ -51,6 +51,9 @@ def context_base(project=None, channel=None) -> dict:
     for key in ("accent", "accent2", "ground", "ink"):
         pal[key] = "#" + "".join(f"{c:02x}" for c in pal[key][:3])
     frame_values = {**frame.to_dict(), **{k: v["value"] for k, v in resolved["frame"].items()}}
+    from . import packs
+    pack_fonts = {f'pack:{item["ref"]}': f'/fonts/packs/{item["ref"]}'
+                  for pack in packs.scan() for item in pack.fonts()} if include_packs else {}
     return dict(frame=frame_values, palette=pal, copy=copy,
                 vars=dict(**{f"copy.{k}": v for k, v in copy.items()},
                           **{k: v["value"] for k, v in resolved["colors"].items()},
@@ -58,7 +61,7 @@ def context_base(project=None, channel=None) -> dict:
                           tagline=copy["tagline"],
                           title=project.title if project else "Scene capture",
                           subtitle=project.subtitle if project else ""),
-                fonts={"Inter": "/fonts/Inter-Medium.ttf",
+                fonts={**pack_fonts, "Inter": "/fonts/Inter-Medium.ttf",
                        "Archivo": "/fonts/ArchivoNarrow-Bold.ttf",
                        "EB Garamond": "/fonts/EBGaramond-Regular.ttf",
                        "JetBrains Mono": "/fonts/JetBrainsMono-Regular.ttf"},
@@ -82,7 +85,7 @@ def render_html(template: str, ctx: dict) -> str:
     if template.startswith('sponsor/'):
         from .sponsors import scene_context
         ctx = {**ctx, **scene_context(ctx)}
-    if template.startswith('_blocks/user/'):
+    if template.startswith(('_blocks/user/', '_blocks/pack/')):
         from .block_sandbox import render
         html = render(env.loader.get_source(env, template)[0], ctx)
     else:
@@ -427,6 +430,17 @@ def render_card(kind, name, channel, video_title, out_path,
     """Shared scene dispatch for channel, standalone and preview cards."""
     if kind not in ("intro", "outro"):
         raise ValueError("unknown scene card kind")
+    from . import scene_builder
+    if name.startswith('pack/'):
+        from . import blocks
+        ctx = context_base(channel=channel)
+        ctx['vars']['title'] = video_title
+        meta = blocks.discover()[name]['meta']
+        values = {k: v for k, v in ctx['vars'].items() if k in meta['variables']}
+        template, ctx = blocks.prepare(name, values, context=ctx)
+        scene_builder.render(out_path.parent, template, ctx, out_path,
+                             seconds=ctx['duration'], size=(WIDTH, HEIGHT), fps=FPS, crf=18)
+        return ctx['duration']
     # Card names are local template names, never arbitrary paths.
     if not re.fullmatch(r"[\w-]+", name):
         raise ValueError("invalid scene card name")

@@ -1110,7 +1110,7 @@ def _slate_channel(project: Project):
         if channel:
             from .learning import choose, effective_frame
             from . import themes
-            key = choose('theme', [channel.style.theme, *themes.THEME_KEYS], effective_frame(project))
+            key = choose('theme', [channel.style.theme, *themes.theme_keys()], effective_frame(project))
             if key != channel.style.theme:
                 themes.apply_to_style(channel.style, key, False)
         return channel
@@ -1285,8 +1285,9 @@ def pick_music(project: Project,
     if not project.music:
         return None
     if project.music != AUTO_MUSIC:
-        chosen = MUSIC_DIR / project.music
-        if chosen.exists():
+        from . import packs
+        chosen = packs.resolve(project.music, 'music') if '/' in project.music else MUSIC_DIR / project.music
+        if isinstance(chosen, Path) and chosen.is_file():
             return chosen
         # Named a track that has since been deleted. Silence is the honest
         # answer; substituting another one would be a change nobody made.
@@ -2784,7 +2785,14 @@ def credits_text(project: Project) -> str:
 
     music = pick_music(project)          # credits list the bed, they do not log
     if music:
-        lines += ["", f"Music: {music.stem}"]
+        from . import packs
+        credit = next((item['credits'] for pack in packs.scan() for item in pack.music()
+                       if item['path'] == music), {})
+        line = f"Music: {credit.get('title', music.stem)}"
+        line += f" by {credit['artist']}" if credit.get('artist') else ''
+        line += f" ({credit['licence']})" if credit.get('licence') else ''
+        line += f" {credit['url']}" if credit.get('url') else ''
+        lines += ["", line]
     lines += ["", "Verify every licence before publishing. Some archives place "
                   "conditions on commercial reuse."]
     return "\n".join(lines)

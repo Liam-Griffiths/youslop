@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand, check, edits, ops, review, storyboard, razor
+from . import brand, check, edits, ops, review, storyboard, razor, packs
 from .audio_files import next_raw_path, next_take_path
 from . import camera
 from . import audio as audio_mod
@@ -57,6 +57,7 @@ from .paths import resource_root
 # too; it is here as well so that importing this module directly — which is
 # what `run.sh` and any uvicorn invocation do — is enough on its own.
 ensure_dirs()
+packs.scan()
 
 app = FastAPI(title=brand.NAME)
 
@@ -337,7 +338,7 @@ def patch_channel(cid: str, payload: dict = Body(...)) -> dict:
                 raise HTTPException(400, str(exc)) from exc
         for key, value in (payload.get("style") or {}).items():
             if key == "theme":
-                if value not in themes_mod.THEME_KEYS:
+                if value not in themes_mod.theme_keys():
                     raise HTTPException(400, f"No such theme: {value}")
                 ch.style.theme = str(value)
             elif hasattr(ch.style, key):
@@ -359,7 +360,7 @@ def patch_channel(cid: str, payload: dict = Body(...)) -> dict:
                 continue
             current = getattr(ch.outro, key)
             if key == "template":
-                if value not in outro_mod.TEMPLATE_KEYS:
+                if value not in [t['key'] for t in outro_mod.all_templates()]:
                     raise HTTPException(400, f"No such end screen: {value}")
                 ch.outro.template = str(value)
             elif key == "slots":
@@ -393,7 +394,7 @@ def patch_channel(cid: str, payload: dict = Body(...)) -> dict:
                 continue
             current = getattr(ch.intro, key)
             if key == "template":
-                if value not in intro_mod.TEMPLATE_KEYS:
+                if value not in [t['key'] for t in intro_mod.all_templates()]:
                     raise HTTPException(400, f"No such slate template: {value}")
                 ch.intro.template = str(value)
             elif key == "subjects":
@@ -437,13 +438,13 @@ def delete_channel(cid: str) -> dict:
 @app.get("/api/intro/templates")
 def intro_templates() -> list[dict]:
     """The slates a channel can open on, with the knobs each one answers to."""
-    return intro_mod.TEMPLATES
+    return intro_mod.all_templates()
 
 
 @app.get("/api/themes")
 def list_themes() -> list[dict]:
     """The themes a channel can be cast in, with their palettes and picks."""
-    return themes_mod.THEMES
+    return themes_mod.all_themes()
 
 
 @app.post("/api/channels/{cid}/theme")
@@ -455,13 +456,13 @@ def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
     without losing it.
     """
     key = str(payload.get("key") or "")
-    if key not in themes_mod.THEME_KEYS:
+    if key not in themes_mod.theme_keys():
         raise HTTPException(400, f"No such theme: {key}")
     take = payload.get("templates", True)
     with channels.lock_for(cid):
         ch = _channel(cid)
         from .learning import choose
-        key = choose("theme", [key, *themes_mod.THEME_KEYS], ch.frame)
+        key = choose("theme", [key, *themes_mod.theme_keys()], ch.frame)
         picks = themes_mod.apply_to_style(ch.style, key, bool(take))
         ch.frame = themes_mod.apply_to_frame(ch.frame, key)
         if picks:
@@ -476,7 +477,7 @@ def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
 @app.get("/api/outro/templates")
 def outro_templates() -> list[dict]:
     """The end screens a channel can close on, and how many plates each holds."""
-    return outro_mod.TEMPLATES
+    return outro_mod.all_templates()
 
 
 @app.post("/api/channels/{cid}/cast")
@@ -860,7 +861,7 @@ def _apply_solo_intro(spec, patch: dict) -> None:
     for key, value in patch.items():
         if key == "template":
             template = str(value or "")
-            if template and template not in intro_mod.SOLO_TEMPLATE_KEYS:
+            if template and template not in [t['key'] for t in intro_mod.all_templates() if not t['needs_images']]:
                 raise HTTPException(400, f"No such opening card: {template}")
             spec.template = template
         elif key == "duration":
@@ -883,7 +884,7 @@ def _apply_solo_outro(spec, patch: dict) -> None:
     """A standalone video's own end screen — the channel card, minus the channel."""
     for key, value in patch.items():
         if key == "template":
-            if value not in outro_mod.TEMPLATE_KEYS:
+            if value not in [t['key'] for t in outro_mod.all_templates()]:
                 raise HTTPException(400, f"No such end screen: {value}")
             spec.template = str(value)
         elif key == "slots":
@@ -996,7 +997,7 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
                 raise HTTPException(400, str(exc)) from exc
         for key, value in (payload.get("style") or {}).items():
             if key == "theme":
-                if value not in themes_mod.THEME_KEYS:
+                if value not in themes_mod.theme_keys():
                     raise HTTPException(400, f"No such theme: {value}")
                 p.style.theme = str(value)
             elif hasattr(p.style, key):
@@ -2773,7 +2774,29 @@ def music_list() -> list[dict]:
         {"name": p.name, "size_mb": round(p.stat().st_size / 1e6, 1)}
         for p in sorted(MUSIC_DIR.iterdir())
         if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
-    ]
+    ] + [dict(name=item['ref'], label=item['label'], pack=pack.name,
+              size_mb=round(item['path'].stat().st_size / 1e6, 1))
+         for pack in packs.scan() for item in pack.music()]
+
+
+@app.post('/api/packs/rescan')
+def rescan_packs() -> list[dict]:
+    return [dict(id=p.id, name=p.name, version=p.version, problems=p.problems,
+                 item_problems=p.item_problems) for p in packs.scan(force=True)]
+
+
+@app.get('/fonts/packs/{pack_id}/{filename}')
+def pack_font(pack_id: str, filename: str):
+    path = packs.font_path(f'/fonts/packs/{pack_id}/{filename}')
+    if path is None:
+        raise HTTPException(404, 'No such pack font')
+    return FileResponse(path)
+
+
+@app.post('/api/models/{mid:path}/copy')
+def copy_model(mid: str):
+    _model_or_404(mid)
+    return models3d.copy_to_library(mid)
 
 
 # ------------------------------------------------------------- 3D models
@@ -2808,12 +2831,7 @@ async def add_model(file: UploadFile) -> dict:
         tmp.unlink(missing_ok=True)
 
 
-@app.get("/api/models/{mid}")
-def get_model(mid: str) -> dict:
-    return _model_or_404(mid)
-
-
-@app.patch("/api/models/{mid}")
+@app.patch("/api/models/{mid:path}")
 def edit_model(mid: str, payload: dict = Body(default={})) -> dict:
     _model_or_404(mid)
     try:
@@ -2822,18 +2840,20 @@ def edit_model(mid: str, payload: dict = Body(default={})) -> dict:
         raise HTTPException(400, str(exc))
 
 
-@app.delete("/api/models/{mid}")
+@app.delete("/api/models/{mid:path}")
 def delete_model(mid: str) -> dict:
     _model_or_404(mid)
     using = [p["title"] for p in store.list_projects() if mid in p["cast"]]
     if using:
         raise HTTPException(409, "Still in the cast of: " + "; ".join(using[:5])
                             + ". Remove it from those videos first.")
+    if '/' in mid:
+        raise HTTPException(400, 'Pack models are read-only.')
     models3d.delete(mid)
     return {"deleted": mid}
 
 
-@app.post("/api/models/{mid}/identify")
+@app.post("/api/models/{mid:path}/identify")
 async def identify_model(mid: str, views: list[UploadFile], captions: str = Form("[]"),
                          meta: str = Form("{}"), kind: str = Form("object"),
                          mode: str = Form("identify")) -> dict:
@@ -2841,6 +2861,8 @@ async def identify_model(mid: str, views: list[UploadFile], captions: str = Form
     for its kind (static/stage/identify.js). Stores the suggestions; changes
     nothing else — the confirm screen applies them on a click."""
     m = _model_or_404(mid)
+    if m.get('read_only'):
+        raise HTTPException(400, 'Copy to my library to edit.')
     if kind not in models3d.KINDS:
         raise HTTPException(400, f"Unknown kind {kind!r}")
     images = [await v.read() for v in views[:8]]
@@ -2892,7 +2914,7 @@ async def identify_model(mid: str, views: list[UploadFile], captions: str = Form
     return models3d.update(mid, {"identity": found})
 
 
-@app.get("/api/models/{mid}/model.glb")
+@app.get("/api/models/{mid:path}/model.glb")
 def model_file(mid: str, request: Request) -> Response:
     try:
         path = models3d.glb_path(mid)
@@ -2901,7 +2923,7 @@ def model_file(mid: str, request: Request) -> Response:
     return _ranged(path, request)
 
 
-@app.get("/api/models/{mid}/thumb.jpg")
+@app.get("/api/models/{mid:path}/thumb.jpg")
 def model_thumb(mid: str) -> Response:
     _model_or_404(mid)
     path = models3d.thumb_path(mid)
@@ -2910,7 +2932,7 @@ def model_thumb(mid: str) -> Response:
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
 
 
-@app.post("/api/models/{mid}/thumb")
+@app.post("/api/models/{mid:path}/thumb")
 async def set_model_thumb(mid: str, request: Request) -> dict:
     """The browser renders the thumbnail, since it is the one with WebGL."""
     _model_or_404(mid)
@@ -2919,6 +2941,11 @@ async def set_model_thumb(mid: str, request: Request) -> dict:
     except models3d.ModelError as exc:
         raise HTTPException(400, str(exc))
     return {"ok": True}
+
+
+@app.get("/api/models/{mid:path}")
+def get_model(mid: str) -> dict:
+    return _model_or_404(mid)
 
 
 @app.post("/api/projects/{pid}/cast")

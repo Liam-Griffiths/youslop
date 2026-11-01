@@ -119,10 +119,21 @@ THEME_KEYS = [t["key"] for t in THEMES]
 DEFAULT = "archive"
 
 
+def all_themes() -> list[dict]:
+    from . import packs
+    return THEMES + [item['value'] for pack in packs.scan() for item in pack.themes()]
+
+
+def theme_keys():
+    return [t['key'] for t in all_themes()]
+
+
 def theme(key: str) -> dict:
-    for t in THEMES:
+    for t in (all_themes() if '/' in key else THEMES):
         if t["key"] == key:
             return t
+    import logging
+    logging.getLogger(__name__).warning('Missing theme %s; using %s', key, DEFAULT)
     return THEMES[0]
 
 

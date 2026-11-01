@@ -11,7 +11,7 @@ def _tokens():
     return {
         'camera': set(render.CAMERA_OPS),
         'join': set(render.JOIN_XFADE) | set(render.NAMED_XFADES),
-        'theme': set(themes.THEME_KEYS),
+        'theme': set(themes.theme_keys()),
         'cut': set(cuts.BY_KEY),
     }
 
@@ -23,7 +23,7 @@ def validate_look(token):
     if not isinstance(token, str) or ':' not in token:
         raise ValueError('Look must be a namespaced token, e.g. camera:punch')
     kind, name = token.split(':', 1)
-    if name not in LOOK_TOKENS.get(kind, set()):
+    if name not in _tokens().get(kind, set()):
         raise ValueError(f'Unknown look token: {token}')
     return token
 
@@ -50,7 +50,7 @@ def resolve_choices(project):
     """Resolve existing choices too, so late channel feedback reaches old videos."""
     from . import cuts, themes
     frame = effective_frame(project)
-    key = choose('theme', [project.style.theme, *themes.THEME_KEYS], frame)
+    key = choose('theme', [project.style.theme, *themes.theme_keys()], frame)
     if key != project.style.theme:
         themes.apply_to_style(project.style, key, False)
     if project.style.format in cuts.BY_KEY:

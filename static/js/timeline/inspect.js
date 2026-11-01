@@ -102,7 +102,7 @@ function tlInspector() {
       if (channel) html += previewStage(channel, role === 'intro' ? 'intro preview' : 'end screen preview', `cache/${role}_preview.webm`, role === 'intro' ? channel.preview_at : channel.outro_preview_at);
       html += '<p class="tl-note">Replay the selected segment to preview the saved template.</p>';
     } else {
-      html += field('music', 'Track', p.music, '', [['', 'None'], ['__auto__', 'Automatic'], ...TL.inspectorMusic.map((m) => [m.name, m.name])])
+      html += field('music', 'Track', p.music, '', [['', 'None'], ['__auto__', 'Automatic'], ...TL.inspectorMusic.map((m) => [m.name, m.label || m.name])])
         + field('music_db', 'Level under voice', p.style.music_db, 'dB');
       if ((channel || p).outro?.enabled && p.use_outro !== false) html += field('music_fade', 'Fade over end card', (channel || p).outro.music_fade, 's');
     }

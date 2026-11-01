@@ -19,7 +19,6 @@ from .config import STATIC_DIR
 
 BUILTIN_DIR = STATIC_DIR / 'blocks'
 USER_DIR = paths.data_root() / 'blocks'
-PACKS_DIR = paths.data_root() / 'packs'
 SCHEMA = paths.resource_root() / 'docs/blocks/block.schema.json'
 STAGED = ContextVar('staged_blocks', default=())
 
@@ -182,32 +181,36 @@ def discover():
     candidates = [(p.parent, '') for p in sorted(BUILTIN_DIR.glob('*/block.json'))]
     candidates += [(p.parent, 'user/') for p in sorted(USER_DIR.glob('*/block.json'))]
     candidates += [(p, 'user/') for p in STAGED.get()]
-    for manifest in sorted(PACKS_DIR.glob('*/pack.json')):
-        pack = json.loads(manifest.read_text())
-        if pack.get('id') != manifest.parent.name or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,47}', pack['id']):
-            raise ValueError(f'invalid pack id: {manifest}')
-        candidates += [(p.parent, pack['id'] + '/') for p in sorted((manifest.parent / 'blocks').glob('*/block.json'))]
     result = {}
-    schema = json.loads(SCHEMA.read_text())
     for root, prefix in candidates:
-        meta = json.loads((root / 'block.json').read_text())
-        _check(meta, schema, str(root / 'block.json'))
-        if meta['id'] != root.name:
-            raise ValueError(f'block id must match folder: {root}')
-        validate_vars(meta, {})
-        rule = meta['duration']
-        required = {'fixed': ['seconds'], 'range': ['min', 'max'], 'from_words': ['min', 'max', 'variable', 'words_per_minute']}[rule['mode']]
-        if any(k not in rule for k in required) or rule.get('min', 0) > rule.get('max', math.inf):
-            raise ValueError(f'{meta["id"]}: invalid duration rule')
-        if rule['mode'] == 'from_words' and meta['variables'].get(rule['variable'], {}).get('type') != 'text':
-            raise ValueError('from_words requires a text variable')
-        for name in ['block.html', *meta['aspects'].values(), *meta['assets']]:
-            _file(root, name)
+        meta = validate_folder(root)
         ref = prefix + meta['id']
         if ref in result:
             raise ValueError(f'duplicate block id: {ref}')
         result[ref] = dict(meta=meta, root=root)
+    from . import packs
+    for pack in packs.scan():
+        for item in pack.blocks():
+            result[item["ref"]] = dict(meta=item["meta"], root=item["path"], pack=pack.name, version=pack.version)
     return result
+
+
+def validate_folder(root):
+    schema = json.loads(SCHEMA.read_text())
+    meta = json.loads((root / 'block.json').read_text())
+    _check(meta, schema, str(root / 'block.json'))
+    if meta['id'] != root.name:
+        raise ValueError(f'block id must match folder: {root}')
+    validate_vars(meta, {})
+    rule = meta['duration']
+    required = {'fixed': ['seconds'], 'range': ['min', 'max'], 'from_words': ['min', 'max', 'variable', 'words_per_minute']}[rule['mode']]
+    if any(k not in rule for k in required) or rule.get('min', 0) > rule.get('max', math.inf):
+        raise ValueError(f'{meta["id"]}: invalid duration rule')
+    if rule['mode'] == 'from_words' and meta['variables'].get(rule['variable'], {}).get('type') != 'text':
+        raise ValueError('from_words requires a text variable')
+    for name in ['block.html', *meta['aspects'].values(), *meta['assets']]:
+        _file(root, name)
+    return meta
 
 
 class Loader(jinja2.BaseLoader):
@@ -221,15 +224,15 @@ class Loader(jinja2.BaseLoader):
             if template.startswith(prefix):
                 path = _file(block['root'], template[len(prefix):])
                 source = path.read_text()
-                if key.startswith('user/'):
+                if key.startswith(('user/', 'pack/')):
                     from .block_sandbox import parse
                     parse(source)
                 return source, str(path), lambda: False
         raise jinja2.TemplateNotFound(template)
 
 
-def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None):
-    block = discover().get(block_id)
+def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, _block=None):
+    block = _block if _block is not None else discover().get(block_id)
     if block is None:
         raise ValueError(f'unknown block: {block_id}')
     meta, root = block['meta'], block['root']
@@ -301,7 +304,7 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
         if path.is_file():
             _file(root, str(path.relative_to(root)))
             fingerprint.update(str(path.relative_to(root)).encode() + path.read_bytes())
-    ctx['block_version'] = fingerprint.hexdigest()
+    ctx['block_version'] = fingerprint.hexdigest() + block.get('version', '')
     return template, ctx
 
 

@@ -214,6 +214,13 @@ def _source(gltf: dict) -> dict:
 
 # ------------------------------------------------------------------- storage
 def _dir(mid: str) -> Path:
+    if '/' in (mid or ''):
+        from .packs import resolve
+        model = resolve(mid, 'models')
+        if model is None:
+            raise ModelError('No such model.')
+        from .packs import scan
+        return next(item['path'] for pack in scan() for item in pack.models() if item['ref'] == mid)
     if not _ID.match(mid or ""):
         raise ModelError("No such model.")
     return MODELS_DIR / mid
@@ -224,6 +231,8 @@ def _manifest_path(mid: str) -> Path:
 
 
 def _write(manifest: dict) -> None:
+    if '/' in manifest['id']:
+        raise ModelError('Pack models are read-only. Copy to my library to edit.')
     path = _manifest_path(manifest["id"])
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -231,6 +240,12 @@ def _write(manifest: dict) -> None:
 
 
 def get(mid: str) -> dict:
+    if '/' in mid:
+        from .packs import resolve
+        model = resolve(mid, 'models')
+        if model is None:
+            raise ModelError('No such model.')
+        return model
     with _LOCK:
         path = _manifest_path(mid)
         if not path.exists():
@@ -252,16 +267,15 @@ def thumb_path(mid: str) -> Path:
 def all_models() -> list[dict]:
     out = []
     with _LOCK:
-        if not MODELS_DIR.is_dir():
-            return out
-        for d in MODELS_DIR.iterdir():
+        for d in MODELS_DIR.iterdir() if MODELS_DIR.is_dir() else []:
             if _ID.match(d.name) and (d / "manifest.json").exists():
                 try:
                     out.append(json.loads((d / "manifest.json").read_text(encoding="utf-8")))
                 except (OSError, json.JSONDecodeError):
                     continue
     out.sort(key=lambda m: m.get("created_at", 0), reverse=True)
-    return out
+    from .packs import scan
+    return out + [item['value'] for pack in scan() for item in pack.models()]
 
 
 def add(upload: Path, filename: str) -> dict:
@@ -312,6 +326,7 @@ def kind_of(m: dict) -> str:
 
 
 def update(mid: str, changes: dict) -> dict:
+    _editable(mid)
     with _LOCK:
         m = get(mid)
         for key, value in changes.items():
@@ -376,6 +391,7 @@ def _clean_regions(value: Any) -> list[dict]:
 
 
 def set_thumb(mid: str, data: bytes) -> None:
+    _editable(mid)
     if not data.startswith(b"\xff\xd8"):
         raise ModelError("The thumbnail must be a JPEG.")
     with _LOCK:
@@ -386,6 +402,7 @@ def set_thumb(mid: str, data: bytes) -> None:
 
 
 def delete(mid: str) -> None:
+    _editable(mid)
     with _LOCK:
         d = _dir(mid)
         if d.is_dir():
@@ -407,3 +424,20 @@ def credit_line(m: dict) -> str:
     if src.get("url"):
         line += f" {src['url']}"
     return line
+
+
+def _editable(mid):
+    if '/' in mid:
+        raise ModelError('Pack models are read-only. Copy to my library to edit.')
+
+
+def copy_to_library(mid):
+    source = _dir(mid)
+    manifest = get(mid).copy()
+    fresh = 'm' + uuid.uuid4().hex[:8]
+    shutil.copytree(source, MODELS_DIR / fresh)
+    manifest.update(id=fresh, created_at=time.time())
+    manifest.pop('pack', None)
+    manifest.pop('read_only', None)
+    _write(manifest)
+    return manifest

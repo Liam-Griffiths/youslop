@@ -107,7 +107,7 @@ TEMPLATE_KEYS = [t["key"] for t in TEMPLATES]
 
 
 def template(key: str) -> dict:
-    for t in TEMPLATES:
+    for t in all_templates():
         if t["key"] == key:
             return t
     return TEMPLATES[0]
@@ -1219,3 +1219,11 @@ def render_outro(channel: Channel, video_title: str, out_path: Path,
 
 def preview_path(channel: Channel) -> Path:
     return channel_dir(channel.id) / "cache" / "outro_preview.webm"
+
+
+def all_templates():
+    from . import packs
+    return TEMPLATES + [dict(key='scene:' + item['ref'], label=item['meta']['name'],
+                            needs_images=False, max_slots=0, wants_backdrop=False, cta='Watch next')
+                        for pack in packs.scan() for item in pack.blocks()
+                        if item['meta']['kind'] == 'outro']
