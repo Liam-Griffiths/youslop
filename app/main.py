@@ -2066,6 +2066,71 @@ async def upload_camera(pid: str, sid: str, file: UploadFile) -> dict:
     return {"slide": s.to_dict(), "recorded_seconds": p.recorded_seconds()}
 
 
+@app.post("/api/projects/{pid}/camera-paragraph")
+async def add_camera_paragraph(pid: str, file: UploadFile | None = None,
+                               position: str = Form("after_intro"),
+                               convert_presenter: bool = Form(False)) -> dict:
+    """Add a camera beat; keep the source and legacy presenter on failure."""
+    if position not in {"start", "after_intro", "end"} and not position.startswith("before:"):
+        raise HTTPException(400, "Choose a camera paragraph position")
+    with store.lock_for(pid):
+        p = _load(pid)
+        legacy = deepcopy(p.presenter) if convert_presenter else None
+        if legacy:
+            if not legacy.enabled:
+                raise HTTPException(400, "Enable the legacy clip before converting it")
+            if not legacy.path or not legacy.has_audio:
+                raise HTTPException(400, "Conversion needs a presenter clip with audio")
+            src = project_dir(pid) / legacy.path
+            if not src.is_file():
+                raise HTTPException(400, "The presenter clip is missing")
+            source_upload = tempfile.SpooledTemporaryFile(max_size=2 * 1024 ** 3)
+            source_upload.write(src.read_bytes())
+            source_upload.seek(0)
+            file = UploadFile(filename=src.name, file=source_upload)
+            position = legacy.position
+        if file is None:
+            raise HTTPException(400, "Choose a camera clip")
+        slide = Slide(on_camera=True, beat="Camera paragraph")
+        # A paragraph follows the slate in normal picture order. Both opening
+        # positions therefore precede the script; end is the sign-off.
+        index = len(p.slides) if position == "end" else 0
+        if position.startswith("before:"):
+            anchor = _slide(p, position.removeprefix("before:"))
+            index = p.slides.index(anchor)
+        p.slides.insert(index, slide)
+        store.save(p)
+    try:
+        await upload_camera(pid, slide.id, file)
+    except HTTPException as exc:
+        raise HTTPException(exc.status_code, f"{exc.detail}. Camera paragraph kept; "
+                            "retry its import in Record.") from exc
+    finally:
+        if legacy:
+            source_upload.close()
+    with store.lock_for(pid):
+        p = _load(pid)
+        slide = _slide(p, slide.id)
+        if legacy:
+            take = slide.takes[CAMERA_TRACK]
+            # Legacy trims use the source clock. Camera edits use the cleaned
+            # audio clock, whose origin is the speech trim, not file zero.
+            origin = take["trimmed"][0]
+            duration = take["duration"]
+            a = min(duration, max(0., legacy.trim_start - origin))
+            b = min(duration, max(0., legacy.source_duration - legacy.trim_end - origin))
+            if b - a < .02:
+                raise HTTPException(400, "Presenter trim contains no cleaned speech; "
+                                    "camera paragraph kept, original still enabled")
+            take["cuts"] = ([{"a": 0., "b": a, "by": "hand"}] if a else []) + (
+                [{"a": b, "b": duration, "by": "hand"}] if b < duration else [])
+            take["focal"] = legacy.focal
+            if p.presenter.to_dict() == legacy.to_dict():
+                p.presenter.enabled = False
+        store.save(p)
+    return {"sid": slide.id, "project": p.to_dict()}
+
+
 # --------------------------------------------------------------- ai narration
 @app.get("/api/tts")
 def tts_status() -> dict:

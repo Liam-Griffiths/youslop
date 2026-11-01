@@ -608,25 +608,24 @@ function presenterPanel(p) {
   const src = `/api/projects/${p.id}/file/${pr.path}?v=${p.updated_at}`;
   const max = pr.source_duration || 0;
 
-  if (!has) {
-    return `<div class="panel" style="margin-top:18px">
-      <div class="row">
-        <div style="flex:1;min-width:200px">
-          <strong>Talking head</strong>
-          <div class="mono" style="color:var(--ink-faint);margin-top:4px">
-            Optional. A short piece to camera, cut in after the slate — viewers
-            settle faster once they have seen your face.</div>
-        </div>
-        <label class="btn sm" style="cursor:pointer">choose a clip
-          <input type="file" accept="video/*" hidden onchange="uploadPresenter(this.files[0])">
-        </label>
-      </div>
+  const add = `<div class="row" style="margin-top:12px">
+    <label class="field"><span>Camera paragraph position</span>
+      <select id="camera-paragraph-position">
+        <option value="after_intro">After the slate</option>
+        ${p.slides.slice(1).map((s, i) => `<option value="before:${esc(s.id)}">Before paragraph ${i + 2}</option>`).join('')}
+        <option value="end">At the end</option>
+      </select></label>
+    <button class="btn sm" onclick="$('#camera-paragraph-file').click()">Add a paragraph on camera</button>
+    <input id="camera-paragraph-file" type="file" accept="video/*,.mkv" hidden onchange="addCameraParagraph(this.files[0]);this.value=''">
     </div>`;
-  }
+  if (!has) return `<div class="panel" style="margin-top:18px"><strong>On camera</strong>${add}</div>`;
 
   return `<div class="panel" style="margin-top:18px">
+    ${add}
     <div class="row" style="margin-bottom:14px">
       <strong>Talking head</strong>
+      <span>Legacy clip. <button class="btn sm ghost" ${pr.enabled && pr.has_audio ? '' : 'disabled'} onclick="addCameraParagraph(null,true)">Convert to a camera paragraph</button>
+        ${pr.position === 'start' ? 'Conversion places this paragraph after the slate.' : ''}</span>
       <span class="pill ${pr.enabled ? 'on' : ''}">${pr.duration.toFixed(1)}s on screen</span>
       ${pr.has_audio ? '' : '<span class="pill warn">no audio track</span>'}
       <div class="spacer"></div>
@@ -683,17 +682,24 @@ function scrubPresenter(t) {
   if (v) { v.currentTime = Math.max(0, +t); }
 }
 
-async function uploadPresenter(file) {
-  if (!file) return;
+let addingCameraParagraph = false;
+async function addCameraParagraph(file, convert = false) {
+  if ((!file && !convert) || addingCameraParagraph) return;
+  addingCameraParagraph = true;
+  toast('Processing camera paragraph…');
   const fd = new FormData();
-  fd.append('file', file);
-  toast('uploading…');
+  if (file) fd.append('file', file);
+  fd.append('position', $('#camera-paragraph-position')?.value || 'after_intro');
+  fd.append('convert_presenter', convert ? 'true' : 'false');
   try {
-    await api(`/api/projects/${state.project.id}/presenter`, { method: 'POST', body: fd });
-    state.project = await api(`/api/projects/${state.project.id}`);
-    render();
-    toast('clip added');
+    const result = await api(`/api/projects/${state.project.id}/camera-paragraph`, { method: 'POST', body: fd });
+    state.project = result.project;
+    state.rec.index = result.project.slides.findIndex(s => s.id === result.sid);
+    go(`#/p/${state.project.id}/record`);
+    await route();
+    toast('Camera paragraph added. Add its words in Script for the prompter.');
   } catch (e) { toast(e.message, true); }
+  finally { addingCameraParagraph = false; }
 }
 
 async function savePresenter(patch) {

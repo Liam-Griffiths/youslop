@@ -77,6 +77,14 @@ async function renderHome() {
                      onchange="newTestRun(this.checked)"> test run — 1 minute, quick research</label>
           </label>`}
         <label class="field">
+          <span>Delivery</span>
+          <select id="delivery" onchange="state.newDelivery=this.value">
+            <option value="voice_over" ${(state.newDelivery || 'voice_over') === 'voice_over' ? 'selected' : ''}>Voice-over</option>
+            <option value="on_camera" ${state.newDelivery === 'on_camera' ? 'selected' : ''}>On camera</option>
+            <option value="mixed" ${state.newDelivery === 'mixed' ? 'selected' : ''}>Mixed</option>
+          </select>
+        </label>
+        <label class="field">
           <span>Tone</span>
           <select id="tone">
             <option>warm documentary</option>
@@ -277,7 +285,7 @@ function pictureEveryLabel(n) {
 
 async function createProject() {
   const scripting = state.mode === 'script';
-  const body = { tone: $('#tone').value, channel_id: $('#chan').value || '',
+  const body = { delivery: $('#delivery').value, tone: $('#tone').value, channel_id: $('#chan').value || '',
                  format: state.newFormat || 'kenburns',
                  picture_every: state.newPictureEvery || 1 };
 

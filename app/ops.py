@@ -30,7 +30,8 @@ def prepare_create(payload):
     tone = payload.get("tone") or (channel.tone if channel else "warm documentary")
     try:
         project = new_project(idea or script[:200], minutes, tone, channel=channel,
-                              format_name=payload.get("format_name", ""))
+                              format_name=payload.get("format_name", ""),
+                              delivery=payload.get("delivery", "voice_over"))
     except ValueError as exc:
         raise PayloadError(str(exc)) from exc
     if script:

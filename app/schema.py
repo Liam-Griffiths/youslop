@@ -781,6 +781,7 @@ class Project:
     # in this record: it can be thousands of words, and project.json is read and
     # rewritten constantly. Only the flag and the mode live here.
     has_source: bool = False
+    delivery: str = "voice_over"    # voice_over | on_camera | mixed
     fidelity: str = "faithful"      # faithful | adapted
     tone: str = "warm documentary"
     target_minutes: int = 12
@@ -867,6 +868,7 @@ class Project:
             "outro": self.outro.to_dict(),
             "has_source": self.has_source,
             "fidelity": self.fidelity,
+            "delivery": self.delivery,
             "tone": self.tone,
             "target_minutes": self.target_minutes,
             "status": self.status,
@@ -1052,9 +1054,13 @@ def chapter_title(project: Project, slide: Slide) -> str:
 
 
 def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documentary",
-                channel: Channel | None = None, format_name: str = "") -> Project:
+                channel: Channel | None = None, format_name: str = "",
+                delivery: str = "voice_over") -> Project:
     """A new video. Inside a channel it inherits that channel's look and voice."""
     p = Project(id=_uid("p"), idea=idea.strip(), target_minutes=target_minutes, tone=tone)
+    if delivery not in {"voice_over", "on_camera", "mixed"}:
+        raise ValueError("Delivery must be voice_over, on_camera or mixed")
+    p.delivery = delivery
     if channel:
         p.channel_id = channel.id
         p.tone = channel.tone or tone

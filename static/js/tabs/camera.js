@@ -5,7 +5,8 @@ function cameraMode() {
   const p = state.project, s = p?.slides[state.rec.index];
   if (!s) return false;
   return cam.overrides[p.id + '/' + s.id] ?? (s.on_camera ||
-    localStorage.getItem('cb_record_mode_' + p.id) === 'camera');
+    (localStorage.getItem('cb_record_mode_' + p.id) ??
+      (p.delivery === 'on_camera' ? 'camera' : 'voice')) === 'camera');
 }
 function recordModeSwitch() {
   return `<div class="row" style="margin-top:14px">

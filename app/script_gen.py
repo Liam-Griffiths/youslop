@@ -354,6 +354,15 @@ def _normalise_outline(raw: Any, project: Project, n_beats: int,
 
 
 # ---------------------------------------------------------------------- script
+CAMERA_DELIVERY = """DELIVERY: ON CAMERA
+Speak directly to the viewer ("you"). Use sentences that can be said in one
+breath. Move figures that need a chart to cutaways instead of reading them out."""
+
+
+def _delivery_text(project: Project) -> str:
+    return CAMERA_DELIVERY if project.delivery == "on_camera" else ""
+
+
 def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
     sections = outline["sections"]
     sec = sections[idx]
@@ -405,6 +414,8 @@ HOOK PLAN (honour its opening and promised payoffs): {outline.get("hook", {})}
 
 {_frame_text(project)}
 
+{_delivery_text(project)}
+
 Budget: about {words} words, split into {n_paras} paragraphs.
 
 Return JSON: a list of {n_paras} objects, each:
@@ -436,6 +447,8 @@ paragraph with the subject's name.
 def draft_key(project: Project) -> str:
     """What a saved draft was written against. Changing any of it invalidates it."""
     seed = f"{project.idea}|{project.target_minutes}|{project.tone}"
+    if project.delivery != "voice_over":
+        seed += f"|{project.delivery}"
     return hashlib.md5(seed.encode("utf-8")).hexdigest()[:12]
 
 
@@ -493,6 +506,7 @@ def write_script(project: Project, outline: dict, progress: Progress = lambda m:
         for para in results.get(i, []):
             slides.append(
                 Slide(
+                    on_camera=project.delivery == "on_camera",
                     section=para["kind"],
                     beat=para["beat"],
                     narration=para["text"],
@@ -1090,6 +1104,8 @@ THIS IS {where.upper()}.
 
 {rules}
 
+{_delivery_text(project) if fidelity == "adapted" else ""}
+
 TEXT:
 \"\"\"{chunk}\"\"\"
 
@@ -1123,6 +1139,7 @@ example", a numeral stays a numeral only if you would say it that way.""",
     for ci in range(len(chunks)):
         for para in results.get(ci, []):
             slides.append(Slide(
+                on_camera=project.delivery == "on_camera",
                 section="main",
                 beat=(para.get("beat") or "").strip()[:40],
                 narration=para["text"].strip(),
