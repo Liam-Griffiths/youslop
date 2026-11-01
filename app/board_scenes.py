@@ -4,9 +4,13 @@ from __future__ import annotations
 from dataclasses import asdict
 import hashlib
 import io
+import json
+import math
 from pathlib import Path
 import tempfile
 from urllib.parse import quote
+
+from PIL import Image
 
 from . import diagram as dg, ffutil, scenes, stage, titles
 from .config import FPS, HEIGHT, WIDTH
@@ -71,24 +75,56 @@ def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=N
 
 
 def plates(project, key, ctx, size):
+    """Capture and measure each beat once; cache only its occupied pixels."""
     paths, items = [], []
     for order in range(len(ctx['beats'])):
         plate_ctx = {**ctx, 'plate': True, 'settled': True, 'active_order': order}
         digest, html, prepared = scenes._prepare(
-            project, f'board/{key}.html', plate_ctx, ctx['duration'], size, FPS)
+            project, f'board/{key}.html', plate_ctx, ctx['duration'], size, FPS,
+            ('board-cropped-v1',))
         out = html.with_suffix('.png')
         paths.append(out)
-        if not out.exists() or not out.stat().st_size:
+        if not out.exists() or not out.stat().st_size or not out.with_suffix('.bounds.json').exists():
             items.append(dict(clip=digest, url_path=f'/scene/{{token}}/{html.name}',
                               W=prepared['width'], H=prepared['height'],
                               size=size, t=0, alpha=True))
     if items:
-        made = stage.capture_stills(items, paths[0].parent, **ctx['asset_roots'])
+        bounds = {}
+
+        def probe(cdp, session, item, t):
+            # SVG roots cover the viewport. Measure their painted children,
+            # including stroke caps, after fonts load and before this screenshot.
+            result = stage._evaluate(cdp, session, """Array.from(
+                document.querySelectorAll('.board svg > *'), el => {
+                    const r = el.getBoundingClientRect();
+                    const pad = parseFloat(getComputedStyle(el).strokeWidth) / 2 + 2;
+                    return [r.left-pad, r.top-pad, r.right+pad, r.bottom+pad];
+                })""")
+            rects = result['result']['value']
+            if not rects:
+                raise stage.StageError('Board plate has no bounds')
+            sx, sy = size[0] / item['W'], size[1] / item['H']
+            bounds[item['clip']] = [
+                max(0, math.floor(min(r[0] for r in rects) * sx)),
+                max(0, math.floor(min(r[1] for r in rects) * sy)),
+                min(size[0], math.ceil(max(r[2] for r in rects) * sx)),
+                min(size[1], math.ceil(max(r[3] for r in rects) * sy))]
+
+        made = stage.capture_stills(items, paths[0].parent, **ctx['asset_roots'], scene_probe=probe)
         for name, data in made.items():
-            _write(paths[0].parent / f'{name}.png', data)
-        if any(not p.exists() or not p.stat().st_size for p in paths):
+            box = bounds.get(name)
+            if box is None or box[2] <= box[0] or box[3] <= box[1]:
+                raise stage.StageError('Board plate has invalid bounds')
+            with Image.open(io.BytesIO(data)) as image:
+                cropped = io.BytesIO()
+                image.crop(box).save(cropped, format='PNG')
+            out = paths[0].parent / f'{name}.png'
+            _write(out, cropped.getvalue())
+            _write(out.with_suffix('.bounds.json'), json.dumps(box).encode())
+        if any(not p.exists() or not p.stat().st_size or
+               not p.with_suffix('.bounds.json').exists() for p in paths):
             raise stage.StageError('Board plates did not render')
-    return paths
+    return [(p, json.loads(p.with_suffix('.bounds.json').read_text())) for p in paths]
 
 
 def without_scale(extra):
@@ -110,13 +146,31 @@ def render(project, key, ctx, ground, out, *, crf, extra):
             size = tuple(map(int, scale.removeprefix('scale=').split(':')))
             extra = without_scale(extra)
     paths = plates(project, key, ctx, size)
-    bg = _asset(paths[0].parent, ground.resize(size))
+    bg = _asset(paths[0][0].parent, ground.resize(size))
     inputs = ['-loop', '1', '-framerate', str(FPS), '-i', str(bg)]
     graph, last = [], '0:v'
-    for i, (path, (start, duration)) in enumerate(zip(paths, ctx['beats']), 1):
+    for i, ((path, box), (start, duration)) in enumerate(zip(paths, ctx['beats']), 1):
         inputs += ['-loop', '1', '-framerate', str(FPS), '-i', str(path)]
-        graph.append(f'[{i}:v]format=rgba,fade=t=in:st={start}:d={duration}:alpha=1[b{i}]')
-        graph.append(f'[{last}][b{i}]overlay=0:0:shortest=1[v{i}]')
+        # Same quadratic ease-out as diagram.reveal_at(board.reveal_plan(...)).
+        progress = f'(1-pow(1-clip((T-{start})/{duration},0,1),2))'
+        ink = any(m['order'] == i - 1 and m['kind'] != 'wash' for m in ctx['marks'])
+        photo = any(p['order'] == i - 1 for p in ctx['photos'])
+        if ink and not photo:
+            # Evaluate only the small cached crop, and only while arriving.
+            # The soft nib and early opacity ramp echo Pillow's _draw_text.
+            feather = max(1, max((m['size'] * .22 * size[0] / WIDTH
+                                 for m in ctx['marks'] if m['order'] == i - 1
+                                 and m['kind'] == 'text'), default=1))
+            alpha = (f'alpha(X,Y)*clip({progress}/0.3,0,1)*'
+                     f'clip((({box[2]-box[0]}+{2*feather})*{progress}-X)/{2*feather},0,1)')
+            effect = (f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
+                      f"a='{alpha}':enable='between(t,{start},{start+duration})'")
+        else:
+            # Photos and washes already fade in Pillow; do not wipe the print.
+            effect = f'fade=t=in:st={start}:d={duration}:alpha=1'
+        graph.append(f'[{i}:v]format=rgba,{effect}[b{i}]')
+        graph.append(f"[{last}][b{i}]overlay={box[0]}:{box[1]}:shortest=1:"
+                     f"enable='gte(t,{start})'[v{i}]")
         last = f'v{i}'
     out.parent.mkdir(parents=True, exist_ok=True)
     ffutil.run([*inputs, '-filter_complex_threads', '1', '-filter_complex', ';'.join(graph),

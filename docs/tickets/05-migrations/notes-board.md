@@ -29,10 +29,19 @@ use INK_FAINT. Native text baselines come from the selected font's anchor box.
 `reveal_plan()` calls `diagram.schedule`: usable=max(.4,seconds×.66),
 step=usable/beats, start=i×step, arrival=min(settle,max(.22,step×1.35)).
 Render settle is clamped to .18…1.2. Both paths share these times. Scene
-beats fade together; Pillow retains progressive text wipes/stroke drawing.
+ink beats use an eased left-to-right soft wipe, including Pillow's initial
+text opacity ramp. Stroke-only beats use the same wipe (an approximation of
+Pillow's path-length prefix); washes and photo beats retain the existing fade.
+Pillow also raises arriving photos by up to 26px; scenes keep their fixed placement.
 Photos retain their prepared tape, shadow, rotation and placement. Paper
 and avatar come from `_ground_for` and are saved by content hash in scenes/.
-Each transparent beat is captured once; ffmpeg supplies fades and holds.
+Each transparent beat is captured once. A `scene_probe` measures the union of
+its SVG children's `getBoundingClientRect()` bounds in that same session,
+with stroke/antialias padding. Bounds are scaled outwards to capture pixels;
+the PNG is cropped once and cached with a `.bounds.json` sidecar. ffmpeg
+overlays each crop at its saved origin, evaluating its alpha ramp only within
+that crop and only until its arrival ends. Photo beats (including split's
+shared divider/photo beat) and washes use fades without geq.
 
 The chapter scene tail remains in render._chapter_tail. No board template
 includes a chapter card. Diagram and board_engine=pillow keep the old path.

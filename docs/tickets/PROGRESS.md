@@ -83,7 +83,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T5.1 | Essay captions as a scene | M | T2.4 | done | 2026-10-31 Codex, 2 rounds; plates once per phrase + ffmpeg motion, faster than Pillow; owner: T0.8 RSS re-measure needs a full render |
-| T5.2a | Board templates as scenes | M | T2.4, T2.5 | doing | 2026-10-31 Codex + review fix (preview scale clash); 2.3x faster than Pillow; round 2: restore pen write-on |
+| T5.2a | Board templates as scenes | M | T2.4, T2.5 | done | 2026-10-31 Codex, 2 rounds + review fixes; 2.3x faster than Pillow, pen write-on kept; owner: watch one board video |
 | T5.2b | Diagrams as SVG scenes | M | T5.2a | todo | |
 | T5.2c | Custom slides through a scene template | S | T5.2a | todo | |
 | T5.2d | Custom slides written as sanitised HTML | M | T5.2c | todo | security-sensitive |
