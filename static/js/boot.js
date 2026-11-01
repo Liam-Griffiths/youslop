@@ -26,6 +26,8 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
   if (k === '[' || k === ']') tlSelectNext(k === '[' ? -1 : 1);
+  else if (k === 's' || k === 'S') tlSplitHere();
+  else if (k === 'c' || k === 'C') tlChapterHere(e.shiftKey);
   else if (k === ' ') tlToggle();
   else if (k === 'ArrowLeft') e.shiftKey ? tlPara(-1) : tlStep(-1);
   else if (k === 'ArrowRight') e.shiftKey ? tlPara(1) : tlStep(1);

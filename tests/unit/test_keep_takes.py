@@ -76,22 +76,18 @@ def test_two_uploads_restore_and_reprocess(saved, fake_audio, monkeypatch):
     assert (root / first['path']).read_bytes() == original
 
 
-@pytest.mark.parametrize('operation', ['rewrite', 'split'])
-def test_clear_all_tracks_and_stale_restore(saved, monkeypatch, operation):
+def test_rewrite_clears_all_tracks_and_stale_restore(saved, monkeypatch):
     p, s = saved, saved.slides[0]
     for track in ['mic', 'kokoro']:
         p.set_take(s, track, {'path': f'takes/{track}/old.wav', 'synthetic': track != 'mic'})
     store.save(p)
     monkeypatch.setattr(main.script_gen, 'rewrite_slide', lambda *a: 'Changed narration.')
     monkeypatch.setattr(main.jobs, 'start', lambda kind, pid, fn: fn(lambda msg: None))
-    if operation == 'rewrite':
-        main.rewrite(p.id, s.id, {})
-    else:
-        main.split_slide(p.id, s.id)
+    main.rewrite(p.id, s.id, {})
     s = store.load(p.id).slides[0]
     assert not s.takes and s.take is None
     assert len(s.history) == 2
-    assert {x['reason'] for x in s.history} == {operation}
+    assert {x['reason'] for x in s.history} == {'rewrite'}
     assert main.restore_take(p.id, s.id, 0)['stale'] is True
     assert store.load(p.id).voice_track == 'mic'
 

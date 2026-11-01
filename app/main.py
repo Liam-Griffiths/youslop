@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from . import brand, check, edits, ops, review, storyboard
+from . import brand, check, edits, ops, review, storyboard, razor
 from .audio_files import next_raw_path, next_take_path
 from . import audio as audio_mod
 from . import reactions
@@ -1053,25 +1053,35 @@ def delete_slide(pid: str, sid: str) -> dict:
 
 
 @app.post("/api/projects/{pid}/slides/{sid}/split")
-def split_slide(pid: str, sid: str) -> dict:
-    """Split one paragraph in half, so a long take becomes two shorter ones."""
+def split_slide(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
+    """Prepare every track first; publish only if the project is unchanged."""
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)
-        sentences = re.split(r"(?<=[.!?])\s+", s.narration)
-        if len(sentences) < 2:
-            raise HTTPException(400, "Not enough sentences to split.")
-        half = len(sentences) // 2
-        tail = Slide(section=s.section, beat=s.beat,
-                     narration=" ".join(sentences[half:]),
-                     visual_note=s.visual_note, queries=list(s.queries),
-                     prefer_kind=s.prefer_kind, candidates=list(s.candidates))
-        for track in list(s.takes):
-            p.set_take(s, track, None, reason="split")
-        s.narration = " ".join(sentences[:half])
-        p.slides.insert(p.slides.index(s) + 1, tail)
-        store.save(p)
-    return p.to_dict()
+        before = p.to_dict()
+    root = project_dir(pid)
+    # Same filesystem for exclusive hard links: no existing file can be replaced.
+    with tempfile.TemporaryDirectory(prefix=".razor-", dir=root) as folder:
+        published = []
+        try:
+            tail, prepared, approximate = razor.prepare(
+                p, s, root, Path(folder), payload.get("at") if isinstance(payload, dict) else None)
+            with store.lock_for(pid):
+                if _load(pid).to_dict() != before:
+                    raise ValueError("Project changed during split; try again.")
+                for track, side, source, take in prepared:
+                    dest_slide = s if side == "head" else tail
+                    dest = next_take_path(root, track, dest_slide.id)
+                    os.link(source, dest)
+                    published.append(dest)
+                    take["path"] = dest.relative_to(root).as_posix()
+                    p.set_take(dest_slide, track, take)
+                store.save(p)
+        except (ValueError, TypeError, KeyError, OSError, ffutil.FFError) as exc:
+            for path in published:
+                path.unlink()  # only new derived halves from this failed operation
+            raise HTTPException(409, str(exc)) from exc
+    return {**p.to_dict(), "approximate": approximate}
 
 
 @app.post("/api/projects/{pid}/slides/{sid}/rewrite")

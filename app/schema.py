@@ -128,6 +128,7 @@ class Slide:
     # "casefile", ...): a list of cues, each landing on the words in its `on`.
     # Keyed so switching a video between cuts keeps what was written for each.
     # A cut with nothing here draws from the narration. See app/cuts/.
+    needs_cues: bool = False             # razor left this half without cues
     cues: dict = field(default_factory=dict)
     # A 3D explainer's shot for the picture this paragraph leads: the
     # planner's intent, the solver's camera path and checks, and whether a

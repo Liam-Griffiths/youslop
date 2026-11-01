@@ -71,7 +71,8 @@ function tlInspector() {
   const timing = (key, label, effective) => field(key, `${label} (blank = auto: ${effective.toFixed(2)} s)`, slide[key], 's');
   let html = `<div class="mono tl-note">${tlClock(sel.t0)} → ${tlClock(sel.t1)}</div>`;
   if (sel.kind === 'paragraph' && slide) html += `<div class="tl-text">${esc(slide.narration)}</div>
-    <button class="btn sm" id="tl-edit-text">Edit the words</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
+    <button class="btn sm" id="tl-edit-text">Edit the words</button>
+    <button class="btn sm" id="tl-split-here">Split here (S)</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
   if (sel.kind === 'title' && slide) html += field('title', 'Title', slide.title)
     + timing('title_at', 'Arrival', para.timing.title_at.value) + timing('title_hold', 'Hold', para.timing.title_hold.value);
   if (sel.kind === 'chapter' && slide) html += field('chapter', 'Chapter', slide.chapter)
@@ -107,6 +108,7 @@ function tlInspector() {
   }
   if (['sting', 'note', 'sponsor'].includes(sel.kind)) html += `<p>${esc(sel.text)}</p>`;
   body.innerHTML = html;
+  if ($('#tl-split-here')) $('#tl-split-here').onclick = tlSplitHere;
   if ($('#tl-edit-text')) $('#tl-edit-text').onclick = () => tlEditText(slide.id);
   if ($('#tl-picture')) $('#tl-picture').onclick = () => tlEditPicture(slide.id);
   if ($('#tl-cue-editor')) $('#tl-cue-editor').onclick = () => tlModal(() => openCueEditor(slide.id));
@@ -386,4 +388,42 @@ async function tlRejectLook() {
       document.body.appendChild(wrap);
     });
   } catch (e) { toast(e.message, true); }
+}
+
+// Razor and chapter shortcuts always target the live playhead paragraph.
+function tlRazorTarget() {
+  const t = TL.playing ? tlNow() : TL.cur;
+  return {t, para: tlParas().find((q) => q.start <= t && t < q.start + q.duration)};
+}
+
+let tlSplitting = false;
+async function tlSplitHere() {
+  if (tlSplitting) return;
+  const {t, para} = tlRazorTarget();
+  if (!para) { tlMsg('Place the playhead inside a paragraph.'); return; }
+  tlPause();
+  tlSplitting = true;
+  try {
+    const result = await api(`/api/projects/${TL.pid}/slides/${para.id}/split`, {
+      method: 'POST', body: JSON.stringify({at: t - para.start})});
+    await tlRefreshProject();
+    tlSelect(tlItems('paragraph').find((s) => s.sid === para.id));
+    tlMsg(result.approximate ? 'Split at the nearest word gap (approximate).' : 'Paragraph split.');
+  } catch (e) { tlMsg(e.message); }
+  finally { tlSplitting = false; }
+}
+
+function tlChapterHere(remove) {
+  const {para} = tlRazorTarget();
+  if (!para) { tlMsg('Place the playhead inside a paragraph.'); return; }
+  tlPause();
+  const sel = tlItems('chapter').find((s) => s.sid === para.id);
+  tlSelect(sel);
+  if (remove) { tlInspectorSave(sel, 'remove', '', TL.host); return; }
+  const slide = state.project.slides.find((s) => s.id === para.id);
+  const input = $('#tl-field-chapter');
+  input.value = slide.chapter || slide.beat;
+  input.focus();
+  input.select();
+  // Prefilling is a proposal; Enter or a change saves it through the inspector.
 }
