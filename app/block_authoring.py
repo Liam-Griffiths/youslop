@@ -80,6 +80,12 @@ MEASURE = r'''(() => {
    el.matches('[data-var-text]') || (!el.children.length && el.textContent.trim() &&
      !el.matches('script,style') && !el.closest('[data-var-text]')));
  for (const el of elements) {
+   // An atlas stores offscreen rows; measure only the row visible at this seek.
+   const atlas = el.closest('[data-motion="atlas"]');
+   if (atlas) {
+     const r = el.getBoundingClientRect(), b = atlas.getBoundingClientRect();
+     if (r.bottom <= b.top+1 || r.top >= b.bottom-1) continue;
+   }
    const key = el.dataset.varText || Object.keys(window.__vars).find(k =>
      String(window.__vars[k]) === el.textContent.trim()) || el.tagName,
    r = el.getBoundingClientRect(), p = el.parentElement,

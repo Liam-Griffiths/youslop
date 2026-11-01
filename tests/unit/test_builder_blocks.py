@@ -27,6 +27,7 @@ class Layers(HTMLParser):
                 start=float(a.get('data-start', 0)), duration=float(a.get('data-duration', 5)),
                 arrival=float(a.get('data-motion-duration', .6)),
                 motion=a.get('data-motion', a.get('data-anim', 'none')), capture=a.get('data-capture'),
+                atlas=int(a.get('data-atlas', 1)), pathKeys=json.loads(a.get('data-path', '[]')),
                 exit=float(a.get('data-motion-exit', 0)), box=[0, 0, 80, 40], signature=[a]))
         if tag not in ('img', 'meta', 'link', 'br', 'input', 'source', 'hr'):
             self.stack.append('data-layer' in a)
@@ -137,3 +138,32 @@ def test_sponsor_block_beats_and_standalone_timeline():
     assert 'sponsor-house-short' not in html and 'id="paper"' not in html
     standalone = scenes.render_html('sponsor/house_short.html', ctx)
     assert 'sponsor-house-short' in standalone and not Layers(standalone).rows
+
+
+@pytest.mark.parametrize('ref', blocks.core_data_blocks.IDS)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_data_blocks_maximum_datasets_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    values = block_authoring.samples(meta)
+    if 'rows' in values:
+        count = {'stat_comparison': 2, 'line_chart': 8, 'bar_race': 5,
+                 'date_timeline': 5}.get(ref, 6)
+        values['rows'] = [dict(label='W'*(47 if ref == 'date_timeline' else 17)+str(i), **(
+            dict(date='W'*12) if ref == 'date_timeline' else
+            dict(first=i*100, middle=(count-i)*100, last=i*200) if ref == 'bar_race' else
+            dict(value='W'*18) if ref == 'simple_table' else dict(value=999999)))
+            for i in range(count)]
+    else:
+        values['value'] = 100 if ref == 'percentage_ring' else -999999
+    template, ctx = blocks.prepare(ref, values, aspect, seconds=3)
+    stats = builder.inspect(tmp_path, template, ctx, seconds=3,
+                            size=(ctx['width']//4, ctx['height']//4), fps=30)
+    assert stats['captured_frames'] == 0 and stats['passes'] == 1
+    assert stats['layers'] <= 7 and stats['largest_graph_bytes'] < 65536
+    parsed = Layers(scenes.render_html(template, ctx))
+    if ref in ('number_slam', 'percentage_ring', 'bar_race'):
+        assert all(r['motion'] == 'atlas' for r in parsed.rows)
+        assert all(1 < r['atlas'] <= 17 for r in parsed.rows)
+    if ref == 'bar_race':
+        assert len(parsed.rows) == 6
+        assert all(len(r['pathKeys']) == 5 for r in parsed.rows[1:])

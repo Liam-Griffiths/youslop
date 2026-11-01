@@ -137,7 +137,10 @@
     const tl = gsap.timeline({paused: true, data: {start: builder ? number(el.dataset.start) + number(el.closest('[data-screen]')?.dataset.start) : clipStart(el)}});
     const stagger = kind === 'words' && !builder ? {amount: arrive * 0.4} : 0;
     tl.fromTo(targets, from, {...to, duration: kind === 'words' && !builder ? arrive * 0.6 : arrive, stagger,
-      ease: kind === 'pop' && !builder ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : (builder ? easeNames[el.dataset.motionEase || spec.ease] : el.dataset.animEase || easeNames[spec.ease]) || 'back.out(1.70158)'}, 0);
+      ease: builder && kind === 'atlas' ? p => {
+        const steps = Math.max(1, number(el.dataset.atlas, 1)-1);
+        return Math.floor(p*steps)/steps;
+      } : kind === 'pop' && !builder ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : (builder ? easeNames[el.dataset.motionEase || spec.ease] : el.dataset.animEase || easeNames[spec.ease]) || 'back.out(1.70158)'}, 0);
     if (exit > 0) tl.to(targets, {opacity: 0, duration: exit, ease: 'power3.in'}, dur - exit);
     window.__timelines[`preset#${index}`] = tl;
   }
@@ -201,6 +204,15 @@
           }
           for (const tl of Object.values(window.__timelines)) {
             tl.pause(); tl.time(Math.max(0, t - number(tl.data?.start)), false);
+          }
+          if (!window.__builderCapture) for (const el of document.querySelectorAll('[data-path]')) {
+            const keys = JSON.parse(el.dataset.path), local = t-number(el.closest('[data-screen]')?.dataset.start);
+            if (!keys.length) continue;
+            let a = keys[0], b = a;
+            for (let i=1; i<keys.length; i++) { b=keys[i]; if (local<b.t) break; a=b; }
+            const p = b.t>a.t ? Math.max(0, Math.min(1, (local-a.t)/(b.t-a.t))) : 1;
+            const q = gsap.parseEase(easeNames[b.ease || 'linear'])(p);
+            el.style.translate = `${a.x+(b.x-a.x)*q}px ${a.y+(b.y-a.y)*q}px`;
           }
           const screen = [...document.querySelectorAll('[data-screen]')].find(e =>
             t >= number(e.dataset.start) && t < number(e.dataset.start) + number(e.dataset.duration));

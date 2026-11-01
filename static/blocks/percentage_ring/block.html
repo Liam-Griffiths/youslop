@@ -1,0 +1,5 @@
+{% extends '_blocks/number_slam/data_base.html' %}
+{% block content %}
+<div class="atlas ring" {{ layer('ring',0.1,'atlas',0.9) }} data-atlas="17" data-bounds=".atlas-strip" style="left:{{ data.x }}px;top:{{ data.top }}px"><div class="atlas-strip">{% for n in data.frames %}<div class="atlas-row"><svg width="280" height="280" viewBox="0 0 280 280"><circle cx="140" cy="140" r="112" fill="none" stroke="var(--line)" stroke-width="16"/><circle cx="140" cy="140" r="112" fill="none" stroke="var(--accent)" stroke-width="16" stroke-dasharray="703.716754" stroke-dashoffset="{{ 703.716754*(1-n/100) }}" transform="rotate(-90 140 140)"/></svg></div>{% endfor %}</div></div>
+<div class="item" data-ground style="left:{{ data.x }}px;top:{{ data.top+320 }}px;width:{{ data.w }}px"><p class="percent">{{ data.final }}%</p><p class="label dim" data-var-text="label">{{ vars.label }}</p></div>
+{% endblock %}

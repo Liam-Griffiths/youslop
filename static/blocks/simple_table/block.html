@@ -1,0 +1,4 @@
+{% extends '_blocks/number_slam/data_base.html' %}
+{% block content %}
+<div class="item" {{ layer('table',0,'rise') }} style="left:{{ data.x }}px;top:{{ data.top }}px;width:{{ data.w }}px"><table class="grid"><thead><tr><th data-var-text="column_label">{{ vars.column_label }}</th><th data-var-text="column_value">{{ vars.column_value }}</th></tr></thead><tbody>{% for row in data.rows %}<tr><td>{{ row.label }}</td><td>{{ row.value }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

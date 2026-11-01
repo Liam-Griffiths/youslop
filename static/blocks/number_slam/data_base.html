@@ -1,0 +1,45 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>
+@font-face { font-family:DataDisplay; src:url('/fonts/Archivo-Variable.ttf'); font-weight:100 900; font-stretch:62% 125%; }
+@font-face { font-family:DataMono; src:url('/fonts/JetBrainsMono-Regular.ttf'); }
+:root { --panel:color-mix(in srgb,var(--bg) 95%,var(--ink)); --line:color-mix(in srgb,var(--bg) 90%,var(--ink)); --dim:color-mix(in srgb,var(--bg) 35%,var(--ink)); }
+html,body { overflow:visible!important; } body { width:{{ width }}px; height:{{ height }}px; }
+.data-screen { position:absolute; width:{{ width }}px; height:{{ height }}px; }
+.header,.footer,.item,.atlas,.plot { position:absolute; }
+.header,.footer { left:{{ data.x }}px; width:{{ data.w }}px; }
+.header { top:{{ data.header }}px; border-top:5px solid var(--accent); padding-top:24px; }
+h1 { font:800 {{ 48 if height > width else 60 }}px/1.08 DataDisplay,sans-serif; font-stretch:62%; overflow-wrap:anywhere; }
+.footer { top:{{ data.footer }}px; font:22px/1.4 Inter,sans-serif; color:var(--dim); overflow-wrap:anywhere; }
+.label { font:26px/1.3 Inter,sans-serif; overflow-wrap:anywhere; }
+.mono { font-family:DataMono,monospace; font-variant-numeric:tabular-nums; }
+.dim { color:var(--dim); } .accent { color:var(--accent); }
+.atlas { overflow:hidden; } .atlas-strip { width:100%; } .atlas-row { position:relative; width:100%; }
+/* Capture the complete strip in a world screen; preview clips to one row. */
+body:has([data-builder-active]) .atlas { overflow:visible; }
+.number { height:128px; font:96px/128px DataMono,monospace; white-space:nowrap; }
+.number .atlas-row { height:128px; }
+.bar { height:20px; background:var(--accent); }
+.row-label { display:inline-block; width:60%; vertical-align:top; font-size:24px; line-height:1.2; }
+.row-value { float:right; text-align:right; font:30px/1.3 DataMono,monospace; }
+.race { height:80px; } .race .atlas-row { height:80px; }
+.race .bar { position:absolute; top:58px; height:14px; }
+.period { height:42px; font:30px/42px DataMono,monospace; } .period .atlas-row { height:42px; }
+.ring { width:280px; height:280px; } .ring .atlas-row { height:280px; }
+.ring svg { display:block; } .percent { font:68px/1.2 DataMono,monospace; }
+.grid { width:100%; border-collapse:collapse; table-layout:fixed; }
+.grid th,.grid td { width:50%; padding:18px 16px; text-align:left; border-bottom:2px solid var(--line); font:28px/1.3 Inter,sans-serif; overflow-wrap:anywhere; }
+.grid td:last-child { font-family:DataMono,monospace; text-align:right; }
+.grid th { color:var(--dim); font-size:24px; }
+.milestone { border-left:4px solid var(--accent); padding:16px 22px; background:var(--panel); }
+.milestone .mono { display:block; margin-bottom:14px; font-size:28px; }
+</style>
+{% endblock %}
+{% macro layer(id, start=0, motion='none', arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}"{% endmacro %}
+{% block body %}
+<section class="data-screen" data-screen="data" data-world="true" data-start="0" data-duration="{{ duration }}" data-camera='[{"t":0,"x":{{ width/2 }},"y":{{ height/2 }},"zoom":1}]'>
+<header class="header" data-ground><h1 data-var-text="title">{{ vars.title }}</h1></header>
+{% block content %}{% endblock %}
+<footer class="footer" data-ground data-var-text="source">{{ vars.source }}</footer>
+</section>
+{% endblock %}
