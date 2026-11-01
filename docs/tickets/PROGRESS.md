@@ -117,7 +117,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T7.1 | Camera takes in the data model | M | T0.5, T4.9 | todo | added 2026-10-26 |
+| T7.1 | Camera takes in the data model | M | T0.5, T4.9 | done | 2026-11-01 Codex; synthetic A/V sync within a frame; owner: first-word lip sync on a real webcam take |
 | T7.2 | Record on camera in the Record tab | M | T7.1 | todo | desktop camera permissions unverified on Linux |
 | T7.3 | Camera paragraphs in the render | M | T7.1, T0.5 | todo | |
 | T7.4 | Trims and jump cuts on camera takes | M | T7.3, T4.4 | todo | |
