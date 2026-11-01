@@ -1,10 +1,10 @@
-"""Fast storyboard checks. No rendering, media probing or model calls."""
+"""Storyboard checks; essay geometry uses one optional browser dry capture."""
 from dataclasses import asdict, dataclass
 from typing import Callable
 
 from . import cuts, render, storyboard, titles
 from .cuts import kit
-from .schema import FrameSpec
+from .schema import FrameSpec, Project, Slide, Style
 
 
 @dataclass
@@ -45,6 +45,7 @@ def _ctx(sb):
     frame = FrameSpec.from_dict(sb.get('frame', {}))
     paras = {p['id']: p for p in sb['paragraphs']}
     fmt = sb['project']['format']
+    plan_project = Project(id='check', idea='', style=Style(**sb.get('style', {})), frame=frame)
     for p in sb['paragraphs']:
         for w in p.get('take', {}).get('words', []):
             words.append((p['start'] + w['start'], w['w'], p['id'], w.get('src', 'est')))
@@ -62,18 +63,13 @@ def _ctx(sb):
             dur = para['duration']
             final = si == len(pictures) - 1 and pi == len(seg['paragraphs']) - 1
             if fmt == 'essay':
-                chunks = titles.essay_chunks(p['narration'])
-                spoken = p['take'].get('duration') or dur * .85
-                shares = render._caption_timings(chunks, min(dur, spoken), frame)
-                if final and shares:
-                    shares[-1] = max(shares[-1], frame.last_line_min_s)
-                cap = offset
-                for text, share in zip(chunks, shares):
-                    end = min(file_end - .05, cap + share)
-                    # Include omitted flashes: they still fail the reading contract.
-                    lines.append(dict(start=cap, end=end, text=text,
-                                      slide_id=p['id'], type='caption'))
-                    cap += share
+                # Same planner as the graph; storyboard starts are voice time.
+                member = Slide(id=p['id'], narration=p['narration'], take=p['take'])
+                for phrase in render._essay_phrases(plan_project, member, dur,
+                        lead_in=p['start'] - offset, last_line=final):
+                    lines.append(dict(start=offset + phrase['t0'],
+                                      end=min(file_end - .05, offset + phrase['t1']),
+                                      text=phrase['text'], slide_id=p['id'], type='caption'))
             elif fmt == 'kenburns' and p.get('title'):
                 start = offset + frame.arrive_s
                 hold = render._title_hold(frame, p['title'], dur)
@@ -122,7 +118,9 @@ def first_word_collision(sb, frame, ctx):
     t, _, sid, _ = ctx.words[0]
     windows = [(0, sb.get('sting_end', 0))]
     windows += [(l['start'], l['end'] if l['type'] == 'chapter' else
-                 l['start'] + (0.14 if l['type'] == 'caption' else frame.arrive_s))
+                 l['start'] + (0.14 if l['type'] == 'caption' and
+                              sb.get('style', {}).get('captions_engine', 'scene') == 'pillow'
+                              else frame.arrive_s))
                 for l in ctx.lines if l['type'] != 'cue']
     if any(a <= t < b for a, b in windows):
         return [_finding('first_word_collision', 'P1', t, sid,
@@ -164,8 +162,18 @@ def small_text(sb, frame, ctx):
     out = []
     for line in ctx.lines:
         if line['type'] == 'caption':
-            font, _ = titles._fit_caption(line['text'], titles.CAPTION_MAX_W)
-            size = font.size
+            if sb.get('style', {}).get('captions_engine', 'scene') != 'pillow':
+                metrics = line.get('metrics')
+                if metrics is None:
+                    continue  # Chromium unavailable: geometry needs reviewer verification.
+                size = metrics['size']
+                if metrics['overflow']:
+                    out.append(_finding('small_text', 'P1', line['start'], line['slide_id'],
+                                        'Caption exceeds three lines at the minimum font size.',
+                                        'words', instruction='shorten'))
+            else:
+                font, _ = titles._fit_caption(line['text'], titles.CAPTION_MAX_W)
+                size = font.size
         elif line['type'] == 'title':
             size = round(1080 * (frame.title_height_pct_min + frame.title_height_pct_max) / 200 / .72)
         else:
@@ -373,6 +381,12 @@ def run(project) -> dict:
             if seg['type'] == 'intro':
                 sb['sting_end'] = end
     ctx = _ctx(sb)
+    if project.style.format == 'essay' and project.style.captions_engine != 'pillow':
+        from . import scenes, stage
+        lines = [line for line in ctx.lines if line['type'] == 'caption']
+        if lines and stage.browser():
+            for line, metrics in zip(lines, scenes.measure_captions(project, [l['text'] for l in lines])):
+                line['metrics'] = metrics
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
     findings.sort(key=lambda f: (int(f.level[1]), f.t))
     counts = {level: sum(f.level == level for f in findings) for level in ('P0', 'P1', 'P2')}

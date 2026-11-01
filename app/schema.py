@@ -326,6 +326,7 @@ class Style:
     # The five drawn cuts in app/cuts/ — flameboat, casefile, loudmouth,
     # groupchat, ticker — draw every frame themselves and join on hard cuts.
     format: str = "kenburns"        # kenburns | essay | board | stage | a cut key | custom:<id>
+    captions_engine: str = "scene"  # scene | pillow (legacy essay captions)
     vignette: float = 0.34          # 0 = off, 1 = heavy
     ken_burns: bool = True
     ken_burns_amount: float = 0.10  # fractional zoom over a slide

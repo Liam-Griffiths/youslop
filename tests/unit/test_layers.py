@@ -137,6 +137,7 @@ def test_notes_endpoint_and_hide_validation(project, monkeypatch):
 
 
 def test_essay_caption_windows(project, monkeypatch):
+    project.style.captions_engine = "pillow"  # This test inspects legacy fades.
     project.style.format = 'essay'
     monkeypatch.setattr(render.titles, 'render_caption', lambda *a, **kw: None)
     tl = render.timeline(project)

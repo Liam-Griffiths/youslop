@@ -82,7 +82,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T5.1 | Essay captions as a scene | M | T2.4 | todo | |
+| T5.1 | Essay captions as a scene | M | T2.4 | done | 2026-10-31 Codex, 2 rounds; plates once per phrase + ffmpeg motion, faster than Pillow; owner: T0.8 RSS re-measure needs a full render |
 | T5.2a | Board templates as scenes | M | T2.4, T2.5 | todo | split from T5.2 |
 | T5.2b | Diagrams as SVG scenes | M | T5.2a | todo | |
 | T5.2c | Custom slides through a scene template | S | T5.2a | todo | |

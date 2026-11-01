@@ -18,6 +18,7 @@ def _sb(**overrides):
     seg = dict(type='picture', lead='s1', start=0, duration=5, skip=.2,
                camera='creep', problems=[], paragraphs=[dict(id='s1', duration=4.4)])
     return dict(project={'format': 'kenburns', 'duration': 5}, frame=frame.to_dict(),
+                style={'captions_engine': 'pillow'},
                 segments=[seg], paragraphs=[p], outline={'hook': {'muted_image': 'A face'}},
                 music=False) | overrides
 
@@ -209,6 +210,7 @@ def test_real_font_cache_and_fit():
 @pytest.mark.parametrize('fmt', ['essay', 'loudmouth', 'ticker', 'groupchat'])
 def test_run_other_formats(project, fmt, monkeypatch):
     project.style.format = fmt
+    monkeypatch.setattr('app.stage.browser', lambda: None)
     monkeypatch.setattr(ffutil, 'run', lambda *a, **k: pytest.fail('rendered media'))
     result = check.run(project)
     assert sum(result['counts'].values()) == len(result['findings'])

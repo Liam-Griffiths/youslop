@@ -14,6 +14,7 @@ from tests._fixtures import ROOT
 ])
 def test_segment_graph(project, request, name, fmt, size, fps):
     project.style.format = fmt
+    project.style.captions_engine = "pillow"  # Preserve the legacy graph reference.
     project.slides[0].chapter = "Opening"
     group = render._picture_groups(project, render._slide_durations(project, False))[0]
     inputs, graph, last = render._segment_graph(

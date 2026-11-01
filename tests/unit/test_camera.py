@@ -72,6 +72,7 @@ def test_title_hold_grows_and_clamps():
 
 @pytest.mark.parametrize("fmt", ["kenburns", "essay"])
 def test_last_line_extends_tail_and_matches_timeline(project, fmt):
+    project.style.captions_engine = "pillow"  # This test inspects legacy fades.
     project.style.format = fmt
     project.slides = project.slides[:1]
     project.slides[0].take["duration"] = .1

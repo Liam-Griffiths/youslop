@@ -284,6 +284,66 @@ def essay_chunks(text: str, target_words: int = 12,
     return [" ".join(c) for c in chunks]
 
 
+def caption_timings(chunks: list[str], budget: float, frame) -> list[float]:
+    """Legacy proportional holds, also used when a take has no usable words."""
+    if not chunks:
+        return []
+    counts = [max(1, len(c.split())) for c in chunks]
+    shares = [max(frame.title_hold_base_s + frame.title_hold_per_word_s,
+                  budget * n / sum(counts)) for n in counts]
+    if budget > 0 and sum(shares) > budget:
+        scale = budget / sum(shares)
+        shares = [s * scale for s in shares]
+    return shares
+
+
+def phrases(narration, words, *, max_words=17, duration=None, frame=None,
+            lead_in=0.0) -> list[dict]:
+    """Existing essay splitting with word anchors, or exact legacy timing.
+
+    Stale/incomplete word lists fall back as a whole. Short intervals cap the
+    0.8s floor at the next entrance to avoid overlapping plates. Fallback
+    starts at zero, as the Pillow path did; only word anchors use lead_in.
+    """
+    from .schema import FrameSpec
+    frame = frame or FrameSpec()
+    chunks = essay_chunks(narration, max_words=max_words,
+                          target_words=min(12, max_words), min_words=min(4, max_words))
+    if not chunks:
+        return []
+    tokens = narration.split()
+    norm = lambda w: ''.join(c for c in w.casefold() if c.isalnum())
+    try:
+        aligned = len(words) == len(tokens) and all(
+            norm(w['w']) == norm(t) and math.isfinite(float(w['start']))
+            and math.isfinite(float(w['end'])) and 0 <= w['start'] <= w['end']
+            and (i == 0 or words[i-1]['end'] <= w['start'])
+            for i, (w, t) in enumerate(zip(words, tokens)))
+    except (KeyError, TypeError, ValueError):
+        aligned = False
+    if duration is None:
+        duration = float(words[-1]['end']) if aligned else max(0.8, len(tokens) * .3)
+    aligned = aligned and words[-1]['end'] <= duration + 0.001
+    if not aligned:
+        at, result = 0.0, []
+        for text, hold in zip(chunks, caption_timings(chunks, duration, frame)):
+            result.append(dict(text=text, t0=at, t1=at + hold))
+            at += hold
+        return result
+    starts, index = [], 0
+    for text in chunks:
+        starts.append(lead_in + words[index]['start'] + frame.anchor_after_s)
+        index += len(text.split())
+    result = []
+    limit = lead_in + duration
+    for i, (text, start) in enumerate(zip(chunks, starts)):
+        next_start = starts[i+1] if i+1 < len(starts) else limit
+        end = (max(start + .8, next_start - frame.anchor_before_s)
+               if i+1 < len(starts) else limit)
+        result.append(dict(text=text, t0=start, t1=min(next_start, limit, end)))
+    return result
+
+
 def _wrap(probe: ImageDraw.ImageDraw, words: list[str], font, max_w: float) -> list[str]:
     lines, line = [], ""
     for w in words:

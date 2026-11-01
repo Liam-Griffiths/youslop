@@ -612,16 +612,18 @@ def _caption_timings(chunks: list[str], budget: float, frame) -> list[float]:
     would overrun the budget (a paragraph chopped into many short captions),
     everything is scaled back down together rather than overrunning `dur`.
     """
-    if not chunks:
-        return []
-    words = [max(1, len(c.split())) for c in chunks]
-    total = sum(words)
-    raw = [budget * w / total for w in words]
-    shares = [max(frame.title_hold_base_s + frame.title_hold_per_word_s, s) for s in raw]
-    if budget > 0 and sum(shares) > budget:
-        scale = budget / sum(shares)
-        shares = [s * scale for s in shares]
-    return shares
+    return titles.caption_timings(chunks, budget, frame)
+
+
+def _essay_phrases(project, member, dur, *, lead_in=0.0, last_line=False):
+    spoken = float((member.take or {}).get('duration') or 0) or dur * .85
+    words = ((member.take or {}).get('words', [])
+             if project.style.captions_engine != 'pillow' else [])
+    plan = titles.phrases(member.narration, words, duration=min(dur, spoken),
+                          frame=project.frame, lead_in=lead_in)
+    if last_line and plan:
+        plan[-1]['t1'] = max(plan[-1]['t1'], plan[-1]['t0'] + project.frame.last_line_min_s)
+    return plan
 
 
 def _title_hold(frame, title, dur):
@@ -657,10 +659,11 @@ def _tail_pad(project, groups):
     member, dur = groups[-1][-1]
     frame = project.frame
     if project.style.format == "essay":
-        chunks = titles.essay_chunks(member.narration)
-        spoken = float((member.take or {}).get("duration") or 0.0) or dur * 0.85
-        shares = _caption_timings(chunks, min(dur, spoken), frame)
-        needed = sum(shares[:-1]) + frame.last_line_min_s + 0.05 if shares else 0
+        lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, groups[-1][0][0])
+        plan = _essay_phrases(project, member, dur, lead_in=lead, last_line=True)
+        needed = (plan[-1]['t0'] + frame.last_line_min_s + .05
+                  if project.style.captions_engine == 'pillow' and plan else
+                  plan[-1]['t1'] + .05 if plan else 0)
     elif project.style.format == "kenburns" and member.title:
         needed = frame.arrive_s + max(frame.last_line_min_s,
                                      _title_hold(frame, member.title, dur)) + frame.arrive_s * frame.exit_ratio
@@ -728,7 +731,7 @@ def _segment_graph(
     op: str, channel=None, chapter: tuple[str, str] | None = None,
     size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
     dip_out: bool = False, camera_index: int = 0, last_line: bool = False,
-    hide: frozenset = frozenset(),
+    hide: frozenset = frozenset(), *, prepare_only: bool = False,
 ) -> tuple[list[str], str, str]:
     """Return input args, filtergraph and output label for a photographic segment.
 
@@ -837,9 +840,45 @@ def _segment_graph(
 
     # Type over the picture. The documentary cut announces a chapter once per
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
+    if essay and style.captions_engine != 'pillow' and 'titles' not in hide:
+        plan, offset = [], 0.0
+        lead = cuts.transition_for(style) / 2 + cuts.head_pad_for(project, group[0][0])
+        for n, (member, dur) in enumerate(group):
+            for phrase in _essay_phrases(project, member, dur, lead_in=lead,
+                    last_line=last_line and n == len(group) - 1):
+                start, end = offset + phrase['t0'], min(seg_len - .05, offset + phrase['t1'])
+                if end > start + .25:
+                    plan.append(dict(text=phrase['text'], t0=start, t1=end))
+            offset += dur
+        if plan:
+            ctx = scenes.context_base(project, channel)
+            ctx.update(phrases=plan)
+            plates = scenes.caption_plates(project, ctx, size=size, render=not prepare_only)
+            for c, (phrase, plate) in enumerate(zip(plan, plates)):
+                start, end = phrase['t0'], phrase['t1']
+                hold = end - start
+                arrive = min(hold, max(.001, frame.arrive_s))
+                exit_s = min(hold / 2, arrive * max(0, frame.exit_ratio))
+                inputs += _still_input(plate, fps)
+                # Process only the phrase's hold, then shift it into segment time.
+                # eof_action=pass releases each plate after its own short stream.
+                graph += (
+                    f';[{n_inputs}:v]format=rgba,{HOLD_STILL},trim=duration={hold:.6f},'
+                    f'fade=t=in:st=0:d={arrive:.6f}:alpha=1'
+                    + (f',fade=t=out:st={hold - exit_s:.6f}:d={exit_s:.6f}:alpha=1'
+                       if exit_s > 0 else '')
+                    + f',setpts=PTS-STARTPTS+{start:.6f}/TB[cap{c}]'
+                    f";{last}[cap{c}]overlay=x=0:y='if(lt(t,{start + arrive:.6f}),"
+                    f"{48 * h / HEIGHT:.6f}*pow(2,-10*(t-{start:.6f})/{arrive:.6f}),0)':"
+                    f"enable='between(t,{start:.6f},{end:.6f})':"
+                    f'eof_action=pass:repeatlast=0:format=auto[vcap{c}]'
+                )
+                n_inputs += 1
+                last = f'[vcap{c}]'
+
     offset = 0.0
     for n, (member, dur) in enumerate(group):
-        if "titles" in hide:
+        if "titles" in hide or (essay and style.captions_engine != "pillow"):
             offset += dur
             continue
         if essay:
@@ -1445,7 +1484,7 @@ def _segment_key(project, group, settings) -> str:
     graph = None
     if not (scenes.handles(project.style.format) or cuts.is_cut(project.style.format)
             or project.style.format == "board" or project.style.format.startswith("custom:")):
-        graph = _segment_graph(project, group, settings["seg_len"],
+        graph = _segment_graph(project, group, settings["seg_len"], prepare_only=True,
                                **{k: settings[k] for k in (
                                    "op", "channel", "chapter", "size", "fps", "dip_out",
                                    "camera_index", "last_line")})
@@ -1614,8 +1653,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
 
     # ------------------------------------------------------------- segments
     workers = max(2, min(6, (os.cpu_count() or 4) // 2))
-    # HOLD_STILL reduced caption decoding costs, but the essay overlay chain
-    # still uses more memory than the documentary graph. Budget per encode.
+    # Keep the conservative essay budget while Pillow remains available.
+    # T5.1 scene RSS must be re-measured with T0.8 before reducing it.
     per = SEGMENT_RSS_MB.get(project.style.format, SEGMENT_RSS_MB["default"])
     free_mb = sysinfo.available_mb()
     if free_mb is not None:
@@ -2029,17 +2068,16 @@ def _layers(project, segs):
                     slide.title, 'title', 'user' if 'user' in
                     (timing['title_at']['src'], timing['title_hold']['src']) else 'auto')
             if project.style.format == 'essay':
-                chunks = titles.essay_chunks(slide.narration)
-                spoken = float((slide.take or {}).get('duration') or 0) or q['duration'] * 0.85
-                shares = _caption_timings(chunks, min(q['duration'], spoken), project.frame)
-                if seg is last_picture and q is seg['paragraphs'][-1] and shares:
-                    shares[-1] = max(shares[-1], project.frame.last_line_min_s)
-                a = q['start'] - cuts.head_pad_for(project, group[0][0]) - seg['skip']
-                for i, (text, share) in enumerate(zip(chunks, shares)):
-                    b = min(seg['start'] + seg['duration'] + seg['skip'] - 0.05, a + share)
-                    if b > a + 0.25:
-                        add('titles', f'{slide.id}:cap{i}', slide.id, a, b, text, 'title')
-                    a += share
+                head = cuts.head_pad_for(project, group[0][0])
+                plan = _essay_phrases(project, slide, q['duration'],
+                    lead_in=head + seg['skip'],
+                    last_line=seg is last_picture and q is seg['paragraphs'][-1])
+                origin = q['start'] - head - seg['skip']
+                for i, phrase in enumerate(plan):
+                    a = origin + phrase['t0']
+                    b = min(seg['start'] + seg['duration'] + seg['skip'] - .05, origin + phrase['t1'])
+                    if b > a + .25:
+                        add('titles', f'{slide.id}:cap{i}', slide.id, a, b, phrase['text'], 'title')
             for i, (cue, span) in enumerate(zip(cue_rows.get(slide.id, []), timing['cues'])):
                 add('cues', f'{slide.id}:{i}', slide.id, span['start'], span['end'],
                     next((cue[k] for k in ('text', 'caption', 'headline', 'title') if cue.get(k)), ''),

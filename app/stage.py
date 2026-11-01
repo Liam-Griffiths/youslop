@@ -497,14 +497,16 @@ class _Cdp:
         os.close(self.r)
 
 
-def _begin_png(run, clip, W, H, fps, frames):
-    out = run.out_dir / f"{clip}.mp4"
-    tmp = out.with_suffix(".part.mp4")
+def _begin_png(run, clip, W, H, fps, frames, *, alpha=False):
+    out = run.out_dir / (clip + (".mov" if alpha else ".mp4"))
+    tmp = out.with_name(out.stem + ".part" + out.suffix)
+    encoding = (["-c:v", "png", "-pix_fmt", "rgba"] if alpha else
+                ["-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
+                 "-pix_fmt", "yuv420p"])
     proc = subprocess.Popen(
         [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
          "-f", "image2pipe", "-c:v", "png", "-framerate", str(fps), "-i", "-",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
-         "-pix_fmt", "yuv420p", "-an", str(tmp)],
+         *encoding, "-an", str(tmp)],
         stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     run.clips[clip] = {"proc": proc, "tmp": tmp, "out": out, "frames": frames, "got": 0}
 
@@ -594,6 +596,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             if nav.get("errorText"):
                 raise StageError(nav["errorText"])
             cdp.wait_event("Page.loadEventFired")
+            cdp.send("Emulation.setDefaultBackgroundColorOverride",
+                     {"color": {"r": 0, "g": 0, "b": 0, "a": 0}} if item.get("alpha") else {}, session)
             _evaluate(cdp, session, "window.__ready")
             if deterministic:
                 _evaluate(cdp, session, """(() => {
@@ -604,7 +608,7 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             clip = item.get("clip", "snapshot")
             count, rate = int(item.get("frames", frames)), item.get("fps", fps)
             if out_dir is not None:
-                _begin_png(run, clip, *output_size, rate, count)
+                _begin_png(run, clip, *output_size, rate, count, alpha=item.get("alpha", False))
             for i in range(count):
                 t = item.get("t", i / rate)
                 _evaluate(cdp, session, seek_js.format(t=t))
@@ -684,8 +688,15 @@ def render_scene(items: list[dict], out_dir: Path,
     return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
 
 
+def capture_stills(items, scene_root, *, project_root=None, channel_root=None):
+    """Capture one PNG per local scene page, sharing one Chromium session."""
+    run = _run_cdp(dict(items=items, scene_root=str(scene_root),
+                        project_root=project_root, channel_root=channel_root), lambda m: None)
+    return run.thumbs
+
+
 def capture_one(url_path, W, H, t, size, *, assets_root=None,
-                project_root=None, channel_root=None) -> bytes:
+                project_root=None, channel_root=None, scene_probe=None) -> bytes:
     """Return a PNG from a local URL, or an absolute HTML file and its assets."""
     root = None
     if Path(url_path).is_file():
@@ -696,5 +707,5 @@ def capture_one(url_path, W, H, t, size, *, assets_root=None,
                     "project_root": str(project_root) if project_root is not None else None,
                     "channel_root": str(channel_root) if channel_root is not None else None,
                     "assets_root": str(assets_root) if assets_root is not None else None, "items": [dict(
-        url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None)
+        url_path=url_path, W=W, H=H, t=t, size=size)]}, lambda m: None, scene_probe=scene_probe)
     return run.thumbs["snapshot"]

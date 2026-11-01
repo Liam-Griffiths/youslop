@@ -1,0 +1,43 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+  :root { --bg: transparent; }
+  html, body { background: transparent !important; }
+  @font-face { font-family: Caption; src: url('/fonts/ArchivoBlack-Regular.ttf'); font-display: block; }
+  .caption { position: absolute; top: 79.444%; left: 0; width: 100%; display: flex; justify-content: center; }
+  {% if settled | default(false) %}
+  .caption { opacity: 1 !important; transform: none !important; }
+  {% endif %}
+  .caption-plate { max-width: 79.8%; padding: 20px 36px; border-radius: 16px;
+    background: rgba(9, 10, 14, .91); border-bottom: 7px solid var(--accent);
+    transform: translateY(-50%); }
+  .caption-text { font-family: Caption, sans-serif; color: white; text-align: center;
+    font-size: {{ caption_size | default(62) }}px;
+    line-height: 1.04; max-height: {{ (caption_lines | default(3)) * 1.04 }}em; overflow: hidden; overflow-wrap: anywhere;
+    text-wrap: balance; text-shadow: 0 2px 4px rgba(0,0,0,.5); }
+</style>
+{% endblock %}
+{% block body %}
+{% for phrase in phrases %}
+<div class="clip caption" data-start="{{ phrase.t0 }}" data-duration="{{ phrase.t1 - phrase.t0 }}"
+     data-track-index="1" data-anim="rise">
+  <div class="caption-plate"><p class="caption-text">{{ phrase.text }}</p></div>
+</div>
+{% endfor %}
+{% endblock %}
+{% block script %}
+<script>
+// Keep the legacy base size; shrink only when three lines still overflow.
+window.__ready = window.__ready.then(async () => {
+  for (const el of document.querySelectorAll('.caption-text')) {
+    const min = Math.min({{ caption_size | default(62) }}, {{ height * frame.title_height_pct_min / 100 }});
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (size > min && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
+      size = Math.max(min, size - 2);
+      el.style.fontSize = `${size}px`;
+    }
+  }
+  await window.__seek(0);
+});
+</script>
+{% endblock %}

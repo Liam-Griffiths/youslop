@@ -9,6 +9,7 @@ import logging
 import math
 from pathlib import Path
 import re
+import tempfile
 from urllib.parse import quote, unquote, urlsplit
 
 import jinja2
@@ -18,7 +19,7 @@ from . import channels, cuts, ffutil, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
-SCENE_VERSION = 2
+SCENE_VERSION = 3
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
 ASSETS_URLS = {kind: f"/scene/{{token}}/{kind}/" for kind in ('project', 'channel')}
@@ -257,7 +258,8 @@ def _prepare(project, template, ctx, seconds, size, fps, key_extra=()):
 
 
 def _sweep(directory, keep):
-    files = sorted(directory.glob('*.mp4'), key=lambda p: p.stat().st_mtime)
+    files = sorted([*directory.glob('*.mp4'), *directory.glob('*.mov')],
+                   key=lambda p: p.stat().st_mtime)
     for path in files[:max(0, len(files) - 400)]:
         if path != keep:
             path.unlink(missing_ok=True)
@@ -281,6 +283,68 @@ def ensure_clip(project, template, ctx, *, seconds, size, fps, key_extra=()) -> 
             raise stage.StageError('Scene did not render')
     _sweep(html.parent, out)
     return out
+
+
+def caption_plates(project, ctx, *, size, render=True) -> list[Path]:
+    """Cache settled RGBA plates by content, capturing misses in one browser.
+
+    Timing belongs to ffmpeg. Each page holds one phrase, so its cache key is
+    independent of the phrase's position or hold in the segment.
+    """
+    from . import titles
+    paths, items = [], {}
+    for phrase in ctx['phrases']:
+        plate_ctx = {**ctx, 'settled': True, 'phrases': [dict(text=phrase['text'], t0=0, t1=5)],
+                     'caption_size': titles.CAPTION_CAP, 'caption_lines': titles.CAPTION_LINES}
+        key, html, prepared = _prepare(project, 'essay/captions.html', plate_ctx,
+                                       5, size, FPS, ('settled-caption-rgba',))
+        out = html.with_suffix('.png')
+        paths.append(out)
+        if render and (not out.exists() or not out.stat().st_size):
+            items[key] = dict(clip=key, url_path=f'/scene/{{token}}/{html.name}',
+                              W=prepared['width'], H=prepared['height'], size=size,
+                              t=2.5, alpha=True)
+    if items:
+        directory = paths[0].parent
+        made = stage.capture_stills(list(items.values()), directory,
+                                    **ctx.get('asset_roots', {}))
+        for key, data in made.items():
+            out = directory / f'{key}.png'
+            # Different segment workers can discover the same content miss.
+            with tempfile.NamedTemporaryFile(dir=directory, suffix='.part.png', delete=False) as f:
+                temporary = Path(f.name)
+                f.write(data)
+            temporary.replace(out)
+        if any(not path.exists() or not path.stat().st_size for path in paths):
+            raise stage.StageError('Caption plates did not render')
+    return paths
+
+
+def measure_captions(project, texts) -> list[dict]:
+    """Measure all plates in one 360px dry capture, in composition pixels."""
+    ctx = context_base(project)
+    from . import titles
+    ctx.update(caption_size=titles.CAPTION_CAP, caption_lines=titles.CAPTION_LINES)
+    ctx['phrases'] = [dict(text=text, t0=0, t1=5) for text in texts]
+    key, html, ctx = _prepare(project, 'essay/captions.html', ctx, 5, (360, 202.5), FPS,
+                              ('caption-geometry',))
+    cached = html.with_suffix('.measure.json')
+    if cached.exists():
+        return json.loads(cached.read_text())
+    measured = []
+
+    def probe(cdp, session, item, t):
+        result = stage._evaluate(cdp, session, """Array.from(document.querySelectorAll('.caption-text'), el => ({
+            size: parseFloat(getComputedStyle(el).fontSize),
+            overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1
+        }))""")
+        measured.extend(result['result']['value'])
+
+    # Keep the 16:9 composition exact: 360x202.5 is a CDP scale, not a new layout.
+    stage.capture_one(html, ctx['width'], ctx['height'], 0, (360, 202.5),
+                      **ctx.get('asset_roots', {}), scene_probe=probe)
+    cached.write_text(json.dumps(measured))
+    return measured
 
 
 def capture(project, template, ctx, *, t, size) -> bytes:
