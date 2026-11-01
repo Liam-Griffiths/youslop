@@ -1,3 +1,10 @@
+![Corkbored: Idea in. Episode out.](docs/brand/corkbored-banner.png)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/corkbored-dark.svg">
+  <img src="docs/brand/corkbored-light.svg" alt="Corkbored" width="280">
+</picture>
+
 # Corkbored
 
 Corkbored turns an idea or script into a researched, narrated, illustrated

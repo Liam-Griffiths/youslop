@@ -164,18 +164,19 @@ def cork_board(w: int, h: int) -> str:
 def render(svg: pathlib.Path, png: pathlib.Path, w: int, h: int) -> None:
     exe = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
     if not exe:
-        print("no Chromium; skipped", png.name)
-        return
+        raise RuntimeError("Chromium is required to rasterise brand assets")
     page = svg.with_suffix(".render.html")
     page.write_text(f'<!doctype html><style>html,body{{margin:0;background:transparent}}'
                     f'img{{display:block;width:{w}px;height:{h}px}}</style><img src="{svg.name}">')
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as prof:
-        subprocess.run([exe, "--headless=new", "--no-sandbox", "--disable-gpu", f"--user-data-dir={prof}",
-                        f"--window-size={w},{h}", "--hide-scrollbars", "--default-background-color=00000000",
-                        "--virtual-time-budget=2000", f"--screenshot={png}", page.as_uri()],
-                       capture_output=True, timeout=60)
-    page.unlink()
-    print("wrote", png.relative_to(ROOT))
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as prof:
+            subprocess.run([exe, "--headless=new", "--no-sandbox", "--disable-gpu", f"--user-data-dir={prof}",
+                            f"--window-size={w},{h}", "--hide-scrollbars", "--default-background-color=00000000",
+                            "--virtual-time-budget=2000", f"--screenshot={png}", page.as_uri()],
+                           capture_output=True, timeout=60, check=True)
+    finally:
+        page.unlink(missing_ok=True)
+    print("wrote", png.relative_to(ROOT) if png.is_relative_to(ROOT) else png.name)
 
 
 def main() -> None:
@@ -197,10 +198,13 @@ def main() -> None:
     render(BRAND / "corkbored-light.svg", BRAND / "corkbored-light.png", 560, 128)
     render(BRAND / "corkbored-dark.svg", BRAND / "corkbored-dark.png", 560, 128)
     render(BRAND / "corkbored-header.svg", BRAND / "corkbored-header.png", 400, 80)
-    # Scene assets: the flat mark, and a cork board baked to JPEG (noise filters
-    # are too slow to run per frame).
     static = ROOT / "static/brand"
     static.mkdir(exist_ok=True)
+    from PIL import Image
+    with Image.open(BRAND / "corkbored-icon-1024.png") as icon:
+        icon.resize((128, 128), Image.Resampling.LANCZOS).save(static / "corkbored-icon-128.png")
+    # Scene assets: the flat mark, and a cork board baked to JPEG (noise filters
+    # are too slow to run per frame).
     for name in ("corkbored-mark.svg", "corkbored-icon.svg", "corkbored-header.svg"):
         shutil.copyfile(BRAND / name, static / name)
     board = static / "cork-1920.svg"

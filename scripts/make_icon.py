@@ -1,52 +1,60 @@
-"""Generate the temporary C app icon using the bundled Inter font.
-
-T6.2 replaces this placeholder with the final mark. Keep the current dark
-tile and accent colour from static/styles.css.
+"""Generate platform icons from the approved SVGs using system Chromium.
 
 Run: .venv/bin/python scripts/make_icon.py
 """
 from __future__ import annotations
 
+import argparse
+import importlib.util
 from pathlib import Path
+import tempfile
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-BG = "#0d0e12"
-ACCENT = "#e8c36a"
-
-
-def draw_master(size: int = 1024) -> Image.Image:
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    pad = int(size * 0.06)
-    radius = int(size * 0.225)
-    draw.rounded_rectangle([pad, pad, size - pad, size - pad],
-                           radius=radius, fill=BG)
-    font = ImageFont.truetype(str(ROOT / "resources/fonts/Inter-Bold.ttf"),
-                              int(size * 0.72))
-    left, top, right, bottom = draw.textbbox((0, 0), "C", font=font)
-    draw.text(((size - (right - left)) / 2 - left,
-               (size - (bottom - top)) / 2 - top),
-              "C", font=font, fill=ACCENT)
-    return img
+_spec = importlib.util.spec_from_file_location("brand_build", ROOT / "docs/brand/src/build.py")
+_build = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_build)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--from-png", action="store_true",
+                        help="use checked-in approved PNGs when Chromium cannot run")
+    args = parser.parse_args()
     out_dir = ROOT / "resources"
-    out_dir.mkdir(exist_ok=True)
-    master = draw_master()
-    master.save(out_dir / "icon_1024.png")
     iconset = out_dir / "icon.iconset"
-    iconset.mkdir(exist_ok=True)
-    for size in (16, 32, 64, 128, 256, 512, 1024):
-        master.resize((size, size), Image.Resampling.LANCZOS).save(
-            iconset / f"icon_{size}x{size}.png")
-        if size <= 512:
-            master.resize((size * 2, size * 2), Image.Resampling.LANCZOS).save(
-                iconset / f"icon_{size}x{size}@2x.png")
-    master.save(out_dir / "icon.icns")
-    print("wrote resources/icon_1024.png, resources/icon.iconset/*.png, resources/icon.icns")
+    iconset.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        images = {}
+        for name in ("icon", "mark"):
+            svg = work / f"{name}.svg"
+            svg.write_bytes((ROOT / f"docs/brand/src/corkbored-{name}.svg" if name == "icon"
+                             else ROOT / "docs/brand/corkbored-mark.svg").read_bytes())
+            png = work / f"{name}.png"
+            if args.from_png:
+                png = ROOT / "docs/brand" / ("corkbored-icon-1024.png" if name == "icon"
+                                            else "corkbored-mark-64.png")
+            else:
+                _build.render(svg, png, 1024, 1024)
+            with Image.open(png) as image:
+                images[name] = image.convert("RGBA")
+
+        def sized(size: int) -> Image.Image:
+            return images["mark" if size <= 32 else "icon"].resize(
+                (size, size), Image.Resampling.LANCZOS)
+
+        images["icon"].save(out_dir / "icon_1024.png")
+        for size in (16, 32, 64, 128, 256, 512, 1024):
+            sized(size).save(iconset / f"icon_{size}x{size}.png")
+            if size <= 512:
+                sized(size * 2).save(iconset / f"icon_{size}x{size}@2x.png")
+        images["icon"].save(out_dir / "icon.icns")
+        sizes = (16, 32, 48, 256)
+        sized(256).save(out_dir / "icon.ico", sizes=[(s, s) for s in sizes],
+                        append_images=[sized(s) for s in sizes[:-1]])
+    print("wrote resources/icon_1024.png, resources/icon.iconset/*.png, resources/icon.icns, resources/icon.ico")
 
 
 if __name__ == "__main__":

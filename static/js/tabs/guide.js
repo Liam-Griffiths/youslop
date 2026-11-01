@@ -12,6 +12,7 @@ function renderGuide() {
     </div>`;
 
   view.innerHTML = `
+    <img src="/static/brand/corkbored-icon-128.png" width="128" height="128" alt="Corkbored">
     <h1>How it works</h1>
     <p class="sub">From an idea to a finished video in five tabs. Claude writes it, the
       archives supply the pictures, you (or the AI narrator) read it, and Corkbored cuts it.</p>

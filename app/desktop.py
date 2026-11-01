@@ -38,7 +38,7 @@ from typing import Callable
 
 from . import brand, jobs
 from .__main__ import configure, free_port, serve
-from .paths import data_root
+from .paths import data_root, resource_root
 
 
 def _log(message: str) -> None:
@@ -288,7 +288,8 @@ def main(open_in_browser: bool = False) -> None:
     window.events.closing += _confirm_quit
     _install_folder_dialog(window)
     wv.start(_request_macos_microphone if sys.platform == "darwin" else (lambda: None),
-            menu=_menu(), private_mode=False)
+            menu=_menu(), private_mode=False,
+            icon=str(resource_root() / "resources" / "icon_1024.png"))
 
 
 if __name__ == "__main__":

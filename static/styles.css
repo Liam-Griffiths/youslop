@@ -91,9 +91,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   display: flex; align-items: center; gap: 8px;
   font-weight: 600; letter-spacing: .01em; cursor: pointer;
 }
-.brand .mark { font-size: 19px; line-height: 1; color: var(--accent); }
+.brand .mark { display: block; width: 24px; height: 24px; }
 .wordmark { font-size: 22px; letter-spacing: -.01em; }
-.wordmark em { font-style: normal; color: var(--ink); }
 .topbar-right { display: flex; align-items: center; gap: 10px; font-size: 13px;
   color: var(--ink-dim); margin-left: auto; }
 

@@ -21,6 +21,7 @@ MACOS = sys.platform == "darwin"
 
 datas = [
     (str(ROOT / "static"), "static"),
+    (str(ROOT / "resources" / "icon_1024.png"), "resources"),
     (str(ROOT / "resources" / "fonts"), "resources/fonts"),
     (str(ROOT / "resources" / "bin"), "resources/bin"),
 ]
@@ -83,6 +84,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(ROOT / "resources" / "icon.ico") if sys.platform == "win32" else None,
 )
 
 coll = COLLECT(
