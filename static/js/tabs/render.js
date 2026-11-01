@@ -3,6 +3,10 @@
 async function paintRender() {
   const p = state.project;
   const st = p.style;
+  const failedRender = state.job?.done === 'error'
+    && ['render', 'preview render'].includes(state.job.kind);
+  const kept = failedRender ? (state.job.lines || []).findLast(
+    (line) => /^resumable: \d+ segments kept$/.test(line)) : null;
   const missingMedia = p.slides.filter((s) => !s.chosen_id).length;
   const missingTakes = p.slides.length - p.recorded_count;
   const music = await api('/api/music').catch(() => []);
@@ -21,6 +25,10 @@ async function paintRender() {
   }
 
   $('#tabbody').innerHTML = `
+    ${kept ? `<div class="panel row">
+      <span>${esc(kept)}</span>
+      <button class="btn" onclick="doRender(${state.job.kind === 'preview render'})">Resume</button>
+    </div>` : ''}
     <div class="panel tl" id="tl"></div>
     <div class="grid-2">
       <div class="panel">

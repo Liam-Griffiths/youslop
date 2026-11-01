@@ -311,13 +311,20 @@ def _draw_segment(job: tuple) -> tuple[int, int, Path, bool]:
 
 
 def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: Path,
-                   channel, free_mb, progress: Progress) -> list[Path]:
+                   channel, free_mb, progress: Progress, *, targets=None) -> list[Path]:
     """Every picture's segment in a drawn cut, drawn across worker processes."""
     import multiprocessing as mp
 
+    targets = targets or [seg_dir / f"seg{i + slide_at:04d}.mp4" for i in range(len(groups))]
+    scratch = seg_dir / "pieces"
+    shutil.rmtree(scratch, ignore_errors=True)
+    scratch.mkdir()
+    expected_gpu = bool(ffutil.gpu_status()["active"])
     jobs = []
     split: dict[int, int] = {}
     for i, group in enumerate(groups):
+        if _segment_ready(targets[i]):
+            continue
         seg_len = seg_lens[i + slide_at]
         total = cuts.frame_count(seg_len, FPS)
         n = max(1, round(total / (CHUNK_SECONDS * FPS)))
@@ -327,9 +334,12 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
         name = f"seg{i + slide_at:04d}"
         for c in range(n):
             a, b = total * c // n, total * (c + 1) // n
-            out = seg_dir / (f"{name}.mp4" if n == 1 else f"{name}.part{c:02d}.mp4")
+            out = scratch / (f"{name}.mp4" if n == 1 else f"{name}.part{c:02d}.mp4")
             jobs.append((project, group, seg_len, i + slide_at, out, channel, chapter,
                          0, i, c, (a, b)))
+    if not jobs:
+        scratch.rmdir()
+        return targets
     cores = os.cpu_count() or 4
     workers = max(1, min(len(jobs), cores - 1, 15))
     if free_mb is not None:
@@ -342,23 +352,17 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
     # running, and a forked copy of those is how a child hangs on a lock it
     # inherited mid-use. It is also what macOS does anyway.
     parts: dict[int, dict[int, tuple[Path, bool]]] = {i: {} for i in range(len(groups))}
-    done = 0
-    with cf.ProcessPoolExecutor(max_workers=workers,
-                                mp_context=mp.get_context("spawn")) as pool:
-        for i, c, out, gpu in pool.map(_draw_segment, jobs):
-            parts[i][c] = (out, gpu)
-            done += 1
-            if done % 5 == 0 or done == len(jobs):
-                progress(f"  pieces {done}/{len(jobs)}")
 
-    paths = []
-    for i in range(len(groups)):
+    def finish(i):
+        # A GPU fallback must never leave CPU pixels under the GPU cache key.
+        if any(gpu != expected_gpu for _path, gpu in parts[i].values()):
+            targets[i] = targets[i].with_suffix(".uncached.mp4")
         if split[i] == 1:
-            paths.append(parts[i][0][0])
-            continue
-        out = seg_dir / f"seg{i + slide_at:04d}.mp4"
+            _publish_segment(parts[i][0][0], targets[i])
+            return
+        out = targets[i].with_suffix(".partial.mp4")
         pieces = [parts[i][c] for c in range(split[i])]
-        listing = seg_dir / f"seg{i + slide_at:04d}.txt"
+        listing = scratch / f"seg{i + slide_at:04d}.txt"
         listing.write_text("".join(f"file '{p.name}'\n" for p, _gpu in pieces))
         if len({gpu for _p, gpu in pieces}) == 1:
             # Same encoder, same settings, each piece starting on a keyframe:
@@ -374,8 +378,29 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
         for p, _gpu in pieces:
             p.unlink(missing_ok=True)
         listing.unlink(missing_ok=True)
-        paths.append(out)
-    return paths
+        _publish_segment(out, targets[i])
+
+    done = 0
+    error = None
+    with cf.ProcessPoolExecutor(max_workers=workers,
+                                mp_context=mp.get_context("spawn")) as pool:
+        futures = [pool.submit(_draw_segment, job) for job in jobs]
+        for future in cf.as_completed(futures):
+            try:
+                i, c, out, gpu = future.result()
+                parts[i][c] = (out, gpu)
+                if len(parts[i]) == split[i]:
+                    finish(i)
+            except Exception as exc:
+                error = error or exc
+            done += 1
+            if done % 5 == 0 or done == len(jobs):
+                progress(f"  pieces {done}/{len(jobs)}")
+    if error:
+        raise error
+
+    shutil.rmtree(scratch)
+    return targets
 
 
 DIP = 0.45      # seconds each side of a dip through black
@@ -1389,8 +1414,83 @@ def _memory_check(progress: Progress) -> None:
 
 
 # ---------------------------------------------------------------------- render
+SEGMENT_VERSION = 1
+
+
+def _segment_key(project, group, settings) -> str:
+    """Exact inputs of a finished picture segment, excluding unused candidates."""
+    import dataclasses
+    import hashlib
+    import json
+
+    root = project_dir(project.id)
+    rows = []
+    for slide, duration in group:
+        row = dataclasses.asdict(slide)
+        row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id]
+        take = slide.take or {}
+        files = []
+        for field in ("path", "video"):
+            path = root / take[field] if take.get(field) else None
+            digest = None
+            if path and path.is_file():
+                with path.open("rb") as stream:
+                    digest = hashlib.file_digest(stream, "sha1").hexdigest()
+            files.append([str(path), _stat(path), digest])
+        picture = _chosen(project, slide)[0]
+        rows.append([row, duration, files, str(picture), _stat(picture)])
+    source = _picture_source(project, group[0][0])
+    picture = _chosen(project, group[0][0])[0]
+    channel = settings.get("channel")
+    graph = None
+    if not (scenes.handles(project.style.format) or cuts.is_cut(project.style.format)
+            or project.style.format == "board" or project.style.format.startswith("custom:")):
+        graph = _segment_graph(project, group, settings["seg_len"],
+                               **{k: settings[k] for k in (
+                                   "op", "channel", "chapter", "size", "fps", "dip_out",
+                                   "camera_index", "last_line")})
+    spec = [SEGMENT_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
+            rows, str(picture), _stat(picture),
+            [c for c in source.candidates if c["id"] == source.chosen_id],
+            dataclasses.asdict(project.style), project.frame.to_dict(),
+            dataclasses.asdict(channel) if dataclasses.is_dataclass(channel) else None,
+            {k: v for k, v in settings.items() if k != "channel"}, graph,
+            ffutil.video_args("segment.mp4", crf=settings["crf"], preset=settings["preset"]),
+            ffutil.h264("segment.mp4", crf=settings["crf"], preset=settings["preset"])]
+    return hashlib.sha1(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _segment_ready(path):
+    return path.is_file() and path.stat().st_size > 0
+
+
+def _publish_segment(temp, out):
+    if not _segment_ready(temp):
+        raise ValueError(f"Empty segment: {temp.name}")
+    os.replace(temp, out)
+
+
+def _sweep_segments(directory, keep):
+    # Only render scratch lives here; never touch takes or source media.
+    for path in directory.iterdir():
+        if path.is_file() and path.name not in keep:
+            path.unlink()
+
+
 def render(project: Project, progress: Progress = lambda m: None,
            preview: bool = False) -> dict:
+    """Render a cut, retaining completed picture segments after any failure."""
+    try:
+        return _render(project, progress, preview)
+    except Exception:
+        directory = project_dir(project.id) / "segments"
+        kept = sum(_segment_ready(p) for p in directory.glob("*.mp4")
+                   if re.fullmatch(r"[0-9a-f]{40}\.mp4", p.name))
+        progress(f"resumable: {kept} segments kept")
+        raise
+
+
+def _render(project: Project, progress: Progress, preview: bool) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
     from .learning import resolve_choices
     resolve_choices(project)
@@ -1398,7 +1498,6 @@ def render(project: Project, progress: Progress = lambda m: None,
 
     root = project_dir(project.id)
     seg_dir = root / "segments"
-    shutil.rmtree(seg_dir, ignore_errors=True)
     seg_dir.mkdir(parents=True, exist_ok=True)
 
     plan = _slide_durations(project, use_estimates=preview)
@@ -1538,16 +1637,32 @@ def render(project: Project, progress: Progress = lambda m: None,
 
     ops = camera_plan(project, groups)
 
-    def work(i: int) -> tuple[int, Path]:
-        out = seg_dir / f"seg{i + slide_at:04d}.mp4"
-        # A section starting in the next group is announced at the end of this
-        # one, in the silence that precedes it.
+    settings = []
+    paths = []
+    for i, group in enumerate(groups):
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
-        _render_segment(project, groups[i], seg_lens[i + slide_at], i + slide_at,
-                        out, channel=seg_channel, chapter=chapter, threads=seg_threads,
-                        dip_out=_dips_into(groups, i + 1),
-                        op=ops[i], camera_index=i, last_line=i == len(groups) - 1)
+        opts = dict(seg_len=seg_lens[i + slide_at], channel=seg_channel,
+                    chapter=chapter, threads=seg_threads, size=(WIDTH, HEIGHT), fps=FPS,
+                    crf=18, preset="veryfast", dip_out=_dips_into(groups, i + 1),
+                    op=ops[i], camera_index=i, last_line=i == len(groups) - 1,
+                    index=i + slide_at,
+                    **({"chunk_seconds": CHUNK_SECONDS} if cuts.is_cut(project.style.format) else {}))
+        settings.append(opts)
+        paths.append(seg_dir / f"{_segment_key(project, group, opts)}.mp4")
+    missing = [i for i, path in enumerate(paths) if not _segment_ready(path)]
+    progress(f"reused {len(groups) - len(missing)} of {len(groups)} segments")
+
+    def work(i: int) -> tuple[int, Path]:
+        out = paths[i]
+        temp = out.with_suffix(".partial.mp4")
+        opts = dict(settings[i])
+        seg_len, index = opts.pop("seg_len"), opts.pop("index")
+        encoder = ffutil.h264("segment.mp4", crf=opts["crf"], preset=opts["preset"])
+        _render_segment(project, groups[i], seg_len, index, temp, **opts)
+        if encoder != ffutil.h264("segment.mp4", crf=opts["crf"], preset=opts["preset"]):
+            out = paths[i] = out.with_suffix(".uncached.mp4")
+        _publish_segment(temp, out)
         return i, out
 
     # The drawn cuts paint every frame in Python, and Python threads take turns
@@ -1560,16 +1675,14 @@ def render(project: Project, progress: Progress = lambda m: None,
     # memory set the count; one core is left for the encoders and the app.
     if cuts.is_cut(project.style.format):
         seg_paths = _draw_segments(project, groups, seg_lens, slide_at, seg_dir,
-                                   seg_channel, free_mb, progress)
+                                   seg_channel, free_mb, progress, targets=paths)
     else:
         with cf.ThreadPoolExecutor(max_workers=workers) as pool:
-            results = {}
-            for i, path in pool.map(work, range(len(groups))):
-                results[i] = path
+            for i, path in pool.map(work, missing):
                 done += 1
-                if done % 3 == 0 or done == len(groups):
-                    progress(f"  segments {done}/{len(groups)}")
-            seg_paths = [results[i] for i in range(len(groups))]
+                if done % 3 == 0 or done == len(missing):
+                    progress(f"  segments {len(groups) - len(missing) + done}/{len(groups)}")
+            seg_paths = paths
 
     if intro_path:
         # The slate is already the right length; pad it to seg_len so its tail
@@ -1747,6 +1860,9 @@ def render(project: Project, progress: Progress = lambda m: None,
         progress("The GPU encoder failed; encoding on the CPU instead "
                  f"({str(exc).strip().splitlines()[-1][:120]})")
         encode(False)
+
+    _sweep_segments(seg_dir, {path.name for path in paths
+                              if re.fullmatch(r"[0-9a-f]{40}\.mp4", path.name)})
 
     result = {
         "output": f"out/{out_path.name}",

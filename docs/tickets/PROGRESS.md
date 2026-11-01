@@ -8,7 +8,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
 > Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
-> **Codex limit, 2026-10-31 23:20 PDT:** the 5-hour window reset; resumed with T12.3 (core blocks, batch 1 text). T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
+> **Codex limit, 2026-10-31 23:20 PDT:** the 5-hour window reset. T12.3 batch 1 committed, then back to roadmap order: Phase 5 (T5.6, T5.7, T5.1, T5.2a…, T5.3a…), T6.3. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -95,7 +95,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.3e | Drawn cut to scene: Casefile | L | T5.3d | todo | last; texture-heavy |
 | T5.4 | Thumbnails as a scene | M | T2.4 | todo | |
 | T5.5 | 3D stage under CDP | M | T2.1 | todo | |
-| T5.6 | Resume a failed render | S | T0.5 | todo | |
+| T5.6 | Resume a failed render | S | T0.5 | done | 2026-10-31 Codex; keyed segment cache, atomic publish, Resume button; owner: interrupt a real render and resume |
 | T5.7 | verify.py after render | S | T0.6 | todo | |
 
 ## Phase 6: brand rollout
