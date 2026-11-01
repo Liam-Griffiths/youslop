@@ -53,6 +53,9 @@ class Clip:
     in_s: float = 0.0
     out_s: float = 0.0
     thumbs: list[str] = field(default_factory=list)  # Relative to shoot directory.
+    quality: dict = field(default_factory=dict)  # Empty until analyzed; old manifests default safely.
+    duplicate_group: str = ''
+    best_take: str = ''
 
     @classmethod
     def from_dict(cls, raw: dict) -> Clip:
@@ -261,12 +264,33 @@ def start_processing(shoot_id: str) -> str:
 
 
 def process_and_detect(shoot_id: str, progress: Progress = lambda m: None) -> dict:
-    """Proxies, then shots. Detection runs only when every proxy is ready."""
+    """Proxies, then shots and quality, once every proxy is ready."""
     result = process_shoot(shoot_id, progress)
     if result['ready'] == result['total']:
         detect_shots(shoot_id, progress=progress)
+        analyze_quality(shoot_id, progress=progress)
         progress(f"Done: {result['ready']}/{result['total']} ready")
     return status(shoot_id)
+
+
+def analyze_quality(shoot_id: str, progress: Progress = lambda m: None) -> list[Clip]:
+    """Analyze proxy spans and persist flags only; leave every clip available."""
+    from . import footage_quality
+
+    with _PROCESS_LOCK:
+        shoot = load(shoot_id)
+        sources = {s.id: s for s in shoot.files}
+        audio = {}
+        for clip in shoot.clips:
+            progress(f'Analyzing quality: {clip.id}')
+            proxy, _ = _outputs(shoot, sources[clip.file])
+            if clip.file not in audio:
+                audio[clip.file] = ffutil.has_audio(proxy)
+            clip.quality = footage_quality.analyze_clip(proxy, clip.in_s, clip.out_s, audio[clip.file])
+        footage_quality.flag_soft(shoot.clips)
+        footage_quality.group_duplicates(shoot.clips)
+        _save(shoot)
+        return shoot.clips
 
 
 # Analysis thresholds are deliberately independent of the original camera format.
