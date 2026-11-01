@@ -912,3 +912,11 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-track { padding-left: 104px; box-sizing: content-box; }
 .tl-layer-label { left: 104px; transform: translateX(-104px); }
 .tl-lane em { left: 104px; transform: translateX(-104px); width: 104px; margin-left: 0; }
+
+/* Timeline variables sit with the selected-item inspector. */
+.tl-side { min-width: 0; overflow: auto; }
+.tl-side .tl-inspector { width: auto; }
+#tl-variables summary { cursor: pointer; padding: 8px 0; }
+.tl-variable-row { margin: 10px 0; }
+.tl-variable-row input[type="color"] { width: 34px; min-width: 34px; padding: 2px; }
+.tl-variable-row input { min-width: 0; }

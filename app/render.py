@@ -1029,6 +1029,9 @@ def _slate_channel(project: Project):
 
     if project.channel_id:
         channel = channels.load_or_none(project.channel_id)
+        if channel:
+            channel.style = Style(**project.style.to_dict())
+            channel.frame = FrameSpec.from_dict(project.frame.to_dict())
         if channel and project.format_look:
             channel.intro = IntroSpec(**project.format_look['intro'])
             channel.outro = OutroSpec(**project.format_look['outro'])

@@ -72,7 +72,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T4.4 | Layers rows | M | T4.3, T0.7 | done | 2026-10-31 Codex; layer rows (titles/cues/chapters/music/stings/notes/sponsors), hide in preview; owner: play with a layer hidden |
 | T4.5 | Drag and resize timing | M | T4.4 | todo | |
 | T4.6 | Razor (keeps audio) | M | T4.3, T0.6 | done | 2026-10-31 Codex + review fixes (spoken-number timings, snap to real pauses); originals kept; owner: try a mic take |
-| T4.7 | Variables panel | S | T4.3, T1.1 | todo | |
+| T4.7 | Variables panel | S | T4.3, T1.1 | done | 2026-10-31 Codex; variables panel (colours/copy/frame, project or channel scope); owner: slates now follow project style |
 | T4.8 | Quick wins: search, suggest chapters | S | T4.1 | done | 2026-10-31 Codex; home search/filter/sort, suggest chapters (no model); fixed beat title casing |
 | T4.9 | Keep every take | S | — | done | 2026-10-31 Codex; audited: no take deleted or overwritten; owner: try earlier-takes UI |
 

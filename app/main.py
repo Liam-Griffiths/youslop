@@ -864,6 +864,31 @@ def _apply_solo_outro(spec, patch: dict) -> None:
     spec.slots = min(spec.slots, outro_mod.max_slots(spec.template))
 
 
+@app.get("/api/projects/{pid}/variables")
+def get_variables(pid: str) -> dict:
+    from .variables import variables
+    return variables(_load(pid))
+
+
+@app.patch("/api/projects/{pid}/variables")
+def patch_variables(pid: str, payload: dict = Body(...)) -> dict:
+    from .variables import apply, variables
+    with store.lock_for(pid):
+        p = _load(pid)
+        # Keep channel edits serialized with the channel settings UI.
+        with channels.lock_for(p.channel_id or pid):
+            ch = channels.load_or_none(p.channel_id) if p.channel_id else None
+            try:
+                apply(p, ch, payload.get('scope'), payload.get('key'), payload.get('value'))
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            if payload.get('scope') == 'channel':
+                channels.save(ch)
+            else:
+                store.save(p)
+            return variables(p, ch)
+
+
 @app.patch("/api/projects/{pid}")
 def patch_project(pid: str, payload: dict = Body(...)) -> dict:
     with store.lock_for(pid):

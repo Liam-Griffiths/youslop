@@ -32,13 +32,18 @@ def context_base(project=None, channel=None) -> dict:
         channel = channels.load_or_none(project.channel_id)
     style = project.style if project else channel.style if channel else Style()
     frame = project.frame if project else channel.frame if channel else FrameSpec()
+    from .variables import variables
+    resolved = variables(project, channel)
+    copy = {k: v["value"] for k, v in resolved["copy"].items()}
     pal = asdict(themes.palette(style))
     for key in ("accent", "accent2", "ground", "ink"):
         pal[key] = "#" + "".join(f"{c:02x}" for c in pal[key][:3])
-    return dict(frame=frame.to_dict(), palette=pal,
-                vars=dict(channel_name=channel.name if channel else "",
-                          tagline=channel.tagline if channel else "",
-                          accent=style.accent, accent2=style.accent2,
+    frame_values = {**frame.to_dict(), **{k: v["value"] for k, v in resolved["frame"].items()}}
+    return dict(frame=frame_values, palette=pal, copy=copy,
+                vars=dict(**{f"copy.{k}": v for k, v in copy.items()},
+                          **{k: v["value"] for k, v in resolved["colors"].items()},
+                          channel_name=copy["channel_name"],
+                          tagline=copy["tagline"],
                           title=project.title if project else "Scene capture",
                           subtitle=project.subtitle if project else ""),
                 fonts={"Inter": "/fonts/Inter-Medium.ttf",

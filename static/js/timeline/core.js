@@ -94,7 +94,7 @@ async function tlMount() {
       <div class="tl-stage" id="tl-stage">
         <div class="tl-msg" id="tl-msg"></div>
       </div>
-      <div class="tl-inspector" id="tl-inspector"></div>
+      <div class="tl-side"><div class="tl-inspector" id="tl-inspector"></div><div class="tl-inspector" id="tl-variables"></div></div>
     </div>
     <div class="tl-transport">
       <button class="btn sm ghost" id="tl-prev" title="previous paragraph (Shift+←)">|◂</button>
@@ -128,6 +128,7 @@ async function tlMount() {
   if (!TL.data) $('#tl-note').textContent = 'laying out the cut…';
   await tlRefresh();
   await tlInspectorLoad();
+  await tlVariablesLoad();
 }
 
 // Re-read the layout. After an edit the changed entries come back not-ready,
