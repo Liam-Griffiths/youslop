@@ -43,6 +43,7 @@ function paintScript() {
     <span class="mono" style="color:var(--ink-faint)">${words} words · ${p.slides.length} paragraphs ·
       ~${fmtTime(p.est_seconds)} at a documentary pace</span>
     <div class="spacer"></div>
+    <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list</a>
     <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
     ${research.facts && research.facts.length
       ? `<button class="btn sm ghost" onclick="runFactcheck()">check facts</button>` : ''}

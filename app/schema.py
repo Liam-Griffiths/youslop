@@ -740,6 +740,18 @@ class SponsorSlot:
 
 
 @dataclass
+class PlannedShot:
+    paragraph_ids: list[str] = field(default_factory=list)
+    size: str = "medium"
+    notes: list[str] = field(default_factory=list)
+    done: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PlannedShot":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class Project:
     id: str
     idea: str
@@ -795,6 +807,7 @@ class Project:
     # Cleared the moment a run completes.
     draft: dict = field(default_factory=dict)
     slides: list[Slide] = field(default_factory=list)
+    shot_list: list[PlannedShot] = field(default_factory=list)
     sponsors: list[SponsorSlot] = field(default_factory=list)
     style: Style = field(default_factory=Style)
     frame: FrameSpec = field(default_factory=FrameSpec)
@@ -862,6 +875,7 @@ class Project:
             "test": self.test,
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
+            "shot_list": [asdict(s) for s in self.shot_list],
             "sponsors": [s.to_dict() for s in self.sponsors],
             "style": self.style.to_dict(),
             "frame": self.frame.to_dict(),
@@ -963,12 +977,13 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"frame", "slides", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
+            shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
             sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],
             frame=FrameSpec.from_dict(d.get("frame") or {}),
             style=style,

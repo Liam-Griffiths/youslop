@@ -720,6 +720,27 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
     return run
 
 
+def print_pdf(html: str) -> bytes:
+    """Print one self-contained document in a managed CDP session."""
+    result = []
+
+    def print_document(cdp, session, run):
+        url = 'data:text/html;base64,' + base64.b64encode(html.encode('utf-8')).decode('ascii')
+        cdp.clear_events()
+        nav = cdp.send('Page.navigate', {'url': url}, session)
+        if nav.get('errorText'):
+            raise StageError(nav['errorText'])
+        cdp.wait_event('Page.loadEventFired')
+        _evaluate(cdp, session, 'document.fonts.ready.then(() => true)')
+        result.append(base64.b64decode(cdp.send('Page.printToPDF', {
+            'printBackground': True, 'paperWidth': 8.27, 'paperHeight': 11.69,
+            'marginTop': .4, 'marginBottom': .4, 'marginLeft': .4, 'marginRight': .4,
+        }, session)['data']))
+
+    _run_cdp({'items': []}, lambda message: None, session_action=print_document)
+    return result[0]
+
+
 def render_scene(items: list[dict], out_dir: Path,
                  progress: Progress = lambda m: None, *, models=None) -> dict[str, Path]:
     """Capture local HTML scenes sequentially using one browser.

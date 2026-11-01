@@ -47,7 +47,7 @@ from . import diagram as diagram_mod
 from . import slide_styles
 from . import youtube as youtube_mod
 from . import transfer
-from . import footage_export_ui
+from . import footage_export_ui, shot_list_ui
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
 from .schema import CAMERA_TRACK, MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
 from .store import project_dir
@@ -66,6 +66,10 @@ app.add_api_route('/footage/export', footage_export_ui.export_dialog,
                   methods=['GET'], response_class=HTMLResponse)
 app.add_api_route('/footage/export', footage_export_ui.export_selected,
                   methods=['POST'], response_class=HTMLResponse)
+app.add_api_route('/projects/{pid}/shot-list', shot_list_ui.page, methods=['GET'])
+app.add_api_route('/projects/{pid}/shot-list', shot_list_ui.save_checks, methods=['POST'])
+app.add_api_route('/projects/{pid}/shot-list/build', shot_list_ui.build, methods=['POST'])
+app.add_api_route('/projects/{pid}/shot-list/pdf', shot_list_ui.pdf, methods=['GET'])
 
 @app.get('/api/blocks')
 def list_blocks() -> list[dict]:
