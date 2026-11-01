@@ -1105,6 +1105,16 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         p = _load(pid)
         s = _slide(p, sid)
         try:
+            if 'camera_look' in payload or 'camera_focal' in payload:
+                take = s.takes.get('camera')
+                if not take:
+                    raise edits.EditError('This paragraph has no camera take')
+                if 'camera_look' in payload:
+                    if payload['camera_look'] not in ('auto', 'as_shot'):
+                        raise edits.EditError('Camera look must be auto or as_shot')
+                    take['look'] = payload['camera_look']
+                if 'camera_focal' in payload:
+                    take['focal'] = edits._focal(payload['camera_focal'])
             edits.patch_slide_fields(s, payload)
             if "on_camera" in payload:
                 s.take = p.active_take(s)

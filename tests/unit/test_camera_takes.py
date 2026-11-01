@@ -97,6 +97,8 @@ def test_real_processing(synthetic, tmp_path, monkeypatch):
     assert abs(ffutil.duration(mp4) - ffutil.duration(wav) - meta['tail']) <= 1 / 30
     assert meta['tail'] == pytest.approx(1.8 - end, abs=.002)
     assert (meta['width'], meta['height'], meta['fps']) == (640, 360, 30)
+    assert meta['sync_corrected'] is True
+    assert set(meta['measure']) == {'YAVG', 'UAVG', 'VAVG', 'clipped'}
     assert not ffutil.has_audio(mp4)
     assert synthetic.read_bytes() == before
     with pytest.raises(ValueError, match='fresh'):
@@ -219,6 +221,7 @@ def test_tail_cap_and_accurate_seek_arguments(tmp_path, monkeypatch):
                           {'codec_type': 'audio', 'start_time': '1.2'}]}
     encoded = {'streams': [{'codec_type': 'video', 'width': 640, 'height': 360, 'avg_frame_rate': '30/1'}]}
     monkeypatch.setattr(ffutil, 'probe', lambda p: source if p.name == 'raw' else encoded)
+    monkeypatch.setattr(camera, 'measure', lambda p: {'YAVG': 110})
     monkeypatch.setattr(ffutil, 'run', lambda args: calls.append(args))
     monkeypatch.setattr(audio, 'process_take', lambda *args: {'trimmed': [.5, 1.5], 'duration': 1})
     meta = camera.process_camera_take(tmp_path / 'raw', tmp_path / 'voice.wav', tmp_path / 'picture.mp4')

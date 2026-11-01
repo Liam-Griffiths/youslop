@@ -1196,21 +1196,33 @@ def _build_intro(project: Project, progress: Progress,
 
 
 # ------------------------------------------------------------------ presenter
-def _camera_look(style, focal, size, src, fps) -> str:
-    """The presenter's existing crop, grade and light vignette, unchanged."""
+def _camera_look(style, focal, size, src, fps, *, take=None, target=110.0) -> str:
+    """Correct paragraph takes gently; retain the legacy presenter look."""
     crop, _ = _cover_crop(src, *size, focal)
     chain = [crop, f"fps={fps}"]
-    if style.grade in GRADES:
+    if take is not None:
+        from .camera import correction_filter
+        chain.append(correction_filter(take, target))
+        grades = {
+            "warm": "colorbalance=rs=0.0175:bs=-0.0225,eq=saturation=0.975:contrast=1.025:gamma=0.995",
+            "neutral": "eq=contrast=1.015:saturation=0.99",
+            "cool": "colorbalance=rs=-0.015:bs=0.025,eq=saturation=0.98:contrast=1.02",
+            "mono": "hue=s=0.5,eq=contrast=1.05:gamma=1.01",
+        }
+        if take.get("look", "auto") != "as_shot":
+            chain.append(grades.get(style.grade, ""))
+    elif style.grade in GRADES:
         chain.append(GRADES[style.grade])
     vig = _vignette(style.vignette * 0.6)
-    if vig:
+    if vig and (take is None or take.get("look", "auto") != "as_shot"):
         chain.append(vig)
     chain.append("format=yuv420p")
-    return ','.join(chain)
+    return ','.join(x for x in chain if x)
 
 
 def _camera_source(project, slide, seg_len, size, fps):
     """Align picture speech to the voice's lead-in, then keep real tail frames."""
+    from .camera import target
     take = project.active_take(slide) or {}
     root = project_dir(project.id)
     video = root / take.get("video", "")
@@ -1232,7 +1244,8 @@ def _camera_source(project, slide, seg_len, size, fps):
              f"setpts=PTS-STARTPTS,"
              f"tpad=start_mode=clone:start_duration={pad:.6f}:"
              f"stop_mode=clone:stop_duration={seg_len:.6f},"
-             + _camera_look(project.style, take.get("focal"), size, src, fps))
+             + _camera_look(project.style, take.get("focal"), size, src, fps,
+                            take=take, target=target(project)))
     return ["-i", str(src)], chain
 
 
@@ -1569,6 +1582,9 @@ def _segment_key(project, group, settings) -> str:
                                **{k: settings[k] for k in (
                                    "op", "channel", "chapter", "size", "fps", "dip_out",
                                    "camera_index", "last_line")})
+    from .camera import target
+    if group[0][0].on_camera:
+        rows[0].append(target(project))
     spec = [SEGMENT_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
             rows, str(picture), _stat(picture),
             [c for c in source.candidates if c["id"] == source.chosen_id],
@@ -2219,6 +2235,9 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
             slides[-1].append([_stat(root / camera[k]) if camera.get(k) else None
                                for k in ("video", "raw_path")])
     pic = _chosen(project, lead)[0]
+    from .camera import target
+    if lead.on_camera:
+        slides[0].append(target(project))
     blob = json.dumps(
         [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
          index, slides, _stat(pic),

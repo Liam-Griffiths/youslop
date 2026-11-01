@@ -62,6 +62,14 @@ function paintCameraRecord() {
     ${take ? `<div class="panel" style="margin-top:12px">
       <video id="camera-review" controls playsinline preload="metadata" style="width:100%"></video>
       <audio id="camera-audio" preload="metadata"></audio>
+      <label>Look <select onchange="saveCameraLook({camera_look:this.value})">
+        <option value="auto" ${take.look !== 'as_shot' ? 'selected' : ''}>Auto match</option>
+        <option value="as_shot" ${take.look === 'as_shot' ? 'selected' : ''}>As shot</option>
+      </select></label>
+      <p>Pause the video, then click your face to set the crop focal point.
+      <span id="camera-focal">${take.focal?.length ? `Focal: ${take.focal.map(v => Math.round(v * 100) + '%').join(', ')}` : 'No focal point set'}</span>
+      <button class="btn sm ghost" onclick="saveCameraLook({camera_focal:[]})">clear focal point</button></p>
+      <p class="mono">Review shows the original picture. Preview this paragraph to see the saved look and crop.</p>
       <div class="row"><button class="btn sm" onclick="reviewCamera()">review cleaned take</button>
       <span>Kept automatically</span><button class="btn sm" ${locked} onclick="toggleCameraRec()">Retake</button></div>
       ${take.sync_warning ? '<p>Audio/video offset exceeds 100 ms — check sync.</p>' : ''}
@@ -226,6 +234,18 @@ function setupCameraReview(p, take) {
   const video = $('#camera-review'), audio = $('#camera-audio');
   video.src = `/api/projects/${p.id}/file/${take.video}`;
   audio.src = `/api/projects/${p.id}/file/${take.path}`;
+  video.onclick = (event) => {
+    if (!video.paused || !video.videoWidth) return;
+    const box = video.getBoundingClientRect();
+    if (event.clientY > box.bottom - 40) return; // Leave native playback controls usable.
+    event.preventDefault();
+    // Account for letterboxing within the video element.
+    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+    const w = video.videoWidth * scale, h = video.videoHeight * scale;
+    const x = (event.clientX - box.left - (box.width - w) / 2) / w;
+    const y = (event.clientY - box.top - (box.height - h) / 2) / h;
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1) saveCameraLook({camera_focal:[x,y]});
+  };
   // Picture is silent and includes trailing gap footage; stop at the voice end.
   const sync = () => { audio.currentTime = Math.min(video.currentTime, take.duration); };
   video.onplay = () => { sync(); audio.play().catch(() => video.pause()); };
@@ -242,3 +262,15 @@ function setupCameraReview(p, take) {
   audio.onended = () => video.pause();
 }
 function reviewCamera() { $('#camera-review')?.play().catch(e => toast(e.message, true)); }
+async function saveCameraLook(fields) {
+  const p = state.project, s = p.slides[state.rec.index];
+  try {
+    const saved = await api(`/api/projects/${p.id}/slides/${s.id}`, {method:'PATCH', body:JSON.stringify(fields)});
+    Object.assign(s, saved);
+    if (state.project === p && state.tab === 'record' && p.slides[state.rec.index] === s) {
+      const label = $('#camera-focal'), focal = s.takes?.camera?.focal;
+      if (label) label.textContent = focal?.length
+        ? `Focal: ${focal.map(v => Math.round(v * 100) + '%').join(', ')}` : 'No focal point set';
+    }
+  } catch (e) { toast(e.message, true); }
+}

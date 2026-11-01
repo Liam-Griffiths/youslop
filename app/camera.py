@@ -2,12 +2,60 @@
 import logging
 from fractions import Fraction
 from pathlib import Path
+from statistics import median
 from tempfile import TemporaryDirectory
 
 from . import audio, ffutil
 from .schema import Voice
 
 TAIL_S = 2.5
+
+
+def measure(path: Path) -> dict:
+    """One 1 fps ffmpeg pass; clipping is measured before any resizing."""
+    with TemporaryDirectory(prefix="corkbored-camera-stats-") as folder:
+        stats, clipped = Path(folder) / "stats", Path(folder) / "clipped"
+        graph = ("[0:v:0]fps=1:round=up,format=yuv444p,split[a][b];"
+                 f"[a]signalstats,metadata=print:file={stats}[s];"
+                 "[b]lut=y='if(gt(val,250),255,0)':u=128:v=128,"
+                 f"signalstats,metadata=print:file={clipped}[c]")
+        ffutil.run(["-i", str(path), "-filter_complex", graph,
+                    "-map", "[s]", "-map", "[c]", "-an", "-f", "null", "-"], threads=1)
+        def average(file, key):
+            values = [float(line.split("=", 1)[1]) for line in file.read_text().splitlines()
+                      if line.startswith(f"lavfi.signalstats.{key}=")]
+            if not values:
+                raise ValueError("No camera measurement samples")
+            return sum(values) / len(values)
+        return {**{key: average(stats, key) for key in ("YAVG", "UAVG", "VAVG")},
+                "clipped": average(clipped, "YAVG") / 255}
+
+
+def target(project) -> float:
+    values = [(project.active_take(s) or {}).get("measure", {}).get("YAVG")
+              for s in project.slides if s.on_camera]
+    return median(v for v in values if v is not None) if any(v is not None for v in values) else 110.0
+
+
+def correction(take, luma_target=110.0) -> tuple[float, list[float]]:
+    """Bounded exposure and RGB cast offsets, shared by render and checks."""
+    stats = take.get("measure", {})
+    if take.get("look", "auto") == "as_shot" or "YAVG" not in stats:
+        return 0.0, [0.0] * 3
+    cap = lambda v, limit: max(-limit, min(limit, v))
+    brightness = cap((luma_target - stats["YAVG"]) / 255, .06)
+    u, v = stats.get("UAVG", 128) - 128, stats.get("VAVG", 128) - 128
+    rgb = [-1.402 * v / 255, (.344 * u + .714 * v) / 255, -1.772 * u / 255]
+    return brightness, [cap(x, .025) for x in rgb]
+
+
+def correction_filter(take, luma_target=110.0) -> str:
+    brightness, rgb = correction(take, luma_target)
+    if not brightness and not any(rgb):
+        return ""
+    balance = ":".join(f"{c}{zone}={v:.6f}" for c, v in zip("rgb", rgb) for zone in "smh")
+    return (f"eq=brightness={brightness:.6f}:contrast=1"
+            + (f",colorbalance={balance}:pl=1" if any(rgb) else ""))
 
 
 def process_camera_take(raw: Path, out_wav: Path, out_mp4: Path,
@@ -61,4 +109,5 @@ def process_camera_take(raw: Path, out_wav: Path, out_mp4: Path,
     return {**meta, "tail": round(tail, 6), "width": result["width"],
             "height": result["height"], "fps": float(Fraction(result["avg_frame_rate"])),
             "kind": "camera", "av_offset": round(offset, 6),
-            "sync_warning": abs(offset) > 0.1, "video_start": round(video_start, 6)}
+            "sync_warning": abs(offset) > 0.1, "sync_corrected": True,
+            "video_start": round(video_start, 6), "measure": measure(out_mp4)}

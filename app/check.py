@@ -386,12 +386,86 @@ def number_match(sb, frame, ctx):
     return out
 
 
+def _camera_paragraphs(sb):
+    return [p for p in sb['paragraphs'] if p.get('on_camera')]
+
+
+def camera_dark(sb, frame, ctx):
+    from .camera import correction
+    out = []
+    for p in _camera_paragraphs(sb):
+        take = p['take']
+        luma = take.get('measure', {}).get('YAVG')
+        brightness, _ = correction(take, sb.get('camera_target', 110))
+        if luma is not None and luma + brightness * 255 < 60:
+            out.append(_finding('camera_dark', 'P1', p['start'], p['id'],
+                                'Camera picture remains too dark after gentle correction.'))
+    return out
+
+
+def camera_blown(sb, frame, ctx):
+    return [_finding('camera_blown', 'P1', p['start'], p['id'],
+                     'More than 3% of camera pixels have clipped highlights.')
+            for p in _camera_paragraphs(sb) if p['take'].get('measure', {}).get('clipped', 0) > .03]
+
+
+def camera_sync(sb, frame, ctx):
+    return [_finding('camera_sync', 'P0', p['start'], p['id'],
+                     'Camera audio/video start offset exceeds 80 ms and is uncorrected.')
+            for p in _camera_paragraphs(sb)
+            if abs(p['take'].get('av_offset', 0)) > .08
+            and not p['take'].get('sync_corrected', 'video_start' in p['take'])]
+
+
+def camera_low_res(sb, frame, ctx):
+    return [_finding('camera_low_res', 'P2', p['start'], p['id'],
+                     'Camera footage is narrower than 1280 pixels.')
+            for p in _camera_paragraphs(sb) if 0 < p['take'].get('width', 0) < 1280]
+
+
+def camera_no_focal(sb, frame, ctx):
+    return [_finding('camera_no_focal', 'P2', p['start'], p['id'],
+                     'Set a focal point: the camera crop may cut off the face.')
+            for p in _camera_paragraphs(sb) if not p['take'].get('focal')
+            and p['take'].get('height', 0) > 0 and p['take'].get('width', 0) > 0
+            and abs(p['take']['width'] / p['take']['height'] - 16 / 9) > .01]
+
+
+def camera_held(sb, frame, ctx):
+    out = []
+    for p in _camera_paragraphs(sb):
+        take = p['take']
+        duration = p['end'] - p['start']
+        # Cut ranges are in original take time; overlay times are after cuts.
+        events, removed = [0.0, duration], 0.0
+        for cut in sorted(take.get('cuts', []), key=lambda c: c['a']):
+            a, b = cut['a'], cut['b']
+            if b > a:
+                events.append(max(0, min(duration, a - removed)))
+                removed += b - a
+        for overlay in take.get('overlays', []):
+            if overlay.get('kind') == 'cutaway':
+                a = max(0, min(duration, overlay['at']))
+                b = max(a, min(duration, overlay['at'] + overlay['dur']))
+                events.extend([a, b])
+        events = sorted(set(events))
+        for a, b in zip(events, events[1:]):
+            hidden = any(o.get('kind') == 'cutaway' and o['at'] <= a
+                         and o['at'] + o['dur'] >= b for o in take.get('overlays', []))
+            if b - a > frame.max_gap_after_s and not hidden:
+                out.append(_finding('camera_held', 'P2', p['start'] + a, p['id'],
+                                    'Camera shot holds too long; add a cut, punch or cutaway.'))
+    return out
+
+
 Rule = Callable[[dict, FrameSpec, Ctx], list[Finding]]
 RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_stretch,
                     overlay_budget, small_text, text_overflow, unreadable_line, anchor_off,
                     same_device_twice, last_line_short, silent_film, open_loop_unpaid,
                     banned_used, timeline_problem, sponsor_early_long, sponsor_count,
-                    sponsor_disclosure, sponsor_question, sponsor_music, number_match]
+                    sponsor_disclosure, sponsor_question, sponsor_music, number_match,
+                    camera_dark, camera_blown, camera_sync, camera_low_res,
+                    camera_held, camera_no_focal]
 
 
 def _scene_text(project, sb, ctx, groups, measure):
@@ -461,6 +535,8 @@ def run(project, measure=False) -> dict:
     from .learning import effective_frame
     frame = effective_frame(project)
     sb = storyboard.build(project)
+    from .camera import target
+    sb['camera_target'] = target(project)
     sb['outline'] = project.outline
     sb['music'] = bool(render.pick_music(project))
     pictures = _pictures(sb)

@@ -50,6 +50,11 @@ def build(project) -> dict:
                          "duration": take.get("duration", 0.0),
                          "words": deepcopy(take.get("words", []))},
             })
+            if slide.on_camera:
+                paragraphs[-1]['take'].update({k: deepcopy(v) for k, v in
+                    (project.active_take(slide) or {}).items() if k in {
+                        'measure', 'look', 'focal', 'av_offset', 'sync_corrected',
+                        'video_start', 'width', 'height', 'cuts', 'overlays'}})
             if slide.cues.get('blocks'):
                 paragraphs[-1]['block_cues'] = deepcopy(slide.cues['blocks'])
     if cuts.is_cut(project.style.format):

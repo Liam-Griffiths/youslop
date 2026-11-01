@@ -34,8 +34,9 @@ def _fire(code, sb, frame=None):
     return getattr(check, code)(sb, frame, check._ctx(sb))
 
 
-# Sponsor rule fixtures live in test_sponsors.py.
-@pytest.mark.parametrize('code', [r.__name__ for r in check.RULES if not r.__name__.startswith("sponsor_")])
+# Dedicated rule fixtures live in test_sponsors.py and test_camera_checks.py.
+@pytest.mark.parametrize('code', [r.__name__ for r in check.RULES
+                                if not r.__name__.startswith(("sponsor_", "camera_"))])
 def test_each_rule_positive_and_negative(code, monkeypatch):
     sb = _sb()
     if code == 'empty_first_frame':
