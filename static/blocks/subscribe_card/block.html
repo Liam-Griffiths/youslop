@@ -1,0 +1,9 @@
+{% extends '_blocks/subscribe_card/channel_base.html' %}
+{% block body %}
+{{ box('subscribe','Subscribe',c.x,c.top,c.w,150,'heading rule') }}
+{% if c.avatar %}{{ photo('avatar',c.avatar,vars.avatar,c.x,570 if p else 380,320 if p else 440,320 if p else 440,focal=[vars.focal_x,vars.focal_y]) }}{% endif %}
+{% set tx = c.x if p or not c.avatar else 750 %}
+{% set tw = c.w if p or not c.avatar else 940 %}
+{{ box('channel',vars.channel_name,tx,940 if p else 400,tw,300 if p else 260,'heading',0.15) }}
+{{ box('handle',vars.handle,tx,1280 if p else 710,tw,186,'mono',0.3) }}
+{% endblock %}

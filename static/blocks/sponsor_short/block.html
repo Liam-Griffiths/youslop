@@ -1,0 +1,9 @@
+{% extends '_blocks/sponsor_short/sponsor_base.html' %}
+{% block body %}
+{{ identity() }}
+{{ box('made',sponsor.made,c.x,410 if p else 230,c.w,124 if p else 62,'copy',b.made) }}
+{{ box('brand',sponsor.name,c.x,560 if p else 320,c.w,210 if p else 190,'heading',b.brand) }}
+{{ box('learn',sponsor.learn,c.x,800 if p else 520,c.w,186 if p else 124,'copy',b.learn) }}
+{{ box('link',sponsor.link,c.x,1020 if p else 644,c.w,124 if p else 62,'copy',b.link) }}
+{{ strip() }}
+{% endblock %}

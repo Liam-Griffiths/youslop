@@ -1,0 +1,13 @@
+{% extends '_blocks/sponsor_short/sponsor_base.html' %}
+{% block body %}
+{{ identity() }}
+{{ box('brand',sponsor.name,c.x if p else 1160,410 if p else 240,756 if p else 530,124 if p else 330,'heading',b.brand) }}
+{{ box('made',sponsor.made,c.x,600 if p else 300,756 if p else 880,124,'copy',b.made,'rise',c.intro-b.made) }}
+{{ box('learn',sponsor.learn,c.x,780 if p else 470,756 if p else 880,248,'copy',b.learn,'rise',c.intro-b.learn) }}
+{% for slot in c.slots %}
+{{ photo('picture-'~loop.index,slot.path,slot.src,c.x,570 if p else 230,756 if p else 880,590 if p else 700,slot.start,slot.duration,slot.focal) }}
+{{ box('caption-'~loop.index,slot.caption,c.x if p else 1160,990 if p else 590,756 if p else 530,170 if p else 186,'copy strip',slot.start,'none',slot.duration) }}
+{% endfor %}
+{{ box('url',sponsor.url,c.x if p else 1160,1200 if p else 780,756 if p else 530,186 if p else 124,'mono strip',b.link) }}
+{% if sponsor.code %}{{ box('code','Code: '~sponsor.code,c.x if p else 1160,1410 if p else 910,756 if p else 530,62,'mono',b.link) }}{% endif %}
+{% endblock %}

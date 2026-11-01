@@ -3,6 +3,7 @@ import base64
 from html.parser import HTMLParser
 import io
 import json
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -85,7 +86,8 @@ def test_builtin_checks_and_builder_stats(ref, capture_mock):
         assert stats['captured_frames'] == 0
         assert 1 <= stats['layers'] <= 48 and stats['passes'] == 1
         # Native media is not screenshotted; warm manifests also count its files.
-        if ref in blocks.core_explainer_blocks.IDS and ref != 'step_list':
+        if (ref in blocks.core_explainer_blocks.IDS and ref != 'step_list' or
+                ref in blocks.core_channel_blocks.IDS):
             assert 1 <= stats['captures'] + stats['cache_hits'] <= stats['layers'] + 1
         else:
             assert stats['captures'] + stats['cache_hits'] == stats['layers'] + 1
@@ -204,3 +206,27 @@ def test_explainer_maximum_inputs_compile(ref, aspect, capture_mock, tmp_path):
     if ref in ('document_highlight', 'callout_arrow', 'map_highlight', 'labelled_diagram'):
         assert 'class="annotation"' in html
         assert next(r for r in rows if r['id'] == 'annotation')['motion'] in ('wipe', 'reveal')
+
+
+@pytest.mark.parametrize('ref', blocks.core_channel_blocks.IDS)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_channel_maximum_inputs_compile(ref, aspect, capture_mock, tmp_path):
+    values = json.loads((blocks.BUILTIN_DIR/ref/'sample-max.json').read_text())
+    seconds = 30 if ref == 'sponsor_long' else 5
+    template, ctx = blocks.prepare(ref, values, aspect, seconds=seconds)
+    rows = Layers(scenes.render_html(template, ctx)).rows
+    stats = builder.inspect(tmp_path, template, ctx, seconds=seconds,
+                            size=(ctx['width']//4,ctx['height']//4), fps=30)
+    native = [r for r in rows if r['native']]
+    assert len(native) == (4 if ref == 'sponsor_long' else 0 if ref == 'sponsor_short' else 1)
+    assert stats['captured_frames'] == 0 and stats['passes'] == 1
+    assert stats['layers'] <= 16 and stats['largest_graph_bytes'] < 65536
+    assert stats['captures'] == 1+len(rows)-len(native)
+    assert all(r['duration'] > 0 and r['start']+r['duration'] <= seconds+.001 for r in rows)
+    # Declared settled boxes clear the title-safe and Shorts-control insets.
+    for row in rows:
+        style = dict(re.findall(r'(left|top|width|height):([0-9.]+)px', row['signature'][0]['style']))
+        x, y, w, h = [float(style[k]) for k in ('left', 'top', 'width', 'height')]
+        assert x >= ctx['width']*.1 and x+w <= ctx['width']*(.85 if aspect == '9:16' else .9)
+        assert y >= ctx['height']*(.15 if aspect == '9:16' else .1)
+        assert y+h <= ctx['height']*(.8 if aspect == '9:16' else .9)

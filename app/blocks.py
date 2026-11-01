@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 import jinja2
 
-from . import core_data_blocks, core_explainer_blocks, paths, scene_builder, scenes
+from . import core_channel_blocks, core_data_blocks, core_explainer_blocks, paths, scene_builder, scenes
 from .config import STATIC_DIR
 
 BUILTIN_DIR = STATIC_DIR / 'blocks'
@@ -198,6 +198,8 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
     if meta['kind'] == 'sponsor':
         from .sponsors import scene_context
         ctx.update(scene_context(ctx))
+    if block_id in core_channel_blocks.IDS:
+        ctx['channel_block'] = core_channel_blocks.layout(block_id, values, ctx)
     template = f'_blocks/{block_id}/{meta["aspects"][aspect]}'
     # Hash local assets as well as templates; previews/clips invalidate on edits.
     fingerprint = hashlib.sha1()

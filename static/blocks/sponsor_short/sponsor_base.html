@@ -1,0 +1,13 @@
+{% extends '_blocks/subscribe_card/channel_base.html' %}
+{% set b = channel_block.beats %}
+{% block head %}{{ super() }}<style>:root { --accent:{{ sponsor.accent }}; }</style>{% endblock %}
+{% macro identity() %}
+{{ box('disclosure','Sponsored by',c.x,c.top,c.w-(110 if sponsor.logo else 0),90,'copy rule',0,'none') }}
+{% if sponsor.logo %}<div class="box" data-layer="logo" data-motion="fade" data-start="0" data-duration="{{ duration }}" style="left:{{ c.x+c.w-90 }}px;top:{{ c.top }}px;width:90px;height:90px"><img class="logo" src="{{ sponsor.logo }}" alt=""></div>{% endif %}
+{% endmacro %}
+{% macro strip() %}
+{% set y = 1170 if p else 710 %}
+<div class="box strip" style="left:{{ c.x }}px;top:{{ y }}px;width:{{ c.w }}px;height:{{ 340 if p else 252 }}px"></div>
+{{ box('url',sponsor.url,c.x,y+20,c.w,186 if p else 124,'mono',b.link) }}
+{% if sponsor.code %}{{ box('code','Code: '~sponsor.code,c.x,1400 if p else 890,c.w,62,'mono',b.link) }}{% endif %}
+{% endmacro %}

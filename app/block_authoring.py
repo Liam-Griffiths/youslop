@@ -70,6 +70,10 @@ def lint(block_id):
 # Run after fonts/__ready and seek. Use layout dimensions for overflow even when
 # an entrance preset temporarily makes the text transparent or transforms it.
 MEASURE = r'''(() => {
+ // Entrance presets move layers before they arrive; measure the settled layout.
+ const settle = document.createElement('style');
+ settle.textContent = '*{transform:none!important;translate:none!important;scale:none!important}';
+ document.head.append(settle);
  const errors = [], W = document.documentElement.dataset.width * 1,
  H = document.documentElement.dataset.height * 1;
  const rgb = s => (s.match(/[\d.]+/g) || []).map(Number);
@@ -97,7 +101,7 @@ MEASURE = r'''(() => {
    if (r.left < W*inset-1 || r.right > W*(1-inset)+1 ||
        r.top < H*inset-1 || r.bottom > H*(1-inset)+1 ||
        (H > W && (r.top < H*.15 || r.bottom > H*.8 || r.right > W*.85)))
-     errors.push(key+': outside title safe area / Shorts UI zones');
+     errors.push(key+': outside title safe area / Shorts UI zones at '+[r.left,r.top,r.right,r.bottom].map(Math.round).join(','));
    let node = el, bg;
    while (node) {
      const c = rgb(getComputedStyle(node).backgroundColor);
@@ -114,6 +118,7 @@ MEASURE = r'''(() => {
      if (ratio < (large ? 3 : 4.5)) errors.push(key+': insufficient contrast');
    }
  }
+ settle.remove();
  return errors;
 })()'''
 

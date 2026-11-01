@@ -1,0 +1,6 @@
+{% extends '_blocks/subscribe_card/channel_base.html' %}
+{% block body %}
+{{ box('label','Up next',c.x,c.top,c.w,90,'copy rule') }}
+{{ photo('thumbnail',c.picture,vars.picture,c.x,440 if p else 260,756 if p else 880,650,focal=[vars.focal_x,vars.focal_y]) }}
+{{ box('title',vars.title,c.x if p else 1160,1140 if p else 300,756 if p else 530,360 if p else 600,'heading',0.2) }}
+{% endblock %}
