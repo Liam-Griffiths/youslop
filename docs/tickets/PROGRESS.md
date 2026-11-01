@@ -122,7 +122,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T7.2 | Record on camera in the Record tab | M | T7.1 | done | 2026-11-01 Codex + review fix (WebM duration); browser flow verified with fake devices; owner: Linux desktop permissions, real webcam |
 | T7.3 | Camera paragraphs in the render | M | T7.1, T0.5 | done | 2026-11-01 Codex; synthetic A/V sync within a preview frame; owner: real webcam paragraph by eye and ear |
 | T7.4 | Trims and jump cuts on camera takes | M | T7.3, T4.4 | done | review: button styling, source strip at ruler scale |
-| T7.5 | Cutaways and layouts over camera | M | T7.4, T2.4 | todo | includes the Auto-edit button |
+| T7.5 | Cutaways and layouts over camera | M | T7.4, T2.4 | done | includes the Auto-edit button; review: PIP mask drawn once; owner: Auto-edit on real paragraphs |
 | T7.6 | Camera look and checks | S | T7.3, T1.5 | done | 2026-11-01 Codex; bounded look matching, deterministic checks; owner: two differently lit real takes |
 | T7.7 | Talking-head videos end to end | S | T7.2, T7.3, T7.4 | todo | |
 | T7.8 | Long-take import (stretch goal) | L | T7.1, T7.2, T7.4 | todo | stretch; opt-in speech recognition |
