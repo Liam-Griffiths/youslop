@@ -148,3 +148,41 @@ def test_missing_download_keeps_install_absent(upstream):
         catalog.fetch('lower-third')
     assert not (catalog.CATALOG_DIR / 'lower-third').exists()
     assert not list(catalog.CATALOG_DIR.glob('_fetch-*'))
+
+
+def test_quarantined_metadata_including_cached_entries(upstream):
+    item, calls = upstream
+    item.update(preview='https://preview.invalid/branding.mp4',
+                metadata={'poster': 'https://preview.invalid/poster.png'})
+    first = catalog.search('lower third')
+    assert first == [dict(name='lower-third', type='hyperframes:component',
+                          license=item['license'], third_party=True)]
+    count = len(calls)
+    assert catalog.search('lower third') == first
+    assert len(calls) == count
+    dest = catalog.fetch('lower-third')
+    source_path = dest / 'SOURCE.json'
+    source = json.loads(source_path.read_text())
+    source['preview'] = item['preview']
+    source_path.write_text(json.dumps(source))
+    installed = catalog.installed()[0]
+    assert installed['third_party'] is True
+    assert installed['license'] == item['license']
+    assert 'preview.invalid' not in json.dumps(installed)
+    assert not any('preview.invalid' in url for url in calls)
+
+
+def test_third_party_setting_defaults_off(monkeypatch):
+    from app import brand, settings
+
+    field = settings.FIELDS_BY_KEY['third_party_blocks']
+    assert field.default == 'off'
+    for name in brand.env_names('THIRD_PARTY_BLOCKS'):
+        monkeypatch.delenv(name, raising=False)
+    assert not catalog.ui_enabled()
+    monkeypatch.setenv('YOUSLOP_THIRD_PARTY_BLOCKS', 'on')
+    assert catalog.ui_enabled()
+    monkeypatch.setenv(field.env, 'off')
+    assert not catalog.ui_enabled()
+    monkeypatch.setenv(field.env, 'on')
+    assert catalog.ui_enabled()

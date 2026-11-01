@@ -48,7 +48,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.6 | Migration: intro slates | M | T2.5 | done | 2026-10-31 Codex; 4 intro scenes checked; owner: Dossier lost its stamp, Folio kicker contrast |
 | T2.7 | Catalog fetcher | S | T2.3 | done | 2026-10-31 Codex; real catalog search works |
 | T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | compatibility only (catalog is temporary, see T12.7) |
-| T2.7c | Quarantine the third-party catalog | S | T2.7 | todo | owner 2026-10-31: competitor blocks, off by default, no their previews |
+| T2.7c | Quarantine the third-party catalog | S | T2.7 | done | 2026-10-31 Codex; off by default, metadata allowlist hides previews; UI gating waits for a catalog UI |
 
 ## Phase 3: review loop and agent surface
 

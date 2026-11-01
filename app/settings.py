@@ -197,6 +197,12 @@ FIELDS: list[Field] = [
          "Wikimedia and Nominatim ask automated clients to identify "
          "themselves with a contact — put an email address here.",
          aliases=tuple(brand.env_names("USER_AGENT")[1:]), group="General"),
+    Field("third_party_blocks", brand.ENV_PREFIX + "THIRD_PARTY_BLOCKS",
+         "Third-party blocks",
+         "Temporary compatibility catalog. Third-party blocks retain their own "
+         "licences; upstream previews are never displayed.",
+         aliases=tuple(brand.env_names("THIRD_PARTY_BLOCKS")[1:]),
+         options=(("off", "Off"), ("on", "On")), default="off"),
 ]
 FIELDS_BY_KEY = {f.key: f for f in FIELDS}
 

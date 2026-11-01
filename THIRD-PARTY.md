@@ -63,3 +63,22 @@ Not bundled; fetched at runtime and credited per video by the app's own
 credits block. Tile and API terms are the user's to honour — see the
 "Licensing" section of the README, which says plainly that the tool records
 provenance but does not clear rights for you.
+
+## Third-party scene catalog (temporary compatibility)
+
+The Hyperframes catalog is retained for compatibility only, pending replacement
+by Corkbored's own blocks. Catalog search, fetch and list are currently CLI-only.
+The `third_party_blocks` setting defaults to off; any future catalog UI must
+honour it and label each item **third-party** with its licence. Shared catalog
+metadata excludes upstream preview URLs and branding. Never fetch or display
+upstream previews; any future posters must be rendered locally with neutral
+sample values. Downloads retain upstream licences and SOURCE.json provenance.
+
+Packs, built-in defaults and new-channel templates must never reference catalog
+blocks (`/catalog/`); T8.3 pack lint must reject these references when pack tooling
+is implemented. Existing project compositions remain compatible.
+
+Retirement criteria (T12.7): every catalog block used by any local project has a
+Corkbored equivalent, and the core set has shipped all four batches. Provide a
+catalog-to-block variable mapping and replacement action before removing the
+catalog CLI and setting; keep runtime compatibility for old compositions.

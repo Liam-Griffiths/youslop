@@ -11,6 +11,7 @@ import time
 
 import httpx
 
+from . import brand
 from .config import USER_AGENT
 from .paths import data_root
 
@@ -43,6 +44,21 @@ def _cached(client, key, url):
     return value
 
 
+def ui_enabled() -> bool:
+    """Future catalog UI must opt in; CLI and existing scenes remain usable."""
+    return brand.env('THIRD_PARTY_BLOCKS', 'off').lower() == 'on'
+
+
+def _metadata(item: dict) -> dict:
+    """Public metadata allowlist: never expose upstream previews or branding.
+
+    Apply to cached entries too. Raw registry metadata stays local for provenance.
+    Future UI consumers must show the third-party chip and this licence.
+    """
+    return {key: item[key] for key in ('name', 'type', 'license', 'commit', 'date', 'lint')
+            if key in item} | {'third_party': True}
+
+
 def search(query: str) -> list[dict]:
     """Search names first; inspect matching items only. Exclude WebGPU items."""
     with httpx.Client(timeout=20, headers={'User-Agent': USER_AGENT}) as client:
@@ -56,12 +72,13 @@ def search(query: str) -> list[dict]:
                 continue
             item = _cached(client, name, RAW + f'main/registry/{folder}/{name}/registry-item.json')
             if 'webgpu' not in [t.lower() for t in item.get('tags', [])]:
-                result.append(item)
+                result.append(_metadata(item))
         return result
 
 
 def installed() -> list[dict]:
-    return [json.loads(p.read_text()) for p in sorted(CATALOG_DIR.glob('*/SOURCE.json'))]
+    return [_metadata(json.loads(p.read_text()))
+            for p in sorted(CATALOG_DIR.glob('*/SOURCE.json'))]
 
 
 def _hash(path):
