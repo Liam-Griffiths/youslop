@@ -30,15 +30,30 @@ are the unchanged `kit.place` cue span, `u=t-a`, `span=max(.6,(b-a)*.5)`.
 
 Builder plan: cue screens with earlier paper flattened into grounds; one native
 ffmpeg still per photo (including video poster frames), one layer per typed row,
-shared camera keys and motion presets, no capture windows. CSS measures wrapping
-and shrinks copy to its longest line before row measurement. The board is laid
+shared camera keys and motion presets, no capture windows. Index cards use
+`kit.wrap` at 36px / 600px, up to five rows, matching Pillow. Each row is one SVG
+baseline (140+50*n), with a 50px CSS line-height; browser glyph advances set the
+character reveal edges, and overwide rows shrink to fit the same 600px measure.
+Live and historical rows share that layout. The board is laid
 out using the existing jittered slots, rather than an unrelated CSS grid.
 
-Review differences: deterministic CSS grain replaces Pillow's unseeded noise;
-CSS shadows/pin domes/tape replace raster sprites. Native photos remain square to
+Round 2 grounds are seeded Gaussian-noise PNGs built once per look/output size
+in the project scene cache: Pillow's exact colour endpoints, small-noise bilinear
+resize, >232 cork specks / >200 felt fibres with their original RGBA colours,
+then `_world`'s RGB conversion and 2.9*world-scale blur. The board has no CSS grid
+or lamp wash. `_light` supplies the exact warm/vignette RGBA PNG, composited once
+per output frame after the camera by the builder's static top plate.
+Photo paper and the occasional monochrome choice now use Pillow's caption seed
+and random-call order. Native media applies the (255,220,170,34) wash before
+optional luminance conversion, blur and dim, before looping the still.
+
+Review differences: seeded noise replaces Pillow's unseeded noise; CSS
+shadows/pin domes/tape replace raster sprites. Native photos remain square to
 the board (their paper and caption too) and fade in; other items keep slot rotation
-and scale/drop. Warmth is a board-anchored CSS lamp wash rather than a fixed
-viewport vignette; occasional monochrome printing is omitted. Redacted lines use
+and scale/drop. The static viewport lamp also covers the chapter label (Pillow
+lights only the board beneath that label); review that tail as well as the board.
+RGB tint conversion can differ by one channel value from Pillow's rounding.
+Redacted lines use
 paper-backed row wipes over black bars (same timing/ease), without off-page mask
 spill. The chapter uses the shared 1.14 drop. Human review
 must judge these differences, all five kinds, three looks, history and overview.

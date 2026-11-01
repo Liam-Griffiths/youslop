@@ -1,15 +1,15 @@
 .screen { position:absolute; width:4608px; height:2592px; }
-.board { position:absolute; inset:0; background:radial-gradient(ellipse at 42% 38%,#ffaa5a16, #0009 90%),repeating-radial-gradient(ellipse at 17px 29px,var(--grain) 0 1px,transparent 2px 7px),var(--bg); background-size:auto,37px 31px,auto; }
-.look-wall .board { background-size:auto,17px 19px,auto; }.look-felt .board { background-size:auto,7px 11px,auto; }
+.board { position:absolute; inset:0; background:var(--ground-image) 0 0/100% 100% no-repeat; }
 .item { position:absolute; color:#28282e; }.past { filter:blur(2.9px) brightness(.88); }
 .plate { position:absolute; inset:0; padding:60px; }.paper { position:relative; width:100%; height:100%; background:var(--paper); box-shadow:10px 10px 14px #000a; }
 .pin { position:absolute; left:calc(50% - 17px); top:69px; width:34px; height:34px; border-radius:50%; background:radial-gradient(circle at 32% 27%,white 0 5%,transparent 13%),radial-gradient(circle at 36% 32%,color-mix(in srgb,var(--pin,#c41e24),white 45%) 0 30%,var(--pin,#c41e24) 43% 68%,#0009 90%); box-shadow:8px 12px 9px #0006; }
 .photo-window { position:absolute; left:30px; top:30px; width:540px; height:520px; background:#282624; color:#78746c; text-align:center; font:34px/520px Typewriter; }
 .native-photo { position:absolute; width:540px; height:520px; }.caption { position:absolute; left:40px; top:570px; width:520px; height:105px; text-align:center; font:64px/100px Hand; color:#222246; }
 .tape { position:absolute; left:0; top:0; transform:rotate(-18deg); }
-.card .paper { background:linear-gradient(var(--rule),var(--rule)) 0 92px/100% 3px no-repeat,repeating-linear-gradient(transparent 0 48px,#96b4d6 49px 50px) 0 97px/100% 300px no-repeat,var(--paper); }
+.card .paper { background:linear-gradient(var(--rule),var(--rule)) 0 92px/100% 4px no-repeat,repeating-linear-gradient(#96b4d6 0 3px,transparent 3px 50px) 0 146px/100% 253px no-repeat,var(--paper); }
 .card-title { position:absolute; left:40px; top:24px; width:600px; height:54px; font:44px/54px Mono; }
-.copy { position:absolute; overflow-wrap:anywhere; }.typed { left:40px; top:110px; width:600px; font:36px/50px Typewriter; }
+.card-line { position:absolute; left:40px; width:600px; height:50px; font:36px/50px Typewriter; color:#28282e; }.card-line text { fill:currentColor; }
+.copy { position:absolute; overflow-wrap:anywhere; }
 .ink-row { position:absolute; white-space:pre; }.card-ink { font:36px/50px Typewriter; }.secret-ink { font:32px/44px Typewriter; background:var(--paper); }
 .news { position:absolute; left:35px; top:40px; width:530px; overflow:hidden; height:560px; display:grid; align-content:start; gap:18px; }
 .headline { width:530px; max-height:235px; font:74px/1.05 Condensed; overflow-wrap:anywhere; }.body-copy { font:32px/40px Serif; overflow-wrap:anywhere; }

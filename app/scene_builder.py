@@ -57,7 +57,8 @@ _PROBE = r"""(() => {
    world:e.dataset.world === 'true', signature:[e.outerHTML,style(e)],
    media:[...e.querySelectorAll('[data-media]:not([data-layer])')].map(n=>{const r=n.getBoundingClientRect();return {
      path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime),
-     dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), blur:Number(n.dataset.mediaBlur || 0), box:[r.left,r.top,r.right,r.bottom]};}),
+     dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), blur:Number(n.dataset.mediaBlur || 0),
+     wash:JSON.parse(n.dataset.mediaWash || 'null'), grayscale:n.dataset.mediaGrayscale==='true', box:[r.left,r.top,r.right,r.bottom]};}),
    camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
  const row = (e,i,ground=false) => {
    let r=e.getBoundingClientRect();
@@ -87,6 +88,7 @@ _PROBE = r"""(() => {
      clip:JSON.parse(e.dataset.clip || 'null'), native:e.dataset.media || '',
      video:e.dataset.video==='true', time:Number(e.dataset.mediaTime || 0),
      dim:Number(e.dataset.mediaDim ?? 1), focal:JSON.parse(e.dataset.mediaFocal || '[0.5,0.5]'), blur:Number(e.dataset.mediaBlur || 0),
+     wash:JSON.parse(e.dataset.mediaWash || 'null'), grayscale:e.dataset.mediaGrayscale==='true',
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
  };
  const rows = layers.map(row);
@@ -215,7 +217,7 @@ def _batches(plates, limit=MAX_CAPTURE_SIDE):
 
 def _plates(project, template, ctx, seconds, size, fps, stats):
     key, html, ctx = scenes._prepare(project, template, ctx, seconds, size, fps,
-                                    ('builder-v4', MOTIONS))
+                                    ('builder-v5', MOTIONS))
     stats.setdefault('screenshots', 0)
     manifest = html.with_suffix('.layers.json')
     if manifest.exists():
@@ -427,11 +429,23 @@ def _media_filter(media, w, h):
     dim = '.53' if dim == .53 else f'{dim:g}'
     x, y = (max(0, min(1, float(v))) for v in media.get('focal', [.5, .5]))
     blur = float(media.get('blur') or 0)
+    tint = ''
+    wash = media.get('wash')
+    if wash is not None:
+        if len(wash) != 4 or not all(isinstance(v, (int, float)) and math.isfinite(v) and 0 <= v <= 255 for v in wash):
+            raise ValueError('media wash must contain four channels in 0..255')
+        r,g,b,a = wash
+        tint = 'format=rgb24,lutrgb=' + ':'.join(
+            f"{ch}='val*{255-a:g}/255+{value*a:g}/255'" for ch,value in zip('rgb',(r,g,b))) + ','
+    if media.get('grayscale'):
+        # Pillow ImageOps.grayscale uses the BT.601 RGB luminance coefficients.
+        tint += 'colorchannelmixer=' + ':'.join(
+            f'{out}{src}={v}' for out in 'rgb' for src,v in zip('rgb',('.299','.587','.114'))) + ','
     # Soft background: shrink by `blur`, soften, scale back (cheap at the small size).
     soften = (f'scale={max(2, round(w/blur))}:{max(2, round(h/blur))}:flags=area,gblur=sigma=1.5,'
               f'scale={w}:{h}:flags=bicubic,' if blur > 1 else '')
     return (f'scale={w}:{h}:force_original_aspect_ratio=increase,'
-            f'crop={w}:{h}:(iw-ow)*{x}:(ih-oh)*{y},{soften}'
+            f'crop={w}:{h}:(iw-ow)*{x}:(ih-oh)*{y},{tint}{soften}'
             f'colorchannelmixer=rr={dim}:gg={dim}:bb={dim}')
 
 
@@ -572,13 +586,21 @@ def _compile(data, screen, size, fps, directory):
         z = f'({z})*{world["width"]/(data["width"]*world["density"])}'
     else:
         x, y = f'({x})*{size[0]/data["width"]}', f'({y})*{size[1]/data["height"]}'
+    top = data.get('top_plate')
+    output = 'camera' if top else 'out'
     if data.get('alpha'):
-        graph.append(f'[{last}]format=rgba[out]')
+        graph.append(f'[{last}]format=rgba[{output}]')
     elif not keys:
         # No camera: zoompan is the costliest node at full size, so skip it.
-        graph.append(f'[{last}]format=yuv420p[out]')
+        graph.append(f'[{last}]format={"rgba" if top else "yuv420p"}[{output}]')
     else:
-        graph.append(f"[{last}]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={size[0]}x{size[1]}:fps={fps},format=yuv420p[out]")
+        graph.append(f"[{last}]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={size[0]}x{size[1]}:fps={fps},format={'rgba' if top else 'yuv420p'}[{output}]")
+    if top:
+        # One static viewport plate, after the camera. Decode/scale once and
+        # repeat the finished pixels; never send it through zoompan or geq.
+        inputs += ['-i', str(top)]
+        graph.append(f'[{len(layers)+1}:v]scale={size[0]}:{size[1]},format=rgba[top]')
+        graph.append(f'[camera][top]overlay=eof_action=repeat:format=auto,format={"rgba" if data.get("alpha") else "yuv420p"}[out]')
     text = ';\n'.join(graph)
     if len(text.encode()) >= 65536:
         raise ValueError('screen graph exceeds 64 KB; add screen boundaries')
@@ -590,7 +612,8 @@ def inspect(project, template, ctx, *, seconds, size, fps):
     stats = dict(captures=0, screenshots=0, cache_hits=0, layers=0, passes=0,
                  largest_graph_bytes=0, captured_frames=0)
     data = _plates(project, template, ctx, seconds, size, fps, stats)
-    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
+    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False),
+                top_plate=ctx.get('builder_top_plate'))
     with tempfile.TemporaryDirectory(prefix='builder-check-') as work:
         for screen in _plan(data, seconds, fps):
             _, graph = _compile(data, screen, size, fps, Path(work))
@@ -616,7 +639,8 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=(), fr
         del extra[i:i+2]
     stats = dict(captures=0, screenshots=0, cache_hits=0, layers=0, passes=0, largest_graph_bytes=0, captured_frames=0)
     data = _plates(project, template, ctx, seconds, size, fps, stats)
-    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
+    data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False),
+                top_plate=ctx.get('builder_top_plate'))
     screens = _plan(data, seconds, fps)
     stats['layers'] = len(data['layers'])
     out = Path(out)

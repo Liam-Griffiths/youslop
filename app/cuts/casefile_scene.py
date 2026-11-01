@@ -1,6 +1,9 @@
 """Casefile world plates; the existing board layout and kit own placement/time."""
+import io
 import json
 import random
+
+from PIL import Image, ImageFilter, ImageOps
 
 from .. import scene_builder, scenes
 from . import casefile as c, cues_for, kit, source_for
@@ -8,6 +11,49 @@ from . import casefile as c, cues_for, kit, source_for
 TEMPLATE = 'cuts/casefile.html'
 SIZES = dict(photo=(600,700), card=(680,420), clipping=(600,640),
              note=(440,440), redacted=(580,720))
+
+
+def _noise(size, sigma, rng):
+    return Image.frombytes('L', size, bytes(
+        max(0, min(255, int(rng.gauss(128, sigma)))) for _ in range(size[0]*size[1])))
+
+
+def _assets(project, ctx):
+    """Seeded equivalents of _ground; the lamp uses _light's exact pixels.
+
+    Build once at Pillow's world resolution for this output size, never per
+    frame. Keep generated assets in the scene cache, not in the source tree.
+    """
+    directory = scenes._directory(project)
+    look = ctx.look if ctx.look in ('wall', 'felt') else 'cork'
+    size = tuple(max(1, round(v * ctx.k * c.WORLD_SCALE)) for v in (c.WORLD_W, c.WORLD_H))
+    ground = directory / f'casefile-ground-v1-{look}-{size[0]}x{size[1]}.png'
+    if not ground.exists():
+        rng = random.Random(f'casefile-ground-v1-{look}')
+
+        small = tuple(max(1, v//3) for v in size)
+        grain = _noise(small, 60, rng).resize(size, Image.Resampling.BILINEAR)
+        lo, hi = {'wall':((22,22,26),(52,50,54)), 'felt':((22,58,40),(48,110,74))}.get(
+            look, ((74,46,26),(150,104,62)))
+        image = ImageOps.colorize(grain, lo, hi).convert('RGBA')
+        if look == 'felt':
+            mask = _noise(size, 90, rng).point(lambda v: 255 if v > 200 else 0)
+            image.paste((150,200,170,36), (0,0,*size), mask)
+        elif look == 'cork':
+            mask = _noise(size, 120, rng).point(lambda v: 255 if v > 232 else 0)
+            image.paste((40,22,10,120), (0,0,*size), mask)
+        # _world drops alpha before softening. In particular, felt fibres and
+        # cork specks retain their RGB, rather than blending with the backdrop.
+        image = image.convert('RGB').filter(ImageFilter.GaussianBlur(2.9 * ctx.k * c.WORLD_SCALE))
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        scene_builder._write(ground, buffer.getvalue())
+    lamp = directory / f'casefile-lamp-v1-{ctx.size[0]}x{ctx.size[1]}.png'
+    if not lamp.exists():
+        buffer = io.BytesIO()
+        c._light(ctx).save(buffer, format='PNG')
+        scene_builder._write(lamp, buffer.getvalue())
+    return '/scene/{token}/project/scenes/' + ground.name, str(lamp)
 
 
 def _item(cue, source, board, n, seen):
@@ -19,15 +65,23 @@ def _item(cue, source, board, n, seen):
             seen.add(str(source))
     kind = cue['kind']; w,h = SIZES[kind]
     x,y,angle = c._slots(board)[n % (c.COLS*c.ROWS)]
-    rng = random.Random(str(cue))
+    rng = random.Random(str(cue.get('title')) + str(cue.get('text')) if kind == 'card' else str(cue))
     paper = {'photo':['#f0ece2','#ece8dc','#f4f2ec'], 'card':['#f6f2e6','#f0f4ee','#f8eed6'],
         'clipping':['#e2ded0','#ded6be','#e8e6de'], 'note':['#fada54','#f8b0be','#aad6f0'],
         'redacted':['#eeeee8']}[kind]
+    # _item(photo) consumes the paper choice before choosing monochrome. Use
+    # that same caption seed and call order, including for settled history.
+    photo_rng = random.Random(str(cue.get('caption')))
+    photo_paper = photo_rng.choice(paper) if kind == 'photo' else None
+    grayscale = photo_rng.random() < .3 if kind == 'photo' else False
+    chosen_paper = rng.choice(paper)
     return dict(cue, x=x, y=y, w=w, h=h, angle=0 if kind=='photo' else -angle,
-        paper=rng.choice(paper), rule=rng.choice(['#d65c5c','#5c78c8','#46966e']),
+        paper=photo_paper or chosen_paper, rule=rng.choice(['#d65c5c','#5c78c8','#46966e']),
         pin='#'+''.join(f'{v:02x}' for v in c._pin_colour(board*100+n)),
         tape=kind=='photo' and rng.random()<.35,
         source=str(source) if source and kind=='photo' else '',
+        grayscale=grayscale, wash=[255,220,170,34],
+        card_lines=kit.wrap(cue.get('text',''), 'typewriter', 36, 600)[:5] if kind == 'card' else [],
         stamp=[source.stat().st_mtime_ns,source.stat().st_size] if source and kind=='photo' else None,
         filler=[dict(width=rng.uniform(.4,1)* (w-80), black=rng.random()<.35) for _ in range(10)])
 
@@ -60,6 +114,7 @@ def context(project,ctx,beats,sources,chapter='',card_at=None,hide=frozenset()):
         [('Condensed','condensed'),('Mono','mono_bold'),('Typewriter','typewriter'),
          ('Hand','hand'),('Marker','marker'),('Serif','serif')]})
     data.update(look=ctx.look or 'cork',screens=[],chapter=chapter,card_at=card_at)
+    data['ground_url'], data['builder_top_plate'] = ('', None) if 'cues' in hide else _assets(project, ctx)
     boards=c._boards(ctx); offset=0
     for beat,source in zip(beats,sources):
         board,first=boards[beat.slide.id]; items=[]; seen=set()

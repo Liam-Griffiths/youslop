@@ -5,7 +5,7 @@ import io
 import json
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 import pytest
 
 from app import scene_builder as b
@@ -61,6 +61,68 @@ def test_capture_cache_and_preview(mocked, tmp_path):
         assert result.stats['cache_hits'] == (0 if n == 0 else 4)
         assert result.stats['layers'] == 3 and result.stats['passes'] == 1
     assert len(calls) == 4
+
+
+@pytest.mark.parametrize('grayscale', [False, True])
+def test_media_wash_and_grayscale_pixels(tmp_path, grayscale):
+    photo = tmp_path/'photo.png'
+    original = Image.new('RGB',(48,28))
+    colors = [(0,0,0),(20,100,210),(255,0,0),(255,255,255)]
+    for i,color in enumerate(colors):
+        ImageDraw.Draw(original).rectangle((i*12,0,i*12+11,27),fill=color)
+    original.save(photo)
+    settings = dict(dim=1, wash=[255,220,170,34], grayscale=grayscale)
+    expected = Image.alpha_composite(original.convert('RGBA'), Image.new('RGBA',original.size,tuple(settings['wash'])))
+    if grayscale:
+        expected = ImageOps.grayscale(expected).convert('RGB')
+    out = tmp_path/'tinted.png'
+    REAL_RUN(['-i',str(photo),'-vf',b._media_filter(settings,48,28),'-frames:v','1',str(out)])
+    with Image.open(out) as image:
+        for x in [6,18,30,42]:
+            assert all(abs(a-z)<=1 for a,z in zip(image.getpixel((x,14))[:3],expected.getpixel((x,14))[:3]))
+    # The native still's whole filter runs before looping, retaining the speed fix.
+    data = scene(1,2)
+    data.update(width=48,height=28,ground_path=str(photo))
+    data['layers'][0].update(settings,path=str(photo),native=str(photo),motion='none',box=[0,0,48,28])
+    _,graph = b._compile(data,dict(id='',start=0,duration=2),(48,28),10,tmp_path)
+    effect = graph.split('[1:v]')[1].split('[l1]')[0]
+    assert effect.index('lutrgb') < effect.index('loop=') and 'geq=' not in effect
+
+
+def test_top_plate_stays_in_viewport_after_camera_and_chunk(tmp_path):
+    ground = tmp_path/'ground.png'
+    image = Image.new('RGB',(96,56),'black')
+    ImageDraw.Draw(image).rectangle((0,0,47,55), fill='white')
+    image.save(ground)
+    top = tmp_path/'lamp.png'
+    image = Image.new('RGBA',(48,28))
+    ImageDraw.Draw(image).rectangle((0,0,7,7), fill='white')
+    image.save(top)
+    data = scene(0,1)
+    data.update(width=48,height=28,ground_color='#000000',top_plate=str(top))
+    screen = dict(id='',start=0,duration=.1,ground_path=str(ground),
+        raster=dict(left=0,top=0,density=1,width=96,height=56),
+        camera=[dict(t=0,x=24,y=14,zoom=1),dict(t=1,x=72,y=42,zoom=1)])
+    centers = []
+    for offset in [0,.9]:
+        inputs,graph = b._compile(data,dict(screen,offset=offset),(48,28),10,tmp_path)
+        assert inputs[-2:] == ['-i',str(top)]
+        assert graph.index('zoompan=') < graph.index('[camera][top]overlay')
+        assert 'geq=' not in graph
+        script = tmp_path/'graph.ffgraph'; script.write_text(graph)
+        out = tmp_path/'pixel.png'
+        args = [*inputs,'-filter_complex_threads','1','-filter_complex_script',str(script),'-map','[out]','-frames:v','1',str(out)]
+        try:
+            REAL_RUN(args)
+        except b.ffutil.FFError as exc:
+            if "Unrecognized option 'filter_complex_script'" not in str(exc):
+                raise
+            args[args.index('-filter_complex_script')] = '-/filter_complex'
+            REAL_RUN(args)
+        with Image.open(out) as frame:
+            assert min(frame.getpixel((3,3))[:3]) >= 250
+            centers.append(frame.getpixel((24,14))[0])
+    assert centers[0] > 250 and centers[1] < 5
 
 
 def test_2000_layers_are_bounded(mocked, tmp_path):

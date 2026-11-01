@@ -83,6 +83,13 @@ Blocks, intro/outro cards, chapter tails and block preview videos use this build
 
 Cut media may set `data-media-dim` (default .53) and `data-media-focal='[x,y]'`
 (default [.5,.5]); native ffmpeg photo/video cover crops share these parameters.
+`data-media-wash='[r,g,b,a]'` applies an RGBA colour wash in 0–255 channels;
+`data-media-grayscale="true"` then converts the warmed RGB to luminance using
+Pillow's .299/.587/.114 coefficients. Both default off, precede blur/dimming,
+and are part of the cached still filter; native still filters run before looping.
+`ctx.builder_top_plate` may name a static RGBA PNG to composite over the finished
+viewport after the camera. It is decoded/scaled once, held by ffmpeg, and needs
+no Chromium capture; it stays fixed when seeking a chunk or moving the camera.
 `node` and `badge` provide scale arrivals with back-out(1.9) and back-out(2.4).
 
 `reveal` is a hard horizontal clip; `slide-left` translates x=-80→0 without

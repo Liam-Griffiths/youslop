@@ -1,8 +1,9 @@
 """Casefile clocks, persistent boards and native plates, with mocked Chromium."""
 import json
 from pathlib import Path
+import random
 
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 import pytest
 
 from app import cuts, render, scenes, scene_builder as b
@@ -69,6 +70,7 @@ def test_casefile_history_resets_dedup_and_overview(project,tmp_path,monkeypatch
     hidden=c.context(project,ctx,[beat],[source],hide={'cues'})
     html=scenes.render_html(c.TEMPLATE,hidden)
     assert 'data-video="true"' in html and 'class="board"' not in html
+    assert hidden['builder_top_plate'] is None
     z.chapter='New case';_,_,fresh=context();assert len(fresh['screens'][0]['items'])==1
     z.chapter='';a.cues['casefile']=[CUES[1]]*14
     _,_,full=context();assert len(full['screens'][0]['items'])==1
@@ -108,3 +110,64 @@ def test_casefile_mocked_plates_chunk_and_shared_drop(project,mocked,tmp_path):
         env=dict(clip=lambda x,a,z:max(a,min(z,x)),pow=pow,t=.495+value)
         assert eval(motion['opacity'],{'__builtins__':{}},env)==pytest.approx(1-(1-value/.3)**3)
         assert eval(motion['scale'],{'__builtins__':{}},env)==pytest.approx(1+.14*(1-value/.3)**3)
+
+
+@pytest.mark.parametrize('look', ['', 'wall', 'felt'])
+def test_casefile_seeded_ground_and_lamp_match_pillow(project, monkeypatch, look):
+    """Replay the seeded noise through the real Pillow ground/world recipe."""
+    project.style.cut_look = look
+    ctx = cuts.make_ctx(project, (96,54), 30)
+    url, lamp = c._assets(project, ctx)
+    path = scenes._directory(project) / url.rsplit('/',1)[-1]
+    rng = random.Random(f'casefile-ground-v1-{look or "cork"}')
+    monkeypatch.setattr(c.Image, 'effect_noise', lambda size,sigma: c._noise(size,sigma,rng))
+    expected = cuts.casefile._ground(ctx).convert('RGB').filter(
+        ImageFilter.GaussianBlur(2.9*ctx.k*cuts.casefile.WORLD_SCALE))
+    with Image.open(path) as ground, Image.open(lamp) as light:
+        assert ground.mode == 'RGB' and ground.size == expected.size
+        assert ground.tobytes() == expected.tobytes()
+        assert light.tobytes() == cuts.casefile._light(ctx).tobytes()
+        assert light.getpixel((0,0))[3] > light.getpixel((40,20))[3]
+    before = path.read_bytes(), Path(lamp).read_bytes()
+    # The assets are deterministic after a cold rebuild, and warm calls do no work.
+    path.unlink(); Path(lamp).unlink()
+    assert c._assets(project, ctx) == (url,lamp)
+    assert before == (path.read_bytes(), Path(lamp).read_bytes())
+    monkeypatch.setattr(c, '_noise', lambda *a: pytest.fail('warm ground regenerated'))
+    monkeypatch.setattr(c.c, '_light', lambda *a: pytest.fail('warm lamp regenerated'))
+    assert c._assets(project, ctx) == (url,lamp)
+
+
+@pytest.mark.parametrize('caption', ['The evidence', 'A print', 'Archive', 'Blue room'])
+def test_casefile_photo_tint_matches_caption_seed(caption, tmp_path):
+    source = tmp_path/'photo.png'
+    Image.new('RGB', (540,520), (40,120,200)).save(source)
+    cue = dict(kind='photo', caption=caption)
+    spec = c._item(cue,source,0,0,set())
+    with Image.open(source) as image:
+        reference = cuts.casefile._item(cue,image,1).getpixel((300,290))[:3]
+        tinted = Image.alpha_composite(image.convert('RGBA'), Image.new('RGBA',image.size,tuple(spec['wash'])))
+        if spec['grayscale']:
+            tinted = ImageOps.grayscale(tinted).convert('RGB')
+        assert tinted.getpixel((300,290))[:3] == reference
+    history = c._item(cue,source,0,1,set())
+    assert (history['grayscale'],history['wash']) == (spec['grayscale'],spec['wash'])
+
+
+def test_casefile_card_wrap_rules_and_baselines(project):
+    cue = dict(kind='card', title='Timeline', text='A celebrity gossip story with long words and enough detail to wrap into several ruled lines.')
+    spec = c._item(cue,None,0,0,set())
+    assert len(spec['card_lines']) > 1
+    assert spec['card_lines'] == cuts.kit.wrap(cue['text'],'typewriter',36,600)[:5]
+    assert all(cuts.kit.measure(line,'typewriter',36)[0] <= 600 for line in spec['card_lines'])
+    reference = cuts.casefile._item(cue,None,1)
+    assert spec['paper'] == '#'+''.join(f'{v:02x}' for v in reference.getpixel((0,0))[:3])
+    assert spec['rule'] == '#'+''.join(f'{v:02x}' for v in reference.getpixel((0,92))[:3])
+    ctx = cuts.make_ctx(project,(96,54),30)
+    beat = cuts.beat_for(cuts.casefile,ctx,project.slides[0],4,0,4,scene=True)
+    data = c.context(project,ctx,[beat],[None])
+    data['screens'][0]['items'] = [spec]
+    html = scenes.render_html(c.TEMPLATE,data)
+    for i,line in enumerate(spec['card_lines']):
+        assert f'style="top:{100+i*50}px"><svg width="600" height="50"><text x="0" y="40">{line}</text>' in html
+    assert 'getSubStringLength' in html  # Exact browser glyph advances, not average widths.

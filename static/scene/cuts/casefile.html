@@ -1,7 +1,7 @@
 {% extends '_base.html' %}
 {% block head %}<link rel="stylesheet" href="/static/scene/cuts/casefile.css">{% endblock %}
 {% block body %}
-<main id="page" class="look-{{ look }}" style="--grain:{{ palette.grain }}">
+<main id="page" class="look-{{ look }}" style="--ground-image:url('{{ ground_url }}')">
 {% for s in screens %}
 <section class="clip screen" data-screen="{{ s.id }}" data-world="true" data-start="{{ s.start }}" data-duration="{{ s.duration }}" data-camera='{{ s.camera|tojson }}'>
 {% if s.hidden %}
@@ -12,7 +12,7 @@
 <article class="item {{ item.kind }} {{ 'current' if loop.last else 'past' }}" style="left:{{ item.x-item.w/2-60 }}px;top:{{ item.y-item.h/2-60 }}px;width:{{ item.w+120 }}px;height:{{ item.h+120 }}px;--paper:{{ item.paper }};--rule:{{ item.rule }};--pin:{{ item.pin }};transform:rotate({{ item.angle }}deg)">
 <div class="plate"><div class="paper">
 {% if item.kind=='photo' %}<div class="photo-window">{{ '' if item.source else 'NO PHOTO' }}</div><p class="caption fit">{{ item.caption }}</p>{% if item.tape %}<svg class="tape" width="150" height="46" viewBox="0 0 150 46"><path d="M0 2L150 0 147 44 3 46Z" fill="#ece2be" fill-opacity=".7"/></svg>{% endif %}
-{% elif item.kind=='card' %}<h2 class="card-title fit">{{ item.title|upper }}</h2><p class="typed copy">{{ item.text }}</p>
+{% elif item.kind=='card' %}<h2 class="card-title fit">{{ item.title|upper }}</h2>{% for line in item.card_lines %}<p class="card-line" style="top:{{ 100+loop.index0*50 }}px"><svg width="600" height="50"><text x="0" y="40">{{ line }}</text></svg></p>{% endfor %}
 {% elif item.kind=='clipping' %}<div class="news"><h2 class="headline fit">{{ item.headline|upper }}</h2><p class="body-copy">{{ item.text }}</p>{% for line in item.filler[:5] %}<i class="print" style="width:{{ line.width }}px"></i>{% endfor %}</div>
 {% elif item.kind=='note' %}<div class="note-band"></div><p class="note-copy fit">{{ item.text }}</p>
 {% else %}<h2 class="document-title fit">{{ item.title|upper }}</h2><b class="confidential">CONFIDENTIAL</b><i class="document-rule"></i><div class="document-print">{% for line in item.filler %}<i class="print {{ 'black' if line.black else '' }}" style="width:{{ line.width }}px"></i>{% endfor %}</div><p class="secret copy">{{ item.text }}</p>{% endif %}
@@ -46,6 +46,23 @@ window.__ready=window.__ready.then(()=>{
       const rotation=item.style.transform;item.style.transform='none';
       if(current){layer(plate,screen,s.delay+.495,spec.kind==='photo'?'fade':'pin-drop');layer(pin,screen,s.delay+.795);}
       else {plate.dataset.ground='';pin.dataset.ground='';}
+      // Pillow wraps to 600px at 36px. SVG fixes each baseline at 140+50*n,
+      // six pixels above the blue rule. Fit browser/font rasteriser differences
+      // (or a single overlong word) before measuring exact reveal edges.
+      let chars=0;const total=spec.card_lines.join('').length;
+      item.querySelectorAll('.card-line').forEach(row=>{
+        const text=row.querySelector('text'),width=text.getComputedTextLength();
+        if(width>600)row.style.fontSize=`${36*600/width}px`;
+        if(current){
+          const origin=item.getBoundingClientRect(),r=row.getBoundingClientRect(),start=s.delay+1.1;
+          const steps=[...text.textContent].map((_,j)=>[
+            start+Math.ceil((chars+j+1)/Math.max(1,total)*s.span*12)/12,
+            text.getSubStringLength(0,j+1)]);
+          Object.assign(row.style,{left:`${r.left-origin.left}px`,top:`${r.top-origin.top}px`});
+          item.append(row);layer(row,screen,start,'reveal',s.span);row.dataset.steps=JSON.stringify(steps);
+        }
+        chars+=text.textContent.length;
+      });
       const copy=item.querySelector('.copy');
       if(copy&&current){
         const range=document.createRange();range.selectNodeContents(copy);
@@ -80,7 +97,8 @@ window.__ready=window.__ready.then(()=>{
       if(spec.source){
         const photo=document.createElement('i');photo.className='native-photo';
         Object.assign(photo.style,{left:`${spec.x-spec.w/2+30}px`,top:`${spec.y-spec.h/2+30}px`});
-        Object.assign(photo.dataset,{media:spec.source,video:'false',mediaDim:current?1:.88,mediaBlur:current?0:2.9});
+        Object.assign(photo.dataset,{media:spec.source,video:'false',mediaDim:current?1:.88,mediaBlur:current?0:2.9,
+          mediaWash:JSON.stringify(spec.wash),mediaGrayscale:String(spec.grayscale)});
         layer(photo,screen,current?s.delay+.495:0,current?'fade':'none');screen.append(photo);
       }
       item.style.transform=rotation;

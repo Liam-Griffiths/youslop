@@ -19,3 +19,14 @@ Only the first reviewer-accepted scene frame belongs at
 Measure one picture through `preview_segment` at 480×270, cold scene ≤2× Pillow;
 inspect `<output>.stats.json` for bounded graphs and zero capture-window frames.
 No preview or benchmark was run during implementation.
+
+Round 2 review: compare cork's warm brown noise/dark specks, wall's grey noise and
+felt's pale fibres against Pillow. The lamp should stay fixed at (42%,38%) during
+travel and overview; also check the chapter tail (the scene's top plate lights
+the label too). Compare both warmed colour and caption-seeded monochrome prints,
+including settled history. Check long index-card text (including “celebrity
+gossip”) within the 600px measure, with baselines at 140+50*n and rules at
+146+50*n, for current reveals and historical cards. The new unit checks use
+seeded asset comparisons and tiny synthetic ffmpeg pixel checks; Chromium
+captures remain mocked. Re-measure the same review picture cold at 480×270
+against 7.8 s; no claim of measured Round 2 performance is made here.
