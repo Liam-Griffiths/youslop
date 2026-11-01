@@ -124,6 +124,7 @@ class Slide:
     # on its own reveal beat. What the diagram spec is for a shape, this is
     # for a layout no template anticipated. See app/custom_slide.py.
     custom: dict = field(default_factory=dict)
+    custom_html: str = ""             # constrained fragment; revalidate before capture
     # What the drawn cuts put on screen, keyed by cut ("flameboat",
     # "casefile", ...): a list of cues, each landing on the words in its `on`.
     # Keyed so switching a video between cuts keeps what was written for each.

@@ -1172,6 +1172,7 @@ function openCustomDesigner(opts) {
   const s = opts.slide;
   const sid = opts.sid;
   let spec = opts.spec;
+  let htmlMode = !styleMode && !!s.custom_html;
 
   const wrap = document.createElement('div');
   wrap.className = 'modal';
@@ -1180,6 +1181,7 @@ function openCustomDesigner(opts) {
       <div class="row" style="margin-bottom:12px">
         <strong>${styleMode ? 'Design a video style' : 'Design a slide'}</strong>
         <div class="spacer"></div>
+        ${styleMode ? '' : '<label><input type="checkbox" id="chtml"> HTML</label>'}
         <button class="btn sm ghost" id="cjson">show the spec</button>
         <button class="btn sm ghost" id="cclose">close</button>
       </div>
@@ -1201,7 +1203,8 @@ function openCustomDesigner(opts) {
             Every paragraph of the video gets this design, with its own words and
             pictures swapped into it. So write the text here as a placeholder
             showing what belongs in each slot, not as anything about one subject.</div>` : ''}
-          <div class="row" style="margin-bottom:10px">
+          <textarea id="chtmltext" rows="14" class="mono" style="display:none" aria-label="Slide HTML"></textarea>
+          <div id="cjsoncontrols"><div class="row" style="margin-bottom:10px">
             <label class="field" style="flex:1;margin:0"><span>Background</span>
               <input type="text" id="cbg" placeholder="blank = the usual board"
                 value="${esc(spec.background || '')}"></label>
@@ -1215,7 +1218,7 @@ function openCustomDesigner(opts) {
             <button class="btn xs ghost" data-add="line">line</button>
             <button class="btn xs ghost" data-add="image">image</button>
           </div>
-          <div class="row">
+          </div><div class="row">
             ${styleMode ? '' : `
               <button class="btn sm primary" id="cuse">use it on this slide</button>
               <button class="btn sm ghost" id="cstill">as a still, not animated</button>`}
@@ -1240,6 +1243,19 @@ function openCustomDesigner(opts) {
     </div>`;
   document.body.appendChild(wrap);
   const q = (id) => wrap.querySelector(id);
+  q('#chtmltext').value = s?.custom_html || '<section class="cb-slide"><h1 class="cb-title">Slide title</h1></section>';
+  function paintMode() {
+    q('#chtmltext').style.display = htmlMode ? '' : 'none';
+    q('#cjsoncontrols').style.display = htmlMode ? 'none' : '';
+    q('#csave').disabled = htmlMode;
+    q('#cjson').disabled = htmlMode;
+    q('#cspec').style.display = q('#cspecrow').style.display = 'none';
+  }
+  if (!styleMode) {
+    q('#chtml').checked = htmlMode;
+    q('#chtml').onchange = () => { htmlMode = q('#chtml').checked; paintMode(); nudge(); };
+  }
+  q('#chtmltext').oninput = () => nudge();
   // In style mode there is no Media tab behind this modal to repaint.
   const close = () => { wrap.remove(); if (!styleMode) paintMedia(); };
   q('#cclose').onclick = close;
@@ -1350,11 +1366,11 @@ function openCustomDesigner(opts) {
   let timer = null;
   async function redraw() {
     q('#cspec').value = JSON.stringify(spec, null, 2);
-    if (!spec.elements.length) { q('#cstate').textContent = ''; return; }
+    if (!htmlMode && !spec.elements.length) { q('#cstate').textContent = ''; return; }
     try {
       const res = await fetch('/api/custom/preview',
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spec, project_id: opts.projectId || '',
+          body: JSON.stringify({ ...(htmlMode ? {custom_html: q('#chtmltext').value, slide_id: sid} : {spec}), project_id: opts.projectId || '',
                                  hand: opts.hand }) });
       if (!res.ok) throw new Error((await res.json()).detail || 'no');
       const blob = await res.blob();
@@ -1385,11 +1401,11 @@ function openCustomDesigner(opts) {
   };
 
   async function use(motion) {
-    if (!spec.elements.length) return (q('#cstate').textContent = 'nothing to draw yet');
+    if (!htmlMode && !spec.elements.length) return (q('#cstate').textContent = 'nothing to draw yet');
     q('#cstate').textContent = 'drawing…';
     try {
       const r = await api(`/api/projects/${opts.projectId}/slides/${sid}/custom`,
-        { method: 'POST', body: JSON.stringify({ spec, motion }) });
+        { method: 'POST', body: JSON.stringify({ ...(htmlMode ? {custom_html: q('#chtmltext').value} : {spec}), motion }) });
       let j;
       for (;;) {
         j = await api(`/api/jobs/${r.job}`);
@@ -1444,7 +1460,7 @@ function openCustomDesigner(opts) {
             { method: 'POST', body: JSON.stringify({ description: brief,
                                                      accent: opts.accent }) })
         : await api(`/api/projects/${opts.projectId}/slides/${sid}/custom/generate`,
-            { method: 'POST', body: JSON.stringify({ instruction: brief }) });
+            { method: 'POST', body: JSON.stringify({ instruction: brief, html: htmlMode }) });
       let j;
       for (;;) {
         j = await api(`/api/jobs/${r.job}`);
@@ -1452,7 +1468,8 @@ function openCustomDesigner(opts) {
         await new Promise((res) => setTimeout(res, 900));
       }
       if (j.state === 'error') throw new Error(j.error || 'Claude could not design this one.');
-      spec = j.result.spec;
+      if ('custom_html' in j.result) q('#chtmltext').value = j.result.custom_html;
+      else spec = j.result.spec;
       q('#cbg').value = spec.background || '';
       paintElements();
       redraw();
@@ -1467,6 +1484,7 @@ function openCustomDesigner(opts) {
   };
 
   paintElements();
+  paintMode();
   redraw();
 }
 

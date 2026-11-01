@@ -15,7 +15,7 @@ from urllib.parse import quote, unquote, urlsplit
 import jinja2
 from jinja2 import meta
 
-from . import channels, cuts, ffutil, stage, store, themes
+from . import channels, cuts, ffutil, sanitise, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
@@ -34,6 +34,7 @@ class _BlockLoader(jinja2.BaseLoader):
 env = jinja2.Environment(loader=jinja2.ChoiceLoader([
     _BlockLoader(), jinja2.FileSystemLoader(SCENE_DIR)]),
                          autoescape=True, undefined=jinja2.StrictUndefined)
+env.filters['clean_html'] = sanitise.clean
 log = logging.getLogger(__name__)
 
 

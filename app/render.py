@@ -524,6 +524,13 @@ def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
 
     slide = group[0][0]
     spec = slide.custom or {}
+    if slide.custom_html:
+        from . import custom_scenes
+        root = project_dir(project.id) / 'media'
+        ctx = custom_scenes.html_context(root, slide.custom_html, spec, seg_len, project)
+        clip = scenes.ensure_clip(root, 'slides/custom.html', ctx, seconds=seg_len, size=size, fps=fps)
+        scenes._encode(clip, out, seg_len, size, fps, crf)
+        return out
     if not spec.get("elements"):
         style = slide_styles.get(slide_styles.id_from_format(project.style.format))
         if not style:

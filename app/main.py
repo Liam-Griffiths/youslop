@@ -1528,6 +1528,17 @@ def custom_preview(payload: dict = Body(...)) -> Response:
     Image elements are only drawn if they already carry a `local_path` — a
     preview must not fire archive searches on every keystroke.
     """
+    if 'custom_html' in payload:
+        from . import custom_scenes, sanitise, scenes
+        p = _load(str(payload.get('project_id') or ''))
+        s = _slide(p, str(payload.get('slide_id') or ''))
+        root = project_dir(p.id) / 'media'
+        try:
+            ctx = custom_scenes.html_context(root, payload['custom_html'], s.custom, project=p)
+        except sanitise.UnsafeHTML as exc:
+            raise HTTPException(400, str(exc))
+        return Response(scenes.capture(root, 'slides/custom.html', ctx, t=0, size=(480, 270)),
+                        media_type='image/png', headers={'Cache-Control': 'no-store'})
     try:
         spec = custom_mod.normalise(payload.get("spec") or payload)
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
@@ -1552,6 +1563,8 @@ def generate_slide_custom(pid: str, sid: str, payload: dict = Body(default={})) 
 
     def work(progress):
         progress("Asking Claude to design this slide")
+        if payload.get('html'):
+            return {'custom_html': script_gen.generate_custom_html(p, s, payload.get('instruction', ''))}
         spec = script_gen.generate_custom_slide(p, s, payload.get("instruction", ""))
         progress("Designed")
         return {"spec": spec}
@@ -1568,8 +1581,16 @@ def slide_custom(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     resolved spec is what gets saved, so editing it later never re-fetches.
     Runs as a job because those fetches hit the archives.
     """
+    is_html = 'custom_html' in payload
     try:
-        spec = custom_mod.normalise(payload.get("spec") or payload.get("custom") or {})
+        if is_html:
+            from . import custom_scenes
+            p = _load(pid)
+            spec = _slide(p, sid).custom
+            fragment = custom_scenes.html_context(
+                project_dir(pid) / 'media', payload['custom_html'], spec, project=p)['custom_html']
+        else:
+            spec = custom_mod.normalise(payload.get("spec") or payload.get("custom") or {})
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(400, f"That spec won't draw: {exc}")
     motion = "still" if payload.get("motion") == "still" else "reveal"
@@ -1580,9 +1601,13 @@ def slide_custom(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             p = _load(pid)
             _slide(p, sid)
         progress("Finding any pictures this slide asked for")
-        cand = custom_mod.candidate(
-            spec, project_dir(pid) / "media", motion=motion, seconds=seconds,
-            hand=getattr(p.style, "board_hand", "marker"), engine=p.style.custom_engine)
+        if is_html:
+            cand = custom_scenes.html_candidate(fragment, project_dir(pid) / 'media', spec,
+                                                motion=motion, seconds=seconds, project=p)
+        else:
+            cand = custom_mod.candidate(
+                spec, project_dir(pid) / "media", motion=motion, seconds=seconds,
+                hand=getattr(p.style, "board_hand", "marker"), engine=p.style.custom_engine)
         if not cand:
             raise RuntimeError("Could not draw that slide.")
         progress("Drawn")
@@ -1592,6 +1617,7 @@ def slide_custom(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             s.candidates.insert(0, cand)
             s.chosen_id = cand["id"]
             s.custom = cand["custom"]
+            s.custom_html = cand.get('custom_html', '')
             s.prefer_kind = "custom"
             s.locked_media = True
             store.save(p)

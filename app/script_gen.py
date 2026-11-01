@@ -1279,7 +1279,7 @@ def plan_custom_slides(project: Project, slides: list[Slide], style_spec: dict,
              if el["type"] in ("text", "image")]
     if not slots:
         return
-    targets = [s for s in slides if not (s.custom or {}).get("elements")]
+    targets = [s for s in slides if not s.custom_html and not (s.custom or {}).get("elements")]
     if not targets:
         return
 
@@ -1396,6 +1396,29 @@ like it belongs to this channel."""
         return custom_mod.normalise(out)
     except (ValueError, TypeError):
         raise LLMError("Claude's slide didn't come back in a shape I could draw.")
+
+
+def generate_custom_html(project: Project, slide: Slide, instruction: str = "") -> str:
+    """Design a constrained fragment; the editor saves it only when applied."""
+    from . import custom_scenes, llm, sanitise, store
+    sources = custom_scenes.html_sources(store.project_dir(project.id) / 'media', slide.custom)
+    prompt = f"""Design a typographic slide for this narration: {slide.narration}
+VIDEO: {project.title}. CREATOR INSTRUCTION: {instruction}
+Return JSON {{"html": "<section class=...>...</section>"}}.
+Allowed tags: {' '.join(sorted(sanitise.TAGS))}.
+Allowed classes: {' '.join(sorted(sanitise.CLASSES))}.
+Use cb-slide as the outer section. cb-row gives columns; cb-stack gives rows;
+cb-title and cb-number are large Archivo; cb-label is small mono; cb-card is a
+padded bordered panel; cb-accent uses the channel accent. Keep words brief.
+Allowed attributes: class, alt, data-text, data-start (nonnegative seconds),
+src on img only. Image URLs (use exactly, or omit images): {sources}
+No CSS, style, scripts, other tags or attributes, encoded attributes, or
+unclosed tags. data-start/data-text are inert metadata. The layout is held.
+Example: {{"html": "<section class=\\"cb-slide\\"><p class=\\"cb-label\\">The turning point</p><h1 class=\\"cb-number cb-accent\\">1910</h1></section>"}}"""
+    out = llm.complete_json(prompt, model=MODEL_UTILITY, timeout=180,
+                            require=lambda v: isinstance(v, dict) and isinstance(v.get('html'), str),
+                            require_hint='Return one JSON object with an html string.')
+    return sanitise.clean(out.get('html'), sources)
 
 
 def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:

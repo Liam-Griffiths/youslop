@@ -6,11 +6,59 @@ import math
 from pathlib import Path
 import tempfile
 from urllib.parse import quote
+import uuid
 
 from PIL import Image
 
 from . import board_scenes, custom_slide as custom, diagram, ffutil, scenes, stage, titles
 from .config import FPS, HEIGHT, WIDTH
+
+
+def html_sources(root, spec):
+    """Expose only resolved image elements, copied as inert PNG assets; never fetch."""
+    root = Path(root).resolve()
+    sources = []
+    for el in (spec or {}).get('elements', []):
+        if el.get('type') != 'image' or not el.get('local_path'):
+            continue
+        path = (root / el['local_path']).resolve()
+        if path.is_relative_to(root) and path.is_file():
+            try:
+                with Image.open(path) as image:
+                    asset = board_scenes._asset(scenes._directory(root), image.convert('RGB'))
+                sources.append(scenes.ASSETS_URLS['project'] + asset.relative_to(root).as_posix())
+            except OSError:
+                pass
+    return sources
+
+
+def html_context(root, fragment, spec=None, seconds=custom.DEFAULT_SECONDS, project=None):
+    from . import sanitise
+    ctx = scenes.context_base(project)
+    sources = html_sources(root, spec)
+    ctx.update(custom_html=sanitise.clean(fragment, sources), html_sources=sources,
+               duration=seconds, plate=False)
+    ctx['asset_roots']['project_root'] = str(Path(root).resolve())
+    return ctx
+
+
+def html_candidate(fragment, dest, spec, *, motion='reveal', seconds=custom.DEFAULT_SECONDS, project=None):
+    seconds = max(2., min(20., float(seconds)))
+    ctx = html_context(dest, fragment, spec, seconds, project)
+    stem = 'custom_' + uuid.uuid4().hex[:10]
+    poster = dest / (stem + '.png')
+    poster.write_bytes(scenes.capture(dest, 'slides/custom.html', ctx, t=0, size=(WIDTH, HEIGHT)))
+    out = poster
+    if motion != 'still':
+        out = dest / (stem + '.mp4')
+        clip = scenes.ensure_clip(dest, 'slides/custom.html', ctx, seconds=seconds,
+                                  size=(WIDTH, HEIGHT), fps=FPS)
+        scenes._encode(clip, out, seconds, (WIDTH, HEIGHT), FPS, 17)
+    return dict(id=stem, provider='custom', title='Custom HTML slide',
+                kind='image' if motion == 'still' else 'video',
+                local_path='media/' + out.name, thumb='media/' + poster.name,
+                width=WIDTH, height=HEIGHT, duration=0 if motion == 'still' else seconds,
+                custom=spec, custom_html=ctx['custom_html'])
 
 
 def context(root, spec, seconds, hand=custom.DEFAULT_HAND, grain=.5):

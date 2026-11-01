@@ -5,6 +5,7 @@
       style="--arrive-s:{{ frame.arrive_s }};--exit-ratio:{{ frame.exit_ratio }};--bg:{{ palette.ground }};--ink:{{ palette.ink }};--fg:{{ palette.ink }};--brand:{{ palette.accent }};--accent-2:{{ palette.accent2 }};--font-display:Archivo;--accent:{{ palette.accent }};--accent2:{{ palette.accent2 }}">
 <head>
   <meta charset="utf-8">
+  {% block csp %}{% endblock %}
   <title>{{ vars.title }}</title>
   <link rel="stylesheet" href="/static/scene/_base.css">
   <style>
