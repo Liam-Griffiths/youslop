@@ -129,7 +129,11 @@
     const from = {...spec.from}, to = {...spec.to};
     delete from.wipe; delete to.wipe;
     if ('y' in from) from.y = number(el.dataset.motionY || el.dataset.animY, from.y);
-    if (builder && ['words', 'wipe'].includes(kind)) { from.clipPath = 'inset(0 100% 0 0)'; to.clipPath = 'inset(0 0% 0 0)'; }
+    if (builder && ['words', 'wipe', 'reveal'].includes(kind)) { from.clipPath = 'inset(0 100% 0 0)'; to.clipPath = 'inset(0 0% 0 0)'; }
+    if (builder && kind === 'atlas') {
+      targets = el.querySelector('.atlas-strip');
+      from.yPercent = 0; to.yPercent = -100 * (number(el.dataset.atlas, 1)-1) / number(el.dataset.atlas, 1);
+    }
     const tl = gsap.timeline({paused: true, data: {start: builder ? number(el.dataset.start) + number(el.closest('[data-screen]')?.dataset.start) : clipStart(el)}});
     const stagger = kind === 'words' && !builder ? {amount: arrive * 0.4} : 0;
     tl.fromTo(targets, from, {...to, duration: kind === 'words' && !builder ? arrive * 0.6 : arrive, stagger,

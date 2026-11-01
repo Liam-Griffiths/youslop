@@ -84,3 +84,12 @@ Blocks, intro/outro cards, chapter tails and block preview videos use this build
 Cut media may set `data-media-dim` (default .53) and `data-media-focal='[x,y]'`
 (default [.5,.5]); native ffmpeg photo/video cover crops share these parameters.
 `node` and `badge` provide scale arrivals with back-out(1.9) and back-out(2.4).
+
+`reveal` is a hard horizontal clip; `slide-left` translates x=-80→0 without
+fading. `atlas` selects a row from one captured vertical strip (`data-atlas`,
+1–64 equally sized rows, `.atlas-strip` child, `data-bounds=".atlas-strip"`).
+It steps linearly through rows over `data-motion-duration`; precompute values
+with the desired easing. Use a world screen to capture strips outside the frame.
+`data-path='[{"t":0,"x":0,"y":0},{"t":1,"x":100,"y":20,"ease":"cubic-out"}]'`
+adds translation in composition pixels, in screen-local time, compiled in ffmpeg.
+Each path has at most 48 keys and shares the camera easing vocabulary.

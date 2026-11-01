@@ -1,0 +1,77 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="/static/scene/cuts/ticker.css">{% endblock %}
+{% macro atlas(values, size, start, arrival, keys=[]) %}
+data-layer data-motion="atlas" data-atlas="{{ values|length }}" data-start="{{ start }}" data-motion-duration="{{ arrival }}" data-path='{{ keys|tojson }}' data-bounds=".atlas-strip" style="font-size:{{ size }}px"
+{% endmacro %}
+{% macro strip(values) %}<div class="atlas-strip">{% for value in values %}<div class="atlas-row">{{ value }}</div>{% endfor %}</div>{% endmacro %}
+{% block body %}
+<main id="page" class="look-{{ look }}" style="--grid:{{ palette.grid }};--dim:{{ palette.dim }};--panel:{{ palette.panel }};--hi:{{ palette.hi }}">
+{% for s in screens %}{% set c=s.cue %}
+<section class="clip screen" data-screen="{{ s.id }}" data-world="true" data-start="{{ s.start }}" data-duration="{{ s.duration }}" data-cue-delay="{{ s.delay }}" data-camera='[{"t":{{ s.start }},"x":960,"y":540,"zoom":1}]'>
+{% if s.media %}<i class="media {{ 'full' if s.hidden else '' }}" data-media="{{ s.source }}" data-video="{{ s.video|lower }}" data-media-time="{{ s.media_time }}" data-media-dim="{{ 1 if s.hidden else 0.65 }}"></i>{% endif %}
+{% if not s.media %}<div class="ground" data-ground></div>{% endif %}
+{% if not s.hidden %}
+<header data-ground><b style="font-size:{{ title_size }}px">{{ title }}</b><span>MARKETS · EXPLAINED</span></header>
+{% if c.kind == 'stat' %}
+{% if c.label %}<div class="stat-label" data-ground style="top:{{ c.cy-c.size*0.62-92 }}px">{{ c.label|upper }}</div>{% endif %}
+<div class="stat-position" style="top:{{ c.cy-128 }}px"><div class="number stat" {{ atlas(c['values'],c.size,0,0.05+c.arrival) }}>{{ strip(c['values']) }}</div></div>
+{% if c.delta %}<div class="chip {{ 'down' if c.down else 'up' }}" data-layer data-start=".5" style="top:{{ c.cy+c.size*0.62+18 }}px"><span>{{ '▼' if c.down else '▲' }}</span>{{ c.delta }}</div>{% endif %}
+{% elif c.kind == 'chart' %}
+<div class="panel-title" data-ground>{{ c.title|upper }}</div>{% if c.illustrative %}<div class="illustrative" data-ground>ILLUSTRATIVE</div>{% endif %}
+{% for axis in c.axes %}<div class="axis" data-ground style="top:{{ axis.y }}px"><span>{{ axis.label }}</span></div>{% endfor %}
+<div class="date start" data-ground>{{ c.start }}</div><div class="date end" data-ground>{{ c.end }}</div>
+<svg class="chart" width="1528" height="688" viewBox="-4 -4 1528 688" data-layer data-start=".1" data-motion="reveal" data-motion-duration="{{ c.arrival }}" data-motion-ease="cubic-in-out">
+<polygon points="0,680 {{ c.points_svg }} 1520,680" fill="{{ c.color }}" fill-opacity=".18"/><polyline points="{{ c.points_svg }}" fill="none" stroke="{{ c.color }}" stroke-width="6" stroke-linejoin="round"/></svg>
+<div class="dot" data-layer data-start=".1" data-path='{{ c['keys']|tojson }}' style="left:178px;top:{{ 228+c.xy[0][1] }}px;--dot:{{ c.color }}"><i></i></div>
+<div class="chart-value" data-layer data-start="{{ 0.1+c.arrival }}" style="top:{{ 160+c.xy[-1][1] }}px;color:{{ c.color }}">{{ c.final }}</div>
+{% elif c.kind == 'bars' %}
+<div class="panel-title" data-ground>{{ c.title|upper }}</div>
+{% for row in c.rows %}
+<div class="bar-label" data-ground style="top:{{ row.y }}px;height:{{ row.h }}px">{{ row.label }}</div>
+<div class="bar" data-layer data-start="{{ row.start }}" data-motion="reveal" data-motion-duration=".7" style="top:{{ row.y }}px;width:{{ row.width }}px;height:{{ row.h }}px;background:{{ row.color }}"></div>
+<div class="bar-position" style="top:{{ row.y+(row.h-64)/2 }}px"><div class="number bar-number" {{ atlas(row['values'],44,0,row.start+0.7,row['keys']) }}>{{ strip(row['values']) }}</div></div>
+{% endfor %}
+{% else %}
+<div class="shade" data-ground></div>
+<div class="kicker" data-layer data-start=".05" data-motion="slide-left" style="top:{{ c.ty-c.size-70 }}px">{{ c.kicker }}</div>
+{% for row in c.rows %}<div class="headline" data-layer data-start=".05" data-motion="slide-left" style="top:{{ c.ty+loop.index0*c.size*1.1-c.size }}px;font-size:{{ c.size }}px">{{ row }}</div>{% endfor %}
+{% endif %}{% endif %}</section>{% endfor %}
+</main>
+{% endblock %}
+{% block script %}<script>
+window.__ready=window.__ready.then(()=>{
+  Object.values(window.__timelines).forEach(t=>t.progress(1));
+  document.documentElement.style.overflow='visible';document.body.style.overflow='visible';
+  const page=document.querySelector('#page'), cardAt={{ card_at|tojson }}, total={{ duration }};
+  page.querySelectorAll('.screen').forEach(screen=>{
+    const delay=Number(screen.dataset.cueDelay);
+    screen.querySelectorAll('[data-layer]').forEach(el=>{
+      el.dataset.start=Number(el.dataset.start||0)+delay;
+      if(el.dataset.path)el.dataset.path=JSON.stringify(JSON.parse(el.dataset.path).map(k=>({...k,t:k.t+delay})));
+    });
+  });
+  if(cardAt!==null && page.lastElementChild){
+    const last=page.lastElementChild,card=last.cloneNode(true);
+    Object.assign(card.dataset,{screen:'chapter',start:cardAt,duration:total-cardAt});
+    card.querySelectorAll('[data-layer]').forEach(el=>{
+      const path=JSON.parse(el.dataset.path||'[]');if(path.length){const k=path.at(-1);el.style.transform=`translate(${k.x}px,${k.y}px)`;}
+      if(el.dataset.motion==='atlas'){const strip=el.querySelector('.atlas-strip');strip.replaceChildren(strip.lastElementChild.cloneNode(true));strip.style.transform='none';el.removeAttribute('data-bounds');}
+      delete el.dataset.layer;el.dataset.ground='';
+    });
+    card.querySelectorAll('[data-media]').forEach(el=>el.dataset.mediaTime=Number(el.dataset.mediaTime)+cardAt-Number(last.dataset.start));
+    const wash=document.createElement('div');wash.className='chapter-wash';Object.assign(wash.dataset,{layer:'',motion:'fade',motionEase:'cubic-out',motionDuration:.3});
+    const heading=document.createElement('div');heading.className='chapter-heading';
+    Object.assign(heading.dataset,{layer:'',start:.15,motion:'fade',motionEase:'cubic-out',motionDuration:.45});
+    const rows={{ chapter_rows|tojson }},size={{ chapter_size }};heading.style.top=`${540-rows.length*size*.6-110}px`;
+    const label=document.createElement('p');label.className='section-label';label.textContent='SECTION ▸';heading.append(label);
+    rows.forEach(row=>{const el=document.createElement('p');el.textContent=row;el.style.fontSize=`${size}px`;heading.append(el);});
+    const line=document.createElement('div');line.className='chapter-line';line.style.top=`${540+rows.length*size*.6+44}px`;
+    Object.assign(line.dataset,{layer:'',start:.15,motion:'reveal',motionEase:'cubic-out',motionDuration:.45});
+    card.append(wash,heading,line);page.append(card);
+  }
+  let id=0;page.querySelectorAll('[data-layer]').forEach(el=>{
+    const left=Number(el.closest('[data-screen]').dataset.duration)-Number(el.dataset.start||0);
+    if(left<=0){el.remove();return;}el.dataset.layer=`tk${id++}`;el.dataset.duration=left;
+  });
+});
+</script>{% endblock %}

@@ -93,7 +93,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.2e | Real text measurement for scenes | S | T5.2a, T1.5 | done | 2026-11-01 Codex + review; overflow caught on real Chromium; small_text one per paragraph; owner: board body text is 33-40px |
 | T5.3a | Drawn cut to scene: Loudmouth | L | T2.8, T0.6 | done | Loudmouth on the builder: cold 8.0 s, warm 5.6 s (Pillow 4.3 s); frames match Pillow |
 | T5.3b | Drawn cut to scene: Flameboat | L | T5.3a | done | Flameboat on the builder: cold 5.7 s, warm 3.4 s (Pillow 3.3 s); code/terminal/diagram cues not yet seen in a browser |
-| T5.3c | Drawn cut to scene: Ticker | L | T5.3b | todo | |
+| T5.3c | Drawn cut to scene: Ticker | L | T5.3b | done | Ticker on the builder: cold 3.1 s, warm 2.25 s (Pillow 2.0 s); all cue kinds checked; empty-ground and ground-overflow builder fixes |
 | T5.3d | Drawn cut to scene: Group Chat | L | T5.3c | todo | |
 | T5.3e | Drawn cut to scene: Casefile | L | T5.3d | todo | last; texture-heavy |
 | T5.4 | Thumbnails as a scene | M | T2.4 | todo | |

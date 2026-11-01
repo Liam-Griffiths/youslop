@@ -58,8 +58,15 @@ _PROBE = r"""(() => {
      path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime),
      dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), box:[r.left,r.top,r.right,r.bottom]};}),
    camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
- const row = (e,i) => {
+ const row = (e,i,ground=false) => {
    let r=e.getBoundingClientRect();
+   if (ground) {
+     // Ground plates never move, so take in children painted outside the box
+     // (e.g. an axis label hung off a 1px rule).
+     const rects=[r,...[...e.querySelectorAll('*')].map(n=>n.getBoundingClientRect())].filter(b=>b.width>0&&b.height>0);
+     if (rects.length) r={left:Math.min(...rects.map(b=>b.left)),top:Math.min(...rects.map(b=>b.top)),
+       right:Math.max(...rects.map(b=>b.right)),bottom:Math.max(...rects.map(b=>b.bottom))};
+   }
    const painted = e.dataset.bounds ? [...e.querySelectorAll(e.dataset.bounds)] :
      (e instanceof SVGElement ? [...e.querySelectorAll('text,path,rect,polyline,circle,image')] : []);
    if (painted.length) {
@@ -75,10 +82,11 @@ _PROBE = r"""(() => {
      ease:e.dataset.motionEase, y:e.dataset.motionY, feather:Number(e.dataset.motionFeather || 1),
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      steps:JSON.parse(e.dataset.steps || '[]'),
+     atlas:Number(e.dataset.atlas || 1), pathKeys:JSON.parse(e.dataset.path || '[]'),
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
  };
  const rows = layers.map(row);
- const grounds = [...document.querySelectorAll('[data-ground]')].map(row);
+ const grounds = [...document.querySelectorAll('[data-ground]')].map((e,i)=>row(e,i,true));
  const clone = document.body.cloneNode(true);
  clone.querySelectorAll('[data-layer], [data-screen], script').forEach(e=>e.remove());
  return {layers:rows, grounds, screens, rules, ground:[clone.outerHTML,style(document.body)],
@@ -151,6 +159,8 @@ def _plan(data, seconds, fps):
             used += math.ceil(min(layer['arrival'], layer['duration']) * fps)
             if used > math.floor(seconds * fps * data['budget']):
                 raise ValueError(f'layer {name}: capture window exceeds frame budget')
+        if not isinstance(layer.get('atlas', 1), int) or not 1 <= layer.get('atlas', 1) <= 64:
+            raise ValueError(f'layer {name}: atlas must have 1..64 rows')
     return screens
 
 
@@ -198,6 +208,7 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
     def probe(cdp, session, item, t):
         # Builder timelines have no exit; measure the final layout once.
         _value(cdp, session, "window.__builderCapture=true; document.body.style.transform='none'; Object.values(window.__timelines).forEach(t=>t.progress(1))")
+        _value(cdp, session, "document.querySelectorAll('[data-motion=atlas] .atlas-strip').forEach(e=>e.style.transform='none')")
         data = _value(cdp, session, _PROBE)
         _plan(data, seconds, fps)  # Budget and graph limits precede any screenshot.
         data['files'] = []
@@ -221,6 +232,7 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                    f'html,body {{background:transparent!important}} body * {{visibility:hidden!important}} {selector}, {selector} * {{visibility:visible!important}}')
             if selector and time is None:
                 css += f' {selector} {{opacity:1!important}}'
+                css += ' [data-motion="atlas"] .atlas-strip {transform:none!important}'
             _value(cdp, session, f'window.__isolate.textContent={json.dumps(css)}')
             raw = base64.b64decode(cdp.send('Page.captureScreenshot',
                                           dict(format='png', fromSurface=True), session)['data'])
@@ -251,7 +263,9 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
         pending = {}
         # Ground clones use the same content signatures and world pixel grid as
         # their live rows, including rows only ever visible in a chapter ground.
-        for attr, rows in [('data-layer', data['layers']), ('data-ground', data.get('grounds', []))]:
+        # An empty ground element (e.g. an omitted chart label) paints nothing; drop it.
+        data['grounds'] = [g for g in data.get('grounds', []) if g['box'][2] > g['box'][0] and g['box'][3] > g['box'][1]]
+        for attr, rows in [('data-layer', data['layers']), ('data-ground', data['grounds'])]:
             for layer in rows:
                 x0,y0,x1,y1 = layer['box']
                 dx,dy = (density,density) if world else (sx,sy)
@@ -396,6 +410,8 @@ def _compile(data, screen, size, fps, directory):
             layer['start'] -= screen['start']
         layer['start'] -= screen.get('offset', 0)
         layer['steps'] = [(t-screen.get('offset', 0), edge) for t,edge in layer.get('steps', [])]
+        shift = screen.get('offset', 0)+(screen['start'] if source['screen'] == '' else 0)
+        layer['pathKeys'] = [dict(k, t=k['t']-shift) for k in layer.get('pathKeys', [])]
         if layer['start'] < screen['duration'] and layer['start']+layer['duration'] > 0:
             layers.append(layer)
     # Flatten the settled prefix in paint order. Foreground layers retain their order.
@@ -434,7 +450,7 @@ def _compile(data, screen, size, fps, directory):
                 arrival=.001, motion='none', path=screen['ground_path'], box=[0,0,*text.size])]+layers
         else:
             ground.alpha_composite(text)
-    while not world and layers and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
+    while not world and layers and layers[0]['motion'] != 'atlas' and not layers[0].get('pathKeys') and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
         layer = layers.pop(0)
         with Image.open(layer['path']) as plate:
             ground.alpha_composite(plate.convert('RGBA'), tuple(layer['box'][:2]))
@@ -465,6 +481,12 @@ def _compile(data, screen, size, fps, directory):
                   f"scale=w='max(1,iw*{m['scale']})':h='max(1,ih*{m['scale']})':eval=frame")
         if layer['motion'] == 'none':
             effect = f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba'
+        if layer['motion'] == 'atlas':
+            count = layer.get('atlas', 1)
+            h = h/count
+            index = f"floor(clip((t-{layer['start']})/{layer['arrival']},0,1)*{count-1})"
+            effect = (f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba,'
+                      f"crop=iw:ih/{count}:0:'({index})*ih/{count}'")
         if layer.get('video'):
             inputs[-2:] = ['-stream_loop','-1','-ss',str(layer['time']),'-i',layer['path']]
             effect = f'setpts=PTS-STARTPTS,{_media_filter(layer, w, h)},format=rgba'
@@ -479,6 +501,8 @@ def _compile(data, screen, size, fps, directory):
             effect = f"setpts=PTS-STARTPTS+{layer['start']}/TB,tpad=stop_mode=clone:stop=-1,format=rgba"
         graph.append(f'[{i}:v]{effect}[l{i}]')
         sx, sy = (world['density'], world['density']) if world else (size[0]/data['width'], size[1]/data['height'])
+        if layer.get('pathKeys'):
+            m['x'], m['y'], _ = _camera(layer['pathKeys'], 't', world=True)
         x = f"{layer['box'][0]}+{sx}*{m['x']}+({w}-overlay_w)/2"
         y = f"{layer['box'][1]}+{sy}*{m['y']}+({h}-overlay_h)/2"
         if layer.get('frames'):
