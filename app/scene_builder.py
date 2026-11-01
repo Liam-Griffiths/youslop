@@ -41,16 +41,23 @@ _PROBE = r"""(() => {
  const root = document.querySelector('[data-composition-id]');
  const layers = [...document.querySelectorAll('[data-layer]')];
  if (layers.some(e => e.parentElement.closest('[data-layer]'))) throw Error('Nested data-layer');
- const style = e => [...getComputedStyle(e)].filter(k=>k!=='visibility').map(k => [k,getComputedStyle(e).getPropertyValue(k)]);
- const signature = e => [e.outerHTML.replace(/ data-(start|duration|motion[^ =]*)="[^"]*"/g,'').replace(/visibility:\s*(hidden|visible);?/g,''),
-     [e,...e.querySelectorAll('*')].map(style)];
+ const style = e => {const cs=getComputedStyle(e); return [...cs].filter(k=>k!=='visibility').map(k => [k,cs.getPropertyValue(k)]);};
+ // Computed style follows from the stylesheet rules plus each element's own markup
+ // and its ancestors' tags/classes/inline styles, so sign with those (cheap) unless
+ // a rule depends on sibling position; then serialise every computed style (slow).
+ const rules = [...document.styleSheets].map(sheet => {try {return [...sheet.cssRules].map(r=>r.cssText).join('\n');} catch (err) {return sheet.href || '';}});
+ const positional = rules.some(t => /:(nth|first|last|only)-|[+~]\s*[^=\s]/.test(t.replace(/\{[^}]*\}/g,'{}')));
+ const chain = e => {const out=[]; for (let n=e.parentElement; n; n=n.parentElement) out.push([n.tagName,n.className?.baseVal ?? n.className,n.getAttribute('style')||'']); return out;};
+ const strip = h => h.replace(/ data-(layer|ground|steps|start|duration|motion[^ =]*)="[^"]*"/g,'').replace(/visibility:\s*(hidden|visible);?/g,'');
+ const signature = e => positional ? [strip(e.outerHTML), [e,...e.querySelectorAll('*')].map(style)]
+   : [strip(e.outerHTML), chain(e).map(c=>[c[0],c[1],strip(c[2])]), rules.length];
  const screens = [...document.querySelectorAll('[data-screen]')].map(e => ({
    id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration),
    world:e.dataset.world === 'true', signature:[e.outerHTML,style(e)],
    media:[...e.querySelectorAll('[data-media]')].map(n=>{const r=n.getBoundingClientRect();return {
      path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime), box:[r.left,r.top,r.right,r.bottom]};}),
    camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
- const rows = layers.map((e,i) => {
+ const row = (e,i) => {
    let r=e.getBoundingClientRect();
    const painted = e.dataset.bounds ? [...e.querySelectorAll(e.dataset.bounds)] :
      (e instanceof SVGElement ? [...e.querySelectorAll('text,path,rect,polyline,circle,image')] : []);
@@ -68,10 +75,12 @@ _PROBE = r"""(() => {
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      steps:JSON.parse(e.dataset.steps || '[]'),
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
- });
+ };
+ const rows = layers.map(row);
+ const grounds = [...document.querySelectorAll('[data-ground]')].map(row);
  const clone = document.body.cloneNode(true);
  clone.querySelectorAll('[data-layer], [data-screen], script').forEach(e=>e.remove());
- return {layers:rows, screens, ground:[clone.outerHTML,style(document.body)],
+ return {layers:rows, grounds, screens, rules, ground:[clone.outerHTML,style(document.body)],
    camera:JSON.parse(root.dataset.camera || '[]'), budget:Number(root.dataset.budget || 0.1)};
 })()"""
 
@@ -80,7 +89,7 @@ def _value(cdp, session, js):
     return stage._evaluate(cdp, session, js)['result'].get('value')
 
 
-def _world_bounds(keys, width, height, scale):
+def _world_bounds(keys, width, height, scale, density=None):
     """Conservative swept view, rasterised 1:1 at the closest camera zoom."""
     _camera(keys, 't', world=True)
     def bounds(axis, extent):
@@ -98,8 +107,10 @@ def _world_bounds(keys, width, height, scale):
         return min(edges), max(edges)
     left,right = bounds('x',width)
     top,bottom = bounds('y',height)
+    density = density if density is not None else scale*max(k['zoom'] for k in keys)
+    # All screens share a pixel grid, so settled plates need no resampling.
+    left, top = math.floor(left*density)/density, math.floor(top*density)/density
     w,h = right-left,bottom-top
-    density = scale*max(k['zoom'] for k in keys)
     # Match output aspect exactly, so zoompan never distorts the world.
     divisor = math.gcd(width, height)
     aw, ah = width//divisor, height//divisor
@@ -142,9 +153,40 @@ def _plan(data, seconds, fps):
     return screens
 
 
+CAPTURE_GUTTER = 2
+MAX_CAPTURE_SIDE = 8192
+MAX_CAPTURE_PIXELS = 16_777_216
+
+
+def _batches(plates, limit=MAX_CAPTURE_SIDE):
+    """Greedily pack disjoint padded plates into bounded screenshot viewports."""
+    def fits(bounds):
+        w,h = bounds[2]-bounds[0], bounds[3]-bounds[1]
+        return max(w,h) <= limit and w*h <= MAX_CAPTURE_PIXELS
+    groups = []
+    for plate in plates:
+        x0,y0,x1,y1 = plate['box']
+        box = [x0-CAPTURE_GUTTER,y0-CAPTURE_GUTTER,x1+CAPTURE_GUTTER,y1+CAPTURE_GUTTER]
+        if not fits(box):
+            raise ValueError('layer exceeds capture viewport limits')
+        for group, bounds in groups:
+            union = [min(bounds[0],box[0]),min(bounds[1],box[1]),
+                     max(bounds[2],box[2]),max(bounds[3],box[3])]
+            if fits(union) and all(box[2] <= p['box'][0]-CAPTURE_GUTTER or
+                box[0] >= p['box'][2]+CAPTURE_GUTTER or box[3] <= p['box'][1]-CAPTURE_GUTTER or
+                box[1] >= p['box'][3]+CAPTURE_GUTTER for p in group):
+                group.append(plate)
+                bounds[:] = union
+                break
+        else:
+            groups.append(([plate], box))
+    return groups
+
+
 def _plates(project, template, ctx, seconds, size, fps, stats):
     key, html, ctx = scenes._prepare(project, template, ctx, seconds, size, fps,
-                                    ('builder-v3', MOTIONS))
+                                    ('builder-v4', MOTIONS))
+    stats.setdefault('screenshots', 0)
     manifest = html.with_suffix('.layers.json')
     if manifest.exists():
         data = json.loads(manifest.read_text())
@@ -163,16 +205,17 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
         _value(cdp, session, isolation)
         sx, sy = size[0]/ctx['width'], size[1]/ctx['height']
 
-        def capture(signature, box, selector, time=None):
-            path = html.parent / ('layer-' + _hash([template, signature, size, scenes._asset_hash()]) + '.png')
+        # Every stylesheet rule in the page (inline <style> included) keys the plates.
+        asset_hash = [scenes._asset_hash(), _hash(data.pop('rules', []))]
+
+        def plate_path(signature):
+            path = html.parent / ('layer-' + _hash(['v5', template, signature, size, asset_hash]) + '.png')
             data['files'].append(str(path))
-            if path.exists():
-                stats['cache_hits'] += 1
-                return str(path)
-            if time is not None:
-                _value(cdp, session, f'window.__seek({time})')
-            else:
-                _value(cdp, session, 'Object.values(window.__timelines).forEach(t=>t.progress(1))')
+            return path
+
+        def screenshot(selector, time=None):
+            _value(cdp, session, f'window.__seek({time})' if time is not None else
+                   'Object.values(window.__timelines).forEach(t=>t.progress(1))')
             css = ('[data-layer], [data-layer] *, [data-screen], [data-screen] * {visibility:hidden!important}' if selector is None else
                    f'html,body {{background:transparent!important}} body * {{visibility:hidden!important}} {selector}, {selector} * {{visibility:visible!important}}')
             if selector and time is None:
@@ -180,53 +223,106 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
             _value(cdp, session, f'window.__isolate.textContent={json.dumps(css)}')
             raw = base64.b64decode(cdp.send('Page.captureScreenshot',
                                           dict(format='png', fromSurface=True), session)['data'])
+            stats['screenshots'] += 1
             with Image.open(io.BytesIO(raw)) as image:
-                buf = io.BytesIO()
-                image.convert('RGBA').crop(box).save(buf, format='PNG')
+                return image.convert('RGBA')
+
+        def save_crop(path, image, box):
+            buf = io.BytesIO()
+            image.crop(box).save(buf, format='PNG')
             _write(path, buf.getvalue())
             stats['captures'] += 1
+
+        def capture(signature, box, selector, time=None):
+            path = plate_path(signature)
+            if path.exists():
+                stats['cache_hits'] += 1
+            else:
+                save_crop(path, screenshot(selector, time), box)
             return str(path)
 
-        if any(s.get('world') for s in data['screens']):
-            for n, screen in enumerate(data['screens']):
-                left, top, density, w, h = _world_bounds(screen['camera'], ctx['width'], ctx['height'], sx)
+        world = any(s.get('world') for s in data['screens'])
+        density = sx*max(k['zoom'] for s in data['screens'] for k in s['camera']) if world else sx
+        if world:
+            for screen in data['screens']:
+                left, top, _, w, h = _world_bounds(screen['camera'], ctx['width'], ctx['height'], sx, density)
                 screen['raster'] = dict(left=left, top=top, density=density, width=w, height=h)
-                cdp.send('Emulation.setDeviceMetricsOverride', dict(width=math.ceil(w/density),
-                    height=math.ceil(h/density), deviceScaleFactor=density, mobile=False), session)
-                _value(cdp, session, f"document.body.style.transform='translate({-left}px,{-top}px)'; document.querySelectorAll('[data-screen]')[{n}].setAttribute('data-builder-screen','')")
-                screen['ground_path'] = capture([screen['signature'], screen['raster']], (0,0,w,h), '[data-builder-screen] [data-ground]')
+        pending = {}
+        # Ground clones use the same content signatures and world pixel grid as
+        # their live rows, including rows only ever visible in a chapter ground.
+        for attr, rows in [('data-layer', data['layers']), ('data-ground', data.get('grounds', []))]:
+            for layer in rows:
+                x0,y0,x1,y1 = layer['box']
+                dx,dy = (density,density) if world else (sx,sy)
+                box = [math.floor(x0*dx),math.floor(y0*dy),math.ceil(x1*dx),math.ceil(y1*dy)]
+                if box[2] <= box[0] or box[3] <= box[1]:
+                    raise ValueError(f"layer {layer.get('id', 'ground')}: empty bounds")
+                layer['box'] = box
+                path = plate_path([layer['signature'], box, density])
+                layer['path'] = str(path)
+                if path.exists() or str(path) in pending:
+                    stats['cache_hits'] += 1
+                else:
+                    pending[str(path)] = dict(layer, attr=attr)
+
+        # Validate every batch before any screenshot. The CSS viewport also has
+        # a limit, even when a tiny device scale makes its bitmap small.
+        batches = _batches(pending.values(), min(MAX_CAPTURE_SIDE, int(32767*density)))
+        if not world:
+            data['ground_path'] = capture(data['ground'], (0, 0, *size), None)
+        for group, bounds in batches:
+            if world:
+                x0,y0,x1,y1 = bounds
+                cdp.send('Emulation.setDeviceMetricsOverride', dict(width=math.ceil((x1-x0)/density),
+                    height=math.ceil((y1-y0)/density), deviceScaleFactor=density, mobile=False), session)
+                _value(cdp, session, f"document.body.style.transformOrigin='0 0'; document.body.style.transform='translate({-x0/density}px,{-y0/density}px)'")
+            else:
+                x0,y0 = 0,0
+            _value(cdp, session, ';'.join(f"document.querySelectorAll('[{p['attr']}]')[{p['index']}].setAttribute('data-builder-active','')" for p in group))
+            image = screenshot('[data-builder-active]')
+            for plate in group:
+                box = [v-(x0 if i%2==0 else y0) for i,v in enumerate(plate['box'])]
+                save_crop(Path(plate['path']), image, box)
+            _value(cdp, session, "document.querySelectorAll('[data-builder-active]').forEach(e=>e.removeAttribute('data-builder-active'))")
+
+        if world:
+            for screen in data['screens']:
+                left, top, w, h = (screen['raster'][k] for k in ('left','top','width','height'))
+                origin = [round(left*density),round(top*density)]
+                grounds = [g for g in data.get('grounds', []) if g['screen'] == screen['id']]
+                path = html.parent / ('ground-' + _hash([screen['raster'], [(g['path'],g['box']) for g in grounds]]) + '.png')
+                data['files'].append(str(path))
+                if not path.exists():
+                    ground = Image.new('RGBA', (w,h))
+                    for row in grounds:
+                        x0,y0,x1,y1 = [v-origin[i%2] for i,v in enumerate(row['box'])]
+                        if x1 <= 0 or y1 <= 0 or x0 >= w or y0 >= h:
+                            continue
+                        with Image.open(row['path']) as plate:
+                            ground.alpha_composite(plate, (x0,y0))
+                    buf = io.BytesIO()
+                    ground.save(buf, format='PNG')
+                    _write(path, buf.getvalue())
+                screen['ground_path'] = str(path)
                 for layer in [l for l in data['layers'] if l['screen'] == screen['id']]:
-                    x0,y0,x1,y1 = layer['box']
-                    box = [math.floor((x0-left)*density), math.floor((y0-top)*density),
-                           math.ceil((x1-left)*density), math.ceil((y1-top)*density)]
-                    _value(cdp, session, f"document.querySelectorAll('[data-layer]')[{layer['index']}].setAttribute('data-builder-active','')")
-                    layer['path'] = capture([layer['signature'], box, density], box, '[data-builder-active]')
-                    layer['box'] = box
+                    layer['box'] = [v-origin[i%2] for i,v in enumerate(layer['box'])]
                     layer['steps'] = [(t, edge*density) for t,edge in layer.get('steps', [])]
-                    _value(cdp, session, "document.querySelector('[data-builder-active]').removeAttribute('data-builder-active')")
                 for media in screen.get('media', []):
-                    media['box'] = [round((v-(left if i%2==0 else top))*density) for i,v in enumerate(media['box'])]
-                _value(cdp, session, "document.querySelector('[data-builder-screen]').removeAttribute('data-builder-screen')")
+                    media['box'] = [round(v*density)-origin[i%2] for i,v in enumerate(media['box'])]
             data['ground_color'] = ctx['palette']['ground']
-            _write(manifest, json.dumps(data).encode())
-            return
-        data['ground_path'] = capture(data['ground'], (0, 0, *size), None)
-        for layer in data['layers']:
-            box = [math.floor(layer['box'][0]*sx), math.floor(layer['box'][1]*sy),
-                   math.ceil(layer['box'][2]*sx), math.ceil(layer['box'][3]*sy)]
-            if box[2] <= box[0] or box[3] <= box[1]:
-                raise ValueError(f"layer {layer['id']}: empty bounds")
-            layer['box'] = box
-            _value(cdp, session, f"document.querySelectorAll('[data-layer]')[{layer['index']}].setAttribute('data-builder-active','')")
-            selector = '[data-builder-active]'
-            layer['path'] = capture([layer['signature'], box], box, selector)
-            if layer.get('capture') == 'frames':
-                screen = next((s for s in _plan(data, seconds, fps) if s['id'] == layer['screen']), dict(start=0))
+        else:
+            for layer in data['layers']:
+                if layer.get('capture') != 'frames':
+                    continue
+                _value(cdp, session, f"document.querySelectorAll('[data-layer]')[{layer['index']}].setAttribute('data-builder-active','')")
+                screen = next((s for s in data['screens'] if s['id'] == layer['screen']), dict(start=0))
                 count = math.ceil(min(layer['arrival'], layer['duration'])*fps)
-                layer['frames'] = [capture([key, layer['id'], i], box, selector,
+                layer['frames'] = [capture([key, layer['id'], i], layer['box'], '[data-builder-active]',
                     screen['start'] + layer['start'] + i/fps) for i in range(count)]
                 stats['captured_frames'] += count
-            _value(cdp, session, "document.querySelector('[data-builder-active]').removeAttribute('data-builder-active')")
+                _value(cdp, session, "document.querySelector('[data-builder-active]').removeAttribute('data-builder-active')")
+
+        data['files'] = list(dict.fromkeys(data['files']))
         _write(manifest, json.dumps(data).encode())
 
     stage.capture_stills([dict(clip=key, url_path=f'/scene/{{token}}/{html.name}',
@@ -401,7 +497,7 @@ def _compile(data, screen, size, fps, directory):
 
 def inspect(project, template, ctx, *, seconds, size, fps):
     """Capture and compile an authoring check, returning stats without encoding."""
-    stats = dict(captures=0, cache_hits=0, layers=0, passes=0,
+    stats = dict(captures=0, screenshots=0, cache_hits=0, layers=0, passes=0,
                  largest_graph_bytes=0, captured_frames=0)
     data = _plates(project, template, ctx, seconds, size, fps, stats)
     data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
@@ -428,7 +524,7 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=(), fr
             raise ValueError('builder extra -vf must be a literal scale=W:H')
         size = tuple(map(int, value[6:].split(':')))
         del extra[i:i+2]
-    stats = dict(captures=0, cache_hits=0, layers=0, passes=0, largest_graph_bytes=0, captured_frames=0)
+    stats = dict(captures=0, screenshots=0, cache_hits=0, layers=0, passes=0, largest_graph_bytes=0, captured_frames=0)
     data = _plates(project, template, ctx, seconds, size, fps, stats)
     data.update(width=ctx['width'], height=ctx['height'], alpha=ctx.get('builder_alpha', False))
     screens = _plan(data, seconds, fps)

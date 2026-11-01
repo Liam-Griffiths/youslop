@@ -88,13 +88,14 @@ def test_loudmouth_world_plates_cache_and_frame_range(mocked, tmp_path, monkeypa
     for n in range(2):
         result = b.render(tmp_path, 'cuts/loudmouth.html', dict(width=192,height=112,palette=dict(ground='#101010')),
             tmp_path/'out.mp4', seconds=2,size=(48,28),fps=30,crf=28,frames=(29,33))
-        assert result.stats['captures'] == (8 if n==0 else 0)
+        assert result.stats['captures'] == (6 if n==0 else 0)  # grounds composed without CDP
+        assert result.stats['screenshots'] == (6 if n==0 else 0)
         assert result.stats['captured_frames'] == 0 and result.stats['passes'] == 2
         assert result.stats['largest_graph_bytes'] < 65536
     assert counts == [1,3,1,3]
     assert all(g.count('overlay=') == 3 for g in graphs)  # 30 words, only three row nodes.
     assert all('zoompan' in g and 'if(gte(T,' in g for g in graphs)
-    assert len(captures) == 8
+    assert len(captures) == 6
 
 
 def test_loudmouth_world_camera_and_video_clock(tmp_path, monkeypatch):
