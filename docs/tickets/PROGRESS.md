@@ -50,7 +50,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.6 | Migration: intro slates | M | T2.5 | done | 2026-10-31 Codex; 4 intro scenes checked; owner: Dossier lost its stamp, Folio kicker contrast |
 | T2.7 | Catalog fetcher | S | T2.3 | done | 2026-10-31 Codex; real catalog search works |
 | T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | compatibility only (catalog is temporary, see T12.7) |
-| T2.8 | Scene builder: layers, motion as data, one compositor | L | T2.4, T5.1, T5.2a, T5.2c | todo | owner priority 2026-11-01; Chromium draws layers once, ffmpeg does all motion |
+| T2.8 | Scene builder: layers, motion as data, one compositor | L | T2.4, T5.1, T5.2a, T5.2c | done | 2026-11-01 Codex + review; 60s/40 layers in 7.3s (vs ~2min every-frame), 22KB graph |
 | T2.9 | Move captions, boards, diagrams, custom slides onto the builder | M | T2.8 | todo | |
 | T2.10 | Blocks, cards and HTML slides through the builder | M | T2.8 | todo | |
 | T2.7c | Quarantine the third-party catalog | S | T2.7 | done | 2026-10-31 Codex; off by default, metadata allowlist hides previews; UI gating waits for a catalog UI |

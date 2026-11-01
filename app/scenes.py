@@ -35,6 +35,7 @@ env = jinja2.Environment(loader=jinja2.ChoiceLoader([
     _BlockLoader(), jinja2.FileSystemLoader(SCENE_DIR)]),
                          autoescape=True, undefined=jinja2.StrictUndefined)
 env.filters['clean_html'] = sanitise.clean
+env.globals['motion_presets'] = json.loads((SCENE_DIR / 'motion.json').read_text())
 log = logging.getLogger(__name__)
 
 
@@ -210,7 +211,7 @@ def lint(html: str, *, asset_root=None) -> list[str]:
 
 def _asset_hash() -> str:
     h = hashlib.sha1()
-    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / '_base.css', VENDOR_GSAP):
+    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / 'motion.json', SCENE_DIR / '_base.css', VENDOR_GSAP):
         h.update(path.read_bytes())
     return h.hexdigest()
 

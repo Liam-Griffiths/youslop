@@ -103,15 +103,19 @@
       await mountAll(host, url);
     }
   }
+  let motions;
+  const easeNames = {'quad-out':'power1.out', 'cubic-out':'power2.out', 'expo-out':'expo.out', 'linear':'none'};
   function preset(el, index) {
-    const kind = el.dataset.anim;
-    if (!['rise', 'blur-in', 'fade', 'scale-in', 'words', 'fly-left', 'fly-right', 'pop'].includes(kind)) return;
+    const builder = el.hasAttribute('data-layer');
+    const kind = builder ? el.dataset.motion || 'none' : el.dataset.anim;
+    if (!motions[kind] || kind === 'none') return;
+    const spec = motions[kind];
     const css = getComputedStyle(el);
     const dur = Math.max(0, number(el.dataset.duration));
-    const arrive = Math.min(dur, Math.max(0.001, number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), 0.6))));
-    const exit = Math.min(dur / 2, arrive * Math.max(0, number(el.dataset.animExit, number(css.getPropertyValue('--exit-ratio'), 0.5))));
+    const arrive = Math.min(dur, Math.max(0.001, builder ? number(el.dataset.motionDuration, spec.duration) : number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), spec.duration))));
+    const exit = builder ? 0 : Math.min(dur / 2, arrive * Math.max(0, number(el.dataset.animExit, number(css.getPropertyValue('--exit-ratio'), 0.5))));
     let targets = el;
-    if (kind === 'words') {
+    if (kind === 'words' && !builder) {
       const parts = el.textContent.split(/(\s+)/);
       el.replaceChildren(...parts.map(word => {
         if (/^\s*$/.test(word)) return document.createTextNode(word);
@@ -121,17 +125,14 @@
       }));
       targets = el.querySelectorAll('span');
     }
-    const from = {opacity: 0};
-    const to = {opacity: 1};
-    if (kind === 'rise' || kind === 'words') { from.y = number(el.dataset.animY, 48); to.y = 0; }
-    if (kind === 'blur-in') { from.filter = 'blur(16px)'; to.filter = 'blur(0px)'; }
-    if (kind === 'scale-in') { from.scale = 0.85; to.scale = 1; }
-    if (kind === 'fly-left') { from.x = -240; to.x = 0; }
-    if (kind === 'fly-right') { from.x = 240; to.x = 0; }
-    const tl = gsap.timeline({paused: true, data: {start: clipStart(el)}});
-    const stagger = kind === 'words' ? {amount: arrive * 0.4} : 0;
-    tl.fromTo(targets, from, {...to, duration: kind === 'words' ? arrive * 0.6 : arrive, stagger,
-      ease: kind === 'pop' ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : el.dataset.animEase || 'expo.out'}, 0);
+    const from = {...spec.from}, to = {...spec.to};
+    delete from.wipe; delete to.wipe;
+    if ('y' in from) from.y = number(el.dataset.motionY || el.dataset.animY, from.y);
+    if (builder && kind === 'words') { from.clipPath = 'inset(0 100% 0 0)'; to.clipPath = 'inset(0 0% 0 0)'; }
+    const tl = gsap.timeline({paused: true, data: {start: builder ? number(el.dataset.start) + number(el.closest('[data-screen]')?.dataset.start) : clipStart(el)}});
+    const stagger = kind === 'words' && !builder ? {amount: arrive * 0.4} : 0;
+    tl.fromTo(targets, from, {...to, duration: kind === 'words' && !builder ? arrive * 0.6 : arrive, stagger,
+      ease: kind === 'pop' && !builder ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : el.dataset.animEase || easeNames[el.dataset.motionEase || spec.ease] || 'back.out(1.70158)'}, 0);
     if (exit > 0) tl.to(targets, {opacity: 0, duration: exit, ease: 'power3.in'}, dur - exit);
     window.__timelines[`preset#${index}`] = tl;
   }
@@ -168,7 +169,9 @@
         const bg = getComputedStyle(root).getPropertyValue('--bg').trim();
         if (bg) document.body.style.background = bg;
         await mountAll(root);
-        root.querySelectorAll('[data-anim]').forEach(preset);
+        const motionData = document.getElementById('scene-motion');
+        motions = motionData ? JSON.parse(motionData.textContent) : await fetch('/static/scene/motion.json').then(r => { if (!r.ok) throw new Error('Cannot load motion table'); return r.json(); });
+        root.querySelectorAll('[data-anim], [data-layer]').forEach(preset);
         const clips = [...document.querySelectorAll('.clip')];
         const style = document.createElement('style');
         style.textContent = '*{transition:none!important;animation-play-state:paused!important;caret-color:transparent!important}';
@@ -187,8 +190,25 @@
             }
             el.style.visibility = visible && t >= start ? 'visible' : 'hidden';
           }
+          for (const el of document.querySelectorAll('[data-screen], [data-layer]')) {
+            const start = number(el.dataset.start) + (el.hasAttribute('data-layer') ? number(el.closest('[data-screen]')?.dataset.start) : 0);
+            el.style.visibility = t >= start && t < start + number(el.dataset.duration, window.__composition.duration) ? 'visible' : 'hidden';
+          }
           for (const tl of Object.values(window.__timelines)) {
             tl.pause(); tl.time(Math.max(0, t - number(tl.data?.start)), false);
+          }
+          const screen = [...document.querySelectorAll('[data-screen]')].find(e =>
+            t >= number(e.dataset.start) && t < number(e.dataset.start) + number(e.dataset.duration));
+          const camera = JSON.parse(screen?.dataset.camera || root.dataset.camera || '[]');
+          if (camera.length && !window.__builderCapture) {
+            let a = camera[0], b = camera[camera.length - 1];
+            for (let i = 1; i < camera.length; i++) { if (t < camera[i].t) { a = camera[i-1]; b = camera[i]; break; } a = camera[i]; }
+            const p = b.t > a.t ? Math.max(0, Math.min(1, (t-a.t)/(b.t-a.t))) : 1;
+            const q = gsap.parseEase(easeNames[b.ease || 'linear'] || 'back.out(1.70158)')(p);
+            const value = (k, d) => (a[k] ?? d) + ((b[k] ?? d)-(a[k] ?? d))*q;
+            const z = value('zoom', 1), x = Math.max(0, Math.min(W-W/z, value('x',0))), y = Math.max(0, Math.min(H-H/z, value('y',0)));
+            document.body.style.transformOrigin = '0 0';
+            document.body.style.transform = `scale(${z}) translate(${-x}px,${-y}px)`;
           }
           gsap.ticker.sleep();
           for (const animation of document.getAnimations()) {

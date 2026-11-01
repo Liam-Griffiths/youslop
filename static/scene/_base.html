@@ -14,6 +14,7 @@
     {% endfor %}
   </style>
   <script>window.__vars = {{ vars | tojson }};</script>
+  <script id="scene-motion" type="application/json">{{ motion_presets | tojson }}</script>
   <script src="/static/scene/runtime.js"></script>
   <script src="/static/vendor/gsap/gsap.min.js"></script>
   {% block head %}{% endblock %}

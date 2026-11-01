@@ -1,0 +1,11 @@
+{
+  "none": {"from": {}, "to": {}, "duration": 0, "ease": "linear"},
+  "fade": {"from": {"opacity": 0}, "to": {"opacity": 1}, "duration": 0.6, "ease": "expo-out"},
+  "rise": {"from": {"opacity": 0, "y": 48}, "to": {"opacity": 1, "y": 0}, "duration": 0.6, "ease": "expo-out"},
+  "blur-in": {"from": {"opacity": 0, "filter": "blur(16px)"}, "to": {"opacity": 1, "filter": "blur(0px)"}, "renderFrom": {"opacity": 0, "scale": 0.85}, "renderTo": {"opacity": 1, "scale": 1}, "duration": 0.6, "ease": "expo-out"},
+  "scale-in": {"from": {"opacity": 0, "scale": 0.85}, "to": {"opacity": 1, "scale": 1}, "duration": 0.6, "ease": "expo-out"},
+  "words": {"from": {"opacity": 0, "y": 48, "wipe": 0}, "to": {"opacity": 1, "y": 0, "wipe": 1}, "duration": 0.6, "ease": "expo-out"},
+  "fly-left": {"from": {"opacity": 0, "x": -240}, "to": {"opacity": 1, "x": 0}, "duration": 0.6, "ease": "expo-out"},
+  "fly-right": {"from": {"opacity": 0, "x": 240}, "to": {"opacity": 1, "x": 0}, "duration": 0.6, "ease": "expo-out"},
+  "pop": {"from": {"opacity": 0}, "to": {"opacity": 1}, "duration": 0.6, "ease": "back-out"}
+}

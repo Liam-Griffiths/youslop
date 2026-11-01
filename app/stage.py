@@ -691,9 +691,9 @@ def render_scene(items: list[dict], out_dir: Path,
     return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
 
 
-def capture_stills(items, scene_root, *, project_root=None, channel_root=None, scene_probe=None):
+def capture_stills(items, scene_root, *, project_root=None, channel_root=None, scene_probe=None, assets_root=None):
     """Capture one PNG per local scene page, sharing one Chromium session."""
-    run = _run_cdp(dict(items=items, scene_root=str(scene_root),
+    run = _run_cdp(dict(items=items, scene_root=str(scene_root), assets_root=assets_root,
                         project_root=project_root, channel_root=channel_root), lambda m: None,
                    scene_probe=scene_probe)
     return run.thumbs
