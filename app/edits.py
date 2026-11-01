@@ -5,6 +5,8 @@ import math
 
 TIMING_FIELDS = {"gap_override", "title_at", "title_hold", "chapter_hold"}
 
+from .take_edits import take_duration
+
 from . import board as board_mod, cuts as cuts_mod, diagram as diagram_mod
 
 
@@ -42,7 +44,7 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
             if key == "gap_override":
                 value = min(10.0, value)
             elif key == "title_at" and s.take:
-                value = min(float(s.take.get("duration") or 0), value)
+                value = min(take_duration(s.take), value)
         setattr(s, key, value)
     if "on_camera" in payload:
         if not isinstance(payload["on_camera"], bool):
@@ -131,7 +133,7 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
                 if "at" in cue:
                     at = cue["at"]
                     if s.take:
-                        cue["at"] = min(float(s.take.get("duration") or 0), at)
+                        cue["at"] = min(take_duration(s.take), at)
             if clean:
                 cues[key] = clean
             else:

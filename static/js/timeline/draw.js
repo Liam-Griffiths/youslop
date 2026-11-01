@@ -60,10 +60,12 @@ function tlDraw() {
     <div class="tl-ruler">${ticks}</div>
     <div class="tl-lane"><em>pictures</em>${pics}</div>
     <div class="tl-lane para"><em>voice</em>${paras}${tlGapItems()}</div>
+    ${tlCameraRows()}
     ${tlLayerRows()}
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
   tlWireLayers();
   tlWireTiming();
+  tlWireCamera();
   tlPaintProblems();
   tlPaintReview();
   TL.lastPara = '';

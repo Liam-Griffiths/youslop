@@ -851,7 +851,8 @@ class Project:
         return words / WORDS_PER_MINUTE * 60 + PARAGRAPH_GAP * len(self.slides)
 
     def recorded_seconds(self) -> float:
-        return sum((s.take or {}).get("duration", 0.0) for s in self.slides)
+        from .take_edits import take_duration
+        return sum(take_duration(s.take) for s in self.slides)
 
     def to_dict(self) -> dict[str, Any]:
         return {

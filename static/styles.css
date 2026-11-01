@@ -945,3 +945,13 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
   overflow: auto; background: #000b; color: white; line-height: 1.4; white-space: pre-wrap; }
 .camera-countdown { position: absolute; top: 45%; left: 48%; font-size: 64px; color: white; }
 .camera-drop { border: 1px dashed var(--line); padding: 12px; margin-bottom: 12px; }
+
+.tl-camera-source { position:absolute; top:4px; height:34px; background:var(--raised); border:1px solid var(--line-strong); user-select:none; font:11px var(--mono); }
+.tl-camera-source > span { position:absolute; left:16px; bottom:-15px; pointer-events:none; color:var(--ink-faint); font-size:10px; white-space:nowrap; }
+.tl-camera-cut { position:absolute; top:0; height:100%; border:1px solid var(--bad); background:var(--panel); color:var(--bad); text-decoration:line-through; overflow:hidden; padding:0; font-size:14px; }
+.tl-camera-cut.suggested { border:1px dashed var(--cool); color:var(--cool); background:transparent; }
+.tl-camera-trim { position:absolute; top:0; height:100%; padding:0; width:10px; cursor:ew-resize; background:var(--line-strong); border:0; color:transparent; }
+.tl-camera-trim.start { left:0; } .tl-camera-trim.end { right:0; }
+.tl-camera-selection { position:absolute; top:0; height:100%; background:var(--accent-tint); outline:1px solid var(--accent); pointer-events:none; }
+.tl-camera-actions { position:absolute; top:6px; align-items:center; display:flex; gap:6px; white-space:nowrap; }
+.tl-camera-actions label { display:flex; gap:4px; align-items:center; font-size:13px; color:var(--ink-dim); }

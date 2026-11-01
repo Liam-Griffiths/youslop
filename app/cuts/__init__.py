@@ -87,7 +87,8 @@ def cues_for(module, slide) -> list[dict]:
 
 
 def spoken_of(slide, dur: float) -> float:
-    take = float((getattr(slide, "take", None) or {}).get("duration") or 0.0)
+    from ..take_edits import take_duration
+    take = take_duration(getattr(slide, "take", None))
     if take > 0:
         return min(take, dur)
     return min(dur, max(2.0, slide.word_count / WORDS_PER_MINUTE * 60))

@@ -1105,6 +1105,20 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         p = _load(pid)
         s = _slide(p, sid)
         try:
+            if 'camera_cuts' in payload or 'camera_punch' in payload:
+                from .take_edits import validate_cuts
+                take = s.takes.get('camera')
+                if not take:
+                    raise edits.EditError('This paragraph has no camera take')
+                try:
+                    clean = validate_cuts(take, payload.get('camera_cuts', take.get('cuts', [])))
+                except ValueError as exc:
+                    raise edits.EditError(str(exc)) from exc
+                if 'camera_punch' in payload and not isinstance(payload['camera_punch'], bool):
+                    raise edits.EditError('Camera punch must be a boolean')
+                take['cuts'] = clean
+                if 'camera_punch' in payload:
+                    take['punch'] = payload['camera_punch']
             if 'camera_look' in payload or 'camera_focal' in payload:
                 take = s.takes.get('camera')
                 if not take:
@@ -1122,6 +1136,15 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             raise HTTPException(exc.status, str(exc)) from exc
         store.save(p)
     return s.to_dict()
+
+
+@app.get("/api/projects/{pid}/slides/{sid}/camera-cuts")
+def camera_cut_suggestions(pid: str, sid: str) -> list[dict]:
+    p = _load(pid)
+    take = _slide(p, sid).takes.get('camera')
+    if not take:
+        raise HTTPException(400, 'This paragraph has no camera take')
+    return camera.suggest_cuts({**take, 'path': str(store.project_dir(pid) / take['path'])})
 
 
 @app.delete("/api/projects/{pid}/slides/{sid}")

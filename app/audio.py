@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import ffutil
+from .take_edits import take_duration, audio_pieces
 from .config import HEAD_PAD, PARAGRAPH_GAP, TAIL_PAD
 from .schema import Project, Voice, chapter_title
 
@@ -485,7 +486,7 @@ def slide_durations(project: Project) -> list[tuple[str, float]]:
     out = []
     for s in project.slides:
         take = s.take or {}
-        d = float(take.get("duration") or 0.0)
+        d = take_duration(take)
         if d <= 0:
             continue
         out.append((s.id, round(d + gaps.get(s.id, PARAGRAPH_GAP), 3)))
@@ -556,8 +557,12 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         pad_after = (gaps.get(slide.id, PARAGRAPH_GAP)
                      + (tail if i == len(takes) - 1 else 0.0))
         pre = f"adelay={int(pad_before * 1000)}|{int(pad_before * 1000)}," if pad_before else ""
+        source = f"{i}:a"
+        if take and take.get("cuts"):
+            pieces, source = audio_pieces(take, i)
+            filters.extend(pieces)
         filters.append(
-            f"[{i}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"
+            f"[{source}]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"
             f"{pre}apad=pad_dur={pad_after}[a{i}]"
         )
         labels.append(f"[a{i}]")

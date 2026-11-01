@@ -5,6 +5,7 @@ from typing import Callable
 from . import cuts, render, storyboard, titles
 from .cuts import kit
 from .schema import FrameSpec, Project, Slide, Style
+from .take_edits import cut_ranges
 
 
 @dataclass
@@ -64,7 +65,9 @@ def _ctx(sb):
             final = si == len(pictures) - 1 and pi == len(seg['paragraphs']) - 1
             if fmt == 'essay':
                 # Same planner as the graph; storyboard starts are voice time.
-                member = Slide(id=p['id'], narration=p['narration'], take=p['take'])
+                # Storyboard words/duration already use the edited clock.
+                member = Slide(id=p['id'], narration=p['narration'],
+                               take={k: v for k, v in p['take'].items() if k != 'cuts'})
                 for phrase in render._essay_phrases(plan_project, member, dur,
                         lead_in=p['start'] - offset, last_line=final):
                     lines.append(dict(start=offset + phrase['t0'],
@@ -438,8 +441,8 @@ def camera_held(sb, frame, ctx):
         duration = p['end'] - p['start']
         # Cut ranges are in original take time; overlay times are after cuts.
         events, removed = [0.0, duration], 0.0
-        for cut in sorted(take.get('cuts', []), key=lambda c: c['a']):
-            a, b = cut['a'], cut['b']
+        # Storyboard duration is effective; cuts still describe source time.
+        for a, b in cut_ranges(take, duration=float('inf')):
             if b > a:
                 events.append(max(0, min(duration, a - removed)))
                 removed += b - a

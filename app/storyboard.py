@@ -9,11 +9,12 @@ from copy import deepcopy
 from dataclasses import asdict
 
 from . import cuts, edits, render
+from .take_edits import take_duration, take_words
 
 EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues"} | edits.TIMING_FIELDS
 
 
-_UI_ONLY = {"spoken", "word_times", "effective_cues"}
+_UI_ONLY = {"spoken", "word_times", "effective_cues", "camera_edit"}
 
 
 def build(project) -> dict:
@@ -47,8 +48,8 @@ def build(project) -> dict:
                             "mode": slide.picture_mode},
                 "take": {"path": take.get("path", ""),
                          "video": take.get("video", ""),
-                         "duration": take.get("duration", 0.0),
-                         "words": deepcopy(take.get("words", []))},
+                         "duration": take_duration(take),
+                         "words": take_words(take)},
             })
             if slide.on_camera:
                 paragraphs[-1]['take'].update({k: deepcopy(v) for k, v in

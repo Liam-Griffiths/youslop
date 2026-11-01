@@ -11,6 +11,24 @@ from .schema import Voice
 TAIL_S = 2.5
 
 
+def suggest_cuts(take) -> list[dict]:
+    """Internal pauses only, on the cleaned take's original clock."""
+    from .take_edits import cut_ranges
+    # Callers resolve relative paths against the project before invoking this.
+    env = audio._levels(Path(take['path']))
+    span = audio.speech_span(env)
+    if not span:
+        return []
+    threshold = span.floor + (span.peak - span.floor) * .35
+    from .words import _runs
+    runs = _runs(env, threshold)
+    removed = cut_ranges(take)
+    return [{'a': round(b + .15, 6), 'b': round(c - .15, 6)}
+            for (_, b), (c, _) in zip(runs, runs[1:])
+            if c - b > .6 and b >= span.start and c <= span.end
+            and not any(a < c - .15 and end > b + .15 for a, end in removed)]
+
+
 def measure(path: Path) -> dict:
     """One 1 fps ffmpeg pass; clipping is measured before any resizing."""
     with TemporaryDirectory(prefix="corkbored-camera-stats-") as folder:

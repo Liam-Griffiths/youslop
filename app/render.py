@@ -19,6 +19,7 @@ from .config import (
 )
 from .schema import AUTO_MUSIC, Project, Slide, chapter_title, group_slides
 from .store import project_dir
+from .take_edits import take_duration, take_words, kept_ranges
 
 Progress = Callable[[str], None]
 
@@ -240,7 +241,7 @@ def _slide_durations(project: Project, use_estimates: bool) -> list[tuple[Slide,
     out: list[tuple[Slide, float]] = []
     for s in project.slides:
         take = s.take or {}
-        d = float(take.get("duration") or 0.0)
+        d = take_duration(take)
         if d <= 0:
             if not use_estimates:
                 continue
@@ -633,8 +634,8 @@ def _caption_timings(chunks: list[str], budget: float, frame) -> list[float]:
 
 
 def _essay_phrases(project, member, dur, *, lead_in=0.0, last_line=False):
-    spoken = float((member.take or {}).get('duration') or 0) or dur * .85
-    words = ((member.take or {}).get('words', [])
+    spoken = take_duration(member.take) or dur * .85
+    words = (take_words(member.take)
              if project.style.captions_engine != 'pillow' else [])
     plan = titles.phrases(member.narration, words, duration=min(dur, spoken),
                           frame=project.frame, lead_in=lead_in)
@@ -892,7 +893,7 @@ def _segment_graph(
             # Across the spoken part only. `dur` carries the pause that follows
             # the paragraph, and a caption still on screen through a chapter
             # break reads as one that has been left up by mistake.
-            spoken = float((member.take or {}).get("duration") or 0.0) or dur * 0.85
+            spoken = take_duration(member.take) or dur * 0.85
             shares = _caption_timings(chunks, min(dur, spoken), frame)
             if last_line and n == len(group) - 1 and shares:
                 shares[-1] = max(shares[-1], frame.last_line_min_s)
@@ -1196,9 +1197,15 @@ def _build_intro(project: Project, progress: Progress,
 
 
 # ------------------------------------------------------------------ presenter
-def _camera_look(style, focal, size, src, fps, *, take=None, target=110.0) -> str:
+def _camera_look(style, focal, size, src, fps, *, take=None, target=110.0, punch=1.0) -> str:
     """Correct paragraph takes gently; retain the legacy presenter look."""
-    crop, _ = _cover_crop(src, *size, focal)
+    scaled = tuple(round(v * punch / 2) * 2 for v in size) if punch != 1 else size
+    crop, point = _cover_crop(src, *scaled, focal)
+    if scaled != size:
+        point = point or [v / 2 for v in scaled]
+        x, y = [min(big - small, max(0, at - small / 2))
+                for big, small, at in zip(scaled, size, point)]
+        crop += f',crop={size[0]}:{size[1]}:{x:.3f}:{y:.3f}'
     chain = [crop, f"fps={fps}"]
     if take is not None:
         from .camera import correction_filter
@@ -1239,6 +1246,9 @@ def _camera_source(project, slide, seg_len, size, fps):
         start = max(0.0, speech - lead)
         pre = speech - start
         pad = max(0.0, lead - pre)
+    if take.get("cuts"):
+        return ["-i", str(src)], _camera_cut_source(
+            project, take, src, start + pre, lead, seg_len, size, fps)
     length = pre + float(take["duration"]) + float(take.get("tail", 0))
     chain = (f"setpts=PTS-STARTPTS,trim=start={start:.6f}:duration={length:.6f},"
              f"setpts=PTS-STARTPTS,"
@@ -1247,6 +1257,38 @@ def _camera_source(project, slide, seg_len, size, fps):
              + _camera_look(project.style, take.get("focal"), size, src, fps,
                             take=take, target=target(project)))
     return ["-i", str(src)], chain
+
+
+def _camera_cut_source(project, take, src, speech, lead, seg_len, size, fps):
+    from .camera import target
+    ranges = kept_ranges(take)
+    n = len(ranges)
+    graph = ['setpts=PTS-STARTPTS,split=' + str(n)
+             + ''.join(f'[ks{j}]' for j in range(n))]
+    punch = (project.frame.punch_min + project.frame.punch_max) / 2
+    elapsed, frames, labels = lead, 0, []
+    for j, (a, b) in enumerate(ranges):
+        # Pre-roll follows the first surviving word, tail follows the last.
+        start = max(0, speech + a - (lead if j == 0 and a == 0 else 0))
+        end = speech + b + (float(take.get('tail', 0)) if j == n - 1 and b == take['duration'] else 0)
+        pad = max(0, lead - (speech + a - start)) if j == 0 else 0
+        elapsed += b - a + (end - speech - b)
+        count = round(elapsed * fps) - frames
+        frames += count
+        if count <= 0:
+            graph.append(f'[ks{j}]nullsink')
+            continue
+        labels.append(f'[kp{j}]')
+        graph.append(f'[ks{j}]trim=start={start:.6f}:end={end:.6f},setpts=PTS-STARTPTS,'
+                     f'tpad=start_mode=clone:start_duration={pad:.6f},'
+                     + _camera_look(project.style, take.get('focal'), size, src, fps,
+                                    take=take, target=target(project),
+                                    punch=punch if j % 2 and take.get('punch', True) else 1).replace(f'fps={fps},', '')
+                     + f',tpad=stop_mode=clone:stop_duration={seg_len},fps={fps},'
+                     f'trim=end_frame={count},settb=AVTB,setpts=N/({fps}*TB)[kp{j}]')
+    graph.append(''.join(labels) + f'concat=n={len(labels)}:v=1:a=0,'
+                 f'tpad=stop_mode=clone:stop_duration={seg_len:.6f}')
+    return ';'.join(graph)
 
 
 def camera_thumbnail(project, slide) -> Path:
@@ -2035,7 +2077,7 @@ def _verify_output(path, project, groups, durations, group_indices, T, progress)
                 for slide, seconds in groups[gi]:
                     paragraphs.append({"id": slide.id, "word_times": [
                         {**w, "start": pt + w["start"], "end": pt + w["end"]}
-                        for w in (slide.take or {}).get("words", [])]})
+                        for w in take_words(slide.take)]})
                     pt += seconds
             # Joins switch pictures at the midpoint of their overlap.
             segments.append({"start": start + T / 2, "duration": duration,
@@ -2240,7 +2282,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         slides[0].append(target(project))
     blob = json.dumps(
         [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
-         index, slides, _stat(pic),
+         index, [sum(d for _, d in g) for g in groups[:index]], slides, _stat(pic),
          [c for c in _picture_source(project, lead).candidates
           if c["id"] == _picture_source(project, lead).chosen_id],
          _segment_timing(project, groups, index), index == len(groups) - 1,
@@ -2579,7 +2621,8 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     import json
 
     root = project_dir(project.id)
-    takes = [[s.id, _stat(root / s.take["path"]) if (s.take or {}).get("path") else None]
+    takes = [[s.id, (s.take or {}).get('cuts', []),
+              _stat(root / s.take["path"]) if (s.take or {}).get("path") else None]
              for s in project.slides]
     music = pick_music(project)
     stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
@@ -2765,10 +2808,14 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                 "spoken": cuts.spoken_of(s, d),
                 "word_times": [{**w, "start": round(pt + w["start"], 3),
                                 "end": round(pt + w["end"], 3)}
-                               for w in (s.take or {}).get("words", [])],
+                               for w in take_words(s.take)],
                 "effective_cues": cue_times.get(s.id, ([], []))[0],
                 "recorded": bool(s.take), "section": s.section, "on_camera": s.on_camera,
             })
+            if s.on_camera:
+                take = project.active_take(s) or {}
+                paras[-1]['camera_edit'] = {k: take.get(k, default) for k, default in
+                    [('duration', 0), ('cuts', []), ('words', []), ('punch', True)]}
             pt += d
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
