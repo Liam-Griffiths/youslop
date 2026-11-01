@@ -8,7 +8,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
 > Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
-> **2026-11-01:** owner made the scene builder the priority (T2.8 → T2.9 → T2.10, then T5.3a–e and T12.3 on it). Phase 5 up to T5.2e done. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
+> **2026-11-01 01:55 PDT:** owner made the scene builder the priority. T2.8 and T2.9 done. Codex 5-hour window at 89% (weekly 45%); paused until it resets (~04:45 PDT), then T2.10, T5.3a on the builder, T12.3. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
