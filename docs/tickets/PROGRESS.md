@@ -7,7 +7,9 @@ full log lives in the ticket file.
 Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 reviewing)
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
-> Resumed 18:17 PDT at T4.1 after the window reset. Owner checks collected per row below.
+> Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
+> **Codex limit, 2026-10-31 ~21:00 PDT:** the 5-hour window is at 87% (weekly 31%). Paused until it resets (~00:20 PDT), then resuming with T12.3 (core blocks) and T10.2/T10.4/T10.7 once the house-read decision is made.
+> Owner checks collected per row below.
 
 ## Phase 0: foundations
 
