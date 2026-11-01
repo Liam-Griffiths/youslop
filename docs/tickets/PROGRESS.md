@@ -47,6 +47,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.5 | Migration: outro and chapter cards | M | T2.4 | done | 2026-10-31 Codex; outro compared by Claude; owner: chapter card in Timeline |
 | T2.6 | Migration: intro slates | M | T2.5 | done | 2026-10-31 Codex; 4 intro scenes checked; owner: Dossier lost its stamp, Folio kicker contrast |
 | T2.7 | Catalog fetcher | S | T2.3 | done | 2026-10-31 Codex; real catalog search works |
+| T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | found 2026-10-31: CDN GSAP blocks fail lint |
 
 ## Phase 3: review loop and agent surface
 
