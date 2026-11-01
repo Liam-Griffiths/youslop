@@ -8,7 +8,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
 > Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
-> **Codex limit, 2026-10-31 23:20 PDT:** the 5-hour window reset. T12.3 batch 1 committed, then back to roadmap order: Phase 5 (T5.6, T5.7, T5.1, T5.2a…, T5.3a…), T6.3. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
+> **2026-11-01:** owner made the scene builder the priority (T2.8 → T2.9 → T2.10, then T5.3a–e and T12.3 on it). Phase 5 up to T5.2e done. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -50,6 +50,9 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.6 | Migration: intro slates | M | T2.5 | done | 2026-10-31 Codex; 4 intro scenes checked; owner: Dossier lost its stamp, Folio kicker contrast |
 | T2.7 | Catalog fetcher | S | T2.3 | done | 2026-10-31 Codex; real catalog search works |
 | T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | compatibility only (catalog is temporary, see T12.7) |
+| T2.8 | Scene builder: layers, motion as data, one compositor | L | T2.4, T5.1, T5.2a, T5.2c | todo | owner priority 2026-11-01; Chromium draws layers once, ffmpeg does all motion |
+| T2.9 | Move captions, boards, diagrams, custom slides onto the builder | M | T2.8 | todo | |
+| T2.10 | Blocks, cards and HTML slides through the builder | M | T2.8 | todo | |
 | T2.7c | Quarantine the third-party catalog | S | T2.7 | done | 2026-10-31 Codex; off by default, metadata allowlist hides previews; UI gating waits for a catalog UI |
 
 ## Phase 3: review loop and agent surface
@@ -88,7 +91,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T5.2c | Custom slides through a scene template | S | T5.2a | done | 2026-11-01 Codex, 2 rounds; text baselines now match Pillow |
 | T5.2d | Custom slides written as sanitised HTML | M | T5.2c | done | 2026-11-01 Codex (high); allowlist rebuild, reject-not-strip, CSP; reviewer probes all rejected |
 | T5.2e | Real text measurement for scenes | S | T5.2a, T1.5 | done | 2026-11-01 Codex + review; overflow caught on real Chromium; small_text one per paragraph; owner: board body text is 33-40px |
-| T5.3a | Drawn cut to scene: Loudmouth | L | T2.4, T0.6 | todo | first; sets template conventions |
+| T5.3a | Drawn cut to scene: Loudmouth | L | T2.8, T0.6 | todo | first; 2026-11-01 attempt discarded (63x slower, then graph overflow); redo on the builder |
 | T5.3b | Drawn cut to scene: Flameboat | L | T5.3a | todo | |
 | T5.3c | Drawn cut to scene: Ticker | L | T5.3b | todo | |
 | T5.3d | Drawn cut to scene: Group Chat | L | T5.3c | todo | |
@@ -176,7 +179,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T12.1 | Corkbored block format and local registry | M | T2.3, T2.7c | done | 2026-10-31 Codex; clean-room block format + registry, 9 built-in blocks wrap our templates; fixed preview default length |
 | T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
-| T12.3 | Core block set v1 | L | T12.2 | doing | 2026-10-31 batch 1 (12 text blocks) done, browser checks pass; paused for Phase 5 |
+| T12.3 | Core block set v1 | L | T12.2, T2.10 | doing | 2026-10-31 batch 1 (12 text blocks) done, browser checks pass; paused for Phase 5 |
 | T12.4 | Data blocks from tables | M | T12.3 | todo | number-match check |
 | T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |
 | T12.6 | Make a block from a description | M | T12.2 | todo | model writes a reusable block once |

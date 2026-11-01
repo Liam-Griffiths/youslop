@@ -167,6 +167,13 @@ Reuse `app/stage.py` as the runner. Today it serves `static/` plus a `job.json` 
 - **Authoring.** Scenes are HTML templates under `static/scene/<format>/` rendered with Jinja2 from the same JSON the cuts' `PLAN` prompts already emit (cues with anchor words and on-screen text). The planner output does not change; only the drawer does. The agent-facing CLI (section 7) can also write a scene file directly, which is the Hyperframes-style "agent writes HTML" path for one-off shots.
 - **Preview.** The Timeline's proxy pipeline (`proxy_segment`) renders the scene at quarter size through the same runner, which is a `data-width` change. "Preview this bit" works unchanged. The scene editor tab can additionally show the live HTML in an iframe with a scrub bar driving `__seek`, which is free and is the one place a browser engine beats Pillow for the *editing* experience too.
 
+### Scene builder (owner priority, 2026-11-01)
+
+Scope: templates, blocks, and custom scenes when appropriate; not a Hyperframes clone.
+Chromium lays out and draws each layer once; ffmpeg does all timing and motion from a
+motion table shared with the in-app preview. Cost grows with layers, not frames, and
+graphs stay bounded. See T2.8–T2.10 and `docs/scene-builder.md`.
+
 ### Migration order (each step deletes Python)
 
 1. End card (`app/outro.py`) and chapter cards: smallest, proves the pipeline, exercises fonts and variables.

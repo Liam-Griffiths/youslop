@@ -185,3 +185,12 @@ decides where the cut scene branch lives (notes recommend inside
   after, and diff. The notes say how for each.
 - If a ticket grows past ~600 changed lines, stop, log what is done, and
   open a `b` ticket (README rule). T3.5 is the likely one.
+
+## Scene rendering speed (2026-11-01)
+
+Chromium draws; ffmpeg moves. Never screenshot every frame through CDP for content
+that is static between short motions: capture each layer once (cached by content),
+and let ffmpeg do holds, fades, rises, wipes and camera moves. Never build one ffmpeg
+node per word or letter, and pass generated graphs with `-filter_complex_script`.
+Use `app/scene_builder.py` (T2.8) rather than writing another compositor. Measured
+cost of getting this wrong: Loudmouth 293 s vs Pillow 4.6 s for one picture.
