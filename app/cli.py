@@ -305,6 +305,21 @@ def cmd_footage(args):
                       'files': len(s.files)} for s in footage.list_shoots()])
     elif args.footage_cmd == 'status':
         _print_json(footage.status(args.shoot))
+    elif args.footage_cmd == 'labels':
+        from . import footage_labels
+        _guard_write()
+        if args.place is not None:
+            footage_labels.set_vocabulary(args.shoot, args.place)
+
+        def confirm(budget):
+            print(f"Estimated token budget: {budget['input_tokens']} input + "
+                  f"{budget['output_tokens']} output; {budget['calls']} calls, "
+                  f"{budget['uncached']} uncached clips (approximate).",
+                  file=sys.stderr, flush=True)
+            return args.yes or input('Send thumbnails for labeling? [y/N] ').strip().lower() == 'y'
+
+        _print_json(footage_labels.run(args.shoot, confirm=confirm,
+                    progress=lambda message: print(message, file=sys.stderr, flush=True)))
     else:
         _guard_write()
         progress = lambda message: print(message, file=sys.stderr, flush=True)
@@ -420,6 +435,10 @@ def main(argv=None):
     child.add_argument('--copy', action='store_true', help='Copy sources into app storage (default: link)')
     footage_sub.add_parser('list')
     footage_sub.add_parser('status').add_argument('shoot')
+    child = footage_sub.add_parser('labels', help='Estimate tokens, confirm, and label clip thumbnails')
+    child.add_argument('shoot')
+    child.add_argument('--place', action='append', help='Replace shoot vocabulary (repeat for each name)')
+    child.add_argument('--yes', action='store_true', help='Accept the displayed token estimate')
     for name, action, value in [('rule', 'add', 'text'), ('look', 'reject', 'token'), ('format', 'save', 'name')]:
         command = sub.add_parser(name)
         actions = command.add_subparsers(dest='action', required=True)

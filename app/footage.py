@@ -57,6 +57,7 @@ class Clip:
     duplicate_group: str = ''
     best_take: str = ''
     labels: list[str] = field(default_factory=list)
+    auto_labels: dict = field(default_factory=dict)  # Vision suggestions, never source edits.
 
     @classmethod
     def from_dict(cls, raw: dict) -> Clip:
@@ -71,6 +72,7 @@ class Shoot:
     added_at: float = 0.0
     files: list[SourceFile] = field(default_factory=list)
     clips: list[Clip] = field(default_factory=list)
+    vocabulary: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
