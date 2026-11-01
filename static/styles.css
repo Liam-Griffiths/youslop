@@ -920,3 +920,16 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-variable-row { margin: 10px 0; }
 .tl-variable-row input[type="color"] { width: 34px; min-width: 34px; padding: 2px; }
 .tl-variable-row input { min-width: 0; }
+
+/* Timing edits never move or trim a recorded take. */
+.tl-layer-item.editable { cursor: grab; padding-right: 9px; touch-action: none; }
+.tl-layer-item.user::after, .tl-gap.user::after { content: '•'; color: var(--accent);
+  position: absolute; left: 1px; top: -2px; pointer-events: none; }
+.tl-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px;
+  cursor: ew-resize; border-right: 2px solid var(--dim); }
+.tl-resize.left { left: 0; right: auto; border-right: 0; border-left: 2px solid var(--dim); }
+.tl-gap { position: absolute; top: 23px; height: 20px; width: 18px; padding: 0;
+  transform: translateX(-50%); z-index: 3; cursor: ew-resize; touch-action: none;
+  background: var(--panel); color: var(--dim); border: 1px solid var(--line); }
+.tl-snap-guide { position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--cool); pointer-events: none; z-index: 5; }

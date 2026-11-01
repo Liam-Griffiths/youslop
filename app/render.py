@@ -1868,7 +1868,8 @@ def _layers(project, segs):
                 a = timing['title_at']['start']
                 add('titles', slide.id, slide.id, a,
                     a + timing['title_hold']['value'] + project.frame.arrive_s * project.frame.exit_ratio,
-                    slide.title, 'title', timing['title_at']['src'])
+                    slide.title, 'title', 'user' if 'user' in
+                    (timing['title_at']['src'], timing['title_hold']['src']) else 'auto')
             if project.style.format == 'essay':
                 chunks = titles.essay_chunks(slide.narration)
                 spoken = float((slide.take or {}).get('duration') or 0) or q['duration'] * 0.85
@@ -2461,6 +2462,11 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                 "id": s.id, "index": index_of[s.id], "start": round(pt, 3),
                 "duration": d, "text": s.narration, "title": s.title,
                 "chapter": s.chapter, "words": s.word_count, "timing": timing,
+                "spoken": cuts.spoken_of(s, d),
+                "word_times": [{**w, "start": round(pt + w["start"], 3),
+                                "end": round(pt + w["end"], 3)}
+                               for w in (s.take or {}).get("words", [])],
+                "effective_cues": cue_times.get(s.id, ([], []))[0],
                 "recorded": bool(s.take), "section": s.section,
             })
             pt += d
@@ -2514,6 +2520,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
         "segments": segments, "total": round(t, 3), "fps": PREVIEW_FPS,
         "width": size[0], "height": size[1],
         "format": project.style.format,
+        "title_exit": project.frame.arrive_s * project.frame.exit_ratio,
+        "last_line_min_s": project.frame.last_line_min_s,
         "mix": _mix_state(project, lay, hide),
         "camera_clip": bool(pres.usable() and (project_dir(project.id) / pres.path).exists()),
         "estimated": any(not s.take for s in project.slides),

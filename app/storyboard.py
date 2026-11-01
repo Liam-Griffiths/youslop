@@ -13,10 +13,18 @@ from . import cuts, edits, render
 EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues"} | edits.TIMING_FIELDS
 
 
+_UI_ONLY = {"spoken", "word_times", "effective_cues"}
+
+
 def build(project) -> dict:
     timeline = render.timeline(project)
     segments = [{k: v for k, v in seg.items() if k not in {"stamp", "ready", "have"}}
                 for seg in timeline["segments"]]
+    # Drag-editing detail (per-word times etc.) is for the timeline UI only;
+    # it would bloat the contract a model reads.
+    for seg in segments:
+        seg["paragraphs"] = [{k: v for k, v in q.items() if k not in _UI_ONLY}
+                             for q in seg.get("paragraphs", [])]
     slides = {s.id: s for s in project.slides}
     paragraphs = []
     for seg in segments:

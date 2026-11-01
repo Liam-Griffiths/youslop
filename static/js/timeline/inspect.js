@@ -83,7 +83,8 @@ function tlInspector() {
     if (candidate?.focal?.length === 2) html += field('focal_x', 'Focal X', candidate.focal[0], '0–1') + field('focal_y', 'Focal Y', candidate.focal[1], '0–1');
   }
   if (sel.kind === 'cue' && slide) {
-    const cues = (slide.cues || {})[p.style.format] || [], cue = cues[sel.cue];
+    const cues = (slide.cues || {})[p.style.format]?.length ? slide.cues[p.style.format] : para.effective_cues;
+    const cue = cues[sel.cue];
     if (cue) {
       const vocabulary = (cutInfo(p.style.format)?.kinds || '').split(' · ').map((k) => k.split(' ')[0]).filter(Boolean);
       html += field('text', 'Text', cue.text ?? cue.caption ?? cue.headline ?? cue.title ?? '') + field('at', 'Arrival (blank = auto)', cue.at, 's')
@@ -107,7 +108,11 @@ function tlInspector() {
     }
   }
   if (['sting', 'note', 'sponsor'].includes(sel.kind)) html += `<p>${esc(sel.text)}</p>`;
+  if (['paragraph', 'cue', 'chapter'].includes(sel.kind) || tlTimingKind(sel) === 'title')
+    html += '<button class="btn sm" id="tl-reset-timing">Reset timing</button>';
   body.innerHTML = html;
+  const reset = $('#tl-reset-timing');
+  if (reset) reset.onclick = () => tlResetTiming({...sel});
   if ($('#tl-split-here')) $('#tl-split-here').onclick = tlSplitHere;
   if ($('#tl-edit-text')) $('#tl-edit-text').onclick = () => tlEditText(slide.id);
   if ($('#tl-picture')) $('#tl-picture').onclick = () => tlEditPicture(slide.id);
@@ -143,7 +148,8 @@ function tlInspectorSave(sel, key, raw, el) {
       if (sel.kind === 'cue') {
         const slide = state.project.slides.find((s) => s.id === sel.sid);
         const fmt = state.project.style.format;
-        const cues = structuredClone(slide.cues[fmt]);
+        const para = tlParas().find((q) => q.id === sel.sid);
+        const cues = structuredClone(slide.cues?.[fmt]?.length ? slide.cues[fmt] : para.effective_cues);
         if (key === 'remove') cues.splice(sel.cue, 1);
         else if (key === 'at' && value === null) delete cues[sel.cue].at;
         else {

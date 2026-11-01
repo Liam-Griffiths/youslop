@@ -11,7 +11,7 @@ function tlLayerRows() {
     return `<div class="tl-lane tl-layer ${hidden ? 'hidden' : ''}">
       <span class="tl-layer-label">${row === 'sponsors' ? row : `<button type="button" data-eye="${row}"
         aria-label="${hidden ? 'Show' : 'Hide'} ${row} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>${row}`}</span>
-      ${items.map((s, i) => `<button type="button" class="tl-layer-item ${esc(s.severity || '')}" data-layer="${row}" data-item="${i}"
+      ${items.map((s, i) => `<button type="button" class="tl-layer-item ${esc(s.severity || '')} ${s.src === 'user' ? 'user' : ''}" data-layer="${row}" data-item="${i}"
         style="left:${s.t0 * TL.zoom}px;width:${Math.max(2, (s.t1 - s.t0) * TL.zoom - 2)}px"
         title="${esc(`${s.severity ? s.severity + ' · ' : ''}${tlClock(s.t0)}–${tlClock(s.t1)} · ${s.text}`)}">${esc((s.severity ? s.severity + ' · ' : '') + (s.text || s.cue_kind || kind))}</button>`).join('')}
     </div>`;

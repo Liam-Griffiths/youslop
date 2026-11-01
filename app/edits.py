@@ -41,6 +41,8 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
             value = max(0.0, float(value))
             if key == "gap_override":
                 value = min(10.0, value)
+            elif key == "title_at" and s.take:
+                value = min(float(s.take.get("duration") or 0), value)
         setattr(s, key, value)
     if "narration" in payload:
         s.narration = str(payload["narration"]).strip()
@@ -94,9 +96,19 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
                 raise EditError(f"No such cut: {key}")
             if value and not isinstance(value, list):
                 raise EditError("Cues are a list of objects.")
+            for cue in value or []:
+                at = cue.get("at") if isinstance(cue, dict) else None
+                if at is not None and (isinstance(at, bool) or not isinstance(at, (int, float))
+                                       or not math.isfinite(at)):
+                    raise EditError("at must be finite seconds or null")
             clean = cuts_mod.normalise(cuts_mod.BY_KEY[key], value or [])
             if value and not clean:
                 raise EditError("None of those cues are a kind this cut draws.")
+            for cue in clean:
+                if "at" in cue:
+                    at = cue["at"]
+                    if s.take:
+                        cue["at"] = min(float(s.take.get("duration") or 0), at)
             if clean:
                 cues[key] = clean
             else:
