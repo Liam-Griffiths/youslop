@@ -24,6 +24,8 @@ datas = [
     (str(ROOT / "resources" / "icon_1024.png"), "resources"),
     (str(ROOT / "resources" / "fonts"), "resources/fonts"),
     (str(ROOT / "resources" / "bin"), "resources/bin"),
+    # app/blocks.py validates every block.json against this at runtime.
+    (str(ROOT / "docs" / "blocks" / "block.schema.json"), "docs/blocks"),
 ]
 binaries = []
 
@@ -31,6 +33,8 @@ hiddenimports = [
     "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
     "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
     "uvicorn.logging",
+    # Imported lazily inside CLI handlers, so analysis can miss them.
+    "app.block_authoring", "app.footage_labels",
 ]
 if MACOS:
     hiddenimports += ["webview.platforms.cocoa",
