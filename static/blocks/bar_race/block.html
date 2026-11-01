@@ -1,8 +1,8 @@
 {% extends '_blocks/number_slam/data_base.html' %}
 {% block content %}
-<p class="item label mono dim" data-ground style="left:{{ data.x }}px;top:{{ data.top-60 }}px;width:{{ data.w }}px">{{ data.scale }}</p>
-<div class="atlas period" {{ layer('period',0,'atlas',duration*0.6) }} data-atlas="3" data-bounds=".atlas-strip" style="left:{{ data.x }}px;top:{{ data.top }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for period in data.periods %}<div class="atlas-row">{{ period }}</div>{% endfor %}</div></div>
+<p class="item label mono dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px">{{ data.scale }}</p>
+<div class="atlas period" {{ layer('period',0,'atlas',duration*0.6) }} data-atlas="3" data-bounds=".atlas-strip" style="left:{{ data.x }}px;top:{{ data.top }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for period in data.periods %}<div class="atlas-row single" data-fit>{{ period }}</div>{% endfor %}</div></div>
 {% for row in data.rows %}
-<div class="atlas race" {{ layer('race-'~loop.index,0,'atlas',duration*0.6) }} data-atlas="3" data-bounds=".atlas-strip" data-path='{{ row.path|tojson }}' style="left:{{ data.x }}px;top:{{ row.y }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for frame in row.frames %}<div class="atlas-row"><span class="row-label label">{{ row.label }}</span><span class="row-value">{{ frame.value }}</span><div class="bar" style="width:{{ frame.width }}px"></div></div>{% endfor %}</div></div>
+<div class="atlas race" {{ layer('race-'~loop.index,0,'atlas',duration*0.6) }} data-atlas="3" data-bounds=".atlas-strip" data-path='{{ row.path|tojson }}' style="left:{{ data.x }}px;top:{{ row.y }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for frame in row.frames %}<div class="atlas-row"><span class="row-label single" data-fit>{{ row.label }}</span><span class="row-value single" data-fit>{{ frame.value }}</span><div class="bar" style="width:{{ frame.width }}px"></div></div>{% endfor %}</div></div>
 {% endfor %}
 {% endblock %}

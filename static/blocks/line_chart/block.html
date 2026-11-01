@@ -1,7 +1,8 @@
 {% extends '_blocks/number_slam/data_base.html' %}
 {% block content %}
-<p class="item label mono dim" data-ground style="left:{{ data.x }}px;top:{{ data.top-60 }}px;width:{{ data.w }}px">{{ data.scale }}</p>
+<p class="item label mono dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px">{{ data.scale }}</p>
 <svg class="plot" data-ground width="{{ data.w }}" height="{{ data.plot_h }}" style="left:{{ data.x }}px;top:{{ data.top }}px"><path d="M0 0V{{ data.plot_h }}H{{ data.w }}" fill="none" stroke="var(--line)" stroke-width="3"/></svg>
-<svg class="plot" {{ layer('line',0.1,'reveal',0.9) }} width="{{ data.w+12 }}" height="{{ data.plot_h+12 }}" viewBox="-6 -6 {{ data.w+12 }} {{ data.plot_h+12 }}" style="left:{{ data.x-6 }}px;top:{{ data.top-6 }}px"><polyline points="{{ data.points }}" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linejoin="round"/></svg>
-<div class="item label" data-ground style="left:{{ data.x }}px;top:{{ data.top+data.plot_h+30 }}px;width:{{ data.w }}px;display:flow-root"><span class="row-label">{{ data.rows[0].label }} · <span class="mono">{{ '%g'|format(data.rows[0].value) }}</span></span><span style="float:right;width:38%;text-align:right">{{ data.rows[-1].label }} · <span class="mono">{{ '%g'|format(data.rows[-1].value) }}</span></span></div>
+<svg class="plot" {{ layer('line',0.1,'reveal',0.9) }} width="{{ data.w+24 }}" height="{{ data.plot_h+24 }}" viewBox="-12 -12 {{ data.w+24 }} {{ data.plot_h+24 }}" style="left:{{ data.x-12 }}px;top:{{ data.top-12 }}px"><polyline points="{{ data.points }}" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linejoin="round"/><circle cx="{{ data.w }}" cy="{{ data.end_y }}" r="10" fill="var(--accent)"/></svg>
+<div class="item label endpoint" data-ground style="left:{{ data.x }}px;top:{{ data.top+data.plot_h+24 }}px;width:{{ data.w }}px">
+{% for row in [data.rows[0],data.rows[-1]] %}<div style="text-align:{{ 'left' if loop.first else 'right' }}"><span class="endpoint-label" data-fit>{{ row.label }}</span><span class="mono single" data-fit style="display:block;height:62px">{{ '%g'|format(row.value) }}</span></div>{% endfor %}</div>
 {% endblock %}

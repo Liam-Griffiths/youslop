@@ -1,5 +1,5 @@
 {% extends '_blocks/number_slam/data_base.html' %}
 {% block content %}
-<div class="atlas number" {{ layer('number',0.1,'atlas',0.9) }} data-atlas="17" data-bounds=".atlas-strip" style="left:{{ data.x }}px;top:{{ data.top+80 }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for n in data.frames %}<div class="atlas-row">{{ n }}</div>{% endfor %}</div></div>
-<p class="item label dim" data-ground style="left:{{ data.x }}px;top:{{ data.top+240 }}px;width:{{ data.w }}px" data-var-text="unit">{{ vars.unit }}</p>
+<div class="atlas number" {{ layer('number',0.1,'atlas',0.9) }} data-atlas="17" data-bounds=".atlas-strip" style="left:{{ data.x }}px;top:{{ data.top+40 }}px;width:{{ data.w }}px"><div class="atlas-strip">{% for n in data.frames %}<div class="atlas-row" data-fit>{{ n }}</div>{% endfor %}</div></div>
+<p class="item label dim" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top+data.hero*1.4+60 }}px;width:{{ data.w }}px;height:62px" data-var-text="unit">{{ vars.unit }}</p>
 {% endblock %}

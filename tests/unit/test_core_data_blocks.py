@@ -66,3 +66,36 @@ def test_atlas_endpoints_ranks_and_escaping():
     template, ctx = blocks.prepare('simple_table', dict(rows=[dict(label='<b>x</b>', value='<script>')]))
     html = scenes.render_html(template, ctx)
     assert '&lt;b&gt;x&lt;/b&gt;' in html and '&lt;script&gt;' in html
+
+
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_dense_data_layouts_keep_readable_slots(aspect):
+    """Maximum row counts still leave room for 44px copy and separate bars."""
+    for ref, count in [('bar_chart', 6), ('bar_race', 5),
+                       ('simple_table', 6), ('date_timeline', 5)]:
+        rows = [dict(label=f'Row {i}', value=999999, date='2024',
+                     first=i, middle=count-i, last=i*2) for i in range(count)]
+        _, ctx = blocks.prepare(ref, dict(rows=rows), aspect)
+        d = ctx['data']
+        assert d['bar_w'] > 0 and d['bar_h'] >= 44
+        assert d['top'] + d['content_h'] < d['footer']
+        if ref == 'bar_chart':
+            assert d['row_gap'] >= max(58, d['bar_h']+5)
+        elif ref == 'bar_race':
+            assert d['race_gap']-12 >= 58
+            for row in d['rows']:
+                for key in row['path']:
+                    assert d['top']+80 <= row['y']+key['y']
+                    assert row['y']+key['y']+58 <= d['bottom']
+        elif ref == 'simple_table':
+            assert d['content_h']/(count+1) >= 56  # cell line and rule
+        elif aspect == '9:16':
+            assert d['row_gap']-102 >= 54  # date, padding, gap, one label line
+
+
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_line_endpoint_copy_has_room_below_plot(aspect):
+    _, ctx = blocks.prepare('line_chart', aspect=aspect)
+    d = ctx['data']
+    assert d['top']+d['plot_h']+24+106+54 < d['footer']
+    assert d['end_y'] == pytest.approx(float(d['points'].split()[-1].split(',')[1]), abs=.01)

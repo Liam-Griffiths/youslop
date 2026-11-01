@@ -1,8 +1,8 @@
 {% extends '_blocks/number_slam/data_base.html' %}
 {% block content %}
-<p class="item label mono dim" data-ground style="left:{{ data.x }}px;top:{{ data.top-60 }}px;width:{{ data.w }}px">{{ data.scale }}</p>
-{% for row in data.rows %}{% set y=data.top+loop.index0*(100 if height > width else 82) %}
-<div class="item label" data-ground style="left:{{ data.x }}px;top:{{ y }}px;width:{{ data.w }}px;height:64px"><span class="row-label">{{ row.label }}</span><span class="row-value">{{ '%g'|format(row.value) }}</span></div>
-{% if row.value > 0 %}<div class="item bar" {{ layer('bar-'~loop.index,0.12*loop.index0,'reveal',0.7) }} style="left:{{ data.x }}px;top:{{ y+64 }}px;width:{{ data.w*row.ratio }}px"></div>{% endif %}
+<p class="item label mono dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px">{{ data.scale }}</p>
+{% for row in data.rows %}{% set y=data.top+loop.index0*data.row_gap %}
+<div class="item" data-ground style="left:{{ data.x }}px;top:{{ y }}px;width:{{ data.w }}px;height:{{ data.row_gap }}px"><span class="row-label single" data-fit>{{ row.label }}</span><span class="row-value single" data-fit>{{ '%g'|format(row.value) }}</span></div>
+{% if row.value > 0 %}<div class="item bar" {{ layer('bar-'~loop.index,0.12*loop.index0,'reveal',0.7) }} style="left:{{ data.x+data.label_w+24 }}px;top:{{ y+5 }}px;width:{{ data.bar_w*row.ratio }}px;height:{{ data.bar_h }}px"></div>{% endif %}
 {% endfor %}
 {% endblock %}

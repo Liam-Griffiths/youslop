@@ -1,1 +1,10 @@
-{% extends '_blocks/bar_chart/bars.html' %}
+{% extends '_blocks/number_slam/data_base.html' %}
+{% block content %}
+<p class="item label mono dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px">{{ data.scale }}</p>
+{% for row in data.rows %}{% set portrait=height > width %}{% set w=data.w if portrait else (data.w-60)/2 %}{% set x=data.x if portrait else data.x+loop.index0*(w+60) %}{% set y=data.top+loop.index0*data.content_h/2 if portrait else data.top %}
+<div class="item" data-ground style="left:{{ x }}px;top:{{ y }}px;width:{{ w }}px">
+<p class="label single" data-fit style="height:62px">{{ row.label }}</p>
+<p class="percent single" data-fit>{{ '%g'|format(row.value) }}</p></div>
+{% if row.value > 0 %}<div class="item bar" {{ layer('bar-'~loop.index,0.12*loop.index0,'reveal',0.7) }} style="left:{{ x }}px;top:{{ y+data.hero*1.4+70 }}px;width:{{ w*row.ratio }}px;height:44px"></div>{% endif %}
+{% endfor %}
+{% endblock %}

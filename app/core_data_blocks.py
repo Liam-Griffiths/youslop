@@ -7,9 +7,13 @@ IDS = ('number_slam', 'stat_comparison', 'line_chart', 'bar_chart', 'bar_race',
 
 def layout(ref, v, width, height, seconds):
     portrait = height > width
-    x, w, top = (130, 756, 580) if portrait else (230, 1460, 360)
-    d = dict(x=x, w=w, top=top, plot_h=560 if portrait else 420,
-             header=340 if portrait else 160, footer=1400 if portrait else 925,
+    x, w, top = (130, 756, 600) if portrait else (230, 1460, 350)
+    bottom = 1400 if portrait else 860
+    d = dict(x=x, w=w, top=top, bottom=bottom, content_h=bottom-top,
+             plot_h=630 if portrait else 350,
+             header=300 if portrait else 120, footer=1430 if portrait else 888,
+             hero=200 if portrait else 260, ring=700 if portrait else 560,
+             label_w=210 if portrait else 360, value_w=180 if portrait else 220,
              rows=[], frames=[], periods=[])
     rows = v.get('rows', [])
     limits = {'stat_comparison': (2, 2), 'line_chart': (2, 8), 'bar_chart': (1, 6),
@@ -18,6 +22,9 @@ def layout(ref, v, width, height, seconds):
         lo, hi = limits[ref]
         if not lo <= len(rows) <= hi:
             raise ValueError(f'rows: {ref} requires {lo}..{hi} rows')
+        d['row_gap'] = d['content_h']/len(rows)
+        d['bar_w'] = w-d['label_w']-d['value_w']-48
+        d['bar_h'] = max(44, min(76, d['row_gap']*.45))
     for i, row in enumerate(rows):
         fields = {'date': 12, 'label': 48} if ref == 'date_timeline' else {'label': 18}
         if ref == 'simple_table':
@@ -48,12 +55,14 @@ def layout(ref, v, width, height, seconds):
     if ref == 'line_chart':
         d['points'] = ' '.join(f'{i*w/(len(rows)-1):.2f},{d["plot_h"]*(1-r["value"]/d["maximum"]):.2f}'
                                for i, r in enumerate(rows))
+        d['end_y'] = d['plot_h']*(1-rows[-1]['value']/d['maximum'])
     if ref == 'bar_race':
         if len({r['label'] for r in rows}) != len(rows):
             raise ValueError('rows: bar race labels must be unique')
         d['periods'] = [v[k] for k in ('first_period', 'middle_period', 'last_period')]
         rankings = [sorted(range(len(rows)), key=lambda i: (-rows[i][k], i)) for k in keys]
-        gap = 110 if portrait else 88
+        gap = (d['content_h']-80)/len(rows)
+        d['race_gap'] = gap
         d['rows'] = []
         for i, row in enumerate(rows):
             rank = [order.index(i) for order in rankings]
@@ -63,7 +72,7 @@ def layout(ref, v, width, height, seconds):
                 path += [dict(t=t-.16, x=0, y=(rank[stage-1]-rank[0])*gap),
                          dict(t=t, x=0, y=(rank[stage]-rank[0])*gap, ease='cubic-out')]
             d['rows'].append(dict(label=row['label'], y=top+80+rank[0]*gap, path=path,
-                frames=[dict(value=f'{row[k]:g}', width=w*row[k]/d['maximum']) for k in keys]))
+                frames=[dict(value=f'{row[k]:g}', width=d['bar_w']*row[k]/d['maximum']) for k in keys]))
     if ref in ('simple_table', 'date_timeline'):
         d['rows'] = rows
     return d
