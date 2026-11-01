@@ -104,7 +104,8 @@
     }
   }
   let motions;
-  const easeNames = {'quad-out':'power1.out', 'cubic-out':'power2.out', 'expo-out':'expo.out', 'linear':'none'};
+  const easeNames = {'quad-out':'power1.out', 'cubic-out':'power2.out', 'cubic-in-out':'power2.inOut',
+    'back-out-1.9':'back.out(1.9)', 'back-out-2.4':'back.out(2.4)', 'expo-out':'expo.out', 'linear':'none'};
   function preset(el, index) {
     const builder = el.hasAttribute('data-layer');
     const kind = builder ? el.dataset.motion || el.dataset.anim || 'none' : el.dataset.anim;

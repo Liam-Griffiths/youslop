@@ -86,6 +86,7 @@ def test_proxy_variants_reuse_and_hide_threading(project, monkeypatch):
 
 def test_hidden_cuts_skip_cue_pixels(project, monkeypatch, tmp_path):
     project.style.format = 'flameboat'
+    project.style.cut_engine = 'pillow'  # This test exercises the Pillow stream.
     monkeypatch.setattr(cuts.flameboat, 'frame', lambda *a: pytest.fail('cue frame drawn'))
     frames = []
     def encode(stream, out, **kw):

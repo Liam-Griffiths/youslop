@@ -1,4 +1,6 @@
 {
+  "badge": {"from": {"scale": 0.001}, "to": {"scale": 1}, "duration": 0.32, "ease": "back-out-2.4"},
+  "node": {"from": {"scale": 0.001}, "to": {"scale": 1}, "duration": 0.26, "ease": "back-out-1.9"},
   "slam": {"from": {"scale": 1.55}, "to": {"scale": 1}, "duration": 0.16, "ease": "cubic-out"},
   "chapter": {"from": {"scale": 0.6, "opacity": 0}, "to": {"scale": 1, "opacity": 1}, "duration": 0.35, "ease": "back-out-1.9"},
   "none": {"from": {}, "to": {}, "duration": 0, "ease": "linear"},

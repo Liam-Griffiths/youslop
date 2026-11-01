@@ -24,6 +24,7 @@ promise the board makes: changing format never produces a blank video.
 from __future__ import annotations
 
 import math
+from importlib import import_module
 from pathlib import Path
 
 from ..config import FPS, HEAD_PAD, WIDTH, WORDS_PER_MINUTE
@@ -219,8 +220,8 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
     title = (chapter[0] if chapter else "").strip()
     card_at = seg_len - hold if title and hold > 0.2 else None
     if scene:
-        from . import loudmouth_scene
-        return loudmouth_scene.render(project, ctx, beats, [source_for(ctx, b.slide) for b in beats],
+        drawer = import_module(f'.{module.KEY}_scene', __name__)
+        return drawer.render(project, ctx, beats, [source_for(ctx, b.slide) for b in beats],
             out, seconds=frame_count(seg_len, fps)/fps, size=size, fps=fps, crf=crf,
             chapter=title, card_at=card_at, hide=hide, frames=frames)
     draw_card = getattr(module, "chapter", None) or kit.chapter_screen
@@ -292,11 +293,11 @@ def still(project, slide, out: Path, *, channel=None, image_for=None,
     out.parent.mkdir(parents=True, exist_ok=True)
     if scene:
         import tempfile
-        from . import loudmouth_scene
+        drawer = import_module(f'.{module.KEY}_scene', __name__)
         with tempfile.TemporaryDirectory(dir=out.parent) as work:
             movie = Path(work) / "still.mp4"
             first = round(t*FPS)
-            loudmouth_scene.render(project, ctx, [beat], [source_for(ctx, slide)], movie,
+            drawer.render(project, ctx, [beat], [source_for(ctx, slide)], movie,
                 seconds=frame_count(length, FPS)/FPS, size=ctx.size, fps=FPS, crf=18, frames=(first, first+1))
             ffutil.run(["-i", str(movie), "-frames:v", "1", str(out)])
         return out

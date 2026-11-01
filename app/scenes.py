@@ -373,7 +373,7 @@ def capture(project, template, ctx, *, t, size) -> bytes:
 
 
 def handles_cut(key: str) -> bool:
-    return key == "loudmouth" and (SCENE_DIR / "cuts" / f"{key}.html").is_file()
+    return key in {"loudmouth", "flameboat"} and (SCENE_DIR / "cuts" / f"{key}.html").is_file()
 
 
 def handles(fmt: str) -> bool:

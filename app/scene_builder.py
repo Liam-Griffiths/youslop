@@ -55,7 +55,8 @@ _PROBE = r"""(() => {
    id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration),
    world:e.dataset.world === 'true', signature:[e.outerHTML,style(e)],
    media:[...e.querySelectorAll('[data-media]')].map(n=>{const r=n.getBoundingClientRect();return {
-     path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime), box:[r.left,r.top,r.right,r.bottom]};}),
+     path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime),
+     dim:Number(n.dataset.mediaDim ?? .53), focal:JSON.parse(n.dataset.mediaFocal || '[0.5,0.5]'), box:[r.left,r.top,r.right,r.bottom]};}),
    camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
  const row = (e,i) => {
    let r=e.getBoundingClientRect();
@@ -340,8 +341,8 @@ def ease(name, p):
         return f'if(gte({p},1),1,1-pow(2,-10*({p})))'
     if name == 'cubic-in-out':
         return f'if(lt({p},0.5),4*pow({p},3),1-pow(-2*({p})+2,3)/2)'
-    if name in ('back-out', 'back-out-1.9'):
-        s = 1.9 if name.endswith('1.9') else 1.70158
+    if name in ('back-out', 'back-out-1.9', 'back-out-2.4'):
+        s = float(name.rsplit('-', 1)[1]) if name != 'back-out' else 1.70158
         return f'(1+{s+1}*pow(({p})-1,3)+{s}*pow(({p})-1,2))'
     raise ValueError(f'unsupported ease: {name}')
 
@@ -376,6 +377,15 @@ def _camera(keys, clock, world=False):
     return [expr(k, d) for k, d in [('x', 0), ('y', 0), ('zoom', 1)]]
 
 
+def _media_filter(media, w, h):
+    dim = float(media.get('dim', .53))
+    dim = '.53' if dim == .53 else f'{dim:g}'
+    x, y = (max(0, min(1, float(v))) for v in media.get('focal', [.5, .5]))
+    return (f'scale={w}:{h}:force_original_aspect_ratio=increase,'
+            f'crop={w}:{h}:(iw-ow)*{x}:(ih-oh)*{y},'
+            f'colorchannelmixer=rr={dim}:gg={dim}:bb={dim}')
+
+
 def _compile(data, screen, size, fps, directory):
     layers = []
     for source in data['layers']:
@@ -407,12 +417,13 @@ def _compile(data, screen, size, fps, directory):
                 continue
             source = Path(media['path'])
             stamp = source.stat()
-            path = Path(screen['ground_path']).parent / ('media-'+_hash([str(source),stamp.st_mtime_ns,stamp.st_size,x1-x0,y1-y0])+'.png')
+            vf = _media_filter(media, x1-x0, y1-y0)
+            path = Path(screen['ground_path']).parent / ('media-'+_hash([str(source),stamp.st_mtime_ns,stamp.st_size,vf])+'.png')
             if not path.exists():
                 with tempfile.NamedTemporaryFile(dir=path.parent, suffix='.png', delete=False) as stream:
                     temporary = Path(stream.name)
                 try:
-                    ffutil.run(['-i', str(source), '-vf', f'scale={x1-x0}:{y1-y0}:force_original_aspect_ratio=increase,crop={x1-x0}:{y1-y0},colorchannelmixer=rr=.53:gg=.53:bb=.53', '-frames:v','1',str(temporary)])
+                    ffutil.run(['-i', str(source), '-vf', vf, '-frames:v','1',str(temporary)])
                     temporary.replace(path)
                 finally:
                     temporary.unlink(missing_ok=True)
@@ -456,7 +467,7 @@ def _compile(data, screen, size, fps, directory):
             effect = f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba'
         if layer.get('video'):
             inputs[-2:] = ['-stream_loop','-1','-ss',str(layer['time']),'-i',layer['path']]
-            effect = f'setpts=PTS-STARTPTS,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},colorchannelmixer=rr=.53:gg=.53:bb=.53,format=rgba'
+            effect = f'setpts=PTS-STARTPTS,{_media_filter(layer, w, h)},format=rgba'
         exit_s = min(layer.get('exit', 0), layer['duration']/2)
         if exit_s > 0:
             effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"

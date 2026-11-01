@@ -80,3 +80,7 @@ Sanitised HTML without explicit layers stays one static layer. Its allowlisted
 layer declarations now drive the builder; `data-start` without a layer remains inert.
 Blocks, intro/outro cards, chapter tails and block preview videos use this builder.
 `inspect(...)` captures and compiles without encoding, for block checks and stats.
+
+Cut media may set `data-media-dim` (default .53) and `data-media-focal='[x,y]'`
+(default [.5,.5]); native ffmpeg photo/video cover crops share these parameters.
+`node` and `badge` provide scale arrivals with back-out(1.9) and back-out(2.4).

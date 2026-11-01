@@ -1,0 +1,108 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="/static/scene/cuts/flameboat.css">{% endblock %}
+{% block body %}
+<main id="page" class="look-{{ look }}" style="--grid:{{ palette.grid }};--dim:{{ palette.dim }};--cyan:{{ palette.cyan }}">
+{% for s in screens %}{% set c=s.cue %}
+<section class="clip screen" data-screen="{{ s.id }}" data-world="true" data-start="{{ s.start }}" data-duration="{{ s.duration }}" data-camera='{{ s.camera | tojson }}'>
+{% if not s.media %}<div class="ground" data-ground></div>{% endif %}
+{% if s.media %}<i class="media" data-media="{{ s.source }}" data-video="{{ s.video | lower }}" data-media-time="{{ s.media_time }}" data-media-dim="1" data-media-focal='{{ s.focal | tojson }}'></i>{% endif %}
+{% if not s.hidden %}
+{% if c.kind == 'title' %}
+<div class="title fit" data-title data-hold="{{ s.cue_duration }}">{% for w in c.words %}<span class="word {{ 'hot' if w.hot else 'cold' }}">{{ w.text }}</span>{% endfor %}</div>
+{% elif c.kind == 'stat' %}
+<div class="stat fit" data-layer data-motion="node" data-motion-duration=".28">{{ c.value }}</div>
+{% if c.label %}<div class="stat-label" data-layer data-start=".18" data-motion="fade" data-motion-ease="linear" data-motion-duration=".2">{{ c.label }}</div>{% endif %}
+{% elif c.kind == 'logo' %}
+<div class="badge" data-layer data-motion="badge" data-motion-duration=".32"><span>{{ c.text }}</span></div>
+{% if c.sub %}<div class="sub" data-layer data-start=".25" data-motion="fade" data-motion-ease="linear" data-motion-duration=".2">{{ c.sub }}</div>{% endif %}
+{% elif c.kind in ['code','term'] %}
+<div class="window {{ c.kind }}">
+<header data-ground><b class="lights"><i></i><i class="yellow"></i><i class="green"></i></b>{{ 'main.' ~ c.lang if c.kind == 'code' else 'zsh' }}</header>
+<div class="window-body" data-ground><i class="window-fill"></i></div>
+{% if c.kind == 'code' %}
+{% for row in c.rows %}<div class="code-row" style="top:{{ 100+loop.index0*65 }}px">
+<small data-ground>{{ loop.index }}</small><pre class="typed" data-layer data-type data-start="{{ row.start }}" data-motion="wipe" data-motion-ease="linear" data-motion-duration="{{ row.arrival }}">{% for kind,text in row.tokens %}<span style="color:{{ colors[kind] }}">{{ text }}</span>{% endfor %}</pre></div>{% endfor %}
+{% if c.hot %}<div class="hot-code" data-layer data-start="{{ c.budget+0.15 }}">{% for row in c.rows %}<div class="settled-code {{ 'lit' if loop.index == c.hot else 'dimmed' }}">{% for kind,text in row.tokens %}<span style="color:{{ colors[kind] }}">{{ text }}</span>{% endfor %}</div>{% endfor %}</div>{% endif %}
+{% else %}
+<div class="command"><b data-ground><em>~</em> $</b><pre class="typed" data-layer data-type data-start=".05" data-motion="wipe" data-motion-ease="linear" data-motion-duration="{{ c.type_time }}">{{ c.cmd }}</pre></div>
+{% for row in c.outputs %}<pre class="output" style="top:{{ 160+loop.index0*63 }}px;color:{{ row.color }}" data-layer data-start="{{ 0.05+c.type_time+0.12+loop.index0*0.07 }}">{{ row.text }}</pre>{% endfor %}
+{% endif %}</div>
+{% elif c.kind == 'diagram' %}
+<div class="diagram">
+{% if c.label %}<div class="diagram-label" data-ground>{{ c.label }}</div>{% endif %}
+{% for node in c.nodes %}{% set step=[0.32,0.6*s.cue_duration/(c.nodes|length)]|min %}
+{% if not loop.first %}<div class="arrow" style="left:{{ 160+loop.index0*1600/(c.nodes|length)-90 }}px" data-layer data-start="{{ loop.index0*step }}" data-motion="wipe" data-motion-duration=".26" data-motion-ease="cubic-out"><svg width="80" height="40" viewBox="0 0 80 40"><path d="M0 20H70M55 6L74 20 55 34" fill="none" stroke="currentColor" stroke-width="6"/></svg></div>{% endif %}
+<div class="node {{ 'last' if loop.last else '' }}" style="left:{{ 160+loop.index0*1600/(c.nodes|length) }}px;width:{{ 1600/(c.nodes|length)-100 }}px" data-layer data-start="{{ loop.index0*step }}" data-motion="node" data-motion-duration=".26">{{ node }}</div>
+{% endfor %}</div>
+{% elif c.kind in ['image','meme'] %}
+{% if c.kind == 'meme' %}
+{% if not s.source %}<div class="missing" data-ground>[ visual not found ]</div>{% endif %}
+<div class="meme top fit" data-ground>{{ c.top | upper }}</div><div class="meme bottom fit" data-ground>{{ c.bottom | upper }}</div>
+{% elif c.label %}<div class="image-label {{ 'missing-label' if not s.source else '' }}" data-ground>{{ c.label }}</div>{% endif %}
+{% elif c.kind == 'post' %}
+<div class="post" data-layer data-motion="rise" data-motion-y="60" data-motion-ease="cubic-out" data-motion-duration=".22">
+<div class="avatar">{{ c.handle[1:2] | upper }}</div><div class="identity"><strong>{{ c.handle[1:].replace('_',' ').title() }}</strong><p>{{ c.handle }}</p></div>
+<p class="post-text">{{ c.text }}</p><footer>12.4K reposts　　　88K likes　　　3.1M views</footer></div>
+{% endif %}{% endif %}</section>{% endfor %}
+</main>
+{% endblock %}
+{% block script %}<script>
+window.__ready = window.__ready.then(() => {
+  Object.values(window.__timelines).forEach(t=>t.progress(1));
+  const page=document.querySelector('#page');
+  page.querySelectorAll('.fit').forEach(el=>{while(el.scrollHeight>el.clientHeight && parseFloat(getComputedStyle(el).fontSize)>40) el.style.fontSize=`${parseFloat(getComputedStyle(el).fontSize)*.92}px`;});
+  page.querySelectorAll('.code').forEach(win=>{
+    const rows=[...win.querySelectorAll('.code-row')], widest=Math.max(...rows.map(r=>r.querySelector('pre').scrollWidth));
+    const px=Math.min(40,40*1260/Math.max(1,widest)), lh=px*1.55, height=156+lh*rows.length;
+    win.style.height=`${height}px`;win.style.top=`${(1080-height)/2}px`;
+    win.querySelector('.window-body').style.height=`${height+34}px`;
+    rows.forEach((r,i)=>{r.style.top=`${100+i*lh}px`;Object.assign(r.querySelector('pre').style,{fontSize:`${px}px`,lineHeight:`${lh}px`});});
+    const hot=win.querySelector('.hot-code');if(hot) Object.assign(hot.style,{fontSize:`${px}px`,lineHeight:`${lh}px`});
+  });
+  page.querySelectorAll('.term pre').forEach(el=>{if(el.scrollWidth>1260)el.style.fontSize=`${parseFloat(getComputedStyle(el).fontSize)*1260/el.scrollWidth}px`;});
+  page.querySelectorAll('.node,.badge span').forEach(el=>{while((el.scrollWidth>el.clientWidth || el.scrollHeight>el.clientHeight) && parseFloat(getComputedStyle(el).fontSize)>26)el.style.fontSize=`${parseFloat(getComputedStyle(el).fontSize)*.92}px`;});
+  page.querySelectorAll('[data-title]').forEach(el=>{
+    const groups=new Map(); [...el.children].forEach(w=>{const y=w.offsetTop;if(!groups.has(y))groups.set(y,[]);groups.get(y).push(w);});
+    el.replaceChildren(...[...groups.values()].map(words=>{const row=document.createElement('div');row.className='title-row';row.append(...words);return row;}));
+    el.querySelectorAll('.title-row').forEach(row=>{
+      row.dataset.ground=''; const band=row.cloneNode(true);delete band.dataset.ground;band.classList.add('highlight');
+      Object.assign(band.style,{position:'absolute',left:`${row.offsetLeft}px`,top:`${row.offsetTop}px`});
+      Object.assign(band.dataset,{layer:'',start:.12,motion:'wipe',motionEase:'cubic-out',motionDuration:Math.min(.5,Number(el.dataset.hold)*.35)}); el.append(band);
+      // One bar per run of hot words: per-word backgrounds seam at fractional pixels.
+      band.style.isolation='isolate'; let run=[];
+      const bar=()=>{if(!run.length)return;const a=run[0],b=run.at(-1),d=document.createElement('i');d.className='bar';
+        Object.assign(d.style,{left:`${a.offsetLeft-16}px`,top:`${a.offsetTop}px`,width:`${b.offsetLeft+b.offsetWidth-a.offsetLeft+32}px`,height:`${a.offsetHeight}px`});band.prepend(d);run=[];};
+      [...band.querySelectorAll('.word')].forEach(w=>{if(w.classList.contains('hot'))run.push(w);else bar();});bar();
+    });
+  });
+  const cardAt={{ card_at | tojson }}, total={{ duration }}, title={{ chapter | tojson }};
+  if(cardAt!==null) {
+    const last=page.querySelector('.screen:last-of-type'), card=last.cloneNode(true);
+    card.dataset.screen='chapter';card.dataset.start=cardAt;card.dataset.duration=total-cardAt;
+    const k=JSON.parse(last.dataset.camera).at(-1);card.dataset.camera=JSON.stringify([{...k,t:cardAt}]);
+    card.querySelectorAll('[data-layer]').forEach(e=>{delete e.dataset.layer;e.dataset.ground='';});
+    card.querySelectorAll('[data-media]').forEach(e=>e.dataset.mediaTime=Number(e.dataset.mediaTime)+cardAt-Number(last.dataset.start));
+    const wash=document.createElement('div');wash.className='chapter-wash';
+    Object.assign(wash.dataset,{layer:'',motion:'fade',motionEase:'cubic-out',motionDuration:.3});
+    const heading=document.createElement('div');heading.className='chapter-heading';
+    heading.innerHTML='<p class="chapter-label" data-layer>// next chapter</p>';
+    heading.style.fontSize='{{ chapter_size }}px';let done=0;
+    {{ chapter_rows | tojson }}.forEach((row,i)=>{
+      const text=document.createElement('div');text.className='chapter-text';text.textContent=(i?'  ':'> ')+row;text.dataset.type='';
+      Object.assign(text.dataset,{layer:'',start:.2+.7*done/Math.max(1,title.length),motion:'wipe',motionEase:'linear',motionDuration:.7*row.length/Math.max(1,title.length)});
+      heading.append(text);done+=row.length+1;
+    });
+    card.append(wash,heading);page.append(card);
+  }
+  // Mono rows reveal by character edges, one ffmpeg node per row.
+  page.querySelectorAll('[data-type]').forEach(el=>{
+    const chars=[...el.textContent], width=el.getBoundingClientRect().width, start=Number(el.dataset.start), dur=Number(el.dataset.motionDuration);
+    el.dataset.steps=JSON.stringify(chars.map((_,i)=>[start+dur*(i+1)/chars.length,width*(i+1)/chars.length]));
+  });
+  // Ignore layers whose arrival falls beyond a crowded cue's end.
+  let id=0;page.querySelectorAll('[data-layer]').forEach(el=>{
+    const screen=el.closest('[data-screen]'), left=Number(screen.dataset.duration)-Number(el.dataset.start||0);
+    if(left<=0) {el.remove();return;} el.dataset.layer=`fb${id++}`;el.dataset.duration=left;
+  });
+});
+</script>{% endblock %}
