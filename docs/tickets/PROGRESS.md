@@ -133,7 +133,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T8.1 | Pack format and loader | M | T0.2, T2.3 | done | 2026-11-01 Codex; pack blocks sandboxed and browser-checked; bad items listed, not offered |
 | T8.2 | Packs screen and install from a file | S | T8.1, T6.1 | done | 2026-11-01 Codex; staged, validated install; Packs screen checked in Chromium; drag and drop untested |
-| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | todo | step 3 waits on an owner decision |
+| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | done | review: Starter cards redrawn distinct; owner: step 3 licence, refine Starter, CC0 music |
 
 ## Phase 9: studio flow overhaul
 
