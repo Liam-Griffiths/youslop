@@ -7,7 +7,7 @@ full log lives in the ticket file.
 Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 reviewing)
 
 > **Codex limit, 2026-10-31 14:50 PDT:** the 5-hour Codex window hit 99% after T4.2 (weekly 18%).
-> Paused until the window resets (~18:15 PDT), then resuming at T4.1. Owner checks collected per row below.
+> Resumed 18:17 PDT at T4.1 after the window reset. Owner checks collected per row below.
 
 ## Phase 0: foundations
 
@@ -66,7 +66,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T4.1 | Split app.js and timeline.js into files | M | — | todo | |
+| T4.1 | Split app.js and timeline.js into files | M | — | done | 2026-10-31 Codex; 20 files under static/js, lines preserved; owner: click through every tab + timeline playback |
 | T4.2 | Retime fields in the schema | S | T0.6 | done | 2026-10-31 Codex; 391 tests; skill reference regenerated |
 | T4.3 | Selection and per-kind inspector | M | T4.1, T4.2 | todo | |
 | T4.4 | Layers rows | M | T4.3, T0.7 | todo | |
