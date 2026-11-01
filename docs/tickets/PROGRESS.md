@@ -184,7 +184,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.1 | Corkbored block format and local registry | M | T2.3, T2.7c | done | 2026-10-31 Codex; clean-room block format + registry, 9 built-in blocks wrap our templates; fixed preview default length |
 | T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
 | T12.3 | Core block set v1 | L | T12.2, T2.10 | done | 2026-11-01 Codex (4 batches); 31 blocks pass browser checks in both aspects; contact sheet docs/blocks/core-v1.png |
-| T12.4 | Data blocks from tables | M | T12.3 | todo | number-match check |
+| T12.4 | Data blocks from tables | M | T12.3 | done | 2026-11-01 Codex; number-match P1 at spoken precision; CSV paste UI moved to T12.5 |
 | T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |
 | T12.6 | Make a block from a description | M | T12.2 | todo | model writes a reusable block once |
 | T12.7 | Retire the third-party catalog | S | T12.3, T12.5 | todo | owner: third-party blocks are temporary |
