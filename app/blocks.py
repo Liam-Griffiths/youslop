@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 import jinja2
 
-from . import core_data_blocks, paths, scene_builder, scenes
+from . import core_data_blocks, core_explainer_blocks, paths, scene_builder, scenes
 from .config import STATIC_DIR
 
 BUILTIN_DIR = STATIC_DIR / 'blocks'
@@ -171,6 +171,8 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None)
         ctx['data'] = core_data_blocks.layout(block_id, values, ctx['width'], ctx['height'], seconds)
         # World-screen grounds use the palette; keep the block/channel token.
         ctx['palette'] = {**ctx['palette'], 'ground': ctx['vars']['bg']}
+    if block_id in core_explainer_blocks.IDS:
+        ctx['explain'] = core_explainer_blocks.layout(block_id, values, ctx)
     if meta['kind'] in ('intro', 'outro'):
         from dataclasses import asdict
         from .schema import Channel

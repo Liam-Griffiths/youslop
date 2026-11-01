@@ -1,0 +1,8 @@
+{% extends '_blocks/step_list/explainer_base.html' %}
+{% block content %}
+{{ photo('picture','picture',explain.x,explain.top,explain.pw,explain.ph) }}
+<svg class="annotation" {{ layer('annotation',0.3,'reveal',0.7) }} width="{{ explain.pw }}" height="{{ explain.ph }}" style="left:{{ explain.x }}px;top:{{ explain.top }}px" viewBox="0 0 {{ explain.pw }} {{ explain.ph }}">
+{% for row in explain.rows %}<path d="M{{ 40+row.x*(explain.pw-80) }} {{ 40+row.y*(explain.ph-80) }}L{{ 40+row.x*(explain.pw-80) }} {{ explain.ph-12 }}"/><circle cx="{{ 40+row.x*(explain.pw-80) }}" cy="{{ 40+row.y*(explain.ph-80) }}" r="34" fill="var(--bg)"/><text x="{{ 40+row.x*(explain.pw-80) }}" y="{{ 40+row.y*(explain.ph-80)+16 }}" text-anchor="middle" style="font:44px ExplainMono,monospace;fill:var(--ink);stroke:none">{{ loop.index }}</text>{% endfor %}
+</svg>
+{% for row in explain.rows %}<div class="item row" {{ layer('label-'~loop.index,0.4+loop.index0*0.15,'rise') }} style="left:{{ explain.label_x }}px;top:{{ explain.label_y+loop.index0*explain.label_gap }}px;width:{{ explain.label_w }}px;height:88px"><span class="mono">{{ loop.index }}</span><p data-fit style="height:62px">{{ row.label }}</p></div>{% endfor %}
+{% endblock %}

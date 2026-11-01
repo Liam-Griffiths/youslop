@@ -549,6 +549,9 @@ def _compile(data, screen, size, fps, directory):
             sx, sy = (world['density'], world['density']) if world else (size[0]/data['width'],size[1]/data['height'])
             mx,my = _camera(layer['pathKeys'], 'T', world=True)[:2] if layer.get('pathKeys') else (alpha['x'],alpha['y'])
             mask = alpha['opacity'] if layer.get('native') else '1'
+            if layer.get('native') and layer['motion'] in ('wipe', 'reveal'):
+                # Native media replaces the plate filter above; retain its reveal.
+                mask = f'({mask})*({wipe})'
             if layer.get('clip'):
                 x0,y0,x1,y1 = layer['clip']
                 px,py = f"X+{layer['box'][0]}+{sx}*({mx})+({w}-W)/2",f"Y+{layer['box'][1]}+{sy}*({my})+({h}-H)/2"

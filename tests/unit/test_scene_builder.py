@@ -382,3 +382,20 @@ def test_plate_key_ignores_root_position_only():
     c = _unplaced(['<p class="x" style="left:12.5px;top:-3px;width:40px"><b style="left:5px">a</b></p>', [1]])
     assert a == b and a != c
     assert _unplaced({'kind': 'ground'}) == {'kind': 'ground'}
+
+
+@pytest.mark.parametrize('motion', ['wipe', 'reveal'])
+def test_native_media_keeps_shared_wipe_mask(tmp_path, motion):
+    photo = tmp_path/'photo.png'
+    Image.new('RGB',(48,28),'white').save(photo)
+    data = scene(1,3)
+    data.update(width=48,height=28,ground_path=str(photo))
+    data['layers'][0].update(path=str(photo),native=str(photo),motion=motion,
+                             start=.75,arrival=.75,box=[0,0,48,28])
+    _, graph = b._compile(data,dict(id='',start=0,duration=3),(48,28),10,tmp_path)
+    effect = graph.split('[1:v]')[1].split('[l1]')[0]
+    assert effect.index('crop=') < effect.index('loop=') < effect.index('geq=')
+    assert "a='alpha(X,Y)*" in effect and 'X' in effect
+    assert "enable='between(t,0.75,1.5)'" in effect
+    assert ('lte(X/W' in effect) == (motion == 'reveal')
+    assert ('-X)' in effect) == (motion == 'wipe')

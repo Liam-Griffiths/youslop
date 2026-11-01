@@ -1,0 +1,7 @@
+{% extends '_blocks/step_list/explainer_base.html' %}
+{% block content %}
+{% for p in explain.panels %}
+{{ photo('panel-'~loop.index,'picture' if loop.first else 'after',p.x,p.y+78,p.w,p.h-78,0,'fade') }}
+<p class="item caption" data-fit style="left:{{ p.x }}px;top:{{ p.y }}px;width:{{ p.w }}px">{{ vars.before_label if loop.first else vars.after_label }}</p>
+{% endfor %}
+{% endblock %}

@@ -29,6 +29,9 @@ class Layers(HTMLParser):
                 motion=a.get('data-motion', a.get('data-anim', 'none')), capture=a.get('data-capture'),
                 atlas=int(a.get('data-atlas', 1)), pathKeys=json.loads(a.get('data-path', '[]')),
                 exit=float(a.get('data-motion-exit', 0)), box=[0, 0, 80, 40], signature=[a]))
+            self.rows[-1].update(native=a.get('data-media', ''),
+                dim=float(a.get('data-media-dim', 1)),
+                focal=json.loads(a.get('data-media-focal', '[0.5,0.5]')))
         if tag not in ('img', 'meta', 'link', 'br', 'input', 'source', 'hr'):
             self.stack.append('data-layer' in a)
 
@@ -81,7 +84,11 @@ def test_builtin_checks_and_builder_stats(ref, capture_mock):
     for aspect, stats in reports:
         assert stats['captured_frames'] == 0
         assert 1 <= stats['layers'] <= 48 and stats['passes'] == 1
-        assert stats['captures'] + stats['cache_hits'] == stats['layers'] + 1
+        # Native media is not screenshotted; warm manifests also count its files.
+        if ref in blocks.core_explainer_blocks.IDS and ref != 'step_list':
+            assert 1 <= stats['captures'] + stats['cache_hits'] <= stats['layers'] + 1
+        else:
+            assert stats['captures'] + stats['cache_hits'] == stats['layers'] + 1
         assert stats['largest_graph_bytes'] < 65536
     # This is a mocked geometry/contrast check; real layout needs Chromium review.
 
@@ -167,3 +174,33 @@ def test_data_blocks_maximum_datasets_compile(ref, aspect, capture_mock, tmp_pat
     if ref == 'bar_race':
         assert len(parsed.rows) == 6
         assert all(len(r['pathKeys']) == 5 for r in parsed.rows[1:])
+
+
+@pytest.mark.parametrize('ref', blocks.core_explainer_blocks.IDS)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_explainer_maximum_inputs_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    values = block_authoring.samples(meta)
+    if ref == 'step_list':
+        values['rows'] = [dict(label='W'*48)]*5
+    elif ref == 'labelled_diagram':
+        values['rows'] = [dict(label='W'*32,x=i/2,y=i/2) for i in range(3)]
+    template, ctx = blocks.prepare(ref, values, aspect, seconds=3)
+    html = scenes.render_html(template, ctx)
+    parsed = Layers(html)
+    rows = parsed.rows
+    stats = builder.inspect(tmp_path, template, ctx, seconds=3,
+                            size=(ctx['width']//4,ctx['height']//4), fps=30)
+    assert stats['captured_frames'] == 0 and stats['passes'] == 1
+    assert stats['layers'] <= 5 and stats['largest_graph_bytes'] < 65536
+    native = [r for r in rows if r['native']]
+    assert len(native) == (0 if ref == 'step_list' else 2 if ref in ('before_after_wipe','split_comparison') else 1)
+    # Every native still bypasses screenshot capture entirely.
+    assert stats['captures'] == 1+len(rows)-len(native)
+    assert len(capture_mock) <= stats['captures']
+    if ref == 'before_after_wipe':
+        assert native[1]['motion'] == 'wipe'
+        assert native[1]['start'] == .75 and native[1]['arrival'] == .75
+    if ref in ('document_highlight', 'callout_arrow', 'map_highlight', 'labelled_diagram'):
+        assert 'class="annotation"' in html
+        assert next(r for r in rows if r['id'] == 'annotation')['motion'] in ('wipe', 'reveal')

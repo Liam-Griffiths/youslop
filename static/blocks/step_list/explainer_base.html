@@ -1,0 +1,39 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>
+@font-face { font-family:ExplainDisplay; src:url('/fonts/Archivo-Variable.ttf'); font-weight:100 900; font-stretch:62% 125%; }
+@font-face { font-family:ExplainMono; src:url('/fonts/JetBrainsMono-Regular.ttf'); }
+:root { --panel:color-mix(in srgb,var(--bg) 95%,var(--ink)); --line:color-mix(in srgb,var(--bg) 90%,var(--ink)); --dim:color-mix(in srgb,var(--bg) 35%,var(--ink)); }
+.header,.footer,.item,.photo,.annotation { position:absolute; }
+.header,.footer { left:{{ explain.x }}px; width:{{ explain.w }}px; }
+.header { top:{{ explain.header }}px; border-top:5px solid var(--accent); padding-top:24px; }
+h1 { font:800 {{ 86 if height > width else 96 }}px/1.08 ExplainDisplay,sans-serif; font-stretch:62%; height:{{ 186 if height > width else 104 }}px; }
+.footer { top:{{ explain.footer }}px; height:84px; color:var(--dim); font:30px/1.4 Inter,sans-serif; }
+.row,.caption { font:44px/62px Inter,sans-serif; }
+.mono { font:44px/62px ExplainMono,monospace; font-variant-numeric:tabular-nums; color:var(--accent); }
+.row { display:grid; grid-template-columns:90px minmax(0,1fr); gap:20px; border-top:2px solid var(--line); padding:12px 0; }
+.caption { background:var(--bg); height:62px; }
+[data-fit] { overflow:hidden; overflow-wrap:anywhere; min-width:0; }
+.photo { overflow:hidden; } .photo img { width:100%; height:100%; object-fit:cover; object-position:{{ vars.focal_x|default(0.5)*100 }}% {{ vars.focal_y|default(0.5)*100 }}%; filter:brightness({{ vars.picture_dim|default(1) }}); }
+.annotation { overflow:visible; fill:none; stroke:var(--accent); stroke-width:8; stroke-linejoin:round; stroke-linecap:round; }
+</style>
+{% endblock %}
+{% macro layer(id, start=0, motion='none', arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}"{% endmacro %}
+{% macro photo(id, key, x, y, w, h, start=0, motion='none', arrival=0.45) %}
+<div class="photo" {{ layer(id,start,motion,arrival) }} data-media="{{ explain[key] }}" data-media-dim="{{ vars.picture_dim }}" data-media-focal='{{ [vars.focal_x,vars.focal_y]|tojson }}' style="left:{{ x }}px;top:{{ y }}px;width:{{ w }}px;height:{{ h }}px"><img src="{{ vars[key] }}" alt=""></div>
+{% endmacro %}
+{% block body %}
+<header class="header"><h1 data-fit data-var-text="title">{{ vars.title }}</h1></header>
+{% block content %}{% endblock %}
+<footer class="footer" data-fit data-var-text="source">{{ vars.source }}</footer>
+{% endblock %}
+{% block script %}<script>
+window.__ready = window.__ready.then(() => {
+  document.querySelectorAll('[data-fit]').forEach(el => {
+    const full = el.textContent.trim(); el.title = full;
+    const fits = () => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight;
+    let text = full;
+    while (text && !fits()) { text = text.slice(0,-1).trimEnd(); el.textContent = text + '…'; }
+  });
+});
+</script>{% endblock %}

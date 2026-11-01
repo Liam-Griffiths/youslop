@@ -1,0 +1,6 @@
+{% extends '_blocks/step_list/explainer_base.html' %}
+{% block content %}
+{{ photo('picture','picture',explain.x,explain.top,explain.w,explain.ph) }}
+{{ photo('after','after',explain.x,explain.top,explain.w,explain.ph,duration*0.25,'wipe',duration*0.25) }}
+<div class="item caption" style="left:{{ explain.x }}px;top:{{ explain.bottom-62 }}px;width:{{ explain.w }}px;display:grid;grid-template-columns:1fr 1fr;gap:32px"><p data-fit>{{ vars.before_label }}</p><p data-fit style="text-align:right">{{ vars.after_label }}</p></div>
+{% endblock %}

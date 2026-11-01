@@ -1,0 +1,6 @@
+{% extends '_blocks/step_list/explainer_base.html' %}
+{% block content %}
+{% for row in explain.rows %}
+<div class="item row" {{ layer('step-'~loop.index,loop.index0*0.15,'rise') }} style="left:{{ explain.x }}px;top:{{ explain.top+loop.index0*explain.gap }}px;width:{{ explain.w }}px;height:{{ explain.gap-12 }}px"><span class="mono">{{ '%02d'|format(loop.index) }}</span><p data-fit style="height:{{ explain.gap-38 }}px">{{ row.label }}</p></div>
+{% endfor %}
+{% endblock %}

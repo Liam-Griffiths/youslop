@@ -1,0 +1,8 @@
+{% extends '_blocks/step_list/explainer_base.html' %}
+{% block content %}
+{{ photo('picture','picture',explain.x,explain.top,explain.w,explain.ph) }}
+<svg class="annotation" {{ layer('annotation',0.3,'wipe',0.7) }} width="{{ explain.w }}" height="{{ explain.ph }}" style="left:{{ explain.x }}px;top:{{ explain.top }}px" viewBox="0 0 {{ explain.w }} {{ explain.ph }}">
+<rect x="{{ 16+vars.x*explain.inner_w }}" y="{{ 16+vars.y*explain.inner_h }}" width="{{ vars.w*explain.inner_w }}" height="{{ vars.h*explain.inner_h }}" fill="var(--accent)" fill-opacity="0.18"/>
+</svg>
+<p class="item caption" {{ layer('caption',0.5,'rise') }} data-fit data-var-text="label" style="left:{{ explain.x }}px;top:{{ explain.bottom-62 }}px;width:{{ explain.w }}px">{{ vars.label }}</p>
+{% endblock %}
