@@ -19,7 +19,8 @@
 // `render()` repaints the whole page whenever a job ends, so this state and
 // its media elements live out here and are re-attached on every mount.
 const TL = {
-  pid: '', data: null, host: null,
+  pid: '', data: null, host: null, selection: null,
+  inspectorTemplates: [], inspectorEndTemplates: [], inspectorMusic: [], inspectorChannel: null,
   cur: 0, playing: false, speed: 1, loop: false, zoom: 10,
   vids: null, active: 0, seg: -1,
   queue: [], pending: new Set(), failed: new Set(), running: false, drawing: '',
@@ -66,12 +67,13 @@ async function tlMount() {
   if (!TL.audio) { TL.audio = new Audio(); TL.audio.preload = 'auto'; }
   if (TL.pid !== p.id) {
     tlPause();
-    Object.assign(TL, { pid: p.id, data: null, cur: 0, seg: -1, queue: [], failed: new Set(),
+    Object.assign(TL, { pid: p.id, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
                         pending: new Set(), wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
     TL.vids.forEach((v) => { v.removeAttribute('src'); v.dataset.seg = ''; v.load(); });
     TL.audio.removeAttribute('src'); TL.audio.load();
   }
   TL.host = host;
+  host.tabIndex = -1;
   host.innerHTML = `
     <div class="tl-head">
       <h3>Timeline</h3>
@@ -124,6 +126,7 @@ async function tlMount() {
 
   if (!TL.data) $('#tl-note').textContent = 'laying out the cut…';
   await tlRefresh();
+  await tlInspectorLoad();
 }
 
 // Re-read the layout. After an edit the changed entries come back not-ready,

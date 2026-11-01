@@ -310,6 +310,13 @@ function tlWireScrub() {
     TL.scrubbing = true;
     if (TL.playing) tlPause();
     tlSeek(at(e), { ensure: false });
+    tlSelectTarget(e.target);
+  };
+  // Keyboard activation of lane buttons selects and seeks without a pointer.
+  track.onclick = (e) => {
+    if (e.detail !== 0) return;
+    tlSelectTarget(e.target);
+    if (TL.selection) { tlPause(); tlSeek(TL.selection.t0, {ensure: false}); }
   };
   track.onpointermove = (e) => { if (TL.scrubbing) tlSeek(at(e), { ensure: false }); };
   const up = () => {
@@ -319,4 +326,17 @@ function tlWireScrub() {
   };
   track.onpointerup = up;
   track.onpointercancel = up;
+}
+
+function tlSelectTarget(target) {
+  const title = target.closest('[data-title]');
+  const para = target.closest('[data-para]');
+  const picture = target.closest('[data-seg]');
+  if (title) tlSelect(tlItems('title').find((s) => s.id === title.dataset.title));
+  else if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para));
+  else if (picture) {
+    const seg = tlSegs()[+picture.dataset.seg];
+    const kind = seg.type === 'picture' ? 'picture' : 'slate';
+    tlSelect(tlItems(kind).find((s) => s.id === seg.ref) || null);
+  }
 }

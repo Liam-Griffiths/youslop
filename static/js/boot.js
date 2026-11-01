@@ -20,11 +20,13 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (!TL.host || !document.body.contains(TL.host) || !TL.data) return;
+  if (e.key === 'Escape' && !document.querySelector('.modal')) { tlSelect(null); TL.host.focus(); return; }
   const tag = (e.target.tagName || '').toLowerCase();
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
   if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
-  if (k === ' ') tlToggle();
+  if (k === '[' || k === ']') tlSelectNext(k === '[' ? -1 : 1);
+  else if (k === ' ') tlToggle();
   else if (k === 'ArrowLeft') e.shiftKey ? tlPara(-1) : tlStep(-1);
   else if (k === 'ArrowRight') e.shiftKey ? tlPara(1) : tlStep(1);
   else if (k === 'Home') { tlPause(); tlSeek(0); }

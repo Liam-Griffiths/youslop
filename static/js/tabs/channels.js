@@ -882,10 +882,10 @@ function applyChannel(fresh) {
   paintChannel();
 }
 
-async function saveChannel(patch) {
-  applyChannel(await api(`/api/channels/${state.channel.id}`,
-    { method: 'PATCH', body: JSON.stringify(patch) }));
-  toast('saved');
+async function saveChannel(patch, {id = state.channel?.id, quiet = false} = {}) {
+  const fresh = await api(`/api/channels/${id}`, {method: 'PATCH', body: JSON.stringify(patch)});
+  if (!quiet) { applyChannel(fresh); toast('saved'); }
+  return fresh;
 }
 
 const saveChannelStyle = (patch) => saveChannel({ style: patch });

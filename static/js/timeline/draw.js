@@ -41,24 +41,28 @@ function tlDraw() {
   const pics = d.segments.map((s) => {
     const img = s.type === 'picture' ? tlThumb(s) : '';
     const bad = s.problems.some((x) => x.startsWith('no picture'));
-    return `<div class="tl-pic ${s.type !== 'picture' ? 'slate' : ''} ${s.ready ? 'ready' : s.have ? 'stale' : ''}
+    return `<button type="button" aria-label="${esc(tlName(s))}" class="tl-pic ${s.type !== 'picture' ? 'slate' : ''} ${s.ready ? 'ready' : s.have ? 'stale' : ''}
         ${bad ? 'bad' : ''}" data-seg="${s.index}"
         style="left:${s.start * z}px;width:${Math.max(2, s.duration * z - 2)}px;
         ${img ? `background-image:url('${esc(img)}')` : ''}">
         <span class="tl-tag">${tlLabel(s)}${s.problems.length ? ' ⚠' : ''}${s.estimated ? ' ~' : ''}</span>
         <i class="tl-dot" title="${s.ready ? 'proxy drawn' : s.have ? 'out of date' : 'not drawn yet'}"></i>
-      </div>`;
+      </button>`;
   }).join('');
   const paras = tlParas().map((q) => `
-      <div class="tl-para ${q.recorded ? '' : 'est'} ${q.chapter ? 'chap' : ''}" data-para="${q.id}"
+      <button type="button" class="tl-para ${q.recorded ? '' : 'est'} ${q.chapter ? 'chap' : ''}" data-para="${q.id}"
         style="left:${q.start * z}px;width:${Math.max(2, q.duration * z - 2)}px"
         title="${esc(q.text.slice(0, 140))}">
         ${q.chapter ? '<span class="tl-flag">⚑</span>' : ''}<span>${esc(q.text)}</span>
-      </div>`).join('');
+      </button>`).join('');
+  const titles = tlParas().filter((q) => q.title).map((q) => `<button class="tl-title-marker"
+    data-title="${q.id}" style="left:${q.timing.title_at.start * z}px;width:${Math.max(8, q.timing.title_hold.value * z)}px"
+    title="${esc(q.title)}">${esc(q.title)}</button>`).join('');
   track.innerHTML = `
     <div class="tl-ruler">${ticks}</div>
     <div class="tl-lane"><em>pictures</em>${pics}</div>
     <div class="tl-lane para"><em>voice</em>${paras}</div>
+    <div class="tl-lane"><em>titles</em>${titles}</div>
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
   tlPaintProblems();
   tlPaintReview();
@@ -219,23 +223,7 @@ function tlPaintHead() {
   $('#tl-clock').textContent =
     `${tlClock(TL.cur)} / ${tlClock(d.total)}  ·  frame ${Math.round(TL.cur * d.fps)}`;
   $('#tl-play').textContent = TL.playing ? '❚❚' : '▶';
-  const seg = tlSegAt(TL.cur);
-  // Which paragraph is under the playhead: the last one that has started, within
-  // a picture; the slate and end card have no paragraph and are inspected alone.
-  let id = '', para = null;
-  if (seg.type === 'picture') {
-    para = [...seg.paragraphs].reverse().find((q) => TL.cur >= q.start - 1e-6) || seg.paragraphs[0];
-    id = para.id;
-  } else id = seg.ref;
-  if (id !== TL.lastPara) {
-    TL.lastPara = id;
-    document.querySelectorAll('#tl-track .tl-para.sel').forEach((e) => e.classList.remove('sel'));
-    if (para) {
-      const el = document.querySelector(`#tl-track [data-para="${para.id}"]`);
-      if (el) el.classList.add('sel');
-      tlInspect({ ...para, seg: seg.index });
-    } else tlInspectSlate(seg);
-  }
+  tlSelectionPaint();
   // Keep the playhead on screen while it plays or is stepped.
   const sc = $('#tl-scroll'), x = TL.cur * TL.zoom;
   if (sc && !TL.scrubbing && (x < sc.scrollLeft + 20 || x > sc.scrollLeft + sc.clientWidth - 40)) {

@@ -1,54 +1,194 @@
-
-// ---------------------------------------------------------------- inspector
-function tlInspect(para) {
-  const box = $('#tl-inspector');
-  if (!box) return;
-  const p = state.project;
-  const s = p.slides.find((x) => x.id === para.id);
-  if (!s) { box.innerHTML = ''; return; }
-  const seg = tlSegs()[para.seg];
-  const fmt = p.style.format;
-  const cut = isCut(fmt);
-  box.innerHTML = `
-    <div class="mono tl-note">paragraph ${String(para.index + 1).padStart(2, '0')} ·
-      ${tlName(seg)} ·
-      ${tlClock(para.start)} → ${tlClock(para.start + para.duration)}
-      ${para.recorded ? '' : '· <span style="color:var(--cool)">estimated, not recorded</span>'}</div>
-    ${s.chapter ? `<div class="pill" style="margin:6px 0 0">⚑ chapter: ${esc(s.chapter)}</div>` : ''}
-    <div class="tl-text">${esc(s.narration)}</div>
-    ${seg.problems.length ? `<div class="tl-warn">${seg.problems.map((m) => '⚠ ' + esc(m)).join('<br>')}</div>` : ''}
-    <div class="tl-actions">
-      <button class="btn sm" onclick="tlAsk()">Ask</button>
-      <button class="btn sm" onclick="tlEditText('${s.id}')">edit the words</button>
-      <button class="btn sm" onclick="tlEditPicture('${seg.lead}')">change the picture</button>
-      ${fmt === 'board' ? `<button class="btn sm" onclick="tlModal(() => openBoardEditor('${s.id}'))">edit the board</button>` : ''}
-      ${cut ? `<button class="btn sm" onclick="tlModal(() => openCueEditor('${s.id}'))">edit the cues</button>` : ''}
-      <button class="btn sm" onclick="tlOpenTab('record','${s.id}')">${para.recorded ? 're-record / re-read' : 'record this'}</button>
-    </div>
-    <div class="tl-links mono">open in
-      <a onclick="tlOpenTab('script','${s.id}')">script</a> ·
-      <a onclick="tlOpenTab('media','${s.id}')">media</a> ·
-      <a onclick="tlOpenTab('record','${s.id}')">record</a></div>`;
+// One explicit selection, independent of playback and scrubbing.
+function tlItems(kind) {
+  if (kind === 'music') return [{kind, id: 'music', sid: '', t0: 0, t1: TL.data.total}];
+  if (kind === 'picture' || kind === 'slate') return tlSegs()
+    .filter((s) => kind === 'picture' ? s.type === 'picture' : ['intro', 'outro'].includes(s.type))
+    .map((s) => ({kind, id: s.ref, sid: s.lead, t0: s.start, t1: s.start + s.duration}));
+  return tlParas().flatMap((q) => {
+    const slide = state.project.slides.find((s) => s.id === q.id);
+    if (kind === 'cue') return ((slide.cues || {})[state.project.style.format] || []).map((c, i) => ({
+      kind, id: `${q.id}:${i}`, sid: q.id, cue: i,
+      t0: q.timing.cues[i]?.start ?? q.start, t1: q.timing.cues[i]?.end ?? q.start + q.duration}));
+    return [{kind, id: q.id, sid: q.id,
+      t0: kind === 'title' ? q.timing.title_at.start : q.start,
+      t1: kind === 'title' ? q.timing.title_at.start + q.timing.title_hold.value : q.start + q.duration}];
+  });
 }
 
-// The slate and end card belong to the channel (or, standalone, to the panels
-// further down this page), so that is where editing them goes.
-function tlInspectSlate(seg) {
+function tlSelect(sel) {
+  TL.selection = sel;
+  tlInspector();
+  tlSelectionPaint();
+}
+
+function tlSelectionPaint() {
+  document.querySelectorAll('#tl-track [data-seg], #tl-track [data-para]').forEach((el) => {
+    const s = TL.selection;
+    el.classList.toggle('sel', !!s && (el.dataset.para === s.sid && s.kind === 'paragraph'
+      || el.dataset.seg !== undefined && ['picture', 'slate'].includes(s.kind)
+      && tlSegs()[+el.dataset.seg]?.ref === s.id));
+  });
+}
+
+function tlSelectKind(kind) {
+  const seg = tlSegAt(TL.cur);
+  const para = [...(seg?.paragraphs || [])].reverse().find((q) => q.start <= TL.cur) || seg?.paragraphs[0];
+  const items = tlItems(kind);
+  tlSelect(items.find((s) => s.sid === para?.id) || items.find((s) => s.t0 <= TL.cur && s.t1 > TL.cur) || items[0] || null);
+}
+
+function tlSelectNext(dir) {
+  if (!TL.selection) return;
+  const items = tlItems(TL.selection.kind);
+  const index = items.findIndex((s) => s.id === TL.selection.id);
+  const item = items[Math.max(0, Math.min(items.length - 1, index + dir))];
+  if (item) { tlPause(); tlSeek(item.t0, {ensure: false}); tlSelect(item); }
+}
+
+function tlInspector() {
   const box = $('#tl-inspector');
   if (!box) return;
-  const p = state.project;
-  const intro = seg.type === 'intro';
-  const where = p.channel_id
-    ? `<button class="btn sm" onclick="go('#/c/${p.channel_id}')">edit it on the channel page</button>`
-    : `<button class="btn sm" onclick="document.getElementById('opening-panel')?.scrollIntoView({block:'center'})">edit it below</button>`;
-  box.innerHTML = `
-    <div class="mono tl-note">${intro ? 'opening slate' : 'end card'} ·
-      ${tlClock(seg.start)} → ${tlClock(seg.start + seg.duration)}
-      ${seg.estimated ? '· <span style="color:var(--cool)">length estimated until drawn</span>' : ''}</div>
-    <div class="tl-text">${intro
-      ? 'The video opens on this slate, with its own sting if it has one. The music bed holds off until it is over.'
-      : 'The video closes on this card. The music bed fades out over it.'}</div>
-    <div class="tl-actions"><button class="btn sm" onclick="tlAsk()">Ask</button>${where}</div>`;
+  const sel = TL.selection, p = state.project;
+  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music'];
+  box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
+    <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask">Ask</button><div id="tl-fields"></div>`;
+  $('#tl-ask').onclick = tlAsk;
+  $('#tl-kind').onchange = (e) => e.target.value ? tlSelectKind(e.target.value) : tlSelect(null);
+  const body = $('#tl-fields');
+  if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
+  const slide = p.slides.find((s) => s.id === sel.sid);
+  const para = tlParas().find((q) => q.id === sel.sid);
+  const seg = tlSegs().find((s) => s.ref === sel.id);
+  const field = (key, label, value, unit = '', options = null) => {
+    const id = `tl-field-${key}`;
+    return `<label for="${id}">${esc(label)}</label><div class="tl-input">${options
+      ? `<select id="${id}" data-field="${key}">${options.map(([v, text]) => `<option value="${esc(v)}" ${String(value) === String(v) ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select>`
+      : `<input id="${id}" data-field="${key}" type="${unit ? 'number' : 'text'}" ${unit ? 'step="0.05"' : ''} value="${esc(value ?? '')}">`}
+      ${unit ? `<span>${unit}</span>` : ''}</div>`;
+  };
+  const timing = (key, label, effective) => field(key, `${label} (blank = auto: ${effective.toFixed(2)} s)`, slide[key], 's');
+  let html = `<div class="mono tl-note">${tlClock(sel.t0)} → ${tlClock(sel.t1)}</div>`;
+  if (sel.kind === 'paragraph' && slide) html += `<div class="tl-text">${esc(slide.narration)}</div>
+    <button class="btn sm" id="tl-edit-text">Edit the words</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
+  if (sel.kind === 'title' && slide) html += field('title', 'Title', slide.title)
+    + timing('title_at', 'Arrival', para.timing.title_at.value) + timing('title_hold', 'Hold', para.timing.title_hold.value);
+  if (sel.kind === 'chapter' && slide) html += field('chapter', 'Chapter', slide.chapter)
+    + timing('chapter_hold', 'Hold', para.timing.chapter_hold.value) + '<button class="btn sm" data-remove>Remove chapter</button>';
+  if (sel.kind === 'picture' && slide) {
+    html += field('title', 'Caption', slide.title) + '<button class="btn sm" id="tl-picture">Change picture</button>';
+    const candidate = slide.candidates.find((c) => c.id === slide.chosen_id);
+    if (candidate?.focal?.length === 2) html += field('focal_x', 'Focal X', candidate.focal[0], '0–1') + field('focal_y', 'Focal Y', candidate.focal[1], '0–1');
+  }
+  if (sel.kind === 'cue' && slide) {
+    const cues = (slide.cues || {})[p.style.format] || [], cue = cues[sel.cue];
+    if (cue) {
+      const vocabulary = (cutInfo(p.style.format)?.kinds || '').split(' · ').map((k) => k.split(' ')[0]).filter(Boolean);
+      html += field('text', 'Text', cue.text ?? cue.caption ?? cue.headline ?? cue.title ?? '') + field('at', 'Arrival (blank = auto)', cue.at, 's')
+        + field('kind', 'Kind', cue.kind, [...new Set([cue.kind, ...vocabulary])].map((k) => [k, k]))
+        + '<button class="btn sm" data-remove>Delete cue</button><button class="btn sm" id="tl-cue-editor">Edit all cue fields</button>';
+    }
+  }
+  const channel = p.channel_id ? TL.inspectorChannel : null;
+  if ((sel.kind === 'slate' && seg) || sel.kind === 'music') {
+    if (p.channel_id && !channel) html += '<p>Loading channel…</p>';
+    else if (sel.kind === 'slate') {
+      const role = seg.type, spec = (channel || p)[role];
+      const templates = role === 'intro' ? TL.inspectorTemplates.filter((t) => channel || !t.needs_images) : TL.inspectorEndTemplates;
+      html += field('template', `${role} template`, spec.template, templates.map((t) => [t.key, t.label]));
+      if (channel) html += previewStage(channel, role === 'intro' ? 'intro preview' : 'end screen preview', `cache/${role}_preview.webm`, role === 'intro' ? channel.preview_at : channel.outro_preview_at);
+      html += '<p class="tl-note">Replay the selected segment to preview the saved template.</p>';
+    } else {
+      html += field('music', 'Track', p.music, '', [['', 'None'], ['__auto__', 'Automatic'], ...TL.inspectorMusic.map((m) => [m.name, m.name])])
+        + field('music_db', 'Level under voice', p.style.music_db, 'dB');
+      if ((channel || p).outro?.enabled && p.use_outro !== false) html += field('music_fade', 'Fade over end card', (channel || p).outro.music_fade, 's');
+    }
+  }
+  body.innerHTML = html;
+  if ($('#tl-edit-text')) $('#tl-edit-text').onclick = () => tlEditText(slide.id);
+  if ($('#tl-picture')) $('#tl-picture').onclick = () => tlEditPicture(slide.id);
+  if ($('#tl-cue-editor')) $('#tl-cue-editor').onclick = () => tlModal(() => openCueEditor(slide.id));
+  body.querySelectorAll('[data-field]').forEach((el) => {
+    let timer, sent = el.value;
+    const send = () => {
+      clearTimeout(timer);
+      if (sent === el.value) return;
+      sent = el.value;
+      tlInspectorSave({...sel}, el.dataset.field, el.value, el);
+    };
+    el.oninput = () => { clearTimeout(timer); timer = setTimeout(send, 300); };
+    el.onchange = send;
+    el.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); send(); TL.host.focus(); }
+    };
+  });
+  const remove = body.querySelector('[data-remove]');
+  if (remove) remove.onclick = () => tlInspectorSave({...sel}, 'remove', '', remove);
+}
+
+// Serialize requests so a slow response cannot overwrite a later edit.
+let tlInspectorQueue = Promise.resolve();
+function tlInspectorSave(sel, key, raw, el) {
+  const pid = TL.pid;
+  tlInspectorQueue = tlInspectorQueue.then(async () => {
+    if (TL.pid !== pid || state.project?.id !== pid) return;
+    try {
+      if (el.type === 'number' && raw !== '' && !Number.isFinite(Number(raw))) throw new Error('Enter a finite number.');
+      const value = el.type === 'number' ? (raw === '' ? null : Number(raw)) : raw;
+      let patch = {[key]: value};
+      if (sel.kind === 'cue') {
+        const slide = state.project.slides.find((s) => s.id === sel.sid);
+        const fmt = state.project.style.format;
+        const cues = structuredClone(slide.cues[fmt]);
+        if (key === 'remove') cues.splice(sel.cue, 1);
+        else if (key === 'at' && value === null) delete cues[sel.cue].at;
+        else {
+          const cue = cues[sel.cue];
+          const textKey = ['text', 'caption', 'headline', 'title'].find((k) => k in cue) || 'text';
+          cue[key === 'text' ? textKey : key] = value;
+        }
+        patch = {cues: {[fmt]: cues}};
+      } else if (key === 'remove') patch = {chapter: ''};
+      else if (key.startsWith('focal_')) {
+        const slide = state.project.slides.find((s) => s.id === sel.sid);
+        const focal = [...slide.candidates.find((c) => c.id === slide.chosen_id).focal];
+        focal[key === 'focal_x' ? 0 : 1] = value;
+        patch = {focal};
+      }
+      if (sel.kind === 'slate' || key === 'music_fade') {
+        const role = key === 'music_fade' ? 'outro' : sel.id;
+        if (state.project.channel_id) TL.inspectorChannel = await saveChannel({[role]: patch}, {id: state.project.channel_id, quiet: true});
+        else await saveProject({[role]: patch}, true);
+      } else if (key === 'music_db') await saveStyle(patch, false);
+      else if (key === 'music') await saveProject(patch, true);
+      else {
+        if (Object.keys(patch).some((k) => !TL_FIELDS[sel.kind]?.includes(k))) throw new Error('Unsupported inspector field.');
+        if (!await saveSlide(sel.sid, patch)) throw new Error('Could not save this field.');
+      }
+      TL.mixFailed = false;
+      await tlRefresh(true);
+      if (TL.selection?.id === sel.id && TL.selection?.kind === sel.kind) {
+        const next = tlItems(sel.kind).find((s) => s.id === sel.id);
+        TL.selection = key === 'remove' && sel.kind === 'cue' ? null : next || null;
+        // Keep the live field and its caret while typing.
+        if (!$('#tl-inspector')?.contains(document.activeElement)) tlInspector();
+      }
+    } catch (e) {
+      tlMsg(e.message);
+      if (TL.selection?.id === sel.id && TL.selection?.kind === sel.kind) tlInspector();
+    }
+  });
+}
+
+async function tlInspectorLoad() {
+  const pid = TL.pid;
+  try {
+    const [templates, ends, music, channel] = await Promise.all([
+      api('/api/intro/templates'), api('/api/outro/templates'), api('/api/music'),
+      state.project.channel_id ? api(`/api/channels/${state.project.channel_id}`) : null]);
+    if (pid !== TL.pid) return;
+    Object.assign(TL, {inspectorTemplates: templates, inspectorEndTemplates: ends, inspectorMusic: music, inspectorChannel: channel});
+    tlInspector();
+  } catch (e) { tlMsg(e.message); }
 }
 
 // Open a tab with one paragraph scrolled into view (or, on Record, selected).
@@ -78,6 +218,7 @@ async function tlRefreshProject() {
   TL.lastPara = '';
   TL.mixFailed = false;
   await tlRefresh(true);
+  if (TL.selection) tlSelect(tlItems(TL.selection.kind).find((s) => s.id === TL.selection.id) || null);
 }
 
 function tlEditPicture(leadId) { tlModal(() => openMediaSearch(leadId)); }

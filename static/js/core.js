@@ -850,17 +850,17 @@ const STING_FIELDS = {
            fade: 'sting_fade', dur: 'sting_duration' },
 };
 
-async function saveStyle(patch) {
+async function saveStyle(patch, repaint = true) {
   state.project = await api(`/api/projects/${state.project.id}`,
     { method: 'PATCH', body: JSON.stringify({ style: patch }) });
-  render();
+  if (repaint) render();
 }
 const pickProjectFormat = (key) => saveStyle({ format: key });
 
-async function saveProject(patch) {
+async function saveProject(patch, quiet = false) {
   state.project = await api(`/api/projects/${state.project.id}`,
     { method: 'PATCH', body: JSON.stringify(patch) });
-  toast('saved');
+  if (!quiet) toast('saved');
 }
 
 
