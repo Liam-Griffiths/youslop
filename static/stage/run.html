@@ -6,7 +6,10 @@
 <script>
   // The page reports its own errors: a dead page must not look like a slow one.
   const post = (p, o) => fetch(p, { method: 'POST', body: typeof o === 'string' ? o : JSON.stringify(o) });
-  const fail = (m) => post('/error', { error: String(m) }).then(() => post('/done', {}));
+  window.__ready = new Promise((resolve, reject) => { window.__stageReady = resolve; window.__stageFailed = reject; });
+  // Push mode has no promise consumer; errors still go to the server below.
+  window.__ready.catch(() => {});
+  const fail = (m) => { window.__stageFailed(new Error(String(m))); return post('/error', { error: String(m) }).then(() => post('/done', {})); };
   addEventListener('error', (e) => fail(`${e.message} @${e.filename}:${e.lineno}`));
   addEventListener('unhandledrejection', (e) => fail((e.reason && e.reason.stack) || e.reason));
 </script>

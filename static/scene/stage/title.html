@@ -1,0 +1,15 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+  html, body { background: transparent !important; }
+  .shot-title { position:absolute; left:8%; bottom:10%; max-width:80%;
+    padding:20px 28px; background:rgba(9,10,14,.9); border-left:6px solid var(--accent);
+    color:var(--ink); font:64px/1.1 Archivo,sans-serif; overflow-wrap:anywhere; }
+</style>
+{% endblock %}
+{% block body %}
+<h1 class="shot-title clip" data-layer="title" data-text="title"
+    data-start="{{ title_at | default(0) }}" data-duration="{{ title_hold | default(duration) }}"
+    data-motion="rise" data-motion-duration="{{ frame.arrive_s }}"
+    data-motion-exit="{{ frame.arrive_s * frame.exit_ratio }}" data-var-text="title"></h1>
+{% endblock %}

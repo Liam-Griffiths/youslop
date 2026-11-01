@@ -28,7 +28,7 @@ const job = await (await fetch('/job.json')).json();
 const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.enabled = job.task === 'render';
+renderer.shadowMap.enabled = ['render', 'still'].includes(job.task);
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 const fitCam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);   // framing
@@ -138,6 +138,37 @@ async function solve() {
 }
 
 // ------------------------------------------------------------------ render
+let drawAt = null;
+function renderAt(t) {
+  if (!drawAt) throw new Error('No shot loaded');
+  drawAt(t);
+}
+window.__seek = async (t) => {
+  await window.__ready;
+  renderAt(t);
+  // Present the WebGL frame before CDP captures the composited page.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+};
+function prepareRender(item, sc) {
+  const { W, H, fps, frames } = item, shot = { ...item.shot, secs: frames / fps };
+  const undo = applyLook(renderer, sc.scene, item.look || 'set', { models: sc.holders, haze: item.haze });
+  renderer.setSize(W, H, false); cam.aspect = W / H;
+  drawAt = (t) => {
+    const i = Math.min(frames - 1, Math.max(0, Math.round(t * fps)));
+    applyPose(cam, poseAt(shot, i, fps), { W, H });
+    renderer.render(sc.scene, cam);
+  };
+  return undo;
+}
+async function still() {
+  const index = Number(new URLSearchParams(location.search).get('item') || 0);
+  const item = job.stage_items[index];
+  const sc = await sceneFor(item);
+  prepareRender(item, sc);
+  renderAt(0);
+  window.__stageReady();
+  // Keep the scene alive until the capture runner closes this page.
+}
 async function render() {
   // Grouped by scene, so each scene's models load once.
   const order = [...job.items].sort((a, b) => sceneKey(entriesOf(a)).localeCompare(sceneKey(entriesOf(b))));
@@ -151,14 +182,12 @@ async function render() {
       const m = motion(shot, plan.ctx.subject.pts, { fps });
       if (!m.ok) await log(`shot ${item.id}: motion check fails at ${shot.secs.toFixed(1)} s (peak turn ${m.peak_turn_deg_s}°/s)`);
     }
-    const undo = applyLook(renderer, sc.scene, item.look || 'set', { models: sc.holders, haze: item.haze });
-    renderer.setSize(W, H, false); cam.aspect = W / H;
+    const undo = prepareRender(item, sc);
     const gl = renderer.getContext(), buf = new Uint8Array(W * H * 4);
     await post(`/begin/${item.clip}`, { W, H, fps, frames });
     const t0 = performance.now();
     for (let i = 0; i < frames; i++) {
-      applyPose(cam, poseAt(shot, i, fps), { W, H });
-      renderer.render(sc.scene, cam);
+      renderAt(i / fps);
       gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
       const r = await post(`/frame/${item.clip}`, buf);
       if (!r.ok) throw new Error(`the encoder refused frame ${i} of ${item.clip}`);
@@ -168,6 +197,9 @@ async function render() {
   }
 }
 
-await ({ intake, solve, render }[job.task])();
-for (const sc of scenes.values()) sc.dispose(renderer);
-await post('/done', {});
+await ({ intake, solve, render, still }[job.task])();
+if (job.task !== 'still') {
+  window.__stageReady();
+  for (const sc of scenes.values()) sc.dispose(renderer);
+  await post('/done', {});
+}

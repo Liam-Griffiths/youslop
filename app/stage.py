@@ -380,7 +380,8 @@ def render(items: list[dict], models: dict[str, dict], out_dir: Path,
     """Draw clips. An item:
 
         {"clip": file stem, "entries": [...], "shot": {...}, "intent": {...},
-         "look": "set", "haze": {...} | None, "W", "H", "fps", "frames"}
+         "look": "set", "haze": {...} | None, "W", "H", "fps", "frames",
+         "overlay": {"template": "...html", "ctx": {...}, "project_root": "..."}}
 
     Writes <out_dir>/<clip>.mp4 for each and returns them by clip."""
     if not items:
@@ -390,16 +391,72 @@ def render(items: list[dict], models: dict[str, dict], out_dir: Path,
     W, H = items[0]["W"], items[0]["H"]
     progress(f"Drawing {len(items)} 3D shot(s), {frames} frames at {W}×{H}")
     t0 = time.time()
-    run = _run({"task": "render", "models": models, "items": items}, progress, out_dir=out_dir)
+    # Overlay context belongs to the Python builder, not the WebGL page.
+    push_items = [{k: v for k, v in i.items() if k != "overlay"} for i in items]
+    run = _run({"task": "render", "models": models, "items": push_items}, progress, out_dir=out_dir)
     made = {c: v["out"] for c, v in run.clips.items() if v.get("done")}
     if run.errors or len(made) < len(items):
         missing = [i["clip"] for i in items if i["clip"] not in made]
         raise StageError("The 3D shots did not all render"
                          + (f" ({len(missing)} missing)" if missing else "")
                          + (": " + "; ".join(run.errors) if run.errors else ""))
+    for item in items:
+        if item.get("overlay"):
+            _overlay_shot(item, made[item["clip"]])
     secs = max(0.01, time.time() - t0)
     progress(f"3D shots drawn: {frames} frames in {secs:.0f} s ({frames / secs:.0f} fps)")
     return made
+
+
+def _overlay_shot(item, push_path):
+    """Composite a builder alpha MOV; publish only a complete result."""
+    from . import ffutil, scene_builder, scenes
+
+    overlay = item["overlay"]
+    size = (item["W"], item["H"])
+    # Templates expect the standard scene context (frame, palette, fonts); the
+    # caller's ctx overrides it, and its vars merge over the defaults.
+    base = scenes.context_base(overlay.get("project"))
+    given = dict(overlay["ctx"])
+    ctx = {**base, **given, "vars": {**base.get("vars", {}), **given.get("vars", {})},
+           "builder_alpha": True}
+    # Lay out at the templates' design size (1920 on the long side); the builder
+    # draws plates at the shot's size, as it does for quarter-size previews.
+    if "width" not in given:
+        long_side = 1920
+        ctx["width"], ctx["height"] = ((long_side, round(long_side * size[1] / size[0]))
+                                       if size[0] >= size[1] else
+                                       (round(long_side * size[0] / size[1]), long_side))
+    # Local scratch/cache by default; callers can share their project cache.
+    with tempfile.TemporaryDirectory(dir=push_path.parent, prefix="stage-overlay-") as work:
+        directory = Path(work)
+        plate = scene_builder.render(overlay.get("project_root", directory),
+            overlay["template"], ctx, directory / "overlay.mov",
+            seconds=item["frames"] / item["fps"], size=size, fps=item["fps"], crf=12)
+        graph = directory / "overlay.ffgraph"
+        graph.write_text("[0:v]setpts=PTS-STARTPTS[base];"
+                         "[1:v]setpts=PTS-STARTPTS[title];"
+                         "[base][title]overlay=0:0:eof_action=pass:repeatlast=0:"
+                         "format=auto,format=yuv420p[out]", encoding="utf-8")
+        out = directory / "composited.mp4"
+        args = ["-i", str(push_path), "-i", str(plate.path),
+                "-filter_complex_threads", str(ffutil._default_threads()),
+                "-filter_complex_script", str(graph), "-map", "[out]",
+                "-frames:v", str(item["frames"]), "-r", str(item["fps"]),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
+                "-pix_fmt", "yuv420p", "-an", str(out)]
+        try:
+            try:
+                ffutil.run(args)
+            except ffutil.FFError as exc:
+                # Match the builder's support for ffmpeg's newer file syntax.
+                if "Unrecognized option 'filter_complex_script'" not in str(exc):
+                    raise
+                args[args.index('-filter_complex_script')] = '-/filter_complex'
+                ffutil.run(args)
+        except ffutil.FFError as exc:
+            raise StageError(f"3D overlay failed: {exc}") from exc
+        out.replace(push_path)
 
 
 # -------------------------------------------------------------- DOM scenes
@@ -664,12 +721,16 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
 
 
 def render_scene(items: list[dict], out_dir: Path,
-                 progress: Progress = lambda m: None) -> dict[str, Path]:
+                 progress: Progress = lambda m: None, *, models=None) -> dict[str, Path]:
     """Capture local HTML scenes sequentially using one browser.
 
     Items supply clip, url_path, W, H, fps, frames, size. For project files,
     also supply a shared scene_root and use /scene/{token}/relative.html.
+    With models supplied, items are 3D shots (including optional overlay),
+    delegated to the push renderer. CDP never captures 3D video.
     """
+    if models is not None:
+        return render(items, models, out_dir, progress)
     if not items:
         return {}
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -691,17 +752,35 @@ def render_scene(items: list[dict], out_dir: Path,
     return {key: c["out"] for key, c in run.clips.items() if c.get("done")}
 
 
-def capture_stills(items, scene_root, *, project_root=None, channel_root=None, scene_probe=None, assets_root=None):
-    """Capture one PNG per local scene page, sharing one Chromium session."""
-    run = _run_cdp(dict(items=items, scene_root=str(scene_root), assets_root=assets_root,
-                        project_root=project_root, channel_root=channel_root), lambda m: None,
+def capture_stills(items, scene_root=None, *, project_root=None, channel_root=None,
+                   scene_probe=None, assets_root=None, models=None):
+    """Capture local scenes, or 3D shot items at their requested t with models."""
+    job = dict(items=items, scene_root=str(scene_root) if scene_root is not None else None,
+               assets_root=assets_root, project_root=project_root, channel_root=channel_root)
+    if models is not None:
+        job.update(task="still", models=models,
+                   stage_items=[{k: v for k, v in i.items() if k != "overlay"} for i in items])
+        job["items"] = [dict(clip=i.get("clip", "snapshot"), W=i["W"], H=i["H"],
+            size=i.get("size", (i["W"], i["H"])), t=i.get("t", 0), frames=1,
+            url_path=f"{PAGE}?item={n}") for n, i in enumerate(items)]
+    run = _run_cdp(job, lambda m: None,
                    scene_probe=scene_probe)
     return run.thumbs
 
 
 def capture_one(url_path, W, H, t, size, *, assets_root=None,
-                project_root=None, channel_root=None, scene_probe=None) -> bytes:
-    """Return a PNG from a local URL, or an absolute HTML file and its assets."""
+                project_root=None, channel_root=None, scene_probe=None,
+                stage_item=None, models=None) -> bytes:
+    """Return a local scene PNG, or a 3D stage_item frame when models is supplied.
+
+    For 3D, pass PAGE as url_path and the original push item's fps/frames/shot.
+    t is in shot seconds and size is the screenshot size.
+    """
+    if stage_item is not None:
+        if models is None:
+            raise ValueError("3D stills require models")
+        item = dict(stage_item, clip="snapshot", W=W, H=H, t=t, size=size)
+        return capture_stills([item], models=models, scene_probe=scene_probe)["snapshot"]
     root = None
     if Path(url_path).is_file():
         from urllib.parse import quote
