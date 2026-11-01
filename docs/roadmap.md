@@ -306,7 +306,19 @@ become a media provider matched to paragraphs and rendered by in/out from the
 original; a shot list can be made from the script before filming. Tickets
 T11.1–T11.8. Shares opt-in speech recognition with T7.8.
 
-### Risks
+### Phase 12: Corkbored blocks (added 2026-10-31)
+Owner decision: Hyperframes catalog blocks are a competitor's, and their
+previews carry Hyperframes and HeyGen branding, so their use is temporary.
+We keep runtime compatibility (our scene runtime follows the same composition
+contract) but quarantine the catalog now (T2.7c: off by default, labelled
+third-party, never their previews, never in packs) and build our own library:
+a block format with typed variables and aspect variants (T12.1), an authoring
+kit that checks text fit, safe areas and contrast (T12.2), a clean-room core
+set of about 30 blocks in 16:9 and 9:16 (T12.3), data blocks with a
+number-match check (T12.4), blocks first in the Visuals stage (T12.5), blocks
+written once by Claude from a description and reused for free (T12.6), then
+retirement of the catalog (T12.7). Blocks are also what paid content packs
+(Phase 8) sell.
 
 - **CDP over pipe is POSIX-only.** Decide the Windows path (port plus stdlib websocket, or push-only) before promising scenes on Windows builds.
 - **Screenshot throughput** is well under the 3D path's 40 fps. Scene segments are short and chunkable with the existing `CHUNK_SECONDS` parallelism, but a long all-scene cut must be benchmarked as an explicit opt-in step on this machine.

@@ -99,6 +99,7 @@ YS_VISUAL=1 .venv/bin/pytest tests/visual -q   # slow, opt-in
 | `08-packs` | 8 | content packs: the format and loader, the Packs screen, tooling and the first free pack |
 | `09-studio-flow` | 9 | the UI and flow overhaul: flow map and mockups, screenshot harness, shell, six stages, jobs, first run |
 | `10-sponsors` | 10 | sponsor segments: short and long reads, placement, templates, checks, publishing |
+| `12-blocks` | 12 | Corkbored's own blocks: format, authoring kit, core set, data blocks, browser, make-your-own, retiring the third-party catalog |
 | `11-footage` | 11 | the user's own footage: import, proxies, shot detection, quality, labels, logger, clips into the edit |
 
 Phase 0 is done first in full. Phases 1 and 2 are independent of each other.
