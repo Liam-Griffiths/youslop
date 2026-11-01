@@ -1,0 +1,22 @@
+{
+  "duration": 7.5,
+  "vars": {
+    "name": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    "url": "example.test/wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+    "code": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    "made": "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+    "learn": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+    "link": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+    "logo": "/static/brand/corkbored-icon.svg",
+    "media": [
+      {
+        "src": "/static/brand/cork-1920.jpg",
+        "caption": "Local product image"
+      },
+      {
+        "src": "/static/brand/corkbored-mark.svg",
+        "caption": "Local brand image"
+      }
+    ]
+  }
+}

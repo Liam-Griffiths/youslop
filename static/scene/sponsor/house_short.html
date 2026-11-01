@@ -8,7 +8,7 @@
     beats.learn  "Learn how you can build your own videos"
     beats.link   "...link in the description below"
 #}
-{% set b = beats | default({'made': 0.4, 'brand': 1.9, 'learn': 2.95, 'link': 5.55}) %}
+{% set b = beats %}
 {% block head %}
 <style>
   @font-face { font-family: 'CB Wordmark'; src: url('/fonts/ArchivoBlack-Regular.ttf'); font-display: block; }
@@ -25,16 +25,40 @@
   .brand { position: absolute; left: 50px; top: 150px; font: 132px/1 'CB Wordmark'; letter-spacing: -3px; color: #1B1B1F; transform-origin: 0 70%; }
   .learn { position: absolute; left: 56px; top: 330px; width: 860px; font: 50px/1.25 'CB Marker'; color: #1B1B1F; }
   .link { position: absolute; left: 56px; top: 466px; font: 50px 'CB Marker'; color: #FF5A1F; }
-  .arrow { position: absolute; left: 1520px; top: 800px; width: 220px; height: 260px; overflow: visible; }
   .url { position: absolute; left: 1150px; bottom: 74px; font: 30px 'JetBrains Mono', monospace; color: #FBF8F1;
          letter-spacing: 1px; text-shadow: 0 2px 6px rgba(42, 20, 4, .7); }
+  .logo { position:absolute; inset:10%; width:80%; height:80%; object-fit:contain; }
+  /* Keep animated copy on the paper, while the pin can protrude above it. */
+  .card-copy { position:absolute; inset:0; overflow:hidden; color:#1B1B1F; }
+  .card-copy > div { width:calc(100% - 112px); overflow:hidden; display:-webkit-box;
+                     -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+  .brand { font-size:{{ sponsor.name_size }}px; max-height:160px; -webkit-line-clamp:2; }
+  .made { max-height:72px; -webkit-line-clamp:2; }
+  .learn { max-height:130px; -webkit-line-clamp:3; }
+  .link { max-height:90px; line-height:1.2; -webkit-line-clamp:3; }
+  .made { max-width:850px; font-size:{{ 46 if sponsor.made|length < 40 else 24 }}px; }
+  .learn { font-size:{{ 50 if sponsor.learn|length < 65 else 24 }}px; overflow-wrap:anywhere; }
+  .link { max-width:850px; overflow-wrap:anywhere; font-size:{{ 50 if (sponsor.link|length + sponsor.code|length) < 38 else 24 }}px; }
+  .url { width:600px; overflow-wrap:anywhere; font-size:{{ 30 if sponsor.url|length < 40 else 24 }}px; }
+  {% if sponsor.url|length >= 40 and width > height %}
+  .url { left:120px; width:1100px; }
+  {% endif %}
+  {% if width < height %}
+  #board { left:-96px; top:-96px; height:2200px; width:3911px; }
+  .note { left:270px; top:80px; width:540px; height:540px; }
+  #notepin { left:504px!important; top:180px!important; }
+  .card { left:80px; top:700px; width:920px; height:620px; }
+  .card .pin { left:420px; }
+  .url { left:110px; bottom:220px; width:800px; }
+  {% endif %}
 </style>
 {% endblock %}
 {% block body %}
 <img id="board" src="/static/brand/cork-1920.jpg" alt="">
 
 <div class="note" id="note">
-  <svg viewBox="0 0 64 64">
+  {% if sponsor.logo %}<img class="logo" src="{{ sponsor.logo }}" alt="{{ sponsor.name }}">{% endif %}
+  <svg viewBox="0 0 64 64" {% if sponsor.logo %}style="visibility:hidden"{% endif %}>
     <defs>
       <linearGradient id="n" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#FFE987"/><stop offset="1" stop-color="#FFD43B"/></linearGradient>
       <linearGradient id="c" x1="1" y1="1" x2="0.6" y2="0.6"><stop offset="0" stop-color="#C79A12"/><stop offset="1" stop-color="#FFE071"/></linearGradient>
@@ -58,17 +82,14 @@
     <ellipse cx="12" cy="16" rx="22" ry="9" fill="#2a1404" opacity="0.35"/>
     <circle r="24" fill="url(#ph)"/><ellipse cx="-7" cy="-8" rx="7" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-30 -7 -8)"/>
   </svg>
-  <div class="made" id="made">This video was made with</div>
-  <div class="brand" id="brand">Corkbored</div>
-  <div class="learn" id="learn">Learn how you can build your own videos</div>
-  <div class="link" id="link">Link in the description</div>
+  <div class="card-copy">
+    <div class="made" id="made">{{ sponsor.made }}</div>
+    <div class="brand" id="brand">{{ sponsor.name }}</div>
+    <div class="learn" id="learn">{{ sponsor.learn }}</div>
+    <div class="link" id="link">{{ sponsor.link }}{% if sponsor.code %} · {{ sponsor.code }}{% endif %}</div>
+  </div>
 </div>
-
-<svg class="arrow" viewBox="0 0 220 260">
-  <path id="arrow" d="M150 10 C 190 80, 170 150, 96 214 M96 214 L 104 160 M96 214 L 150 196"
-        fill="none" stroke="#FBF8F1" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-<div class="url" id="url">corkbored.com</div>
+<div class="url" id="url">{{ sponsor.url }}</div>
 {% endblock %}
 {% block script %}
 <script>
@@ -76,9 +97,6 @@
     const D = {{ duration }};
     const B = {{ b | tojson }};
     const tl = gsap.timeline({ paused: true, defaults: { ease: 'expo.out' } });
-    const arrow = document.querySelector('#arrow');
-    const len = arrow.getTotalLength();
-    gsap.set(arrow, { strokeDasharray: len, strokeDashoffset: len, opacity: 0 });
 
     // The board breathes in for the whole segment.
     tl.fromTo('#board', { scale: 1.0 }, { scale: 1.05, duration: D, ease: 'none' }, 0);
@@ -90,15 +108,13 @@
     tl.fromTo('#card', { x: 1300, rotation: 9 }, { x: 0, rotation: 2, duration: 0.7 }, Math.max(0.2, B.made - 0.25));
     tl.fromTo('#made', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45 }, B.made + 0.15);
     // The name lands on its word, and the card's pin goes in with it.
-    tl.fromTo('#brand', { opacity: 0, scale: 1.35 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' }, B.brand - 0.05);
+    tl.fromTo('#brand', { opacity: 0, scale: 1.35 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' }, Math.max(0, B.brand - 0.05));
     tl.fromTo('#cardpin', { scale: 0, y: -30 }, { scale: 1, y: 0, duration: 0.3, ease: 'back.out(3)' }, B.brand + 0.1);
     tl.fromTo('#learn', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5 }, B.learn);
-    tl.fromTo('#link', { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45 }, B.link - 0.1);
-    tl.set(arrow, { opacity: 1 }, B.link + 0.2);
-    tl.to(arrow, { strokeDashoffset: 0, duration: 0.7, ease: 'power2.inOut' }, B.link + 0.2);
+    tl.fromTo('#link', { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45 }, Math.max(0, B.link - 0.1));
     tl.fromTo('#url', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5 }, B.link + 0.5);
     // Gentle settle out: the whole board dips in the last 0.35 s.
-    tl.to(['#note', '#notepin', '#card', '.arrow', '#url'], { opacity: 0, duration: 0.35, ease: 'power1.in' }, D - 0.35);
+    tl.to(['#note', '#notepin', '#card', '#url'], { opacity: 0, duration: 0.35, ease: 'power1.in' }, D - 0.35);
     window.__timelines['sponsor-house-short'] = tl;
   })();
 </script>

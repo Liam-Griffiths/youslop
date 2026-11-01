@@ -202,24 +202,42 @@ def cmd_ask(args):
         review.apply_ask(args.pid, result)
 
 
+def cmd_scene_check(args):
+    """Render the template and lint its contract; requires no Chromium."""
+    from . import scenes
+    ctx = scenes.context_base()
+    if args.ctx:
+        override = json.loads(Path(args.ctx).read_text(encoding="utf-8"))
+        ctx = {**ctx, **override, 'vars': {**ctx['vars'], **override.get('vars', {})}}
+    errors = scenes.lint(scenes.render_html(args.template, ctx))
+    for error in errors:
+        print(error, file=sys.stderr)
+    if not errors:
+        print(f"{args.template}: lint OK")
+    return 1 if errors else 0
+
+
 def cmd_scene_preview(args):
     from . import scenes
 
     project = store.load(args.project) if args.project else None
     ctx = scenes.context_base(project)
     if args.ctx:
-        ctx.update(json.loads(Path(args.ctx).read_text(encoding="utf-8")))
+        override = json.loads(Path(args.ctx).read_text(encoding="utf-8"))
+        ctx = {**ctx, **override, 'vars': {**ctx['vars'], **override.get('vars', {})}}
+    ctx = scenes._template_context(args.template, ctx)
+    size = (270, 480) if ctx["width"] < ctx["height"] else (480, 270)
     out = Path(args.out or ("scene.mp4" if args.mp4 else "frame.png"))
     # Keep temporary inputs alive until Chromium has finished reading them.
     with tempfile.TemporaryDirectory(prefix="corkbored-scene-") as temporary:
         root = project if project else Path(temporary)
         if args.mp4:
             clip = scenes.ensure_clip(root, args.template, ctx,
-                                      seconds=args.seconds, size=(480, 270), fps=30)
+                                      seconds=args.seconds, size=size, fps=30)
             out.write_bytes(clip.read_bytes())
         else:
             out.write_bytes(scenes.capture(root, args.template, ctx,
-                                          t=args.t, size=(480, 270)))
+                                          t=args.t, size=size))
     print(out)
 
 
@@ -330,6 +348,9 @@ def main(argv=None):
     mode = command.add_mutually_exclusive_group()
     mode.add_argument("--copy", action="store_true")
     mode.add_argument("--apply", action="store_true")
+    command = sub.add_parser("scene-check")
+    command.add_argument("template")
+    command.add_argument("--ctx")
     command = sub.add_parser("scene-preview")
     command.add_argument("template")
     command.add_argument("--ctx")
@@ -366,7 +387,7 @@ def main(argv=None):
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "footage": cmd_footage,
+         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0

@@ -43,3 +43,107 @@ def placements(project, plan, pre=0.0):
 
 def pads(placements):
     return {sid: sum(duration(slot) for slot in slots) for sid, slots in placements.items()}
+
+
+def scene_context(ctx):
+    """Resolve sponsor copy and take-relative beats without a browser or model.
+
+    Assets are served by the scene host, never fetched remotely. Word matches
+    retain their source confidence; an estimate is not upgraded to a TTS timing.
+    """
+    import math
+    import re
+    from urllib.parse import urlsplit
+
+    values = {**ctx.get('vars', {}), **ctx}
+    defaults = dict(name='Corkbored', logo='', url='corkbored.com', code='',
+                    made='This video was made with',
+                    learn='Learn how you can build your own videos',
+                    link='Link in the description', accent='#FF5A1F', ink='#1B1B1F')
+    limits = dict(name=64, url=120, code=32, made=64, learn=120, link=64)
+    sponsor = {key: values.get(key, default) for key, default in defaults.items()}
+    for key, limit in limits.items():
+        if not isinstance(sponsor[key], str) or len(sponsor[key]) > limit:
+            raise ValueError(f'sponsor {key} must be text of at most {limit} characters')
+    for key in ('accent', 'ink'):
+        if not re.fullmatch(r'#[0-9a-fA-F]{6}', sponsor[key]):
+            raise ValueError(f'sponsor {key} must be a six-digit hex colour')
+
+    # Measure the vendored face before HTML/timeline creation. Keep the approved
+    # default size when it fits; otherwise allow two lines with wrapping slack.
+    # Ignore negative tracking here so the estimate stays conservative.
+    from PIL import ImageFont
+    from .config import FONTS_DIR
+    font = ImageFont.truetype(str(FONTS_DIR / 'ArchivoBlack-Regular.ttf'), 132)
+    name_width = font.getlength(sponsor['name'])
+    card_width = 808 if ctx.get('width', 1920) < ctx.get('height', 1080) else 848
+    sponsor['name_size'] = (132 if name_width <= card_width else
+                            int(min(72, 132 * card_width * 1.8 / name_width)))
+
+    def local(url):
+        parts = urlsplit(url)
+        if (parts.scheme or parts.netloc or '\\' in url or
+                not url.startswith(('/static/', '/scene/')) or
+                '..' in parts.path.split('/')):
+            raise ValueError('sponsor assets must use local /static/ or /scene/ URLs')
+        return url
+
+    if sponsor['logo']:
+        sponsor['logo'] = local(sponsor['logo'])
+    media = values.get('media', [])
+    if not isinstance(media, list) or len(media) > 4:
+        raise ValueError('sponsor media must be a list of at most four slots')
+    sponsor['media'] = []
+    for item in media:
+        if item.get('kind', 'image') not in ('image', 'video'):
+            raise ValueError('sponsor media kind must be image or video')
+        caption = item.get('caption', '')
+        if not isinstance(caption, str) or len(caption) > 120:
+            raise ValueError('sponsor media caption must be at most 120 characters')
+        sponsor['media'].append(dict(src=local(item['src']), kind=item.get('kind', 'image'),
+                                     caption=caption))
+    # Empty slots stay useful as product-copy cards; no stock/footage searches.
+    if not sponsor['media']:
+        sponsor['media'] = [dict(src='', kind='image', caption=sponsor['learn']),
+                            dict(src='', kind='image', caption=sponsor['link'])]
+    elif len(sponsor['media']) < 2:
+        raise ValueError('sponsor long reads need two to four media slots')
+
+    seconds = float(ctx.get('duration', 7.5))
+    offset = float(ctx.get('word_offset', 0))
+    if not math.isfinite(seconds) or seconds <= 0 or not math.isfinite(offset):
+        raise ValueError('sponsor duration and word offset must be finite')
+    fallback = dict(made=.4, brand=1.9, learn=2.95, link=5.55)
+    beats = {key: value / 7.5 * seconds for key, value in fallback.items()}
+    sources = {key: 'proportional' for key in beats}
+    words = (ctx.get('take') or {}).get('words', [])
+    tokens = lambda text: re.findall(r'\w+', text.casefold())
+    entries = []
+    for word in words:
+        try:
+            start = float(word['start']) + offset
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(start) and 0 <= start < seconds:
+            entries.extend((token, start, word.get('src', 'est')) for token in tokens(word.get('w', '')))
+
+    def match(phrase):
+        needle = tokens(phrase)
+        if needle:
+            for i in range(len(entries) - len(needle) + 1):
+                if [e[0] for e in entries[i:i + len(needle)]] == needle:
+                    return entries[i][1:]
+        return None
+
+    for key, phrases in dict(made=['This video'], brand=[sponsor['name']],
+                             learn=['Learn', 'Discover'], link=['link', 'description']).items():
+        found = next((hit for phrase in phrases if (hit := match(phrase))), None)
+        if found:
+            beats[key], sources[key] = found
+    for key, value in values.get('beats', {}).items():
+        if key in beats:
+            value = float(value)
+            if not math.isfinite(value) or not 0 <= value < seconds:
+                raise ValueError(f'sponsor beat {key} is outside the segment')
+            beats[key], sources[key] = value, 'explicit'
+    return dict(sponsor=sponsor, beats=beats, beat_sources=sources)

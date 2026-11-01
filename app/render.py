@@ -1618,7 +1618,7 @@ def render(project: Project, progress: Progress = lambda m: None,
             ctx = scenes.context_base(project, seg_channel)
             ctx.update(slot.vars)
             ctx["vars"] = {**ctx["vars"], **slot.vars}
-            ctx.update(script=slot.script, variant=slot.variant)
+            ctx.update(script=slot.script, variant=slot.variant, take=slot.take, word_offset=T / 2)
             clip = scenes.ensure_clip(project, slot.template, ctx,
                                       seconds=seconds + T, size=(WIDTH, HEIGHT), fps=FPS)
             sponsor_indices.add(len(seg_paths))

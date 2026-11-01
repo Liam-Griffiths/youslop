@@ -59,7 +59,17 @@ def context_base(project=None, channel=None) -> dict:
                 duration=5, fps=30)
 
 
+def _template_context(template: str, ctx: dict) -> dict:
+    if template.startswith('sponsor/') and template.endswith('_vertical.html'):
+        return {**ctx, 'width': 1080, 'height': 1920}
+    return ctx
+
+
 def render_html(template: str, ctx: dict) -> str:
+    ctx = _template_context(template, ctx)
+    if template.startswith('sponsor/'):
+        from .sponsors import scene_context
+        ctx = {**ctx, **scene_context(ctx)}
     html = env.get_template(template).render(**ctx)
     # Cached HTML lives elsewhere; resolve relative component/script URLs as
     # they were authored in the template directory.
@@ -218,7 +228,7 @@ def _directory(project):
 def _prepare(project, template, ctx, seconds, size, fps, key_extra=()):
     if not math.isfinite(seconds) or seconds <= 0 or fps <= 0 or min(size) <= 0:
         raise ValueError("positive duration, fps and size required")
-    ctx = {**ctx, 'duration': seconds, 'fps': fps}
+    ctx = _template_context(template, {**ctx, 'duration': seconds, 'fps': fps})
     key, html = _key(template, ctx, seconds, size, fps, key_extra)
     directory = _directory(project)
     path = directory / f'{key}.html'
