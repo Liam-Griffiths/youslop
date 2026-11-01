@@ -327,7 +327,7 @@ function previewStage(c, kind, file, stamp) {
   const job = state.job;
   const running = job && !job.done && job.kind === kind;
   if (running) {
-    const line = (job.lines || []).slice(-1)[0] || job.tagline || 'Stirring the pot…';
+    const line = (job.lines || []).slice(-1)[0] || job.tagline || 'Preparing the preview…';
     return `
       <h3 style="margin-top:24px">Preview</h3>
       <div class="rendering">
@@ -344,6 +344,7 @@ function previewStage(c, kind, file, stamp) {
   if (!stamp) return '';
   return `
     <h3 style="margin-top:24px">Preview</h3>
+    <p class="mono">Preview engine: ${(file.includes('outro') ? c.outro.template : c.intro.template).startsWith('scene:') ? 'Chromium scenes' : 'Pillow'}</p>
     ${videoTag(`/api/channels/${c.id}/file/${file}?v=${stamp}`,
                { scope: 'channel', id: c.id, rel: file })}`;
 }
@@ -636,7 +637,7 @@ function paintChannelOverview() {
       <button class="btn sm primary" onclick="newVideoInChannel('${c.id}')">+ new video</button>
     </div>
     ${(c.videos || []).length === 0
-      ? '<div class="empty-note">None yet — pour one in above.</div>'
+      ? '<div class="empty-note">No music yet. Add a track above.</div>'
       : c.videos.map(projRow).join('')}
   `;
   paintJob();
@@ -945,7 +946,7 @@ async function changeCastImage(i) {
         <button class="btn sm" id="pgo">search</button>
       </div>
       <div id="presults" class="pick-grid portraits">
-        <div class="empty-note" style="grid-column:1/-1">Casting the net…</div>
+        <div class="empty-note" style="grid-column:1/-1">Searching for portraits…</div>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -955,7 +956,7 @@ async function changeCastImage(i) {
 
   const results = wrap.querySelector('#presults');
   const run = async (q) => {
-    results.innerHTML = '<div class="empty-note" style="grid-column:1/-1">Casting the net…</div>';
+    results.innerHTML = '<div class="empty-note" style="grid-column:1/-1">Searching for portraits…</div>';
     let found = [];
     try {
       const r = await api(`/api/channels/${c.id}/cast/${i}/options`

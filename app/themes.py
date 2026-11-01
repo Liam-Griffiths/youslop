@@ -34,7 +34,7 @@ THEMES = [
         "pattern": "icons", "light": False,
         "frame": {"move_max_s": 0.8, "creep_max": 1.10,
                   "transition_types": ["fade", "dip"], "shot_avg_min_s": 2.5},
-        "intro": "columns", "thumb": "banner", "outro": "twoup",
+        "intro": "columns", "thumb": "banner", "outro": "scene:outro_twoup",
     },
     {
         "key": "arcade", "label": "Arcade", "for": "Gaming, streaming, tech culture",
@@ -90,7 +90,7 @@ THEMES = [
         "icons": ["chip", "cursor", "bolt", "plus", "ring", "globe"],
         "pattern": "icons", "light": False,
         "frame": {},
-        "intro": "signal", "thumb": "split", "outro": "console",
+        "intro": "scene:intro_solo", "thumb": "split", "outro": "console",
     },
     {
         "key": "kitchen", "label": "Kitchen", "for": "Food, craft, making things",
@@ -177,7 +177,14 @@ def apply_to_style(style, key: str, take_templates: bool = True) -> dict:
     style.grade = t["grade"]
     if not take_templates:
         return {}
-    return {"intro": t["intro"], "thumb": t["thumb"], "outro": t["outro"]}
+    from . import stage
+
+    picks = {"intro": t["intro"], "thumb": t["thumb"], "outro": t["outro"]}
+    if not stage.browser():
+        for surface in ("intro", "outro"):
+            picks[surface] = {"scene:intro_solo": "signal",
+                              "scene:outro_twoup": "twoup"}.get(picks[surface], picks[surface])
+    return picks
 
 
 def apply_to_frame(frame: FrameSpec, key: str) -> FrameSpec:

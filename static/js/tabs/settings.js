@@ -41,7 +41,7 @@ function settingsFieldRow(f) {
 }
 
 async function renderSettings() {
-  view.innerHTML = `<div class="empty-note">${slopLine()}</div>`;
+  view.innerHTML = `<div class="empty-note">${loadingLine()}</div>`;
   let data;
   try { data = await api('/api/settings'); }
   catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
@@ -56,10 +56,12 @@ async function renderSettings() {
 
   view.innerHTML = `
     <h1>Settings</h1>
-    <p class="sub">What used to live in a <span class="mono">.env</span> file you hand-edited.
-      Changes take effect the next time Corkbored starts.</p>
+    <p class="sub">Set up writing, narration, research and rendering.
+      Changes take effect the next time the app starts.</p>
     <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">
       Data folder: ${esc(data.data_dir)}</p>
+    <p class="mono">New-channel cards: ${esc(data.card_engine)}. Channel preview templates
+      marked “scene” use Chromium; other templates use Pillow.</p>
 
     <h2 class="micro">Appearance</h2>
     <div class="panel">
@@ -79,7 +81,7 @@ async function renderSettings() {
     </div>
 
     <div class="row" style="margin-top:22px;position:sticky;bottom:18px">
-      <button class="btn primary" onclick="saveSettingsForm()">save</button>
+      <button class="btn primary" onclick="saveSettingsForm()">Save settings</button>
       <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
     </div>`;
 }

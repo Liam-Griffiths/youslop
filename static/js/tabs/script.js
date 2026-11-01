@@ -26,11 +26,11 @@ function paintScript() {
            — ${esc(draft.outline.title || p.idea)}.<br>
            <span class="mono" style="color:var(--ink-faint)">Carrying on writes only
              the ${total - written} that are missing.</span><br><br>
-           <button class="btn sm primary" onclick="regenScript()">carry on</button>
+           <button class="btn sm primary" onclick="regenScript()">Continue draft</button>
            <button class="btn sm ghost" onclick="regenScript(true)">start again</button>
          </div>`
-      : `<div class="empty-note">Empty bucket. Someone's got to write this thing.
-           <button class="btn sm" onclick="regenScript()">Write one</button></div>`;
+      : `<div class="empty-note">No script yet. Write one from the idea to begin.
+           <button class="btn sm" onclick="regenScript()">Write the script</button></div>`;
     return;
   }
   const words = p.slides.reduce((n, s) => n + s.word_count, 0);

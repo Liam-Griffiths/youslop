@@ -182,7 +182,7 @@ function paintLibraryGrid() {
           <button class="btn xs ghost danger" onclick="deleteLibraryAsset('${a.id}')">delete</button>
         </div>
       </div>
-    </div>`).join('') || '<div class="empty-note">Bucket\'s empty — add your first download above.</div>';
+    </div>`).join('') || '<div class="empty-note">No downloads yet. Add a file above.</div>';
 }
 
 function editLibraryAsset(id) {
@@ -376,7 +376,7 @@ function paintMedia() {
                 ${c.kind === 'video' ? '<span class="kindtag">clip</span>' : ''}
                 ${playBtn(s.id, c)}
                 <span class="src">${esc(c.provider)}</span>
-              </div>`).join('') || '<div class="empty-note">the well came up dry</div>'}
+              </div>`).join('') || '<div class="empty-note">No pictures found. Try another search.</div>'}
             ${s.candidates.length > 12
               ? `<div class="thumb more" onclick="openMediaSearch('${s.id}')">
                    +${s.candidates.length - 12}<br>more</div>` : ''}
@@ -491,7 +491,7 @@ function openMediaSearch(sid, query = null) {
           <span>${esc(c.provider)}</span>
           <span>${c.width || '?'}×${c.height || '?'}</span>
         </div>
-      </div>`).join('') || '<div class="empty-note">came back dry — try a looser term</div>';
+      </div>`).join('') || '<div class="empty-note">No pictures found. Try a broader search.</div>';
     res.querySelectorAll('.pick').forEach((el) => {
       el.onclick = () => {
         res.querySelectorAll('.pick').forEach((o) => o.classList.remove('sel'));

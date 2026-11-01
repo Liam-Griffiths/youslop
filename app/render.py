@@ -1063,8 +1063,10 @@ def _render_segment(
             crf=crf, extra=_reframe(size, fps))
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
+    from . import stage
+    scene_chapter = bool(chapter and style.chapter_engine == "scene" and stage.browser())
     inputs, graph, last = _segment_graph(
-        project, group, seg_len, op, channel, chapter, size, fps, dip_out,
+        project, group, seg_len, op, channel, None if scene_chapter else chapter, size, fps, dip_out,
         camera_index, last_line, hide)
 
     ffutil.run([
@@ -1073,6 +1075,9 @@ def _render_segment(
         *ffutil.video_args(out, crf=crf, preset=preset),
         "-pix_fmt", "yuv420p", "-an", str(out),
     ], threads=threads)
+    if scene_chapter:
+        return _chapter_tail(project, out, chapter, seg_len, hold, size,
+                             fps, crf, threads, channel)
     return out
 
 

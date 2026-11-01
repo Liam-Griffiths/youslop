@@ -125,7 +125,7 @@ async function paintThumb() {
         <div class="thumb-stage">
           ${t.rendered_at
             ? `<img id="thumbimg" src="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at}">`
-            : `<div class="empty-note" id="thumbimg">Cooking up a thumbnail…</div>`}
+            : `<div class="empty-note" id="thumbimg">Preparing the thumbnail…</div>`}
         </div>
         <div class="row" style="margin-top:10px">
           <span class="mono" id="thumbsize" style="color:var(--ink-faint)">1280×720</span>
@@ -323,7 +323,7 @@ function openThumbPicker() {
           <span>${esc(c._slide ? 'slide ' + c._slide : c.provider)}</span>
           <span>${c.width || '?'}×${c.height || '?'}</span>
         </div>
-      </div>`).join('') || '<div class="empty-note">nothing to show yet — go fish</div>';
+      </div>`).join('') || '<div class="empty-note">No pictures found. Try another search.</div>';
     res.querySelectorAll('.pick').forEach((el) => {
       el.onclick = async () => {
         el.classList.add('sel');

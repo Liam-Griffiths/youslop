@@ -1,93 +1,95 @@
-![Corkbored: Idea in. Episode out.](docs/brand/corkbored-banner.png)
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/corkbored-dark.svg">
-  <img src="docs/brand/corkbored-light.svg" alt="Corkbored" width="280">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/corkbored-dark.svg">
+    <img alt="Corkbored" src="docs/brand/corkbored-light.svg" width="280">
+  </picture>
+</p>
 
 # Corkbored
 
-Corkbored turns an idea or script into a researched, narrated, illustrated
-video on your own machine. Research, write, record or generate narration,
-review the pictures, then cut and publish an episode with your own tools and
-API keys.
+**Idea in. Episode out.**
 
-## Why this exists
+Corkbored turns an idea or a script into a researched, narrated, illustrated
+video, on your own computer. It makes careful, researched long-form video
+cheap enough for one person to produce, review and publish.
 
-Careful, researched videos should be practical for a solo creator. Corkbored
-keeps the script, recordings, pictures and edit together so you can review and
-correct the work before rendering.
+Free and open source. [GPL-3.0](LICENSE).
 
-## History
+## What it does
 
-The project began as Youslop, a joke about slop. The renderer it grew is now
-serious: Corkbored helps creators turn research into finished episodes.
+- **Research:** searches the subject and keeps sources for review.
+- **Write:** Claude drafts an outline and script, or adapts your own words.
+- **Narrate:** record each paragraph or use the built-in narrator.
+- **Cut:** choose pictures, titles and cues timed to the narration.
+- **Review:** check the timeline, run timing and readability checks, and review frames.
+- **Publish:** render a finished file and upload it to YouTube.
 
-## Using it
+## How it works
 
-**Download:** grab the latest build for your OS from
-[Releases](https://github.com/Liam-Griffiths/youslop/releases) and run it —
-no Python, no Homebrew, nothing else to install.
+1. **Describe the idea.** A sentence or two, or paste a script.
+2. **Claude writes it.** Research and archive searches supply a script and a picture per paragraph.
+3. **Add your voice.** Record each paragraph, or let the built-in narrator read it.
+4. **Review and render.** Check the cut on the timeline, change what you like, then render the final file.
 
-**From source:**
+Styles include Documentary, Video essay, Handwritten board, Flameboat,
+Casefile, Loudmouth, Group Chat and Ticker. Channels keep a series' colours,
+opening slate, end card and defaults together.
 
-```
-git clone https://github.com/Liam-Griffiths/youslop.git
-cd youslop
+## Get started
+
+You need a Mac, Windows or Linux computer, and either the Claude Code CLI
+signed in with a Claude subscription or an Anthropic API key in Settings.
+A microphone is optional for your own narration.
+
+Get packaged builds from [Releases](https://github.com/Liam-Griffiths/youslop/releases).
+See each release's assets for the available systems and filenames.
+
+To run from source, install Python 3.12+, git and ffmpeg. Install Chromium
+for scenes and 3D; cards with Pillow equivalents work without it. No Node is
+needed.
+
+```sh
+git clone https://github.com/Liam-Griffiths/youslop.git corkbored
+cd corkbored
 ./run.sh
 ```
 
-Either way, you'll need one of:
+The launcher creates a virtual environment and installs Python dependencies
+on first use. Open the local URL it prints, then set up Claude in Settings.
+For local narration, download the voice files described below.
 
-- the [Claude Code CLI](https://claude.com/claude-code), signed in — free with
-  a Claude subscription, and the default
-- an [Anthropic API key](https://console.anthropic.com/), set in Settings
+## The studio
 
-From there: **New video** → describe the idea (or paste a script) → pick a
-channel, a look, how often the picture changes → write the script. Claude
-plans the visuals, the archives get searched, you record your voice over each
-paragraph (or let the built-in AI narrator read it), and **Render** cuts the
-final file.
+The Timeline shows pictures, narration, titles, captions, chapters and music.
+Scrub and preview at quarter size, edit words and timings, or split a paragraph
+at the playhead. Earlier recordings remain available when you replace a take.
 
-A few things worth knowing once you're in:
+The instant Check flags pacing, readability and timing issues without a model
+call. Frame review uses Claude and proposes fixes for you to approve. Preview
+one picture before rendering the finished cut.
 
-- **Channels** give a series of videos the same opening slate, colours and
-  defaults. A one-off video doesn't need one: on its Render tab it can open on
-  a title card and close on an end card of its own, drawn from its own title
-  and colours. Standalone videos have their own section at the top of the home
-  page and a link in the sidebar.
-- **Timeline** at the top of the Render tab lays the whole cut out in time:
-  scrub it, step a frame at a time (←/→), jump paragraph to paragraph
-  (Shift+←/→), play it (Space) from small quarter-size proxies, and edit the
-  words, picture, cues or recording of whatever is under the playhead. Pictures
-  are drawn only as you reach them, then kept until the script changes. The
-  opening slate, end card and music bed are on it too.
-- **Preview this bit** on the Media tab renders just the picture you're looking
-  at — the real framing, drift, titles and narration, small and rough — instead
-  of rendering the whole video to see one shot.
-- **Chapters**: *start a chapter* on any paragraph in the Script tab puts a
-  full-frame card in the pause before it, and gives that paragraph its own
-  picture. Turn the cards off for the whole video on the Render tab.
-- **Video styles** — Documentary, Video essay, Handwritten board, or design
-  your own with Claude and reuse it across videos. Styles export and import as
-  a single file, so you can share one or move it between installs.
-- **Drawn cuts** — five more styles that draw every frame themselves, each
-  aimed at a different kind of channel: **Flameboat** (rapid-fire tech
-  explainer: B-roll, code, terminals, memes, a cut on every clause),
-  **Casefile** (true crime on a lamp-lit corkboard, pinned up as you talk),
-  **Loudmouth** (kinetic type for motivation, faith and spoken word), **Group
-  Chat** (storytime: a message thread that cuts away to the scene and back)
-  and **Ticker** (a markets terminal for finance channels). Claude writes each paragraph's *cues* — what
-  appears, landing on which words — and you can edit them on the Pictures
-  tab. A paragraph with none is drawn from its narration.
-- **Diagrams and custom slides** let Claude draw a shape or a whole slide
-  layout for a paragraph that has no real photograph to illustrate it.
-- **Project files** move a video between computers: **save project file…**
-  on a video's page, **open project file…** on the New video page. The file
-  carries the script, pictures, recordings and settings, but not the finished
-  render.
-- Settings (gear icon, bottom of the sidebar) is where API keys, the model,
-  and the data folder live.
+## Built for agents
+
+The [producer skill](.claude/skills/corkbored-producer/SKILL.md) describes the
+storyboard and review loop. The command line uses the same operations as the app:
+
+```sh
+.venv/bin/python -m app.cli --help
+.venv/bin/python -m app.cli check <id>
+```
+
+## Where it stands
+
+| Area | Status |
+|---|---|
+| Research, script, archive search, narration and YouTube upload | Available |
+| Documentary, essay, board and five drawn cuts | Available |
+| Chromium scenes, cards, thumbnails and 3D | Available |
+| Timeline layers, timing edits, razor and take history | Available |
+| Instant checks, frame review, fixes, CLI and producer skill | Available; frame review needs owner validation with Claude |
+| Piece-to-camera, packs and the six-stage studio redesign | Planned |
+
+See the [roadmap](docs/roadmap.md) and [work queue](docs/tickets/PROGRESS.md).
 
 ## Building it yourself
 
@@ -99,8 +101,8 @@ machine makes an ARM Linux app, and so on.
 ### macOS
 
 ```sh
-git clone https://github.com/Liam-Griffiths/youslop.git
-cd youslop
+git clone https://github.com/Liam-Griffiths/youslop.git corkbored
+cd corkbored
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt pyinstaller pywebview
 .venv/bin/python scripts/fetch_ffmpeg.py
@@ -147,8 +149,8 @@ plugins-good and libav packages from the line for your distro above.
 Then:
 
 ```sh
-git clone https://github.com/Liam-Griffiths/youslop.git
-cd youslop
+git clone https://github.com/Liam-Griffiths/youslop.git corkbored
+cd corkbored
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt pyinstaller pywebview pygobject
 .venv/bin/python scripts/fetch_ffmpeg.py
@@ -164,8 +166,8 @@ keep the folder together.
 In PowerShell:
 
 ```powershell
-git clone https://github.com/Liam-Griffiths/youslop.git
-cd youslop
+git clone https://github.com/Liam-Griffiths/youslop.git corkbored
+cd corkbored
 py -m venv .venv
 .venv\Scripts\pip install -r requirements.txt pyinstaller pywebview
 .venv\Scripts\python scripts\fetch_ffmpeg.py
@@ -175,7 +177,7 @@ py -m venv .venv
 
 The app is the whole `dist\Corkbored\` folder; keep it together.
 
-### The AI narrator's voice files
+### The built-in narrator's voice files
 
 The narrator is built into the app, but its two voice files (~337MB) are a
 separate download. The first time you open the Record tab, it shows the
@@ -199,8 +201,21 @@ Download both files into that folder, then restart Corkbored:
 
 You don't need these if you record your own voice.
 
+## How it's made
+
+Projects are plain files on your disk. Narration drives picture timing.
+Code checks what it can measure before Claude reviews selected frames.
+Python, ffmpeg and Chromium draw the cut; there is no front-end build step.
+
+## History
+
+Corkbored began as **Youslop**, a joke: a tool to make low-effort AI video so
+easy that YouTube would have to deal with it. Building it properly turned it
+into the opposite: a studio for careful, researched video that one person
+can make well. The name changed to match.
+
 ## Licence
 
-GPLv3 — see [LICENSE](LICENSE). ffmpeg and x264, both GPL, are bundled; see
-[THIRD-PARTY.md](THIRD-PARTY.md) for the full list of what's in here and
-under what terms.
+[GPL-3.0](LICENSE). ffmpeg and x264 are bundled under their GPL terms;
+[THIRD-PARTY.md](THIRD-PARTY.md) lists included components and licences.
+Archive search records provenance; check each asset's rights before publishing.

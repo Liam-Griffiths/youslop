@@ -1165,7 +1165,8 @@ def get_settings() -> dict:
     """Everything the Settings page needs: every field, its current value
     (redacted if secret), and whether a real environment variable has already
     locked it — see app/settings.py:status()."""
-    return {"fields": settings_mod.status(), "data_dir": str(DATA)}
+    return {"fields": settings_mod.status(), "data_dir": str(DATA),
+            "card_engine": "Chromium scenes" if stage_mod.browser() else "Pillow"}
 
 
 @app.post("/api/settings")

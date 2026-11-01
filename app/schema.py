@@ -353,6 +353,7 @@ class Style:
     # Off renders the cut straight through, chapter marks and all, which is
     # what you want for a video that is one continuous argument.
     chapter_cards: bool = True
+    chapter_engine: str = "pillow"  # new channels opt into scenes; old cuts keep their look
     # Base silence after each paragraph. The actual pause varies around this with
     # how the paragraph ended — see audio.paragraph_gaps.
     paragraph_gap: float = 0.42
@@ -694,7 +695,14 @@ class Channel:
 
 
 def new_channel(name: str, concept: str = "") -> Channel:
-    return Channel(id=_uid("c"), name=name.strip(), concept=concept.strip())
+    from . import stage
+
+    channel = Channel(id=_uid("c"), name=name.strip(), concept=concept.strip())
+    use_scene = bool(stage.browser())
+    channel.intro.template = "scene:intro_solo" if use_scene else "signal"
+    channel.outro.template = "scene:outro_twoup" if use_scene else "twoup"
+    channel.style.chapter_engine = "scene" if use_scene else "pillow"
+    return channel
 
 
 @dataclass

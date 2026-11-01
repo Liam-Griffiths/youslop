@@ -30,7 +30,7 @@ function paintRecord() {
       <button class="btn sm ${ai ? 'ghost' : 'selected'}"
         onclick="setNarrator({mode:'mic'})">read it yourself</button>
       <button class="btn sm ${ai ? 'selected' : 'ghost'}"
-        onclick="setNarrator({mode:'ai'})">AI voice</button>
+        onclick="setNarrator({mode:'ai'})">Narrator</button>
       <span class="mono" style="color:var(--ink-faint)">${ai
         ? (narratorEngine(p) === 'kokoro'
             ? 'A model on this machine reads the script. Nothing leaves the computer.'

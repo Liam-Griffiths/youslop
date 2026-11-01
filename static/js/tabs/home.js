@@ -18,7 +18,7 @@ async function renderHome() {
 
   view.innerHTML = `
     <div class="row" style="align-items:flex-start">
-      <h1 style="flex:1;min-width:0">Build a video</h1>
+      <h1 style="flex:1;min-width:0">Idea in. Episode out.</h1>
       <button class="btn ghost sm" onclick="$('#projfile').click()"
         title="a .corkbored file saved from this or another computer">open project file…</button>
       <input type="file" id="projfile" accept=".corkbored,.youslop" style="display:none"
@@ -50,7 +50,7 @@ async function renderHome() {
       ` : `
         <label class="field">
           <span>The idea</span>
-          <textarea id="idea" rows="4" placeholder="The history of YouTube slop — from Elsagate's knock-off cartoons and robot-voiced Top 10 lists to faceless AI channels uploading a video an hour, and why the algorithm kept rewarding them."></textarea>
+          <textarea id="idea" rows="4" placeholder="How public libraries changed the way cities learn. Follow one library from its first reading room to the present day."></textarea>
         </label>
       `}
       <div class="grid-3">
@@ -143,7 +143,7 @@ async function renderHome() {
       <button class="btn sm" onclick="newChannel()">new channel</button>
     </div>
     ${chans.length === 0
-      ? `<div class="empty-note">No channels yet. Start one and every video poured from it
+      ? `<div class="empty-note">No channels yet. Start one and every video in it
            gets the same look and the same animated opening.</div>`
       : chans.map((c) => `
         <div class="proj" onclick="go('#/c/${c.id}')">
@@ -291,7 +291,7 @@ async function createProject() {
     body.fidelity = $('#fidelity').value;
   } else {
     body.idea = $('#idea').value.trim();
-    if (body.idea.length < 8) return toast('Give me a sentence or two to work with.', true);
+    if (body.idea.length < 8) return toast('Describe the idea in a sentence or two.', true);
     body.target_minutes = +$('#mins').value;
     body.research_mode = $('#research').value;
     if (state.newTest) { body.test = true; body.target_minutes = 1; body.research_mode = 'quick'; }

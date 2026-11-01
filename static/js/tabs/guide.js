@@ -12,18 +12,18 @@ function renderGuide() {
     </div>`;
 
   view.innerHTML = `
-    <img src="/static/brand/corkbored-icon-128.png" width="128" height="128" alt="Corkbored">
+    <img src="/static/brand/corkbored-icon-128.png" width="128" height="128" alt="App icon">
     <h1>How it works</h1>
-    <p class="sub">From an idea to a finished video in five tabs. Claude writes it, the
-      archives supply the pictures, you (or the AI narrator) read it, and Corkbored cuts it.</p>
+    <p class="sub">Turn an idea or a script into a researched, narrated, illustrated video
+      on your own computer. Review each step before rendering.</p>
 
     <div class="panel guide-before">
       <h3>Before you start</h3>
-      <p>Corkbored needs Claude to write scripts. Either have the
+      <p>Use Claude to research and write scripts. Either have the
         <a href="https://claude.com/claude-code" target="_blank">Claude Code CLI</a> installed
         and signed in, or add an Anthropic API key in
         <a href="#/settings">Settings</a>.</p>
-      <p>To have the script read for you instead of recording it yourself, the AI narrator
+      <p>To have the script read for you instead of recording it yourself, the built-in narrator
         needs two voice files. The Record tab tells you where to put them the first time you
         open it.</p>
     </div>
@@ -71,11 +71,11 @@ function renderGuide() {
         <ul>
           <li><b>read it yourself</b>: press <b>● Record</b>, read the paragraph on screen,
             press stop. <kbd>space</kbd> records and stops, <kbd>→</kbd> moves to the next
-            paragraph, <kbd>p</kbd> plays the take back, <kbd>r</kbd> discards it.
+            paragraph, <kbd>p</kbd> plays the take back, <kbd>r</kbd> retires it. Earlier takes stay available.
             <b>check the microphone</b> first to hear how your room sounds.</li>
-          <li><b>AI voice</b>: pick a voice and a pace, then press <b>read the whole
-            script</b>, or <b>read this paragraph</b> for just one. It runs on your computer;
-            nothing is sent anywhere.</li>
+          <li><b>Narrator</b>: pick a voice and a pace, then press <b>read the whole
+            script</b>, or <b>read this paragraph</b> for just one. The built-in voice runs on your computer. Hosted voices send the text
+            to the provider you select.</li>
         </ul>
         <p>The strip of squares at the bottom shows which paragraphs are done.
           <b>jump to next blank</b> takes you to the first one that isn't.</p>`)}
@@ -85,11 +85,12 @@ function renderGuide() {
           type a short headline (a few words, not the title again), or press
           <b>write me some</b> for suggestions.</p>`)}
 
-      ${step(6, 'Render', `
+      ${step(6, 'Review and render', `
         <p>On the <b>Render</b> tab, adjust the look (style, drift, crossfade, colour grade)
           and the sound (music and how loud it sits under the voice).</p>
         <ul>
           <li><b>Preview cut (no voice)</b> is a quick check of the pictures and timing.</li>
+          <li>Review the cut on the <b>Timeline</b> and resolve findings in <b>Check</b>.</li>
           <li><b>Render the video</b> makes the finished file.</li>
           <li><b>YouTube description</b> writes the description — hook, chapters with
             timestamps and picture credits — ready to paste into YouTube.</li>

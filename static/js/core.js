@@ -131,21 +131,11 @@ async function ensureChannelsLoaded() {
 // the user didn't mean to change.
 const settingsDirty = new Set();
 
-// One of these per loading spinner, not per repaint — picked once when a wait
-// starts and held steady, so it reads as a little personality rather than a
-// flicker. Kept to kitchen metaphors (the good half of "slop"): a process word,
-// not a judgement on what comes out the other end.
-const SLOP_LINES = [
-  'Stirring the pot…', 'Reducing to a slurry…', 'Simmering the archives…',
-  'Skimming the good bits off the top…', 'Filling the bucket…',
-  'Slopping it together…', 'Working the vat…', 'Straining out the good stuff…',
-  'Boiling it down…', 'Giving it a good stir…',
-];
-const slopLine = () => SLOP_LINES[Math.floor(Math.random() * SLOP_LINES.length)];
+const loadingLine = () => 'Loading…';
 
 // ---------------------------------------------------------------------- jobs
 function watchJob(id, kind, onDone) {
-  state.job = { id, kind, since: 0, lines: [], done: null, tagline: slopLine() };
+  state.job = { id, kind, since: 0, lines: [], done: null, tagline: 'Working…' };
   clearInterval(state.poll);
   const step = async () => {
     let j;
@@ -257,7 +247,7 @@ async function route() {
     }
     if (!state.project || state.project.id !== proj[1]) {
       state.project = null;
-      view.innerHTML = `<div class="empty-note">${slopLine()}</div>`;
+      view.innerHTML = `<div class="empty-note">${loadingLine()}</div>`;
       try { state.project = await api(`/api/projects/${proj[1]}`); }
       catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
       const live = (state.project.jobs || [])[0];
@@ -285,7 +275,7 @@ async function route() {
     }
     if (!state.channel || state.channel.id !== chan[1]) {
       state.channel = null;
-      view.innerHTML = `<div class="empty-note">${slopLine()}</div>`;
+      view.innerHTML = `<div class="empty-note">${loadingLine()}</div>`;
       try { state.channel = await api(`/api/channels/${chan[1]}`); }
       catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
       const live = (state.channel.jobs || [])[0];
