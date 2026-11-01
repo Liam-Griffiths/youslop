@@ -13,6 +13,7 @@ from app import config, main, packs, themes
 @pytest.fixture(autouse=True)
 def storage(tmp_path, monkeypatch):
     monkeypatch.setattr(packs, 'PACKS_DIR', tmp_path / 'packs')
+    monkeypatch.setattr(packs, 'BUILTIN_DIR', tmp_path / 'builtin-packs')
     monkeypatch.setattr(main, 'CACHE_DIR', tmp_path / '.cache')
     main.CACHE_DIR.mkdir()
     monkeypatch.setattr(config, 'CHANNELS_DIR', tmp_path / 'channels')

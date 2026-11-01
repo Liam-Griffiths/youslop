@@ -12,6 +12,7 @@ from app.schema import Style
 @pytest.fixture
 def demo(tmp_path, monkeypatch):
     monkeypatch.setattr(packs, 'PACKS_DIR', tmp_path / 'packs')
+    monkeypatch.setattr(packs, 'BUILTIN_DIR', tmp_path / 'builtin-packs')
     root = packs.PACKS_DIR / 'demo-pack'
     root.mkdir(parents=True)
     (root / 'pack.json').write_text(json.dumps(dict(id='demo-pack', name='Demo pack',

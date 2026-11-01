@@ -283,6 +283,19 @@ def cmd_block(args):
         print(out)
 
 
+def cmd_pack(args):
+    from . import pack_tooling
+    errors = pack_tooling.check(Path(args.folder), static_only=args.static_only)
+    for error in errors:
+        print(error, file=sys.stderr)
+    if errors:
+        return 1
+    print('Pack checks passed' + ('; browser previews skipped' if args.static_only else ''))
+    if args.pack_cmd == 'build':
+        print(pack_tooling.build(Path(args.folder)))
+    return 0
+
+
 def cmd_catalog(args):
     from . import catalog
     if args.catalog_cmd == 'search':
@@ -432,6 +445,12 @@ def main(argv=None):
     child.add_argument('--seconds', type=float)
     child.add_argument('--vars', help='JSON file of block variables')
     child.add_argument('--out')
+    command = sub.add_parser('pack')
+    pack_sub = command.add_subparsers(dest='pack_cmd', required=True)
+    for name in ('check', 'build'):
+        child = pack_sub.add_parser(name)
+        child.add_argument('folder')
+        child.add_argument('--static-only', action='store_true', help='Skip browser previews')
     command = sub.add_parser("catalog")
     catalog_sub = command.add_subparsers(dest="catalog_cmd", required=True)
     catalog_sub.add_parser("list")
@@ -464,7 +483,7 @@ def main(argv=None):
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "block": cmd_block, "footage": cmd_footage,
+         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "pack": cmd_pack, "block": cmd_block, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0

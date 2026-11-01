@@ -18,6 +18,7 @@ about 40 fps at 1080p on a Radeon 780M). See docs/3d-explainer.md, step 10.
 """
 from __future__ import annotations
 
+from contextvars import copy_context
 import base64
 import http.server
 import itertools
@@ -80,6 +81,7 @@ def _angle() -> str:
 class _Run:
     def __init__(self, job: dict, out_dir: Path | None):
         self.job, self.out_dir = job, out_dir
+        self.context = copy_context()  # Local draft packs also supply fonts to HTTP threads.
         self.token = secrets.token_hex(8)
         self.results: list[dict] = []
         self.errors: list[str] = []
@@ -137,7 +139,7 @@ def _handler(run: _Run):
                 return str(target)
             if path.startswith("/fonts/packs/"):
                 from .packs import font_path
-                return str(font_path(unquote(path)) or '/nonexistent')
+                return str(run.context.copy().run(font_path, unquote(path)) or '/nonexistent')
             if path.startswith("/fonts/"):
                 root = (paths.resource_root() / "resources" / "fonts").resolve()
                 target = (root / unquote(path[len("/fonts/"):])).resolve()

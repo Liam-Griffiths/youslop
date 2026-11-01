@@ -1,0 +1,9 @@
+{
+  "id": "starter",
+  "name": "Starter",
+  "version": "0.1.0",
+  "author": "Corkbored contributors",
+  "licence": "GPL-3.0-or-later",
+  "corkbored": ">=1.0",
+  "description": "Draft starter cards and a coordinated theme for owner refinement."
+}

@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+.title { position:absolute; left:10%; right:10%; top:14%; height:22%; display:flex; align-items:center; justify-content:center; text-align:center; }
+h1 { margin:0; width:100%; font:700 80px/1.1 Inter,sans-serif; overflow-wrap:anywhere; }
+.slot { position:absolute; top:44%; width:36%; height:36%; border:4px solid var(--brand); border-radius:12px; box-sizing:border-box; }
+.slot.a { left:10%; } .slot.b { right:10%; }
+.caption { position:absolute; left:10%; right:10%; top:83%; height:8%; text-align:center; }
+p { margin:0; font:700 40px/1.2 Inter,sans-serif; color:var(--brand); text-transform:uppercase; letter-spacing:.08em; overflow-wrap:anywhere; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="title" data-layer="title" data-motion="fade" data-start="0" data-duration="{{ duration }}">
+<h1 data-var-text="title">{{ vars.title }}</h1></div>
+<div class="slot a" data-layer="slot-a" data-motion="pop" data-start="0.3" data-duration="{{ duration - 0.3 }}"></div>
+<div class="slot b" data-layer="slot-b" data-motion="pop" data-start="0.45" data-duration="{{ duration - 0.45 }}"></div>
+<div class="caption" data-layer="caption" data-motion="fade" data-start="0.7" data-duration="{{ duration - 0.7 }}">
+<p data-var-text="caption">{{ vars.caption }}</p></div>
+{% endblock %}

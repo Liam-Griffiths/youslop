@@ -1,0 +1,32 @@
+{
+  "key": "signal",
+  "label": "Starter Signal",
+  "for": "Essays and explainers",
+  "blurb": "Clear orange rules and warm white copy on charcoal.",
+  "accent": "#FF5A1F",
+  "accent2": "#6FB7FF",
+  "ground": "#0E0F11",
+  "ink": "#F2F2F2",
+  "grade": "neutral",
+  "icons": [
+    "column",
+    "laurel",
+    "hourglass",
+    "quill",
+    "key"
+  ],
+  "pattern": "icons",
+  "light": false,
+  "frame": {
+    "move_max_s": 0.8,
+    "creep_max": 1.1,
+    "transition_types": [
+      "fade",
+      "dip"
+    ],
+    "shot_avg_min_s": 2.5
+  },
+  "intro": "scene:pack/starter/cold-open",
+  "thumb": "banner",
+  "outro": "scene:pack/starter/end-card"
+}

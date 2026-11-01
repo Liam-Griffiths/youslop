@@ -1,0 +1,40 @@
+{
+  "id": "chapter-card",
+  "name": "Chapter card",
+  "kind": "chapter",
+  "version": "0.1.0",
+  "licence": "GPL-3.0-or-later",
+  "aspects": {
+    "16:9": "block.html"
+  },
+  "duration": {
+    "mode": "fixed",
+    "seconds": 4
+  },
+  "variables": {
+    "title": {
+      "type": "text",
+      "default": "The next perspective",
+      "max_length": 64
+    },
+    "caption": {
+      "type": "text",
+      "default": "Chapter one",
+      "max_length": 40
+    }
+  },
+  "fonts": [
+    "/fonts/Inter-Bold.ttf"
+  ],
+  "assets": [],
+  "beats": {},
+  "safe_areas": {
+    "title": 0.1,
+    "action": 0.05
+  },
+  "default_colors": {
+    "bg": "#0E0F11",
+    "fg": "#F2F2F2",
+    "brand": "#FF5A1F"
+  }
+}

@@ -1,4 +1,5 @@
 """Read-only content packs. Manifest/security errors disable a pack; bad items stay isolated."""
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -15,6 +16,8 @@ import jinja2
 from . import paths
 
 PACKS_DIR = paths.data_root() / 'packs'
+BUILTIN_DIR = paths.resource_root() / 'packs'
+STAGED = ContextVar('staged_packs', default=())
 _CACHE = {}
 _LOCK = threading.RLock()
 _ID = r'[a-z0-9][a-z0-9-]{1,47}'
@@ -146,7 +149,11 @@ def scan(*, force=False):
     """Nested stat signatures catch in-place item edits as well as folder changes."""
     with _LOCK:
         result = []
-        for root in sorted(PACKS_DIR.glob('*')):
+        # Built-ins win id collisions; authoring contexts can inspect a local draft.
+        roots = {p.name: p for directory in (PACKS_DIR, BUILTIN_DIR)
+                 for p in sorted(directory.glob('*'))}
+        roots.update({p.name: p for p in STAGED.get()})
+        for root in sorted(roots.values(), key=lambda p: p.name):
             if root.name.startswith('.'):
                 continue
             if not root.is_dir() and not root.is_symlink():
@@ -196,6 +203,7 @@ def summary(pack):
     return dict(id=pack.id, name=pack.name, version=pack.version, author=pack.author,
                 licence=pack.licence, licence_url=pack.licence_url, description=pack.description,
                 problems=pack.problems, item_problems=pack.item_problems,
+                builtin=pack.path.parent.resolve() == BUILTIN_DIR.resolve(),
                 preview=f'/api/packs/{pack.id}/preview' if preview.is_file() and not pack.problems else '',
                 items={k: [dict(ref=i['ref'], label=i['label']) for i in v]
                        for k, v in pack.items.items()})
@@ -235,6 +243,8 @@ def install(src, *, replace=False):
             if len(roots) != 1 or not re.fullmatch(_ID, next(iter(roots), '')):
                 raise PackError('Pack archive must contain one folder named after its id')
             pid = roots.pop()
+            if (BUILTIN_DIR / pid).exists():
+                raise PackError("Built-in packs cannot be replaced")
             if f'{pid}/pack.json' not in zf.namelist():
                 raise PackError('Pack archive has no pack.json')
             if any((i.external_attr >> 16) & 0o111 for i in entries if not i.is_dir()):
@@ -271,6 +281,8 @@ def install(src, *, replace=False):
 def _installed(pid):
     if not re.fullmatch(_ID, pid):
         raise PackError('Invalid pack id')
+    if (BUILTIN_DIR / pid).exists():
+        raise PackError('Built-in packs cannot be removed or changed')
     root = PACKS_DIR / pid
     if not root.exists() and not root.is_symlink():
         raise PackError('No such installed pack')

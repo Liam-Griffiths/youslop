@@ -21,6 +21,7 @@ MACOS = sys.platform == "darwin"
 
 datas = [
     (str(ROOT / "static"), "static"),
+    (str(ROOT / "packs"), "packs"),
     (str(ROOT / "resources" / "icon_1024.png"), "resources"),
     (str(ROOT / "resources" / "fonts"), "resources/fonts"),
     (str(ROOT / "resources" / "bin"), "resources/bin"),
@@ -34,7 +35,7 @@ hiddenimports = [
     "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
     "uvicorn.logging",
     # Imported lazily inside CLI handlers, so analysis can miss them.
-    "app.block_authoring", "app.footage_labels",
+    "app.pack_tooling", "app.block_authoring", "app.footage_labels",
 ]
 if MACOS:
     hiddenimports += ["webview.platforms.cocoa",

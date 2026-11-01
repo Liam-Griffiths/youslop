@@ -28,3 +28,5 @@ resources/bin/*
 build/
 dist/
 .idea/
+packs/*/.check/
+*.corkboredpack

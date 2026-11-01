@@ -12,6 +12,7 @@ from types import SimpleNamespace
 def library(tmp_path, monkeypatch):
     monkeypatch.setattr(blocks, 'USER_DIR', tmp_path / 'blocks')
     monkeypatch.setattr(packs, 'PACKS_DIR', tmp_path / 'packs')
+    monkeypatch.setattr(packs, 'BUILTIN_DIR', tmp_path / 'builtin-packs')
     return tmp_path
 
 

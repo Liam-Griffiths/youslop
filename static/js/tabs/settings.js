@@ -129,7 +129,7 @@ async function renderPacks() {
           .map(problem => `<p class="pill warn">${esc(problem)}</p>`).join('')}
         <details><summary>Show contents</summary><ul>${Object.entries(p.items).flatMap(([kind, items]) =>
           items.map(i => `<li>${esc(kind)}: ${esc(i.label)} <span class="mono">${esc(i.ref)}</span></li>`)).join('')}</ul></details>
-        <button class="btn sm ghost" data-pack-id="${esc(p.id)}" onclick="removePack(this.dataset.packId)">Remove…</button>
+        ${p.builtin ? '<span class="muted">Built in</span>' : `<button class="btn sm ghost" data-pack-id="${esc(p.id)}" onclick="removePack(this.dataset.packId)">Remove…</button>`}
       </article>`).join('') : '<p>No packs installed.</p>'}`;
   } catch (e) { host.textContent = e.message; }
 }

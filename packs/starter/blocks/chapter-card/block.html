@@ -1,0 +1,17 @@
+{% extends "_base.html" %}
+{% block head %}
+<style>
+.band { position:absolute; left:0; top:0; bottom:0; width:34%; background:var(--brand); }
+.label { position:absolute; left:4%; width:26%; top:38%; height:24%; display:flex; align-items:center; }
+.label p { margin:0; width:100%; font:700 52px/1.15 Inter,sans-serif; color:var(--bg); text-transform:uppercase; letter-spacing:.04em; overflow-wrap:anywhere; }
+.title { position:absolute; left:40%; right:10%; top:25%; height:50%; display:flex; align-items:center; }
+h1 { margin:0; width:100%; font:700 104px/1.05 Inter,sans-serif; overflow-wrap:anywhere; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="band" data-layer="band" data-motion="wipe" data-start="0" data-duration="{{ duration }}"></div>
+<div class="label" data-layer="label" data-motion="fade" data-start="0.3" data-duration="{{ duration - 0.3 }}">
+<p data-var-text="caption">{{ vars.caption }}</p></div>
+<div class="title" data-layer="title" data-motion="fly-right" data-start="0.4" data-duration="{{ duration - 0.4 }}">
+<h1 data-var-text="title">{{ vars.title }}</h1></div>
+{% endblock %}
