@@ -57,7 +57,7 @@ async function renderLibrary() {
           style="flex:1;min-width:220px">
         <input type="text" id="libsource" placeholder="source page (optional)" style="flex:1;min-width:220px">
       </div>
-      <button class="btn sm primary" id="libadd" onclick="uploadLibraryAsset()">add to library</button>
+      <button class="btn sm" id="libadd" onclick="uploadLibraryAsset()">add to library</button>
     </div>
 
     <div class="row" style="margin-bottom:16px">
@@ -169,7 +169,7 @@ function paintLibraryGrid() {
     <div class="lib-card">
       <div class="lib-thumb">
         <img src="/api/library/thumb/${a.id}" loading="lazy" onerror="this.parentNode.style.opacity=.25">
-        ${a.kind === 'video' ? `<span class="kindtag">clip · ${fmtTime(a.duration)}</span>` : ''}
+        ${a.kind === 'video' ? `<span class="kindtag num">clip · ${fmtTime(a.duration)}</span>` : ''}
       </div>
       <div class="lib-body">
         <div class="lib-title" title="${esc(a.title)}">${esc(a.title)}</div>
@@ -969,7 +969,7 @@ function openDiagramEditor(sid) {
             </div>
             <textarea id="daskwhat" rows="2" style="margin-bottom:8px"
               placeholder="Leave blank to let Claude read the paragraph and pick a shape, or steer it — “as a cycle”, “put the database in the middle”…"></textarea>
-            <button class="btn sm primary" id="dask">draw it for me</button>
+            <button class="btn sm" id="dask">draw it for me</button>
             <span class="mono" id="daskstate" style="color:var(--ink-faint);margin-left:8px"></span>
           </div>
           <label class="field"><span>Layout</span>
@@ -1194,7 +1194,7 @@ function openCustomDesigner(opts) {
               placeholder="${styleMode
                 ? 'e.g. “one huge number on near-black with a thin accent rule”, “a full-bleed photo with a quote over a dark scrim”, “three cards across the middle”…'
                 : 'Leave blank to let Claude read the paragraph and design something, or steer it — “one huge number over a photo”, “three cards across the middle”, “a quote, big, on black”…'}"></textarea>
-            <button class="btn sm primary" id="cask">design it for me</button>
+            <button class="btn sm" id="cask">design it for me</button>
             <span class="mono" id="caskstate" style="color:var(--ink-faint);margin-left:8px"></span>
           </div>
           ${styleMode ? `<div class="mono" style="color:var(--ink-faint);margin-bottom:12px">
@@ -1219,7 +1219,7 @@ function openCustomDesigner(opts) {
             ${styleMode ? '' : `
               <button class="btn sm primary" id="cuse">use it on this slide</button>
               <button class="btn sm ghost" id="cstill">as a still, not animated</button>`}
-            <button class="btn sm ${styleMode ? 'primary' : 'ghost'}" id="csave"
+            <button class="btn sm ${styleMode ? '' : 'ghost'}" id="csave"
               title="keep this design as a reusable video style">
               ${styleMode ? 'save this style' : 'save as a style…'}</button>
           </div>

@@ -13,7 +13,7 @@ function tlInspect(para) {
     <div class="mono tl-note">paragraph ${String(para.index + 1).padStart(2, '0')} ·
       ${tlName(seg)} ·
       ${tlClock(para.start)} → ${tlClock(para.start + para.duration)}
-      ${para.recorded ? '' : '· <span style="color:var(--accent)">estimated, not recorded</span>'}</div>
+      ${para.recorded ? '' : '· <span style="color:var(--cool)">estimated, not recorded</span>'}</div>
     ${s.chapter ? `<div class="pill" style="margin:6px 0 0">⚑ chapter: ${esc(s.chapter)}</div>` : ''}
     <div class="tl-text">${esc(s.narration)}</div>
     ${seg.problems.length ? `<div class="tl-warn">${seg.problems.map((m) => '⚠ ' + esc(m)).join('<br>')}</div>` : ''}
@@ -44,7 +44,7 @@ function tlInspectSlate(seg) {
   box.innerHTML = `
     <div class="mono tl-note">${intro ? 'opening slate' : 'end card'} ·
       ${tlClock(seg.start)} → ${tlClock(seg.start + seg.duration)}
-      ${seg.estimated ? '· <span style="color:var(--accent)">length estimated until drawn</span>' : ''}</div>
+      ${seg.estimated ? '· <span style="color:var(--cool)">length estimated until drawn</span>' : ''}</div>
     <div class="tl-text">${intro
       ? 'The video opens on this slate, with its own sting if it has one. The music bed holds off until it is over.'
       : 'The video closes on this card. The music bed fades out over it.'}</div>
@@ -130,7 +130,7 @@ function tlAsk() {
     const wrap = document.createElement('div');
     wrap.className = 'modal';
     wrap.innerHTML = `<div class="modal-box wide">
-      <h3>Ask at ${tlClock(t)}</h3>
+      <h3>Ask at <span class="num">${tlClock(t)}</span></h3>
       <label>What should change?<textarea data-intent rows="3" placeholder="Make this title shorter"></textarea></label>
       <div class="tl-actions">
         <button class="btn sm" data-copy>Copy for Claude Code</button>

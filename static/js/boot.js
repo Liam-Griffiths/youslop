@@ -1,3 +1,6 @@
+try {
+  document.documentElement.dataset.display = localStorage.getItem('corkbored-display') === 'grotesk' ? 'grotesk' : 'archivo';
+} catch (e) { document.documentElement.dataset.display = 'archivo'; }
 
 window.addEventListener('hashchange', route);
 

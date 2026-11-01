@@ -15,6 +15,8 @@ every video made before this looked like.
 
 | File | Family | Used for | Replaces (macOS) |
 | --- | --- | --- | --- |
+| `Archivo-Variable.ttf` | Archivo (wdth 62–125, wght 100–900) | app/landing display, default 62% / 800 | — |
+| `SpaceGrotesk-Variable.ttf` | Space Grotesk (wght 300–700) | alternate app/landing display at 500 | — |
 | `Inter-SemiBold.ttf` | Inter | slide titles, most UI type | Avenir Next Demi Bold |
 | `Inter-Medium.ttf` | Inter | kickers, small caps lines | Avenir Next Medium |
 | `Inter-Bold.ttf` | Inter | spare weight | — |
@@ -45,3 +47,10 @@ Copyright, as recorded in each file:
 - Permanent Marker, Rock Salt — Copyright (c) 2010 Font Diner, Inc.
 
 All fetched from Google Fonts. `OFL.txt` is the licence they share.
+
+The display variables were supplied from google/fonts `ofl/archivo` and
+`ofl/spacegrotesk`. Their copyright notices and SIL OFL 1.1 licences are
+preserved in `OFL-Archivo.txt` (2020 The Archivo Project Authors) and
+`OFL-SpaceGrotesk.txt` (2020 The Space Grotesk Project Authors).
+The offline UI and landing prose use the bundled Inter Medium (500);
+Inter Regular (400) is not bundled.

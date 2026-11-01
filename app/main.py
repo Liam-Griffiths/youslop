@@ -48,6 +48,7 @@ from . import transfer
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
 from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
 from .store import project_dir
+from .paths import resource_root
 
 # The data folders, before anything can want one. `app/__main__.py` does this
 # too; it is here as well so that importing this module directly — which is
@@ -3095,6 +3096,7 @@ def unhandled(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": f"{type(exc).__name__}: {exc}"}, status_code=500)
 
 
+app.mount("/fonts", StaticFiles(directory=str(resource_root() / "resources" / "fonts")), name="fonts")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

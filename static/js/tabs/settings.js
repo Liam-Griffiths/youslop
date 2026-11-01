@@ -1,3 +1,10 @@
+// Per-viewer appearance; never sent to the settings API.
+function setDisplayFace(value) {
+  const face = value === 'grotesk' ? 'grotesk' : 'archivo';
+  document.documentElement.dataset.display = face;
+  try { localStorage.setItem('corkbored-display', face); } catch (e) { /* private viewer */ }
+}
+
 
 function settingsFieldRow(f) {
   const id = `set_${f.key}`;
@@ -54,6 +61,15 @@ async function renderSettings() {
     <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">
       Data folder: ${esc(data.data_dir)}</p>
 
+    <h2 class="micro">Appearance</h2>
+    <div class="panel">
+      <label class="field"><span>Display face</span>
+        <select id="display-face" onchange="setDisplayFace(this.value)">
+          <option value="archivo" ${document.documentElement.dataset.display !== 'grotesk' ? 'selected' : ''}>Archivo (condensed)</option>
+          <option value="grotesk" ${document.documentElement.dataset.display === 'grotesk' ? 'selected' : ''}>Space Grotesk</option>
+        </select>
+      </label>
+    </div>
     <div id="settings-groups">
       ${groups.map((g) => `
         <h2 style="font-size:15px;margin:26px 0 10px">${esc(g.name)}</h2>

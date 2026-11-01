@@ -1,16 +1,57 @@
 <title>Corkbored</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62,800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap">
+<script>
+try { document.documentElement.dataset.display = localStorage.getItem('corkbored-display') === 'grotesk' ? 'grotesk' : 'archivo'; }
+catch (e) { document.documentElement.dataset.display = 'archivo'; }
+</script>
 <style>
+@font-face {
+  font-family: Inter; src: url('/fonts/Inter-Medium.ttf') format('truetype');
+  font-style: normal; font-weight: 500; font-display: swap;
+}
+@font-face {
+  font-family: Inter; src: url('/fonts/Inter-SemiBold.ttf') format('truetype');
+  font-style: normal; font-weight: 600; font-display: swap;
+}
+@font-face {
+  font-family: Inter; src: url('/fonts/Inter-Bold.ttf') format('truetype');
+  font-style: normal; font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono"; src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-style: normal; font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono"; src: url('/fonts/JetBrainsMono-Bold.ttf') format('truetype');
+  font-style: normal; font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: Archivo; src: url('/fonts/Archivo-Variable.ttf') format('truetype');
+  font-style: normal; font-stretch: 62% 125%; font-weight: 100 900; font-display: swap;
+}
+@font-face {
+  font-family: "Space Grotesk"; src: url('/fonts/SpaceGrotesk-Variable.ttf') format('truetype');
+  font-style: normal; font-weight: 300 700; font-display: swap;
+}
+
 /* Layout: a cinema. Letterboxed black, one enormous condensed wordmark, a production log that writes itself, a single line of pitch. */
 :root {
   --bg: #050505; --ink: #F4F2EE; --dim: #8E8B85; --faint: #3A3835; --btn-fg: #050505;
   --accent: #FF5A1F;
-  --display: "Archivo", "Archivo Black", Impact, sans-serif;
+  --display: "Archivo", Inter, sans-serif;
+  --display-stretch: 62%;
+  --display-weight: 800;
   --ui: Inter, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
   color-scheme: dark;
 }
+
+:root[data-display="grotesk"] {
+  --display: "Space Grotesk", Inter, sans-serif;
+  --display-stretch: 100%;
+  --display-weight: 500;
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) { --bg: #F4F2EE; --ink: #0B0B0B; --dim: #6B6862; --faint: #D6D2CA; --btn-fg: #F4F2EE; --accent: #E84A12; color-scheme: light; }
 }
@@ -18,8 +59,9 @@
 * { box-sizing: border-box; }
 html, body { background: var(--bg); color: var(--ink); margin: 0; }
 .theme { background: none; border: 1px solid var(--faint); color: var(--dim); font: 400 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 7px 10px; border-radius: 2px; cursor: pointer; }
+select.theme { background: var(--bg); }
 .theme:hover { color: var(--ink); border-color: var(--ink); }
-body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+body { font: 500 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 .gut {
   max-width: 1040px; margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -30,18 +72,19 @@ body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overfl
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* top bar */
-.bar { display: flex; justify-content: space-between; align-items: center; padding-block: 18px; border-bottom: 1px solid var(--faint); }
-.bar .l { display: flex; gap: 10px; align-items: center; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; padding-block: 18px; border-bottom: 1px solid var(--faint); }
+.bar .l { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .rec { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); animation: rec 1.6s steps(1) infinite; }
 @keyframes rec { 50% { opacity: .2; box-shadow: none; } }
 
 /* wordmark */
 .mark { padding-block: clamp(28px, 5vw, 56px) 0; position: relative; }
 .mark h1 {
-  margin: 0; font: 800 clamp(56px, 16.6vw, 176px)/.84 var(--display); font-stretch: 62%;
+  margin: 0; font: var(--display-weight) clamp(56px, 16.6vw, 176px)/.84 var(--display); font-stretch: var(--display-stretch);
   letter-spacing: -.035em; text-transform: uppercase; white-space: nowrap;
   color: var(--ink); overflow: hidden;
 }
+:root[data-display="grotesk"] .mark h1 { font-size: clamp(40px, 14vw, 140px); }
 .mark h1 span { display: inline-block; transform: translateY(100%); animation: rise .9s cubic-bezier(.16,1,.3,1) forwards; }
 .mark h1 span:nth-child(2) { animation-delay: .06s; } .mark h1 span:nth-child(3) { animation-delay: .12s; }
 .mark h1 span:nth-child(4) { animation-delay: .18s; } .mark h1 span:nth-child(5) { animation-delay: .24s; }
@@ -52,7 +95,7 @@ body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overfl
   display: flex; justify-content: space-between; align-items: baseline; gap: 24px; flex-wrap: wrap;
   padding-block: 18px 0; border-top: 1px solid var(--faint); margin-top: clamp(12px, 2vw, 24px);
 }
-.sub .tag { font: 800 clamp(22px, 3.2vw, 34px)/1 var(--display); font-stretch: 62%; text-transform: uppercase; letter-spacing: -.01em; }
+.sub .tag { font: var(--display-weight) clamp(22px, 3.2vw, 34px)/1 var(--display); font-stretch: var(--display-stretch); text-transform: uppercase; letter-spacing: -.01em; }
 .sub .tag em { font-style: normal; color: var(--accent); }
 
 /* log */
@@ -92,7 +135,7 @@ body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overfl
 <div class="gut">
   <div class="bar">
     <div class="l"><span class="rec"></span><span class="micro">Corkbored · pre-release</span></div>
-    <div class="l"><span class="micro mono" id="tc">00:00:00:00</span><button class="theme" id="theme" type="button" aria-label="Switch light or dark">Light</button></div>
+    <div class="l"><span class="micro mono" id="tc">00:00:00:00</span><label class="micro" for="display-face">Display face</label><select class="theme" id="display-face"><option value="archivo">Archivo</option><option value="grotesk">Space Grotesk</option></select><button class="theme" id="theme" type="button" aria-label="Switch light or dark">Light</button></div>
   </div>
 
   <div class="mark">
@@ -121,6 +164,12 @@ body { font: 400 16px/1.5 var(--ui); -webkit-font-smoothing: antialiased; overfl
 
 <script>
 (function () {
+  var face = document.getElementById('display-face');
+  face.value = document.documentElement.dataset.display || 'archivo';
+  face.addEventListener('change', function () {
+    document.documentElement.dataset.display = face.value;
+    try { localStorage.setItem('corkbored-display', face.value); } catch (e) {}
+  });
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var lines = [
     ['d', '09:14:02  new episode    '], ['', '"Why every lighthouse used the same lens"'],

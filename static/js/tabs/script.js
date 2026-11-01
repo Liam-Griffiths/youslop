@@ -107,7 +107,7 @@ function paintScript() {
 function sourcesPanel(research) {
   const facts = research.facts || [];
   if (!facts.length) return '';
-  const dotColor = { high: 'var(--good)', medium: 'var(--accent)', low: 'var(--ink-faint)' };
+  const dotColor = { high: 'var(--good)', medium: 'var(--cool)', low: 'var(--ink-faint)' };
   return `<details class="panel" style="margin-bottom:16px">
     <summary style="cursor:pointer;font-weight:600">
       Sources — ${facts.length} researched fact${facts.length === 1 ? '' : 's'}

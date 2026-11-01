@@ -100,7 +100,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T6.1 | Instrument design tokens and fonts | S | T0.4 | todo | |
+| T6.1 | Instrument design tokens and fonts | S | T0.4 | done | 2026-10-31 Codex; Instrument tokens, Archivo/Space Grotesk switch; owner: pick a face from compare/ shots, check desktop window |
 | T6.2 | Mark, favicon and app icon | S | T0.4 | todo | rewritten 2026-10-31: wire in the cork/post-it logo from docs/brand |
 | T6.3 | Copy, README and mockup | S | T6.1, T6.2 | todo | |
 

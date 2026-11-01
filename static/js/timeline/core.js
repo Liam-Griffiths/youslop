@@ -96,7 +96,7 @@ async function tlMount() {
     <div class="tl-transport">
       <button class="btn sm ghost" id="tl-prev" title="previous paragraph (Shift+←)">|◂</button>
       <button class="btn sm ghost" id="tl-back" title="back one frame (←)">◂</button>
-      <button class="btn sm primary tl-play" id="tl-play" title="play / pause (Space)">▶</button>
+      <button class="btn sm tl-play" id="tl-play" title="play / pause (Space)">▶</button>
       <button class="btn sm ghost" id="tl-fwd" title="forward one frame (→)">▸</button>
       <button class="btn sm ghost" id="tl-next" title="next paragraph (Shift+→)">▸|</button>
       <span class="mono tl-clock" id="tl-clock"></span>

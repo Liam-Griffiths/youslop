@@ -425,7 +425,7 @@ function endScreenPanel(c) {
               The last 5 to 20 seconds, held for YouTube's own cards and the
               subscribe badge to sit on. Every video in the channel gets it.</div>
           </div>
-          <button class="btn sm primary" onclick="saveOutro({enabled:true})">add one</button>
+          <button class="btn sm" onclick="saveOutro({enabled:true})">add one</button>
         </div>
       </div>`;
   }
@@ -435,7 +435,7 @@ function endScreenPanel(c) {
         <span class="mono" style="color:var(--ink-faint);flex:1;min-width:220px">
           ${esc(tpl.blurb || '')}</span>
         <div class="spacer"></div>
-        <button class="btn sm primary" onclick="previewOutro()">preview</button>
+        <button class="btn sm" onclick="previewOutro()">preview</button>
         <button class="btn sm ghost" onclick="saveOutro({enabled:false})">turn off</button>
       </div>
 
@@ -592,7 +592,7 @@ function youtubePanel(c) {
         ${yt.connected
           ? `${yt.channel_thumb ? `<img src="${esc(yt.channel_thumb)}" style="width:40px;height:40px;border-radius:50%">` : ''}
              <button class="btn sm ghost danger" onclick="disconnectYoutube()">disconnect</button>`
-          : `<a class="btn sm primary" href="/api/youtube/oauth/start?channel_id=${c.id}">connect YouTube</a>`}
+          : `<a class="btn sm" href="/api/youtube/oauth/start?channel_id=${c.id}">connect YouTube</a>`}
       </div>
     </div>`;
 }
@@ -733,7 +733,7 @@ function paintChannelSetup() {
         ${castLed ? `
           <button class="btn sm" onclick="castChannel()">${cast.length ? 're-cast' : 'cast it for me'}</button>
           <button class="btn sm" onclick="fetchPortraits()" ${cast.length ? '' : 'disabled'}>fetch portraits</button>` : ''}
-        <button class="btn sm primary" onclick="previewIntro()"
+        <button class="btn sm" onclick="previewIntro()"
           ${ready ? '' : 'disabled'}>preview</button>
       </div>
 

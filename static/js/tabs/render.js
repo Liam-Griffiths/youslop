@@ -473,7 +473,7 @@ async function uploadPanel(p) {
         </select></label>
     </div>
     <div class="row" style="margin-top:6px">
-      <button class="btn sm primary" onclick="doYoutubeUpload()">
+      <button class="btn sm" onclick="doYoutubeUpload()">
         ${already ? 'upload again' : 'upload to YouTube'}</button>
       ${u.privacy !== 'private' ? `<span class="pill warn">will be ${u.privacy} the moment it finishes</span>` : ''}
     </div>
@@ -512,7 +512,7 @@ function descriptionPanel(p) {
         <span class="mono" style="color:var(--ink-faint)">hook, summary, chapters with
           timestamps, credits and tags</span>
         <div class="spacer"></div>
-        <button class="btn sm ${text ? 'ghost' : 'primary'}" onclick="writeDescription()">
+        <button class="btn sm ${text ? 'ghost' : ''}" onclick="writeDescription()">
           ${text ? 'write it again' : 'write it'}</button>
         ${text ? `<button class="btn sm" onclick="copyDescription()">copy</button>` : ''}
       </div>

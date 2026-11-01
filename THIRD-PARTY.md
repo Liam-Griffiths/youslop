@@ -39,10 +39,17 @@ as referenced by the preserved file header. No plugins are bundled.
 
 ## Typefaces
 
-Fifteen faces under the **SIL Open Font License 1.1**, bundled in
+Seventeen faces under the **SIL Open Font License 1.1**, bundled in
 `resources/fonts/` because the typography used to resolve to macOS system font
 paths and fell apart anywhere else. Per-face attribution, the replacement table
 and the licence are in `resources/fonts/README.md` and `resources/fonts/OFL.txt`.
+
+The app and offline landing page also use Archivo variable (width 62–125,
+weight 100–900), Copyright 2020 The Archivo Project Authors, from
+`google/fonts/ofl/archivo`, and Space Grotesk variable (weight 300–700),
+Copyright 2020 The Space Grotesk Project Authors, from
+`google/fonts/ofl/spacegrotesk`. Their licences are preserved alongside the
+TTFs as `OFL-Archivo.txt` and `OFL-SpaceGrotesk.txt` (SIL OFL 1.1).
 
 ## Python dependencies
 

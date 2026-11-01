@@ -27,9 +27,9 @@ function paintRecord() {
     ${voiceBar(p, track)}
 
     <div class="row" style="margin:14px 0 0;gap:6px">
-      <button class="btn sm ${ai ? 'ghost' : 'primary'}"
+      <button class="btn sm ${ai ? 'ghost' : 'selected'}"
         onclick="setNarrator({mode:'mic'})">read it yourself</button>
-      <button class="btn sm ${ai ? 'primary' : 'ghost'}"
+      <button class="btn sm ${ai ? 'selected' : 'ghost'}"
         onclick="setNarrator({mode:'ai'})">AI voice</button>
       <span class="mono" style="color:var(--ink-faint)">${ai
         ? (narratorEngine(p) === 'kokoro'
@@ -69,7 +69,7 @@ function paintRecord() {
     ${ai ? `
     <div class="rec-bar">
       <button class="btn primary" onclick="voiceOneSlide()">read this paragraph</button>
-      ${take ? `<span class="pill on"><span class="dot"></span>${take.duration.toFixed(1)}s${
+      ${take ? `<span class="pill on num"><span class="dot"></span>${take.duration.toFixed(1)}s${
         take.synthetic ? ` · ${esc(voiceLabel(take.voice))}` : ' · your voice'}</span>` : ''}
     </div>` : `
     <div class="rec-bar">
@@ -78,7 +78,7 @@ function paintRecord() {
         ${state.rec.recording ? '■ Stop' : '● Record'}</button>
       <span class="timer ${state.rec.recording ? 'live' : ''}" id="timer">0:00</span>
       <div class="level"><i id="level"></i></div>
-      ${take ? `<span class="pill on"><span class="dot"></span>${take.duration.toFixed(1)}s</span>` : ''}
+      ${take ? `<span class="pill on num"><span class="dot"></span>${take.duration.toFixed(1)}s</span>` : ''}
       ${!state.rec.stream && micAvailable()
         ? `<button class="btn sm ghost" onclick="openMic()">check the microphone</button>` : ''}
       ${state.mic.report && state.mic.report.analysis.ok
@@ -105,7 +105,7 @@ function paintRecord() {
 
     ${(s.history || []).length ? `
     <details style="margin-top:12px">
-      <summary>earlier takes (${s.history.length})</summary>
+      <summary>earlier takes (<span class="num">${s.history.length}</span>)</summary>
       ${s.history.map((t, n) => `<div class="row" style="margin-top:8px">
         <span class="mono">${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · ${esc(t.reason || '')}${t.narration !== s.narration ? ' · different text' : ''}</span>
         <audio controls preload="none" src="/api/projects/${p.id}/file/${esc(t.path)}"></audio>
@@ -205,7 +205,7 @@ function aiVoicePanel(p, slide) {
   const engine = narratorEngine(p);
   const engines = t.engines || [{ key: 'kokoro', label: 'On this computer', ready: t.ready }];
   const tabs = `<div class="row" style="margin:14px 0 0;gap:6px;flex-wrap:wrap">
-    ${engines.map((e) => `<button class="btn sm ${e.key === engine ? 'primary' : 'ghost'}"
+    ${engines.map((e) => `<button class="btn sm ${e.key === engine ? 'selected' : 'ghost'}"
         onclick="setNarrator({engine:'${e.key}'})"
         title="${esc(e.blurb || '')}">${esc(e.label)}${e.ready ? '' : ' · not set up'}</button>`).join('')}
   </div>`;
@@ -315,7 +315,7 @@ function cloudVoicePanel(p, e) {
     </div>
 
     <div class="row" style="margin-top:12px">
-      <button class="btn primary" onclick="voiceWholeScript()">
+      <button class="btn" onclick="voiceWholeScript()">
         ${read ? (stale ? `re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
                         : 'read anything still blank') : 'read the whole script'}</button>
       ${read ? `<button class="btn sm ghost" onclick="voiceWholeScript(true)"
@@ -529,7 +529,7 @@ function localVoicePanel(p, slide) {
         onchange="setNarrator({speed:+this.value})"></label>
 
     <div class="row" style="margin-top:12px">
-      <button class="btn primary" onclick="voiceWholeScript()">
+      <button class="btn" onclick="voiceWholeScript()">
         ${read ? (stale ? `re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
                         : 'read anything still blank') : 'read the whole script'}</button>
       ${read ? `<button class="btn sm ghost" onclick="voiceWholeScript(true)"
@@ -1273,9 +1273,9 @@ function paintMicVoice() {
     </div>
 
     <div class="ab-bar">
-      <button class="btn sm ${state.mic.ab === 'raw' ? 'primary' : ''}"
+      <button class="btn sm ${state.mic.ab === 'raw' ? 'selected' : ''}"
         ${has ? '' : 'disabled'} onclick="abPlay('raw')">▶ before</button>
-      <button class="btn sm ${state.mic.ab === 'wet' ? 'primary' : ''}"
+      <button class="btn sm ${state.mic.ab === 'wet' ? 'selected' : ''}"
         ${has ? '' : 'disabled'} onclick="abPlay('wet')">▶ after</button>
       <button class="btn sm ghost" ${has ? '' : 'disabled'} onclick="abStop()">stop</button>
       <span class="mono" id="abnote" style="color:var(--ink-faint);flex:1;min-width:150px">
