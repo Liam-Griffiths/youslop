@@ -530,6 +530,12 @@ def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
             return None
         spec = style.spec            # unfilled: the style's own placeholders
     try:
+        if project.style.custom_engine != "pillow":
+            from . import custom_scenes
+            root = project_dir(project.id) / "media"
+            ctx, ground = custom_scenes.context(
+                root, spec, seg_len, hand=getattr(project.style, "board_hand", "marker"))
+            return custom_scenes.render(root, ctx, ground, out, size=size, fps=fps, crf=crf)
         frames = custom_slide.frames(
             spec, seg_len, hand=getattr(project.style, "board_hand", "marker"),
             media_root=project_dir(project.id) / "media")

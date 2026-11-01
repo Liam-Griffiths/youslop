@@ -360,6 +360,7 @@ class Style:
     # has, and `board_settle` how long one element takes to arrive once its
     # turn comes.
     board_engine: str = "scene"     # scene | pillow (review fallback)
+    custom_engine: str = "scene"    # scene | pillow (review fallback)
     board_hand: str = "marker"      # marker | bradley | chalk | casual
     board_ground: str = "#3A4552"
     board_grain: float = 0.5

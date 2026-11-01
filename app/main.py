@@ -1578,14 +1578,17 @@ def slide_custom(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     def work(progress):
         with store.lock_for(pid):
             p = _load(pid)
+            _slide(p, sid)
+        progress("Finding any pictures this slide asked for")
+        cand = custom_mod.candidate(
+            spec, project_dir(pid) / "media", motion=motion, seconds=seconds,
+            hand=getattr(p.style, "board_hand", "marker"), engine=p.style.custom_engine)
+        if not cand:
+            raise RuntimeError("Could not draw that slide.")
+        progress("Drawn")
+        with store.lock_for(pid):
+            p = _load(pid)
             s = _slide(p, sid)
-            progress("Finding any pictures this slide asked for")
-            cand = custom_mod.candidate(
-                spec, project_dir(pid) / "media", motion=motion, seconds=seconds,
-                hand=getattr(p.style, "board_hand", "marker"))
-            if not cand:
-                raise RuntimeError("Could not draw that slide.")
-            progress("Drawn")
             s.candidates.insert(0, cand)
             s.chosen_id = cand["id"]
             s.custom = cand["custom"]

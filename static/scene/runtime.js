@@ -105,7 +105,7 @@
   }
   function preset(el, index) {
     const kind = el.dataset.anim;
-    if (!['rise', 'blur-in', 'fade', 'scale-in', 'words'].includes(kind)) return;
+    if (!['rise', 'blur-in', 'fade', 'scale-in', 'words', 'fly-left', 'fly-right', 'pop'].includes(kind)) return;
     const css = getComputedStyle(el);
     const dur = Math.max(0, number(el.dataset.duration));
     const arrive = Math.min(dur, Math.max(0.001, number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), 0.6))));
@@ -123,12 +123,15 @@
     }
     const from = {opacity: 0};
     const to = {opacity: 1};
-    if (kind === 'rise' || kind === 'words') { from.y = 48; to.y = 0; }
+    if (kind === 'rise' || kind === 'words') { from.y = number(el.dataset.animY, 48); to.y = 0; }
     if (kind === 'blur-in') { from.filter = 'blur(16px)'; to.filter = 'blur(0px)'; }
     if (kind === 'scale-in') { from.scale = 0.85; to.scale = 1; }
+    if (kind === 'fly-left') { from.x = -240; to.x = 0; }
+    if (kind === 'fly-right') { from.x = 240; to.x = 0; }
     const tl = gsap.timeline({paused: true, data: {start: clipStart(el)}});
     const stagger = kind === 'words' ? {amount: arrive * 0.4} : 0;
-    tl.fromTo(targets, from, {...to, duration: kind === 'words' ? arrive * 0.6 : arrive, stagger, ease: 'expo.out'}, 0);
+    tl.fromTo(targets, from, {...to, duration: kind === 'words' ? arrive * 0.6 : arrive, stagger,
+      ease: kind === 'pop' ? p => Math.min(1, 1.4 * (1 - (1 - p) ** 2)) : el.dataset.animEase || 'expo.out'}, 0);
     if (exit > 0) tl.to(targets, {opacity: 0, duration: exit, ease: 'power3.in'}, dur - exit);
     window.__timelines[`preset#${index}`] = tl;
   }

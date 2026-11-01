@@ -357,9 +357,15 @@ def _faded(tile: Image.Image, alpha: float) -> Image.Image:
 
 # -------------------------------------------------------------------- output
 def render_still(spec: dict, hand: str = DEFAULT_HAND,
-                 media_root: Path | None = None, grain: float = 0.5) -> Image.Image:
+                 media_root: Path | None = None, grain: float = 0.5,
+                 engine: str = "pillow") -> Image.Image:
     """The finished slide, every element at full opacity, in place."""
     spec = normalise(spec)
+    if engine != "pillow":
+        import io
+        from . import custom_scenes
+        return Image.open(io.BytesIO(custom_scenes.still(
+            spec, hand=hand, media_root=media_root, grain=grain))).convert("RGB")
     base = diagram.ground(spec["background"] or diagram.GROUND, grain).convert("RGBA")
     for el in _layout(spec):
         base.alpha_composite(_build_tile(el, hand, media_root), (el["_x"], el["_y"]))
@@ -426,7 +432,7 @@ def _title_text(spec: dict) -> str:
 
 def candidate(spec: dict, dest: Path, *, motion: str = "reveal",
              seconds: float = DEFAULT_SECONDS, hand: str = DEFAULT_HAND,
-             grain: float = 0.5) -> dict | None:
+             grain: float = 0.5, engine: str = "pillow") -> dict | None:
     """Render a spec into `dest` and hand back a media candidate for it.
 
     Shaped exactly like `diagram.candidate()` — a `MediaCandidate`-shaped
@@ -442,20 +448,26 @@ def candidate(spec: dict, dest: Path, *, motion: str = "reveal",
     poster = ""
     if motion == "still":
         out = dest / f"{stem}.png"
-        render_still(spec, hand=hand, media_root=dest, grain=grain).save(out)
+        render_still(spec, hand=hand, media_root=dest, grain=grain, engine=engine).save(out)
         kind, local = "image", out.name
         duration = 0.0
     else:
         out = dest / f"{stem}.mp4"
         seconds = max(2.0, min(20.0, float(seconds)))
-        n = ffutil.encode_frames(
-            frames(spec, seconds, hand=hand, media_root=dest, grain=grain), out)
+        if engine != "pillow":
+            from . import custom_scenes
+            ctx, ground = custom_scenes.context(dest, spec, seconds, hand, grain)
+            custom_scenes.render(dest, ctx, ground, out)
+            n = max(2, round(seconds * FPS))
+        else:
+            n = ffutil.encode_frames(
+                frames(spec, seconds, hand=hand, media_root=dest, grain=grain), out)
         if not n:
             return None
         kind, local = "video", out.name
         duration = round(n / FPS, 3)
         shot = dest / f"{stem}_poster.jpg"
-        render_still(spec, hand=hand, media_root=dest, grain=grain).save(shot, quality=88)
+        render_still(spec, hand=hand, media_root=dest, grain=grain, engine=engine).save(shot, quality=88)
         poster = f"media/{shot.name}" if dest.name == "media" else shot.name
     cand = MediaCandidate(
         id=f"custom_{uuid.uuid4().hex[:8]}",
