@@ -22,7 +22,16 @@ SCENE_VERSION = 2
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
 ASSETS_URLS = {kind: f"/scene/{{token}}/{kind}/" for kind in ('project', 'channel')}
-env = jinja2.Environment(loader=jinja2.FileSystemLoader(SCENE_DIR),
+
+
+class _BlockLoader(jinja2.BaseLoader):
+    def get_source(self, environment, template):
+        from .blocks import Loader
+        return Loader().get_source(environment, template)
+
+
+env = jinja2.Environment(loader=jinja2.ChoiceLoader([
+    _BlockLoader(), jinja2.FileSystemLoader(SCENE_DIR)]),
                          autoescape=True, undefined=jinja2.StrictUndefined)
 log = logging.getLogger(__name__)
 
@@ -74,7 +83,8 @@ def render_html(template: str, ctx: dict) -> str:
     # Cached HTML lives elsewhere; resolve relative component/script URLs as
     # they were authored in the template directory.
     parent = Path(template).parent.as_posix()
-    base = '/static/scene/' + (quote(parent) + '/' if parent != '.' else '')
+    base = ('/scene/{token}/assets/' if template.startswith('_blocks/') else
+            '/static/scene/' + (quote(parent) + '/' if parent != '.' else ''))
     return re.sub(r'<head\s*>', lambda m: m[0] + f'<base href="{base}">', html,
                   count=1, flags=re.I)
 
@@ -110,11 +120,17 @@ _BANNED = [
 ]
 
 
-def _local_file(url: str, base: Path) -> Path:
+def _local_file(url: str, base: Path, asset_root=None) -> Path:
     parts = urlsplit(url)
     if parts.scheme or parts.netloc:
         raise ValueError(f"non-local component: {url}")
     path = unquote(parts.path)
+    if asset_root and path.startswith('/scene/{token}/assets/'):
+        root = Path(asset_root).resolve()
+        target = (root / path[len('/scene/{token}/assets/'):]).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f'component outside block directory: {url}')
+        return target
     from .catalog import CATALOG_DIR
     if path.startswith('/catalog/'):
         target = (CATALOG_DIR / path[len('/catalog/'):]).resolve()
@@ -131,18 +147,19 @@ def _local_file(url: str, base: Path) -> Path:
     target = (STATIC_DIR / path[len('/static/'):] if path.startswith('/static/')
               else base / path).resolve()
     if not (target.is_relative_to(SCENE_DIR.resolve()) or
-            target.is_relative_to(CATALOG_DIR.resolve())):
+            target.is_relative_to(CATALOG_DIR.resolve()) or
+            asset_root and target.is_relative_to(Path(asset_root).resolve())):
         raise ValueError(f"component outside scene directory: {url}")
     return target
 
 
-def _scan(html, base, seen, errors, contract=False):
+def _scan(html, base, seen, errors, contract=False, asset_root=None):
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     parser = _Contract()
     parser.feed(html)
     if parser.base:
         try:
-            base = _local_file(parser.base, base)
+            base = _local_file(parser.base, base, asset_root)
         except ValueError as exc:
             errors.append(str(exc))
     errors.extend(parser.errors)
@@ -164,12 +181,15 @@ def _scan(html, base, seen, errors, contract=False):
         parts = urlsplit(url)
         if parts.scheme or parts.netloc:
             errors.append(f"non-local fetch: {url}")
+    if asset_root and re.search(r"(?:https?:)?//", ' '.join(re.findall(
+            r'''(?:url\(\s*['\"]?|(?:src|href)\s*=\s*['\"]|@import\s+['\"])([^'\"\s)>]+)''', html, re.I))):
+        errors.append('remote block resource is forbidden')
     for url in parser.mounts:
         try:
-            path = _local_file(url, base)
+            path = _local_file(url, base, asset_root)
             if path not in seen:
                 seen.add(path)
-                _scan(path.read_text(), path.parent, seen, errors)
+                _scan(path.read_text(), path.parent, seen, errors, asset_root=asset_root)
         except (OSError, ValueError) as exc:
             errors.append(str(exc))
 
@@ -180,9 +200,9 @@ def lint_component(html: str, base: Path) -> list[str]:
     return errors
 
 
-def lint(html: str) -> list[str]:
+def lint(html: str, *, asset_root=None) -> list[str]:
     errors = []
-    _scan(html, SCENE_DIR, set(), errors, contract=True)
+    _scan(html, SCENE_DIR, set(), errors, contract=True, asset_root=asset_root)
     return errors
 
 
@@ -209,7 +229,7 @@ def _key(template, ctx, seconds, size, fps, key_extra=()):
     # Rendered output also captures mounted component paths driven by context.
     html = render_html(template, ctx)
     mounted, errors = set(), []
-    _scan(html, SCENE_DIR, mounted, errors, contract=True)
+    _scan(html, SCENE_DIR, mounted, errors, contract=True, asset_root=ctx.get('block_assets_root'))
     if errors:
         raise ValueError("Scene lint: " + "; ".join(errors))
     sources.update({str(p): p.read_text() for p in mounted})
@@ -254,7 +274,7 @@ def ensure_clip(project, template, ctx, *, seconds, size, fps, key_extra=()) -> 
     else:
         made = stage.render_scene([dict(clip=key, scene_root=str(html.parent),
             **ctx.get('asset_roots', {}),
-            assets_root=str(html.parent.parent), url_path=f'/scene/{{token}}/{html.name}',
+            assets_root=ctx.get('block_assets_root', str(html.parent.parent)), url_path=f'/scene/{{token}}/{html.name}',
             W=ctx['width'], H=ctx['height'], fps=fps,
             frames=max(2, round(seconds * fps)), size=size)], html.parent)
         if made.get(key) != out:
@@ -270,7 +290,7 @@ def capture(project, template, ctx, *, t, size) -> bytes:
     png = html.with_name(f'{key}_{t}.png')
     if not png.exists():
         data = stage.capture_one(html, ctx['width'], ctx['height'], t, size,
-                                 assets_root=html.parent.parent, **ctx.get('asset_roots', {}))
+                                 assets_root=ctx.get('block_assets_root', html.parent.parent), **ctx.get('asset_roots', {}))
         png.write_bytes(data)
     return png.read_bytes()
 

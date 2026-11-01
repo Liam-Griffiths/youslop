@@ -241,6 +241,26 @@ def cmd_scene_preview(args):
     print(out)
 
 
+def cmd_block(args):
+    from . import blocks, scenes
+    if args.block_cmd == 'list':
+        _print_json([dict(id=ref, name=b['meta']['name'], kind=b['meta']['kind'])
+                     for ref, b in blocks.discover().items()])
+    elif args.block_cmd == 'show':
+        block = blocks.discover().get(args.id)
+        if block is None:
+            raise ValueError(f'unknown block: {args.id}')
+        _print_json(block['meta'])
+    else:
+        values = json.loads(Path(args.vars).read_text()) if args.vars else {}
+        template, ctx = blocks.prepare(args.id, values, args.aspect, args.seconds)
+        size = (ctx['width'] // 4, ctx['height'] // 4)
+        out = Path(args.out or 'frame.png')
+        with tempfile.TemporaryDirectory(prefix='corkbored-block-') as temporary:
+            out.write_bytes(scenes.capture(Path(temporary), template, ctx, t=args.t, size=size))
+        print(out)
+
+
 def cmd_catalog(args):
     from . import catalog
     if args.catalog_cmd == 'search':
@@ -359,6 +379,17 @@ def main(argv=None):
     command.add_argument("--out")
     command.add_argument("--mp4", action="store_true")
     command.add_argument("--seconds", type=float, default=3)
+    command = sub.add_parser('block')
+    block_sub = command.add_subparsers(dest='block_cmd', required=True)
+    block_sub.add_parser('list')
+    block_sub.add_parser('show').add_argument('id')
+    child = block_sub.add_parser('preview')
+    child.add_argument('id')
+    child.add_argument('--aspect', choices=('16:9', '9:16', '1:1'), default='16:9')
+    child.add_argument('--t', type=float, default=1.5)
+    child.add_argument('--seconds', type=float)
+    child.add_argument('--vars', help='JSON file of block variables')
+    child.add_argument('--out')
     command = sub.add_parser("catalog")
     catalog_sub = command.add_subparsers(dest="catalog_cmd", required=True)
     catalog_sub.add_parser("list")
@@ -387,7 +418,7 @@ def main(argv=None):
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "list": cmd_list, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "footage": cmd_footage,
+         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "block": cmd_block, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0
