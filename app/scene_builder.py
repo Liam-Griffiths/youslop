@@ -528,7 +528,8 @@ def _compile(data, screen, size, fps, directory):
             inputs[-2:] = ['-stream_loop','-1','-ss',str(layer['time']),'-i',layer['path']]
             effect = f'setpts=PTS-STARTPTS,{_media_filter(layer, w, h)},format=rgba'
         elif layer.get('native'):
-            effect = f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),{_media_filter(layer,w,h)},format=rgba'
+            # Filter the still once, then repeat the finished pixels.
+            effect = f'{_media_filter(layer,w,h)},format=rgba,loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB)'
         if layer.get('native') or layer.get('clip'):
             # Clip in screen coordinates after translation, on the small plate.
             sx, sy = (world['density'], world['density']) if world else (size[0]/data['width'],size[1]/data['height'])
@@ -538,7 +539,12 @@ def _compile(data, screen, size, fps, directory):
                 x0,y0,x1,y1 = layer['clip']
                 px,py = f"X+{layer['box'][0]}+{sx}*({mx})+({w}-W)/2",f"Y+{layer['box'][1]}+{sy}*({my})+({h}-H)/2"
                 mask += f'*gte({px},{x0})*lt({px},{x1})*gte({py},{y0})*lt({py},{y1})'
-            effect += f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({mask})'"
+            if layer.get('clip'):
+                effect += f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({mask})'"
+            elif not re.fullmatch(r'[\d.()]+', mask):
+                # Opacity only animates during arrival; geq is per-pixel, so not after.
+                effect += (f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({mask})'"
+                           f":enable='between(t,{layer['start']},{layer['start']+layer['arrival']})'")
         exit_s = min(layer.get('exit', 0), layer['duration']/2)
         if exit_s > 0:
             effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"

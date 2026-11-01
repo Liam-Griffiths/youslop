@@ -1,0 +1,114 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="/static/scene/cuts/casefile.css">{% endblock %}
+{% block body %}
+<main id="page" class="look-{{ look }}" style="--grain:{{ palette.grain }}">
+{% for s in screens %}
+<section class="clip screen" data-screen="{{ s.id }}" data-world="true" data-start="{{ s.start }}" data-duration="{{ s.duration }}" data-camera='{{ s.camera|tojson }}'>
+{% if s.hidden %}
+{% if s.source %}<i class="cutaway" data-media="{{ s.source }}" data-video="{{ s.video|lower }}" data-media-time="{{ s.media_time }}" data-media-dim="1"></i>{% endif %}
+{% else %}
+<div class="board" data-ground></div>
+{% for item in s['items'] %}
+<article class="item {{ item.kind }} {{ 'current' if loop.last else 'past' }}" style="left:{{ item.x-item.w/2-60 }}px;top:{{ item.y-item.h/2-60 }}px;width:{{ item.w+120 }}px;height:{{ item.h+120 }}px;--paper:{{ item.paper }};--rule:{{ item.rule }};--pin:{{ item.pin }};transform:rotate({{ item.angle }}deg)">
+<div class="plate"><div class="paper">
+{% if item.kind=='photo' %}<div class="photo-window">{{ '' if item.source else 'NO PHOTO' }}</div><p class="caption fit">{{ item.caption }}</p>{% if item.tape %}<svg class="tape" width="150" height="46" viewBox="0 0 150 46"><path d="M0 2L150 0 147 44 3 46Z" fill="#ece2be" fill-opacity=".7"/></svg>{% endif %}
+{% elif item.kind=='card' %}<h2 class="card-title fit">{{ item.title|upper }}</h2><p class="typed copy">{{ item.text }}</p>
+{% elif item.kind=='clipping' %}<div class="news"><h2 class="headline fit">{{ item.headline|upper }}</h2><p class="body-copy">{{ item.text }}</p>{% for line in item.filler[:5] %}<i class="print" style="width:{{ line.width }}px"></i>{% endfor %}</div>
+{% elif item.kind=='note' %}<div class="note-band"></div><p class="note-copy fit">{{ item.text }}</p>
+{% else %}<h2 class="document-title fit">{{ item.title|upper }}</h2><b class="confidential">CONFIDENTIAL</b><i class="document-rule"></i><div class="document-print">{% for line in item.filler %}<i class="print {{ 'black' if line.black else '' }}" style="width:{{ line.width }}px"></i>{% endfor %}</div><p class="secret copy">{{ item.text }}</p>{% endif %}
+</div></div><i class="pin"></i>
+</article>{% endfor %}
+{% endif %}
+</section>{% endfor %}
+</main>
+{% endblock %}
+{% block script %}<script>
+window.__ready=window.__ready.then(()=>{
+  Object.values(window.__timelines).forEach(t=>t.progress(1));
+  document.documentElement.style.overflow='visible';document.body.style.overflow='visible';
+  const page=document.querySelector('#page'),screens={{ screens|tojson }},cardAt={{ card_at|tojson }};
+  let serial=0;
+  function layer(el,screen,start=0,motion='none',arrival=.3){
+    if(start>=Number(screen.dataset.duration)){el.remove();return;}
+    Object.assign(el.dataset,{layer:`cf${serial++}`,start,duration:Number(screen.dataset.duration)-start,
+      motion,motionDuration:arrival,motionEase:'cubic-out'});
+  }
+  [...page.children].forEach((screen,si)=>{
+    const s=screens[si];
+    if(s.hidden){screen.dataset.camera=JSON.stringify([{t:s.start,x:960,y:540,zoom:1}]);return;}
+    screen.querySelectorAll('.fit').forEach(el=>{
+      while((el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth)&&parseFloat(getComputedStyle(el).fontSize)>20)
+        el.style.fontSize=`${parseFloat(getComputedStyle(el).fontSize)*.94}px`;
+    });
+    [...screen.querySelectorAll('.item')].forEach((item,i)=>{
+      const spec=s.items[i],current=item.classList.contains('current'),plate=item.querySelector('.plate'),pin=item.querySelector('.pin');
+      // Row geometry is measured before restoring the item's small rotation.
+      const rotation=item.style.transform;item.style.transform='none';
+      if(current){layer(plate,screen,s.delay+.495,spec.kind==='photo'?'fade':'pin-drop');layer(pin,screen,s.delay+.795);}
+      else {plate.dataset.ground='';pin.dataset.ground='';}
+      const copy=item.querySelector('.copy');
+      if(copy&&current){
+        const range=document.createRange();range.selectNodeContents(copy);
+        const longest=Math.max(0,...[...range.getClientRects()].map(r=>r.width));if(longest)copy.style.width=`${Math.ceil(longest)+1}px`;
+        const origin=item.getBoundingClientRect(),node=copy.firstChild,groups=new Map();
+        if(node)for(let j=0;j<node.length;j++){
+          range.setStart(node,j);range.setEnd(node,j+1);const r=range.getBoundingClientRect(),key=Math.round(r.top);
+          if(!groups.has(key))groups.set(key,{text:'',left:r.left,top:r.top,right:r.right});
+          const row=groups.get(key);row.text+=node.data[j];row.right=Math.max(row.right,r.right);
+        }
+        let chars=0,line=0;const top=copy.getBoundingClientRect().top,lh=parseFloat(getComputedStyle(copy).lineHeight);
+        groups.forEach(r=>{
+          const row=document.createElement('p');row.className='ink-row '+(spec.kind==='card'?'card-ink':'secret-ink');row.textContent=r.text;
+          Object.assign(row.style,{left:`${r.left-origin.left}px`,top:`${top+line++*lh-origin.top}px`,width:`${spec.kind==='redacted'?500:r.right-r.left+2}px`});item.append(row);
+          const start=s.delay+1.1+(spec.kind==='redacted' ? .25*s.span : 0),arrival=s.span*(spec.kind==='redacted' ? .6 : 1);
+          layer(row,screen,start,'reveal',arrival);
+          if(spec.kind==='card')row.dataset.steps=JSON.stringify([...r.text].map((_,j)=>{
+            const t=Math.ceil((chars+j+1)/Math.max(1,node.length)*s.span*12)/12;
+            return [start+t,(j+1)*(r.right-r.left)/r.text.length];
+          }));else row.dataset.motionEase='cubic-in-out';
+          chars+=r.text.length;
+        });
+        if(spec.kind==='redacted'){const blank=copy.cloneNode(false);blank.textContent='';Object.assign(blank.style,{height:`${copy.offsetHeight}px`,width:'500px',background:'#0a0a0a'});plate.querySelector('.paper').append(blank);}
+        copy.remove();
+      }
+      if(spec.kind==='clipping'){
+        const heading=item.querySelector('.headline'),r=heading.getBoundingClientRect(),origin=item.getBoundingClientRect();
+        const band=document.createElement('i');band.className='highlight';
+        Object.assign(band.style,{left:`${r.left-origin.left-7}px`,top:`${r.top-origin.top-6}px`,width:`${r.width+14}px`,height:`${r.height+10}px`});item.append(band);
+        if(current)layer(band,screen,s.delay+1.1+.45*s.span,'reveal',.5*s.span);else band.dataset.ground='';
+      }
+      if(spec.source){
+        const photo=document.createElement('i');photo.className='native-photo';
+        Object.assign(photo.style,{left:`${spec.x-spec.w/2+30}px`,top:`${spec.y-spec.h/2+30}px`});
+        Object.assign(photo.dataset,{media:spec.source,video:'false',mediaDim:current?1:.88,mediaBlur:current?0:2.9});
+        layer(photo,screen,current?s.delay+.495:0,current?'fade':'none');screen.append(photo);
+      }
+      item.style.transform=rotation;
+    });
+  });
+  if(cardAt!==null&&page.lastElementChild){
+    const last=page.lastElementChild,card=last.cloneNode(true),duration={{ duration }}-cardAt;
+    Object.assign(card.dataset,{screen:'chapter',start:cardAt,duration});
+    const k=JSON.parse(last.dataset.camera).at(-1),z=k.zoom;
+    card.dataset.camera=JSON.stringify([{...k,t:cardAt}]);
+    card.querySelectorAll('[data-layer]').forEach(el=>{
+      if(el.dataset.media){Object.assign(el.dataset,{start:0,duration,motion:'none',layer:`cf${serial++}`});}
+      else{delete el.dataset.layer;el.dataset.ground='';}
+    });
+    const wash=document.createElement('div');wash.className='chapter-wash';
+    Object.assign(wash.style,{left:`${k.x-960/z}px`,top:`${k.y-540/z}px`,width:`${1920/z}px`,height:`${1080/z}px`});
+    layer(wash,card,0,'fade',.45);
+    const label=document.createElement('div');label.className='chapter-card';
+    Object.assign(label.style,{left:`${k.x-650/z}px`,top:`${k.y-270/z}px`,transform:`scale(${1/z})`,transformOrigin:'top left'});
+    const paper=document.createElement('div');paper.className='chapter-paper';
+    const header=document.createElement('p');header.className='chapter-header';header.textContent='CASE FILE · NEXT';
+    const heading=document.createElement('h1');heading.textContent={{ chapter|upper|tojson }};paper.append(header,heading);label.append(paper);card.append(wash,label);
+    while((heading.scrollHeight>heading.clientHeight||heading.scrollWidth>heading.clientWidth)&&parseFloat(getComputedStyle(heading).fontSize)>40)
+      heading.style.fontSize=`${parseFloat(getComputedStyle(heading).fontSize)*.94}px`;
+    layer(label,card,.2,'pin-drop',.35);
+    const pin=document.createElement('i');pin.className='pin chapter-pin';
+    Object.assign(pin.style,{left:`${k.x-17/z}px`,top:`${k.y-195/z}px`,width:`${34/z}px`,height:`${34/z}px`});layer(pin,card,.55);card.append(pin);
+    page.append(card);
+  }
+});
+</script>{% endblock %}
