@@ -219,10 +219,13 @@ function saveThumb(patch, repaint = false) {
   }, 300);
 }
 
+let thumbRenderSeq = 0;
 async function renderThumb() {
-  const p = state.project;
+  const p = state.project, seq = ++thumbRenderSeq;
   try {
     const r = await api(`/api/projects/${p.id}/thumb/render`, { method: 'POST' });
+    // Scene captures take most of a second; show only the newest request's picture.
+    if (seq !== thumbRenderSeq) return;
     p.thumb = r.thumb;
     const stage = $('.thumb-stage');
     if (!stage) return;

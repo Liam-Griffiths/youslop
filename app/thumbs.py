@@ -6,14 +6,18 @@ size: three lines at most, type fitted to fill its box rather than set at a fixe
 size, and a picture that is always knocked back where words sit on top of it.
 
 Same shape as `intro.py`: a TEMPLATES registry the UI reads, one renderer per
-style, and a dispatcher. Rendering is pure Pillow and takes about a fifth of a
-second, so the client re-renders as you type rather than on a button.
+style, and a dispatcher. Scenes capture the layouts; Pillow keeps the raster
+helpers and the legacy renderer available as a fallback.
 """
 from __future__ import annotations
 
+import hashlib
+import io
+import logging
 import math
 
 from pathlib import Path
+from urllib.parse import quote
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
@@ -21,6 +25,7 @@ from . import motifs, themes, titles
 from .schema import Project, Thumb
 
 W, H = 1280, 720
+log = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ templates
 # `flip` says the style has sides worth swapping; `light` marks the one that
@@ -480,17 +485,8 @@ def _disc_mask(cx: float, cy: float, d: int) -> Image.Image:
     return m
 
 
-def _render_loupe(p: Project, src: _Source, out: Image.Image, accent) -> None:
-    """The picture seen through a watchmaker's loupe, type beside it.
-
-    A loupe is the one object that says horology before the picture inside it
-    has been read, and it earns its place mechanically as well: the lens crops
-    any photograph to a circle and magnifies it, so a thumbnail that would be
-    unreadable at sidebar width still has one sharp, bright, obvious subject.
-
-    Everything outside the glass is knocked back, greyed and thrown slightly out
-    of focus, which is what a real loupe does to the rest of the bench.
-    """
+def _loupe_picture(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Shared raster photo treatment and motifs; text stays in the renderer."""
     t = p.thumb
     # The bench: the same photograph, dimmed and softened.
     bed = src.fill(W, H).filter(ImageFilter.GaussianBlur(9))
@@ -553,6 +549,22 @@ def _render_loupe(p: Project, src: _Source, out: Image.Image, accent) -> None:
                                        _disc_mask(cx, cy, D)))
     _over(out, gleam)
 
+
+def _render_loupe(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """The picture seen through a watchmaker's loupe, type beside it.
+
+    A loupe is the one object that says horology before the picture inside it
+    has been read, and it earns its place mechanically as well: the lens crops
+    any photograph to a circle and magnifies it, so a thumbnail that would be
+    unreadable at sidebar width still has one sharp, bright, obvious subject.
+
+    Everything outside the glass is knocked back, greyed and thrown slightly out
+    of focus, which is what a real loupe does to the rest of the bench.
+    """
+    _loupe_picture(p, src, out, accent)
+    t = p.thumb
+    D = 470
+
     headline, kicker = _text_of(p)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -607,15 +619,21 @@ def _cutout(src: _Source, w: int, h: int, flip: bool = False) -> Image.Image:
     return out
 
 
-def _render_sticker(p: Project, src: _Source, out: Image.Image, accent) -> None:
-    """Outlined type slapped over a field of the theme's icons. The loud one."""
-    t = p.thumb
+def _sticker_picture(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Theme gradient and raster icon field, behind the separate cutout."""
     pal = _palette(p)
     ground = motifs.gradient((W, H), [motifs.shade(pal.ground, 1.5), pal.ground,
                                       motifs.mix(pal.ground, pal.accent, 0.2)], 120)
     field = motifs.icon_field((W, H), pal.icons, [pal.accent, pal.accent2, pal.ink],
                               cell=92, alpha=54, angle=-14)
     out.paste(Image.alpha_composite(ground.convert("RGBA"), field).convert("RGB"), (0, 0))
+
+
+def _render_sticker(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Outlined type slapped over a field of the theme's icons. The loud one."""
+    _sticker_picture(p, src, out, accent)
+    t = p.thumb
+    pal = _palette(p)
 
     if src.ok:
         cut = _cutout(src, int(W * 0.58), H, t.flip)
@@ -653,14 +671,8 @@ def _render_sticker(p: Project, src: _Source, out: Image.Image, accent) -> None:
     _over(out, layer)
 
 
-def _render_duotone(p: Project, src: _Source, out: Image.Image, accent) -> None:
-    """The picture flattened into the two theme colours, type straight over it.
-
-    A duotone is the cheapest way to make any photograph — an archive scan, a
-    press shot, a frame grab — look like it belongs to one channel, because
-    every one of them comes out in the same two colours.
-    """
-    t = p.thumb
+def _duotone_picture(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Shared raster photo treatment and motifs; text stays in the renderer."""
     pal = _palette(p)
     grey = src.fill(W, H).convert("L")
     grey = ImageEnhance.Contrast(grey).enhance(1.25)
@@ -672,6 +684,18 @@ def _render_duotone(p: Project, src: _Source, out: Image.Image, accent) -> None:
     duo = ImageOps.colorize(grey, tuple(dark[:3]), tuple(motifs.shade(light, 1.15)[:3]),
                             blackpoint=10, whitepoint=245)
     out.paste(duo, (0, 0))
+
+
+def _render_duotone(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """The picture flattened into the two theme colours, type straight over it.
+
+    A duotone is the cheapest way to make any photograph — an archive scan, a
+    press shot, a frame grab — look like it belongs to one channel, because
+    every one of them comes out in the same two colours.
+    """
+    _duotone_picture(p, src, out, accent)
+    t = p.thumb
+    pal = _palette(p)
 
     headline, kicker = _text_of(p)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -698,8 +722,8 @@ def _render_duotone(p: Project, src: _Source, out: Image.Image, accent) -> None:
     _over(out, layer)
 
 
-def _render_gloss(p: Project, src: _Source, out: Image.Image, accent) -> None:
-    """Soft light, the subject in a ring, and a serif headline beside it."""
+def _gloss_picture(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Shared raster photo treatment and motifs; text stays in the renderer."""
     t = p.thumb
     pal = _palette(p)
     light = pal.light
@@ -710,7 +734,6 @@ def _render_gloss(p: Project, src: _Source, out: Image.Image, accent) -> None:
         (W, H), pal.icons, [pal.accent, pal.accent2], cell=76, alpha=52, angle=8))
     out.paste(base.convert("RGB"), (0, 0))
 
-    ink = pal.ink if light else (255, 255, 255, 255)
     ring_d = 500
     cx = W - 300 if not t.flip else 300
     cy = H // 2
@@ -729,6 +752,18 @@ def _render_gloss(p: Project, src: _Source, out: Image.Image, accent) -> None:
         g = motifs.icon("sparkle", gs, (255, 255, 255, 235) if not light
                         else motifs.shade(pal.accent, 1.5))
         layer.paste(g, (gx, gy), g)
+    _over(out, layer)
+
+
+def _render_gloss(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Soft light, the subject in a ring, and a serif headline beside it."""
+    _gloss_picture(p, src, out, accent)
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    t = p.thumb
+    pal = _palette(p)
+    ink = pal.ink if pal.light else (255, 255, 255, 255)
+    ring_d = 500
 
     headline, kicker = _text_of(p)
     box_w = W - ring_d - 190
@@ -783,8 +818,8 @@ def _render_scoreline(p: Project, src: _Source, out: Image.Image, accent) -> Non
     _over(out, band)
 
 
-def _render_tiles(p: Project, src: _Source, out: Image.Image, accent) -> None:
-    """A panel of icon tiles beside the picture, type plated on top of them."""
+def _tiles_picture(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """Shared raster photo treatment and motifs; text stays in the renderer."""
     t = p.thumb
     pal = _palette(p)
     PANEL = 720
@@ -808,6 +843,15 @@ def _render_tiles(p: Project, src: _Source, out: Image.Image, accent) -> None:
             panel.paste(g, (c * cell + (cell - g.width) // 2,
                             r * cell + (cell - g.height) // 2), g)
     out.paste(panel, (tx, 0), panel)
+
+
+def _render_tiles(p: Project, src: _Source, out: Image.Image, accent) -> None:
+    """A panel of icon tiles beside the picture, type plated on top of them."""
+    _tiles_picture(p, src, out, accent)
+    t = p.thumb
+    pal = _palette(p)
+    PANEL = 720
+    tx = 0 if not t.flip else W - PANEL
 
     headline, kicker = _text_of(p)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -851,6 +895,82 @@ _RENDERERS = {
 
 
 # --------------------------------------------------------------------- render
+def scene_context(project: Project, root: Path, src: _Source) -> dict:
+    """Resolve cropped photos, cutouts and motif rasters for CSS composition."""
+    from . import scenes
+
+    t = project.thumb
+    key = template_meta(t.template)['key']
+    ctx = scenes.context_base(project)
+    ctx['fonts'].update(ThumbDisplay='/fonts/ArchivoBlack-Regular.ttf',
+                        ThumbInter='/fonts/Inter-SemiBold.ttf',
+                        ThumbSmallcaps='/fonts/CormorantSC-SemiBold.ttf')
+    pal = _palette(project)
+    def hex_color(color):
+        return '#' + ''.join(f'{c:02x}' for c in color[:3])
+    colors = {k: hex_color(getattr(pal, k))
+              for k in ('accent', 'accent2', 'ground', 'ink')}
+    colors.update(tab_ink=hex_color(motifs.readable_on(pal.accent)),
+                  face=hex_color((255, 253, 248) if pal.light else motifs.shade(pal.ground, 1.7)),
+                  band=hex_color(motifs.shade(pal.ground, 1.1 if key == 'duotone' else .8)),
+                  outline=hex_color(motifs.shade(pal.ground, .35)))
+    headline, kicker = _text_of(project)
+    ctx['vars'].update(headline=headline, kicker=kicker)
+    image = (root / t.image).resolve() if t.image else None
+    if image and (not image.is_relative_to(root.resolve()) or not image.is_file()):
+        image = None
+    digest = hashlib.sha1(image.read_bytes()).hexdigest() if image else ''
+    url = scenes.ASSETS_URLS['project']
+    asset_key = hashlib.sha1(repr(('round2', key, digest, t.focal, t.flip, t.dim,
+                                  colors, pal.icons)).encode()).hexdigest()
+    def asset(name, draw):
+        rel = f'thumb/{name}-{asset_key}.png'
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not dest.exists():
+            draw().save(dest)
+        return url + rel
+
+    # These are photo processing / raster motifs from the legacy drawers, with
+    # no headline, kicker or rules. Chromium owns the entire text composition.
+    raster = dict(loupe=_loupe_picture, duotone=_duotone_picture,
+                  gloss=_gloss_picture, tiles=_tiles_picture, sticker=_sticker_picture)
+    def background():
+        out = Image.new('RGB', (W, H))
+        raster[key](project, src, out, _accent(project))
+        return out
+    crop = dict(split=(580, H), diagonal=(780, H), poster=(1156, 336))
+    bed = asset('bed', background if key in raster else lambda: src.fill(*crop.get(key, (W, H))))
+    picture = (asset('disc', lambda: src.fill(520, 520)) if key == 'medallion'
+               else bed if key == 'spotlight' else '')
+    cutout = asset('cutout', lambda: _cutout(src, int(W * .58), H, t.flip)) if image and key == 'sticker' else ''
+    # Match the actual _fit_wrap stacks, boxes, caps and maximum line counts.
+    family, cap, box, height, lines, leading = {
+        'banner': ('ThumbDisplay', 128, 1156, 340, 3, 1.0),
+        'split': ('Archivo', 112, 584, 430, 4, 1.02),
+        'spotlight': ('ThumbDisplay', 134, 768, 420, 3, .98),
+        'medallion': ('ThumbInter', 104, 550, 430, 4, 1.06),
+        'diagonal': ('ThumbDisplay', 118, 474, 440, 4, .98),
+        'loupe': ('ThumbInter', 112, 560, 440, 4, 1.04),
+        'poster': ('EB Garamond', 94, 1060, 202 if kicker else 248, 2, 1.02),
+        'sticker': ('ThumbDisplay', 132, int(W * (.52 if src.ok else .86)), 430, 3, 1.0),
+        'duotone': ('ThumbDisplay', 132, 1164, 245, 2, .98),
+        'gloss': ('EB Garamond', 118, 590, 420, 3, 1.06),
+        'scoreline': ('Archivo', 140, 980, 330, 2, .94),
+        'tiles': ('ThumbDisplay', 112, 592, 400, 3, 1.0),
+    }[key]
+    focal = t.focal if len(t.focal) == 2 else [.5, .38]
+    ctx.update(width=W, height=H, duration=1, thumb=dict(
+        key=key, colors=colors, light=pal.light, flip=t.flip, scale=t.text_scale, dim=t.dim,
+        focal=[_clamp(v, 0, 1) * 100 for v in focal],
+        image=url + quote(image.relative_to(root.resolve()).as_posix(), safe='/') if image else '',
+        image_hash=digest, bed=bed, picture=picture, cutout=cutout,
+        family=family, cap=int(cap * t.text_scale), box=box, height=height,
+        lines=lines, leading=leading))
+    ctx['asset_roots']['project_root'] = str(root.resolve())
+    return ctx
+
+
 def render_thumb(project: Project, root: Path, out_path: Path) -> Path:
     """Draw the thumbnail to a jpeg. Returns the path written."""
     t: Thumb = project.thumb
@@ -858,6 +978,19 @@ def render_thumb(project: Project, root: Path, out_path: Path) -> Path:
     rel = (t.image or "").strip()
     path = root / rel if rel else None
     src = _Source(path if (path and path.exists()) else None, t.focal, accent)
+
+    from . import scenes
+    template = f"thumbs/{template_meta(t.template)['key']}.html"
+    if project.style.thumb_engine != 'pillow' and (scenes.SCENE_DIR / template).is_file():
+        try:
+            png = scenes.capture(root, template, scene_context(project, root, src),
+                                 t=0.0, size=(W, H))
+            out = Image.open(io.BytesIO(png)).convert('RGB')
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out.save(out_path, 'JPEG', quality=90, optimize=True, progressive=True)
+            return out_path
+        except Exception:
+            log.warning('Thumbnail scene failed for %s; using Pillow', t.template, exc_info=True)
 
     meta = template_meta(t.template)
     out = Image.new("RGB", (W, H), (238, 233, 222) if meta["light"] else (10, 11, 14))

@@ -1,6 +1,7 @@
 """FastAPI app: the local web UI's backend."""
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import hmac
 import io
@@ -1714,51 +1715,52 @@ def thumb_templates() -> list[dict]:
 
 
 def _thumb_render(p) -> dict:
-    """Draw the thumbnail and stamp it, so the client can bust its own cache."""
+    """Render a detached snapshot, then stamp the freshly loaded project."""
     out = thumbs.render_thumb(p, project_dir(p.id), project_dir(p.id) / "thumb" / "thumb.jpg")
-    p.thumb.rendered_at = time.time()
+    with store.lock_for(p.id):
+        current = _load(p.id)
+        current.thumb.rendered_at = time.time()
+        store.save(current)
     return {"path": "thumb/thumb.jpg", "bytes": out.stat().st_size,
-            "rendered_at": p.thumb.rendered_at}
+            "rendered_at": current.thumb.rendered_at, "thumb": current.thumb.to_dict()}
 
 
 @app.post("/api/projects/{pid}/thumb/render")
 def render_thumbnail(pid: str) -> dict:
-    """Redraw the thumbnail. Pure Pillow, so it runs inline rather than as a job."""
+    """Synchronously capture a thumbnail without holding the project lock."""
     with store.lock_for(pid):
-        p = _load(pid)
-        result = _thumb_render(p)
-        store.save(p)
-    return {**result, "thumb": p.thumb.to_dict()}
+        p = deepcopy(_load(pid))
+    return _thumb_render(p)
 
 
 @app.post("/api/projects/{pid}/thumb/pick")
 def thumb_pick(pid: str, payload: dict = Body(...)) -> dict:
     """Use a picture on the thumbnail — a slide's own, or a search hit."""
     cand = dict(payload.get("candidate") or {})
+    _load(pid)
+    if cand.get("local_path"):
+        rel = cand["local_path"]
+        if not (project_dir(pid) / rel).exists():
+            raise HTTPException(404, "That file is no longer in this project.")
+    elif cand.get("url"):
+        try:
+            name = media.download_to(media.upgrade(cand),
+                                     project_dir(pid) / "thumb",
+                                     f"src_{time.time_ns()}")
+        except Exception as exc:
+            raise HTTPException(502, f"Could not fetch that picture: {str(exc)[:120]}")
+        rel = f"thumb/{name}"
+    else:
+        raise HTTPException(400, "That option has no image to fetch.")
     with store.lock_for(pid):
         p = _load(pid)
-        if cand.get("local_path"):
-            rel = cand["local_path"]          # already inside the project
-            if not (project_dir(pid) / rel).exists():
-                raise HTTPException(404, "That file is no longer in this project.")
-        elif cand.get("url"):
-            # Only the picture actually chosen earns the full-size rendition.
-            try:
-                name = media.download_to(media.upgrade(cand),
-                                         project_dir(pid) / "thumb",
-                                         f"src_{int(time.time())}")
-            except Exception as exc:
-                raise HTTPException(502, f"Could not fetch that picture: {str(exc)[:120]}")
-            rel = f"thumb/{name}"
-        else:
-            raise HTTPException(400, "That option has no image to fetch.")
         p.thumb.image = rel
-        p.thumb.focal = []                     # a new picture invalidates the old point
+        p.thumb.focal = []
         p.thumb.credit = {k: cand.get(k, "") for k in
                           ("provider", "title", "author", "license", "source_page")}
-        result = _thumb_render(p)
         store.save(p)
-    return {**result, "thumb": p.thumb.to_dict()}
+        snapshot = deepcopy(p)
+    return _thumb_render(snapshot)
 
 
 @app.post("/api/projects/{pid}/thumb/upload")
@@ -1769,7 +1771,7 @@ async def thumb_upload(pid: str, file: UploadFile) -> dict:
         raise HTTPException(400, "That is not an image I can read.")
     with store.lock_for(pid):
         p = _load(pid)
-        name = f"upload_{int(time.time())}{suffix}"
+        name = f"upload_{time.time_ns()}{suffix}"
         dest = project_dir(pid) / "thumb" / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(await file.read())
@@ -1782,9 +1784,9 @@ async def thumb_upload(pid: str, file: UploadFile) -> dict:
         p.thumb.focal = []
         p.thumb.credit = {"provider": "local", "title": file.filename or name,
                           "author": "you", "license": "your own file", "source_page": ""}
-        result = _thumb_render(p)
         store.save(p)
-    return {**result, "thumb": p.thumb.to_dict()}
+        snapshot = deepcopy(p)
+    return _thumb_render(snapshot)
 
 
 @app.post("/api/projects/{pid}/thumb/search")

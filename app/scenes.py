@@ -366,7 +366,13 @@ def capture(project, template, ctx, *, t, size) -> bytes:
     key, html, ctx = _prepare(project, template, ctx, ctx.get('duration', 5), size, ctx.get('fps', 30))
     png = html.with_name(f'{key}_{t}.png')
     if not png.exists():
-        data = stage.capture_one(html, ctx['width'], ctx['height'], t, size,
+        if template.startswith('thumbs/'):
+            data = stage.capture_stills([dict(clip=key,
+                url_path=f'/scene/{{token}}/{html.name}', W=ctx['width'],
+                H=ctx['height'], t=t, size=size)], html.parent,
+                assets_root=html.parent.parent, **ctx.get('asset_roots', {}))[key]
+        else:
+            data = stage.capture_one(html, ctx['width'], ctx['height'], t, size,
                                  assets_root=ctx.get('block_assets_root', html.parent.parent), **ctx.get('asset_roots', {}))
         png.write_bytes(data)
     return png.read_bytes()

@@ -1,0 +1,45 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="_thumbs.css">{% endblock %}
+{% block body %}
+<main class="thumb {{ thumb.key }} {% if thumb.flip %}flip{% endif %} {% if thumb.light %}light{% endif %}"
+ style="--ta:{{ thumb.colors.accent }};--tb:{{ thumb.colors.accent2 }};--tg:{{ thumb.colors.ground }};--ti:{{ thumb.colors.ink }};--font:'{{ thumb.family }}';--cap:{{ thumb.cap }}px;--box:{{ thumb.box }}px;--fit-height:{{ thumb.height }}px;--leading:{{ thumb.leading }};--face:{{ thumb.colors.face }};--tab-ink:{{ thumb.colors.tab_ink }};--band:{{ thumb.colors.band }};--outline:{{ thumb.colors.outline }};--dim:{{ thumb.dim }};--fx:{{ thumb.focal[0] }}%;--fy:{{ thumb.focal[1] }}%">
+  <div class="bed">{% if thumb.bed %}<img src="{{ thumb.bed }}" alt="">{% endif %}</div>
+  <div class="picture">{% if thumb.picture %}<img src="{{ thumb.picture }}" alt="">{% endif %}</div>
+  {% if thumb.cutout %}<img class="cutout" src="{{ thumb.cutout }}" alt="">{% endif %}
+  <div class="shade"></div>
+  <section class="copy" data-lines="{{ thumb.lines }}">
+    <p class="kicker" data-var-text="kicker"></p>
+    <h1 data-var-text="headline"></h1>
+    <i class="rule"></i>
+  </section>
+</main>
+{% endblock %}
+{% block script %}
+<script>
+// Extend runtime readiness: loaded fonts and variables precede synchronous fitting.
+window.__ready = window.__ready.then(async () => {
+  await document.fonts.ready;
+  const el = document.querySelector('h1');
+  const css = getComputedStyle(el);
+  // Fit the line boxes against max-height: glyph ink overflows a tight
+  // line-height by a few pixels, so scrollHeight alone always reads as overflow.
+  const limit = parseFloat(css.maxHeight);
+  const maxLines = Number(el.parentElement.dataset.lines);
+  const leading = {{ thumb.leading }};
+  const probe = document.createElement('canvas').getContext('2d');
+  const blockHeight = () => {
+    const style = getComputedStyle(el);
+    probe.font = `${style.fontSize} ${style.fontFamily}`;
+    const metrics = probe.measureText(el.textContent);
+    return el.offsetHeight - parseFloat(style.lineHeight) +
+      metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+  };
+  el.style.maxHeight = 'none';
+  let s = parseFloat(css.fontSize);
+  while ((blockHeight() > limit || el.offsetHeight > s * leading * maxLines + 1 || el.scrollWidth > el.clientWidth + 1) && s > 28) {
+    s = Math.max(28, s - 3); el.style.fontSize = s + 'px';
+  }
+  el.style.maxHeight = '';
+});
+</script>
+{% endblock %}
