@@ -1,0 +1,72 @@
+"""UI harness contracts, deliberately independent of Chromium and sockets."""
+from pathlib import Path
+
+import pytest
+
+from scripts.ui_snapshots import FORMATS, console_error, output_path, routes, seed
+
+
+def test_routes_match_current_tabs_and_families():
+    paths = routes()
+    assert len(paths) == len(set(paths)) == 28
+    assert paths[:4] == ['#/', '#/library', '#/settings', '#/guide']
+    assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
+    for fmt in FORMATS:
+        assert {p.rsplit('/', 1)[1] for p in paths if p.startswith(f'#/p/psnap{fmt}/')} == (
+            {'script', 'media', 'record', 'thumb', 'render'} |
+            ({'cast', 'stage'} if fmt == 'stage' else set()))
+    source = (Path(__file__).resolve().parents[2] / 'static/js/core.js').read_text()
+    for tab in ('script', 'media', 'record', 'thumb', 'render', 'cast', 'stage'):
+        assert f"['{tab}'," in source
+
+
+def test_output_paths_are_unique_and_contained(tmp_path):
+    paths = [output_path(tmp_path, route) for route in routes()]
+    assert len(set(paths)) == 28
+    assert paths[0] == tmp_path / 'home.png'
+    assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
+    assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)
+
+
+@pytest.mark.parametrize('route', ['../../escape', '#/../escape', '#//etc', '#/a-b', '#/a%2Fb', '#/a\\b'])
+def test_reject_unsafe_output_routes(tmp_path, route):
+    with pytest.raises(ValueError):
+        output_path(tmp_path, route)
+
+
+@pytest.mark.parametrize('event, expected', [
+    ({'method': 'Runtime.consoleAPICalled', 'params': {'type': 'error', 'args': [
+        {'value': 'probe'}, {'description': 'Error: broken'}, {'value': 42}]}},
+     'console.error: probe Error: broken 42'),
+    ({'method': 'Runtime.consoleAPICalled', 'params': {'type': 'error'}}, 'console.error: '),
+    ({'method': 'Runtime.exceptionThrown', 'params': {'exceptionDetails': {
+        'text': 'Uncaught', 'exception': {'description': 'ReferenceError: missing'},
+        'url': 'core.js', 'lineNumber': 9}}}, 'exception: ReferenceError: missing (core.js:10)'),
+    ({'method': 'Runtime.exceptionThrown', 'params': {'exceptionDetails': {'text': 'Uncaught'}}},
+     'exception: Uncaught (:1)'),
+    ({'method': 'Runtime.consoleAPICalled', 'params': {'type': 'warning'}}, None),
+    ({'method': 'Network.loadingFinished'}, None),
+])
+def test_console_error_parsing(event, expected):
+    assert console_error(event) == expected
+
+
+def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
+    from app import channels, config, library, store
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
+    monkeypatch.setattr(channels, 'CHANNELS_DIR', tmp_path / 'channels')
+    monkeypatch.setattr(config, 'WRITABLE_DIRS', (tmp_path / 'library',))
+    monkeypatch.setattr(library, '_INDEX_FILE', tmp_path / 'library/library.json')
+    monkeypatch.setattr(library, '_FILES', tmp_path / 'library')
+    monkeypatch.setattr(library, '_THUMBS', tmp_path / 'library')
+    monkeypatch.setattr(library, 'LIBRARY_DIR', tmp_path / 'library')
+    seed()
+    assert channels.load('csnapshot').name == 'Snapshot channel'
+    for fmt in FORMATS:
+        p = store.load(f'psnap{fmt}')
+        assert p.style.format == fmt
+        assert p.channel_id == 'csnapshot'
+        assert all(not slide.take for slide in p.slides)
+        assert store.project_dir(p.id).joinpath('media/pic.jpg').is_file()
+    assets = library.list_all()
+    assert len(assets) == 1 and assets[0]['title'] == 'Fixture picture'

@@ -91,6 +91,8 @@ def test_cdp_error_reply_and_event_limit():
     request_r, request_w = os.pipe()
     response_r, response_w = os.pipe()
     cdp = _Cdp(request_w, response_r)
+    received = []
+    cdp.on_event = received.append
 
     def reply():
         raw = b""
@@ -112,6 +114,8 @@ def test_cdp_error_reply_and_event_limit():
         worker.join()
         assert len(cdp.events) == 200
         assert cdp.events[0]["params"]["n"] == 5
+        assert len(received) == 205  # subscribers see events before queue truncation
+        assert received[0]['params']['n'] == 0
         cdp.clear_events()
         with pytest.raises(StageError, match="timed out"):
             cdp.wait_event("missing", timeout=0.001)

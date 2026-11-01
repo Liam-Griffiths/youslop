@@ -412,6 +412,7 @@ class _Cdp:
         self.condition = threading.Condition()
         self.write_lock = threading.Lock()
         self.closed = False
+        self.on_event = None
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -429,6 +430,8 @@ class _Cdp:
                             if q is not None:
                                 q.put(msg)
                         else:
+                            if self.on_event is not None:
+                                self.on_event(msg)
                             self.events.append(msg)
                             self.events[:] = self.events[-200:]
                         self.condition.notify_all()
@@ -516,7 +519,13 @@ def _evaluate(cdp, session, expression):
 
 
 def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
-             frames=1, seek_js="window.__seek({t})", deterministic=True):
+             frames=1, seek_js="window.__seek({t})", deterministic=True,
+             session_action=None):
+    """Run scene capture, or a custom action with the same managed CDP session.
+
+    session_action(cdp, session, run) owns navigation and capture when supplied.
+    Event callbacks run on the reader thread and must not send CDP commands.
+    """
     if sys.platform == "win32":
         raise StageError("scene rendering needs Linux or macOS for now")
     import fcntl
@@ -525,9 +534,11 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
     if not exe:
         raise StageError(available()[1])
     run = _Run(job, out_dir)
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _handler(run))
-    srv.daemon_threads = True
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv = None
+    if session_action is None:
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _handler(run))
+        srv.daemon_threads = True
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
     proc = cdp = prof = None
     pipes = []
     try:
@@ -563,6 +574,9 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             "targetId": target["targetId"], "flatten": True})["sessionId"]
         cdp.send("Page.enable", session=session)
         cdp.send("Runtime.enable", session=session)
+        if session_action is not None:
+            session_action(cdp, session, run)
+            return run
         for item in job["items"]:
             W, H = int(item["W"]), int(item["H"])
             output_size = item.get("size", size)
@@ -623,8 +637,9 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             prof.cleanup()
         for fd in pipes:
             os.close(fd)
-        srv.shutdown()
-        srv.server_close()
+        if srv is not None:
+            srv.shutdown()
+            srv.server_close()
         for c in run.clips.values():
             if not c.get("done"):
                 if c["proc"].poll() is None:

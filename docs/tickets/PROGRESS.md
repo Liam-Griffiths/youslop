@@ -130,7 +130,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T9.1 | Studio flow map and screen spec | S | T6.1, owner sign-off | todo | mockups: Corkbored studio flow canvas; owner approves first |
-| T9.2 | UI screenshot and console harness | S | T0.5 | todo |  |
+| T9.2 | UI screenshot and console harness | S | T0.5 | done | 2026-10-31 Codex; scripts/ui_snapshots.py: 28 routes in 17.6s, exits 1 on console.error |
 | T9.3 | New app shell and routes | M | T9.1, T4.1, T6.1 | todo |  |
 | T9.4 | Stage model and readiness API | S | T9.1, T1.5 | todo |  |
 | T9.5 | Home and start-a-video flow | M | T9.3 | todo |  |
