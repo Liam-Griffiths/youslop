@@ -40,3 +40,18 @@ document.addEventListener('keydown', (e) => {
 
 
 route();
+
+
+// Only claim bundle drops; media and camera views keep their own drop handlers.
+document.addEventListener('dragover', e => {
+  if (Array.from(e.dataTransfer?.items || []).some(i => i.kind === 'file')) e.preventDefault();
+});
+document.addEventListener('drop', e => {
+  const files = Array.from(e.dataTransfer?.files || []);
+  const bundle = files.find(f => /\.(corkboredpack|corkbored|youslop)$/i.test(f.name));
+  if (!bundle) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (/\.corkboredpack$/i.test(bundle.name)) installPackFile(bundle);
+  else openProjectFile(bundle);
+}, true);

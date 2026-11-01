@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import json
 import shutil
+import stat
 import tempfile
 import time
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import brand, channels, slide_styles, store
 from .config import CACHE_DIR, CHANNELS_DIR, MUSIC_DIR, PROJECTS_DIR
@@ -122,19 +123,41 @@ def export(pid: str, dest: Path) -> dict:
             "title": manifest["title"]}
 
 
+def checked_members(zf, *, max_bytes=None, max_files=None):
+    """Validate the entire archive before creating any files."""
+    entries = zf.infolist()
+    if ((max_files is not None and len(entries) > max_files)
+            or (max_bytes is not None and sum(i.file_size for i in entries) > max_bytes)):
+        raise TransferError('Archive exceeds unpacked size or file count limit')
+    seen = set()
+    for info in entries:
+        name = info.filename
+        parts = PurePosixPath(name).parts
+        mode = info.external_attr >> 16
+        kind = stat.S_IFMT(mode)
+        if (not parts or name.startswith('/') or '\\' in name
+                or PureWindowsPath(name).drive or '..' in parts
+                or kind not in (0, stat.S_IFREG, stat.S_IFDIR)):
+            raise TransferError(f'Refusing unsafe archive member: {name}')
+        canonical = '/'.join(parts)
+        if canonical in seen:
+            raise TransferError(f'Duplicate archive member: {name}')
+        seen.add(canonical)
+    return entries
+
+
 def _extract(zf: zipfile.ZipFile, prefix: str, into: Path) -> None:
-    """Unpack the members under `prefix/` into `into`, refusing any that would
-    land outside it (a crafted zip can name `../../somewhere`)."""
+    """Extract a validated archive subtree into a private staging directory."""
     into = into.resolve()
-    for info in zf.infolist():
-        if info.is_dir() or not info.filename.startswith(prefix + "/"):
+    for info in checked_members(zf):
+        if info.is_dir() or not info.filename.startswith(prefix + '/'):
             continue
         rel = info.filename[len(prefix) + 1:]
         target = (into / rel).resolve()
         if not target.is_relative_to(into):
-            raise TransferError(f"Refusing a file outside the project: {info.filename}")
+            raise TransferError(f'Refusing a file outside the project: {info.filename}')
         target.parent.mkdir(parents=True, exist_ok=True)
-        with zf.open(info) as src, target.open("wb") as dst:
+        with zf.open(info) as src, target.open('xb') as dst:
             shutil.copyfileobj(src, dst)
 
 

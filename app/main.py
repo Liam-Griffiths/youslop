@@ -2792,10 +2792,53 @@ def music_list() -> list[dict]:
          for pack in packs.scan() for item in pack.music()]
 
 
+@app.get('/api/packs')
+def list_packs() -> dict:
+    return dict(packs=[packs.summary(p) for p in packs.scan()], more_url=brand.PACKS_URL)
+
+
 @app.post('/api/packs/rescan')
 def rescan_packs() -> list[dict]:
-    return [dict(id=p.id, name=p.name, version=p.version, problems=p.problems,
-                 item_problems=p.item_problems) for p in packs.scan(force=True)]
+    return [packs.summary(p) for p in packs.scan(force=True)]
+
+
+@app.post('/api/packs/install')
+def install_pack(file: UploadFile, replace: bool = Form(False)) -> dict:
+    if not (file.filename or '').lower().endswith(packs.EXTENSION):
+        raise HTTPException(400, 'Choose a .corkboredpack file')
+    with tempfile.TemporaryFile(dir=CACHE_DIR) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp.seek(0)
+        try:
+            return packs.install(tmp, replace=replace)
+        except packs.ReplaceRequired as exc:
+            raise HTTPException(409, dict(message=str(exc), replace_required=True))
+        except packs.PackError as exc:
+            raise HTTPException(400, str(exc))
+
+
+@app.get('/api/packs/{pid}/uses')
+def pack_uses(pid: str) -> dict:
+    try:
+        return packs.uses(pid)
+    except packs.PackError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.delete('/api/packs/{pid}')
+def remove_pack(pid: str) -> dict:
+    try:
+        return packs.remove(pid)
+    except packs.PackError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get('/api/packs/{pid}/preview')
+def pack_preview(pid: str):
+    pack = next((p for p in packs.scan() if p.id == pid and not p.problems), None)
+    if pack is None or not (pack.path / 'preview.jpg').is_file():
+        raise HTTPException(404, 'No pack preview')
+    return FileResponse(pack.path / 'preview.jpg')
 
 
 @app.get('/fonts/packs/{pack_id}/{filename}')

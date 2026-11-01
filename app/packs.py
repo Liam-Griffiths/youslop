@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 import re
 import stat
+import shutil
+import tempfile
+import uuid
+import zipfile
 import threading
 
 import jinja2
@@ -143,6 +147,8 @@ def scan(*, force=False):
     with _LOCK:
         result = []
         for root in sorted(PACKS_DIR.glob('*')):
+            if root.name.startswith('.'):
+                continue
             if not root.is_dir() and not root.is_symlink():
                 continue
             try:
@@ -170,3 +176,157 @@ def resolve(ref, kind=None):
 def font_path(url):
     match = re.fullmatch(r'/fonts/packs/(' + _ID + r')/([\w-]+\.(?:ttf|otf|woff2))', url)
     return resolve('/'.join(match.groups()), 'fonts') if match else None
+
+
+EXTENSION = '.corkboredpack'
+MAX_BYTES = 2 * 1024**3
+MAX_FILES = 10_000
+
+
+class PackError(ValueError):
+    pass
+
+
+class ReplaceRequired(PackError):
+    pass
+
+
+def summary(pack):
+    preview = pack.path / 'preview.jpg'
+    return dict(id=pack.id, name=pack.name, version=pack.version, author=pack.author,
+                licence=pack.licence, licence_url=pack.licence_url, description=pack.description,
+                problems=pack.problems, item_problems=pack.item_problems,
+                preview=f'/api/packs/{pack.id}/preview' if preview.is_file() and not pack.problems else '',
+                items={k: [dict(ref=i['ref'], label=i['label']) for i in v]
+                       for k, v in pack.items.items()})
+
+
+def _version(value):
+    # Compare numeric releases, with prereleases before the corresponding release.
+    match = re.fullmatch(r'(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?', value)
+    if not match:
+        raise PackError('Pack upgrades require numeric release versions (for example 1.2.0)')
+    numbers = [int(n) for n in match[1].split('.')]
+    while len(numbers) > 1 and numbers[-1] == 0:
+        numbers.pop()
+    pre = tuple((0, int(n)) if n.isdigit() else (1, n) for n in (match[2] or '').split('.'))
+    return tuple(numbers), match[2] is None, pre
+
+
+def _archive_old(root, version):
+    old = PACKS_DIR / '.old'
+    old.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r'[^a-zA-Z0-9._-]', '_', str(version))[:80] or 'unknown'
+    target = old / f'{root.name}-{safe}'
+    if target.exists():
+        target = old / f'{root.name}-{safe}-{uuid.uuid4().hex[:8]}'
+    root.rename(target)
+    return target
+
+
+def install(src, *, replace=False):
+    from . import transfer
+    cache = PACKS_DIR.parent / '.cache'
+    cache.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix='pack-', dir=cache) as temp, zipfile.ZipFile(src) as zf:
+            entries = transfer.checked_members(zf, max_bytes=MAX_BYTES, max_files=MAX_FILES)
+            roots = {i.filename.split('/')[0] for i in entries}
+            if len(roots) != 1 or not re.fullmatch(_ID, next(iter(roots), '')):
+                raise PackError('Pack archive must contain one folder named after its id')
+            pid = roots.pop()
+            if f'{pid}/pack.json' not in zf.namelist():
+                raise PackError('Pack archive has no pack.json')
+            if any((i.external_attr >> 16) & 0o111 for i in entries if not i.is_dir()):
+                raise PackError('Pack archive contains executable files')
+            staged = Path(temp) / pid
+            transfer._extract(zf, pid, staged)
+            pack = _load(staged)  # includes _validate and validation of every item
+            problems = pack.problems + [f'{ref}: {p}' for ref, ps in pack.item_problems.items() for p in ps]
+            if problems:
+                raise PackError('; '.join(problems))
+            with _LOCK:
+                PACKS_DIR.mkdir(parents=True, exist_ok=True)
+                final = PACKS_DIR / pid
+                previous = None
+                if final.exists() or final.is_symlink():
+                    current = _load(final)
+                    if _version(pack.version) <= _version(current.version):
+                        raise PackError(f'{pid} {current.version} is already installed; same or older version refused')
+                    if not replace:
+                        raise ReplaceRequired(f'Replace {pid} {current.version} with {pack.version}? The old pack will be kept.')
+                    previous = _archive_old(final, current.version)
+                try:
+                    staged.rename(final)
+                except OSError:
+                    if previous:
+                        previous.rename(final)
+                    raise
+                scan(force=True)
+                return summary(_load(final))
+    except (transfer.TransferError, zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError) as exc:
+        raise PackError(str(exc)) from exc
+
+
+def _installed(pid):
+    if not re.fullmatch(_ID, pid):
+        raise PackError('Invalid pack id')
+    root = PACKS_DIR / pid
+    if not root.exists() and not root.is_symlink():
+        raise PackError('No such installed pack')
+    return root
+
+
+def references(value, pid):
+    if isinstance(value, str):
+        return value.startswith((pid + '/', 'pack/' + pid + '/', 'scene:pack/' + pid + '/', 'pack:' + pid + '/'))
+    if isinstance(value, dict):
+        return any(references(v, pid) for v in value.values())
+    if isinstance(value, list):
+        return any(references(v, pid) for v in value)
+    return False
+
+
+def uses(pid):
+    from .config import CHANNELS_DIR, PROJECTS_DIR
+    _installed(pid)
+    result = dict(channels=[], projects=[])
+    for kind, directory, filename in [('channels', CHANNELS_DIR, 'channel.json'),
+                                       ('projects', PROJECTS_DIR, 'project.json')]:
+        for path in sorted(directory.glob('*/' + filename)):
+            try:
+                data = _json(path)
+                if references(data, pid):
+                    result[kind].append(dict(id=path.parent.name,
+                        name=data.get('name') or data.get('title') or data.get('idea') or path.parent.name))
+            except (OSError, ValueError):
+                continue
+    return result
+
+
+def remove(pid):
+    with _LOCK:
+        root = _installed(pid)
+        target = _archive_old(root, _load(root).version)
+        scan(force=True)
+        return dict(id=pid, archived_to=str(target))
+
+
+def missing_items(value):
+    """Find missing pack references in persisted item fields, without inspecting prose."""
+    missing = set()
+    def walk(value, key=''):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                walk(v, k)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, key)
+        elif isinstance(value, str):
+            ref = value.removeprefix('scene:').removeprefix('pack:')
+            if (ref.startswith('pack/') or key in {'theme', 'music', 'model'}):
+                pid = ref.removeprefix('pack/').split('/')[0]
+                if '/' in ref and re.fullmatch(_ID, pid) and resolve(ref) is None:
+                    missing.add(ref)
+    walk(value)
+    return sorted(missing)

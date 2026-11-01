@@ -504,6 +504,11 @@ def run(project, measure=False) -> dict:
     else:
         _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
+    from . import packs
+    for ref in sorted(set(packs.missing_items(project.to_dict()) +
+                          packs.missing_items(channel.to_dict() if channel else {}))):
+        findings.append(_finding('missing_pack_item', 'P1', 0, '',
+                                 f'Missing pack item: {ref}. Using a default or omitting it.'))
     findings.sort(key=lambda f: (int(f.level[1]), f.t))
     counts = {level: sum(f.level == level for f in findings) for level in ('P0', 'P1', 'P2')}
     return {'ok': counts['P0'] == 0, 'counts': counts,

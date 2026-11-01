@@ -72,6 +72,8 @@ async function renderSettings() {
         </select>
       </label>
     </div>
+    <h2>Packs</h2>
+    <div id="packs-screen"></div>
     <div id="settings-groups">
       ${groups.map((g) => `
         <h2 style="font-size:15px;margin:26px 0 10px">${esc(g.name)}</h2>
@@ -84,6 +86,7 @@ async function renderSettings() {
       <button class="btn primary" onclick="saveSettingsForm()">Save settings</button>
       <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
     </div>`;
+  await renderPacks();
 }
 
 async function saveSettingsForm() {
@@ -97,5 +100,76 @@ async function saveSettingsForm() {
     await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
     toast('Saved — takes effect next launch');
     await renderSettings();
+  } catch (e) { toast(e.message, true); }
+}
+
+
+function packLink(url) {
+  try { return ['https:', 'http:'].includes(new URL(url).protocol) ? esc(url) : ''; }
+  catch { return ''; }
+}
+
+async function renderPacks() {
+  const host = $('#packs-screen');
+  if (!host) return;
+  try {
+    const data = await api('/api/packs');
+    host.innerHTML = `<button class="btn" onclick="$('#pack-file').click()">Install pack…</button>
+      <input id="pack-file" type="file" accept=".corkboredpack" hidden
+        onchange="installPackFile(this.files[0]);this.value=''">
+      ${packLink(data.more_url) ? `<a href="${packLink(data.more_url)}" target="_blank" rel="noopener">Get more packs</a>` : ''}
+      <p class="sub">Choose a pack file or drop it onto the window. Installed packs are available immediately.</p>
+      ${data.packs.length ? data.packs.map(p => `<article class="panel" style="margin:12px 0">
+        ${p.preview ? `<img src="${esc(p.preview)}" alt="${esc(p.name)} preview" style="width:240px;max-width:100%">` : ''}
+        <p><strong>${esc(p.name || p.id)}</strong> · ${esc(p.version)} · ${esc(p.author)} ·
+          ${esc(Object.entries(p.items).map(([kind, items]) => `${items.length} ${items.length === 1 ? kind.replace(/s$/, '') : kind}`).join(', '))}</p>
+        <p>${esc(p.description)}</p>
+        <p>${packLink(p.licence_url) ? `<a href="${packLink(p.licence_url)}" target="_blank" rel="noopener">${esc(p.licence)}</a>` : esc(p.licence)}</p>
+        ${[...p.problems, ...Object.entries(p.item_problems).map(([ref, errors]) => `${ref}: ${errors.join('; ')}`)]
+          .map(problem => `<p class="pill warn">${esc(problem)}</p>`).join('')}
+        <details><summary>Show contents</summary><ul>${Object.entries(p.items).flatMap(([kind, items]) =>
+          items.map(i => `<li>${esc(kind)}: ${esc(i.label)} <span class="mono">${esc(i.ref)}</span></li>`)).join('')}</ul></details>
+        <button class="btn sm ghost" data-pack-id="${esc(p.id)}" onclick="removePack(this.dataset.packId)">Remove…</button>
+      </article>`).join('') : '<p>No packs installed.</p>'}`;
+  } catch (e) { host.textContent = e.message; }
+}
+
+async function refreshPackPickers() {
+  state.templates = null;
+  state.thumbStyles = null;
+  state.endTemplates = null;
+  state.models = null;
+  state.themes = await api('/api/themes');
+}
+
+async function installPackFile(file, replace = false) {
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('replace', String(replace));
+  toast(`Installing ${file.name}…`);
+  try {
+    const p = await api('/api/packs/install', {method: 'POST', body: form});
+    await refreshPackPickers();
+    toast(`Installed ${p.name} · ${p.version}`);
+    if ($('#packs-screen')) await renderPacks();
+    else go('#/settings');
+  } catch (e) {
+    if (e.status === 409 && e.detail?.replace_required && confirm(e.message)) {
+      return installPackFile(file, true);
+    }
+    toast(e.message, true);
+  }
+}
+
+async function removePack(id) {
+  try {
+    const uses = await api(`/api/packs/${encodeURIComponent(id)}/uses`);
+    const lines = [...uses.channels.map(c => `Channel: ${c.name}`), ...uses.projects.map(p => `Project: ${p.name}`)];
+    if (!confirm(`${lines.length ? lines.join('\n') : 'No channels or projects use this pack.'}\n\nRemove ${id}? Its folder will be kept. Missing items fall back to defaults.`)) return;
+    await api(`/api/packs/${encodeURIComponent(id)}`, {method: 'DELETE'});
+    await refreshPackPickers();
+    await renderPacks();
+    toast('Pack removed. Its folder was kept.');
   } catch (e) { toast(e.message, true); }
 }
