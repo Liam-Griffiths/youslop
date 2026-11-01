@@ -10,6 +10,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > Resumed 18:17 PDT at T4.1 after the window reset; done since then: T4.1, T2.7c, T6.1, T6.2, T9.2, T10.1, T11.1–T11.3, T4.3–T4.8, T10.3, T10.5, T11.8, T12.1, T12.2, T11.4.
 > **2026-11-01 01:55 PDT:** owner made the scene builder the priority. T2.8 and T2.9 done. Codex 5-hour window at 89% (weekly 45%); paused until it resets (~04:45 PDT), then T2.10, T5.3a on the builder, T12.3. T10.2/T10.4/T10.7 wait on the house-read decision; Phase 9 waits on T9.1 sign-off.
 > **2026-11-01 ~05:10 PST:** window reset; T2.10, T5.3a–e done (all drawn cuts on the builder; each preview within ~2x Pillow, Group Chat cold ~2.5x, see its log). Builder fixes along the way: parallel passes, cheap probe signatures, stills filtered once, ground overflow, media blur. Next: T12.3 batches 2–4, T5.4, T5.5, T6.3.
+> **2026-11-01 ~06:30 PST:** T12.3 batches 2 and 3 done (27 core blocks). Codex 5-hour window at 92% (weekly 60%); paused until it resets (~08:40 PST), then T12.3 batch 4, T5.4, T5.5, T6.3.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -180,7 +181,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T12.1 | Corkbored block format and local registry | M | T2.3, T2.7c | done | 2026-10-31 Codex; clean-room block format + registry, 9 built-in blocks wrap our templates; fixed preview default length |
 | T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
-| T12.3 | Core block set v1 | L | T12.2, T2.10 | doing | batch 1 (12 text) and batch 2 (8 data) done, all pass browser checks; batches 3-4 next |
+| T12.3 | Core block set v1 | L | T12.2, T2.10 | doing | batches 1-3 (12 text, 8 data, 7 explainers) done, all pass browser checks; batch 4 (channel) next |
 | T12.4 | Data blocks from tables | M | T12.3 | todo | number-match check |
 | T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |
 | T12.6 | Make a block from a description | M | T12.2 | todo | model writes a reusable block once |
