@@ -9,6 +9,8 @@ async function renderHome() {
     .map((p) => `<span class="pill ${p.available ? 'on' : ''}" title="${p.available ? 'ready' : 'no API key'}">
       <span class="dot"></span>${esc(p.name)}</span>`).join('');
 
+  let homeQuery = '';
+  try { homeQuery = localStorage.getItem('corkbored.homeQuery') || ''; } catch (_) {}
   const byChannel = (id) => projects.filter((p) => (p.channel_id || '') === id);
   const loose = byChannel('');
   state.soloCount = loose.length;
@@ -118,12 +120,21 @@ async function renderHome() {
 
     <div class="row" id="standalone" style="margin:34px 0 14px;align-items:baseline;
          scroll-margin-top:16px">
-      <h2 style="margin:0">${chans.length ? 'Standalone videos' : 'Your videos'}</h2>
+      <h2 style="margin:0">Your videos</h2>
       <span class="mono" style="color:var(--ink-faint)">
-        ${loose.length ? `${loose.length} video${loose.length === 1 ? '' : 's'} in no channel` : ''}</span>
+        ${projects.length} video${projects.length === 1 ? '' : 's'}</span>
     </div>
-    ${loose.length === 0 ? '<div class="empty-note">Bucket\'s empty. Go make some slop.</div>'
-      : loose.map(projRow).join('')}
+    <div class="row" style="flex-wrap:wrap">
+      <label class="field"><span>Search videos</span><input id="home-query" type="search" value="${esc(homeQuery)}"></label>
+      <label class="field"><span>Channel</span><select id="home-channel">
+        <option value="*">All channels</option><option value="">Standalone</option>
+        ${chans.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
+      </select></label>
+      <label class="field"><span>Sort by</span><select id="home-sort">
+        <option value="updated">Recently updated</option><option value="title">Title</option>
+      </select></label>
+    </div>
+    <div id="home-videos" aria-live="polite"></div>
 
     <div class="row" style="margin:34px 0 14px;align-items:baseline">
       <h2 style="margin:0">Channels</h2>
@@ -145,10 +156,25 @@ async function renderHome() {
             ${c.intro_ready ? `slate: ${c.intro_images} cast` : 'no slate yet'}</span>
         </div>`).join('')}
 
-    ${chans.filter((c) => byChannel(c.id).length).map((c) => `
-      <h2>${esc(c.name)}</h2>
-      ${byChannel(c.id).map(projRow).join('')}`).join('')}
   `;
+  const paintVideos = () => {
+    const query = $('#home-query').value.toLocaleLowerCase().trim();
+    try { localStorage.setItem('corkbored.homeQuery', $('#home-query').value); } catch (_) {}
+    const channel = $('#home-channel').value;
+    const names = new Map(chans.map((c) => [c.id, c.name]));
+    const matches = projects.filter((p) => (channel === '*' || (p.channel_id || '') === channel)
+      && [p.title, p.idea, names.get(p.channel_id) || 'Standalone', p.status]
+        .join(' ').toLocaleLowerCase().includes(query));
+    matches.sort($('#home-sort').value === 'title'
+      ? (a, b) => (a.title || a.idea || '').localeCompare(b.title || b.idea || '')
+      : (a, b) => b.updated_at - a.updated_at);
+    $('#home-videos').innerHTML = matches.length
+      ? matches.map(projRow).join('') : '<div class="empty-note">No videos match these filters.</div>';
+  };
+  $('#home-query').oninput = paintVideos;
+  $('#home-channel').onchange = paintVideos;
+  $('#home-sort').onchange = paintVideos;
+  paintVideos();
   if (state.presetChannel) {
     state.presetChannel = null;
     channelPicked();

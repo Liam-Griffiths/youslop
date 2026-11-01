@@ -43,6 +43,7 @@ function paintScript() {
     <span class="mono" style="color:var(--ink-faint)">${words} words · ${p.slides.length} paragraphs ·
       ~${fmtTime(p.est_seconds)} at a documentary pace</span>
     <div class="spacer"></div>
+    <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
     ${research.facts && research.facts.length
       ? `<button class="btn sm ghost" onclick="runFactcheck()">check facts</button>` : ''}
     ${p.has_source ? `
@@ -51,7 +52,7 @@ function paintScript() {
         re-split as ${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}</button>
       <button class="btn sm ghost" onclick="reimport('')">re-split again</button>`
     : `<button class="btn sm danger" onclick="regenScript()">rewrite whole script</button>`}
-  </div>`;
+  </div><div id="chapter-proposals"></div>`;
 
   const stage = isStage(p.style.format), vflags = p.visual_flags || {};
   const nWarn = Object.values(vflags).filter((f) => f.level === 'warn').length;
@@ -260,4 +261,36 @@ async function regenScript(fresh) {
     { method: 'POST', body: JSON.stringify({ fresh: !!fresh }) });
   watchJob(r.job, 'script');
   render();
+}
+
+async function suggestChapters(button) {
+  const pid = state.project.id;
+  button.disabled = true;
+  try {
+    const proposals = await api(`/api/projects/${pid}/chapters/suggest`, {method: 'POST'});
+    const panel = $('#chapter-proposals');
+    if (!panel || state.project.id !== pid) return;
+    panel.innerHTML = proposals.length ? `<div class="panel">
+      <p>Applying chapters lengthens the video by roughly 5 seconds per chapter and may split picture runs.</p>
+      ${proposals.map((p) => `<label class="row"><input type="checkbox" value="${esc(p.sid)}" checked style="width:auto">
+        <span class="mono">${fmtTime(p.t)}</span> ${esc(p.text)}</label>`).join('')}
+      <button class="btn sm" onclick="applySuggestedChapters(this)">Apply selected chapters</button>
+      </div>` : '<p class="empty-note">No new chapter boundaries found.</p>';
+  } catch (e) { toast(e.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function applySuggestedChapters(button) {
+  const pid = state.project.id;
+  const sids = [...$('#chapter-proposals').querySelectorAll('input:checked')].map((el) => el.value);
+  if (!sids.length) return toast('Select a chapter to apply.');
+  button.disabled = true;
+  try {
+    await api(`/api/projects/${pid}/chapters/suggest`, {
+      method: 'POST', body: JSON.stringify({apply: true, sids}),
+    });
+    if (state.project.id !== pid) return;
+    state.project = await api(`/api/projects/${pid}`);
+    paintScript();
+  } catch (e) { toast(e.message, true); button.disabled = false; }
 }

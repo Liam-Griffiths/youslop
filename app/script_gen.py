@@ -5,6 +5,7 @@ import copy
 import concurrent.futures as cf
 import hashlib
 import re
+import string
 import threading
 from typing import Any, Callable
 
@@ -77,6 +78,38 @@ def _frame_text(project: Project) -> str:
     channel = channels.load_or_none(project.channel_id)
     return "PACING AND HOUSE RULES:\n" + project.frame.prompt_block(
         project.style.format, channel.frame if channel else None)
+
+
+def suggest_chapters(project: Project) -> list[dict]:
+    """Propose beat boundaries using the cut's paragraph times, without a model."""
+    from . import render
+
+    paragraphs = [p for seg in render.timeline(project)["segments"]
+                  for p in seg["paragraphs"]]
+    if not paragraphs:
+        return []
+    starts = {p["id"]: p["start"] for p in paragraphs}
+    # Exclude end slates: the ending guard is relative to narration.
+    end = max(p["start"] + p["duration"] for p in paragraphs)
+    proposals = []
+    previous_beat = None
+    main_seen = False
+    for slide in project.slides:
+        first_main = slide.section == "main" and not main_seen
+        main_seen |= slide.section == "main"
+        changed = slide.beat != previous_beat
+        previous_beat = slide.beat
+        t = starts.get(slide.id)
+        if t is None or end - t < 20:
+            continue
+        spaced = not proposals or t - proposals[-1]["t"] >= 45
+        if not slide.chapter and (first_main or (changed and spaced and main_seen)):
+            text = " ".join((slide.beat or slide.narration).split()[:6])
+            if slide.beat:
+                text = string.capwords(text)  # .title() would give "System'S".
+            if text:
+                proposals.append({"sid": slide.id, "text": text, "t": t})
+    return proposals
 
 
 # --------------------------------------------------------------------- outline

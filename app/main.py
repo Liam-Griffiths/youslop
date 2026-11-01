@@ -751,6 +751,26 @@ def get_project(pid: str) -> dict:
     return d
 
 
+@app.post("/api/projects/{pid}/chapters/suggest")
+def suggest_chapters(pid: str, payload: dict = Body(default={})) -> list[dict]:
+    with store.lock_for(pid):
+        project = _load(pid)
+        proposals = script_gen.suggest_chapters(project)
+        if payload.get("apply") is True:
+            selected = payload.get("sids")
+            if selected is not None and (not isinstance(selected, list)
+                                         or any(not isinstance(sid, str) for sid in selected)):
+                raise HTTPException(400, "sids must be a list of slide ids")
+            by_id = {s.id: s for s in project.slides}
+            for proposal in proposals:
+                if selected is None or proposal["sid"] in selected:
+                    slide = by_id[proposal["sid"]]
+                    if not slide.chapter:
+                        slide.chapter = proposal["text"]
+            store.save(project)
+        return proposals
+
+
 def _apply_narrator(narrator, patch) -> None:
     """Validate a narrator patch. An unknown voice is a typo, not a new voice."""
     if not isinstance(patch, dict):
