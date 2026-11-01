@@ -1,0 +1,20 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>{% include 'board/_board.css' %}
+{% if plate %}html,body { background:transparent!important; }{% endif %}</style>
+{% endblock %}
+{% block body %}
+<div class="board" style="--margin:{{ margin }}px;--body-x:{{ body.x }}px;--body-y:{{ body.y }}px;--body-w:{{ body.w }}px;--body-h:{{ body.h }}px;{% if not plate %}--board-ground:url('{{ ground_url }}'){% endif %}">
+{% for start, arrival in beats %}{% set order=loop.index0 %}
+{% if active_order is none or active_order == order %}
+<svg class="clip" data-start="{{ 0 if settled else start }}" data-duration="{{ duration }}" data-track-index="{{ order }}" viewBox="0 0 1920 1080"
+     {% if not settled %}data-anim="fade" data-anim-dur="{{ arrival }}" data-anim-exit="0"{% endif %}>
+{% for p in photos if p.order == order %}<image href="{{ p.url }}" x="{{ p.x }}" y="{{ p.y }}" width="{{ p.w }}" height="{{ p.h }}"/>{% endfor %}
+{% for m in marks if m.order == order %}
+{% if m.kind == 'text' %}<text class="{{ 'mono' if m.font == 'mono' else 'hand' }}" x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
+{% elif m.kind == 'wash' %}<circle cx="{{ m.pts[0][0] }}" cy="{{ m.pts[0][1] }}" r="{{ m.radius }}" fill="{{ m.color }}" opacity="{{ m.alpha }}"/>
+{% else %}<polyline points="{% for x,y in m.pts %}{{ x }},{{ y }} {% endfor %}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>{% endif %}
+{% endfor %}</svg>
+{% endif %}{% endfor %}</div>
+<script>window.__board = {{ board | tojson }};</script>
+{% endblock %}

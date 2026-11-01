@@ -653,6 +653,11 @@ def _compose(base: Image.Image, sheet: Sheet, reveal: dict[int, float],
         dg.draw_marks(base, live, reveal, hand)
 
 
+def reveal_plan(sheet: Sheet, seconds: float, settle: float = 0.5):
+    """Shared normalized beat starts and arrival durations for both engines."""
+    return dg.schedule(sheet.beats, seconds, settle=settle)
+
+
 def frames(sheet: Sheet, seconds: float, ground: Image.Image, hand: str,
            settle: float = 0.5):
     """A board filling up over `seconds`, as RGB frames at `FPS`.
@@ -660,7 +665,7 @@ def frames(sheet: Sheet, seconds: float, ground: Image.Image, hand: str,
     Beats that have finished are folded into the base and never redrawn, so
     holding on a finished board costs one copy per frame rather than a redraw.
     """
-    plan = dg.schedule(sheet.beats, seconds, settle=settle)
+    plan = reveal_plan(sheet, seconds, settle)
     base = ground.convert("RGBA")
     settled = 0
     for i in range(max(2, int(round(seconds * FPS)))):
@@ -718,6 +723,7 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
     The board is always drawn at 1080p — the layout is in pixels — so `extra`
     is where the in-app preview puts the scale down to its own frame size.
     """
+    out.parent.mkdir(parents=True, exist_ok=True)
     style = project.style
     hand = getattr(style, "board_hand", "") or dg.DEFAULT_HAND
     accent = style.accent
@@ -725,8 +731,10 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
     ground = _ground_for(project, channel)
     settle = max(0.18, min(1.2, float(getattr(style, "board_settle", 0.5))))
 
+    from . import board_scenes
+
     previous = ""
-    plan: list[tuple[Sheet, float]] = []
+    plan = []
     spent = 0.0
     for n, (slide, dur) in enumerate(group):
         img = None
@@ -742,10 +750,35 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
         spent += length
         if length <= 0.05:
             continue
-        plan.append((build(slide, key, accent, hand, img), length))
+        plan.append((slide, key, build(slide, key, accent, hand, img), length))
+
+    if any(board_scenes.handles(project, key) for _, key, _, _ in plan):
+        # Keep mixed groups (including diagrams) on their own engine, then join.
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="board-", dir=out.parent) as tmp:
+            clips = []
+            for i, (slide, key, sheet, length) in enumerate(plan):
+                clip = out if len(plan) == 1 else Path(tmp) / f"{i}.mp4"
+                if board_scenes.handles(project, key):
+                    ctx = board_scenes.context(project, slide, key, sheet, ground,
+                                               hand, length, settle, channel)
+                    board_scenes.render(project, key, ctx, ground, clip, crf=crf, extra=extra)
+                elif not ffutil.encode_frames(frames(sheet, length, ground, hand, settle),
+                                              clip, crf=crf, extra=extra):
+                    raise RuntimeError("Could not encode the board segment.")
+                clips.append(clip)
+            if len(clips) == 1:
+                return out
+            inputs = [arg for clip in clips for arg in ('-i', str(clip))]
+            graph = ''.join(f'[{i}:v]' for i in range(len(clips)))
+            graph += f'concat=n={len(clips)}:v=1:a=0[v]'
+            ffutil.run([*inputs, '-filter_complex', graph, '-map', '[v]',
+                        '-t', f'{seg_len:.3f}', *ffutil.video_args(out, crf=crf),
+                        *board_scenes.without_scale(extra), '-pix_fmt', 'yuv420p', '-an', str(out)])
+        return out
 
     def stream():
-        for sheet, length in plan:
+        for _, _, sheet, length in plan:
             yield from frames(sheet, length, ground, hand, settle)
 
     # `-t` so the segment comes out at exactly the length the audio was cut
@@ -759,13 +792,25 @@ def render_segment(project: Project, group: list[tuple[Slide, float]],
 def still(project: Project, slide: Slide, out: Path, channel=None,
           image: Path | None = None, at: float = 1.0) -> Path:
     """One finished board as a PNG — what the slide editor previews."""
+    out.parent.mkdir(parents=True, exist_ok=True)
     style = project.style
     hand = getattr(style, "board_hand", "") or dg.DEFAULT_HAND
     img = _load_photo(image, out.parent) if image else None
     index = next((i for i, s in enumerate(project.slides) if s.id == slide.id), -1)
     key = pick(slide, img is not None, index=index)
     sheet = build(slide, key, style.accent, hand, img)
-    base = _ground_for(project, channel).convert("RGBA")
+    from . import board_scenes, scenes
+    ground = _ground_for(project, channel)
+    if board_scenes.handles(project, key):
+        ctx = board_scenes.context(project, slide, key, sheet, ground, hand, 1.0, 0.55, channel)
+        ctx['settled'] = at >= 1.0
+        ctx['duration'] = max(5.0, at + 1.0)
+        data = scenes.capture(project, f'board/{key}.html', ctx,
+                              t=max(0.0, at), size=(WIDTH, HEIGHT))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+        return out
+    base = ground.convert("RGBA")
     reveal = {o: 1.0 for o in range(sheet.beats)} if at >= 1.0 else dg.reveal_at(
         dg.schedule(sheet.beats, 1.0), at)
     _compose(base, sheet, reveal, 0, sheet.beats, hand)

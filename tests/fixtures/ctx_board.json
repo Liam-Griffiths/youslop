@@ -1,0 +1,12 @@
+{
+  "board": {"lead": "Build an argument", "points": ["One beat at a time"], "note": "", "diagram": {}},
+  "marks": [
+    {"order":0,"kind":"text","font":"hand","x":140,"y":196,"size":78,"color":"#FFFFFF","alpha":1,"text":"Build an argument"},
+    {"order":1,"kind":"text","font":"hand","x":216,"y":360,"size":56,"color":"#FFFFFF","alpha":1,"text":"One beat at a time"}
+  ],
+  "photos": [], "beats": [[0,0.5],[1,0.5]], "ground_url":"", "margin":140,
+  "body":{"x":140,"y":118,"w":1640,"h":844},
+  "active_order":null,"plate":false,"settled":false,
+  "fonts":{"BoardHand":"/fonts/ShantellSans-SemiBold.ttf","BoardMono":"/fonts/JetBrainsMono-Bold.ttf"},
+  "palette":{"ground":"#3A4552","ink":"#FFFFFF","accent":"#E8C36A","accent2":"#8795A4"}
+}
