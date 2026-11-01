@@ -614,6 +614,14 @@ def _title_timing(project, member, dur, lead, last_line=False):
     return start, hold
 
 
+def _title_window(project, member, dur, lead, offset, seg_len, last_line=False):
+    arrival, hold = _title_timing(project, member, dur, lead, last_line)
+    start = offset + arrival
+    exit_s = project.frame.arrive_s * project.frame.exit_ratio
+    return (start, min(seg_len - exit_s, start + hold),
+            max(0.0, min(hold, seg_len - exit_s - offset - arrival)))
+
+
 def _chapter_override(project, group):
     index = next(i for i, s in enumerate(project.slides) if s.id == group[-1][0].id)
     return project.slides[index + 1].chapter_hold if index + 1 < len(project.slides) else None
@@ -695,6 +703,7 @@ def _segment_graph(
     op: str, channel=None, chapter: tuple[str, str] | None = None,
     size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
     dip_out: bool = False, camera_index: int = 0, last_line: bool = False,
+    hide: frozenset = frozenset(),
 ) -> tuple[list[str], str, str]:
     """Return input args, filtergraph and output label for a photographic segment.
 
@@ -805,6 +814,9 @@ def _segment_graph(
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
     offset = 0.0
     for n, (member, dur) in enumerate(group):
+        if "titles" in hide:
+            offset += dur
+            continue
         if essay:
             chunks = titles.essay_chunks(member.narration)
             # Across the spoken part only. `dur` carries the pause that follows
@@ -846,12 +858,10 @@ def _segment_graph(
             idx = n_inputs
             inputs += _still_input(card, fps)
             n_inputs += 1
-            arrival, hold = _title_timing(
+            start, fade_out_at, _ = _title_window(
                 project, member, dur, cuts.transition_for(style) / 2
-                + cuts.head_pad_for(project, group[0][0]),
+                + cuts.head_pad_for(project, group[0][0]), offset, seg_len,
                 last_line and n == len(group) - 1)
-            start = offset + arrival
-            fade_out_at = min(seg_len - frame.arrive_s * frame.exit_ratio, start + hold)
             if fade_out_at > start:
                 graph += (
                     f";[{idx}:v]format=rgba{card_fit},{HOLD_STILL},"
@@ -867,7 +877,7 @@ def _segment_graph(
     # video pauses on the title and then the new section begins. Every format
     # that composes its picture here can carry one; the board and designed-
     # slide cuts draw their own frames and never reach this far.
-    if chapter:
+    if chapter and "chapters" not in hide:
         title, kicker = chapter
         card = (project_dir(project.id) / "titles"
                 / f"chapter_{_SAFE_NAME.sub('_', title)[:40]}.png")
@@ -926,6 +936,7 @@ def _render_segment(
     fps: int = FPS, crf: int = 18, preset: str = "veryfast",
     frames: tuple[int, int] | None = None, dip_out: bool = False,
     op: str = "set", camera_index: int = 0, last_line: bool = False,
+    hide: frozenset = frozenset(),
 ) -> Path:
     """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
 
@@ -945,6 +956,8 @@ def _render_segment(
     essay card, the blur, the type cards — scales with `size`, so a preview is
     the same picture seen smaller rather than a differently composed one.
     """
+    if "chapters" in hide:
+        chapter = None
     style = project.style
     lead_in = (cuts.transition_for(style) / 2
                + cuts.head_pad_for(project, group[0][0]))
@@ -956,7 +969,7 @@ def _render_segment(
     if scenes.handles(style.format):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
-            chapter=chapter, lead_in=lead_in, hold=hold, channel=channel)
+            chapter=chapter, lead_in=lead_in, hold=hold, channel=channel, hide=hide)
     if style.format.startswith("custom:"):
         rendered = _render_custom_style(project, group, seg_len, out, size,
                                         fps, crf)
@@ -974,7 +987,7 @@ def _render_segment(
             image_for=lambda s: _chosen(project, s)[0], size=size, fps=fps,
             crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
             chapter=chapter, frames=frames,
-            hold=hold)
+            hold=hold, hide=hide)
     if style.format == "board":
         from . import board as board_mod
         board_mod.render_segment(
@@ -986,7 +999,7 @@ def _render_segment(
                              fps, crf, threads, channel)
     inputs, graph, last = _segment_graph(
         project, group, seg_len, op, channel, chapter, size, fps, dip_out,
-        camera_index, last_line)
+        camera_index, last_line, hide)
 
     ffutil.run([
         *inputs, "-filter_complex", graph, "-map", last,
@@ -1810,6 +1823,85 @@ def preview_opening(project: Project, kind: str,
 PROXY_VERSION = 2
 
 
+PREVIEW_LAYERS = frozenset({'titles', 'cues', 'chapters', 'music', 'stings', 'notes'})
+
+
+def _hidden_suffix(hide):
+    import hashlib
+    return '_h' + hashlib.sha1(','.join(sorted(hide)).encode()).hexdigest()[:8] if hide else ''
+
+
+def _layers(project, segs):
+    """Render-free spans in picture time; reuse the renderer's timing plan."""
+    layers = {key: [] for key in PREVIEW_LAYERS}
+    layers['sponsors'] = []
+    slides = {s.id: s for s in project.slides}
+    total = sum(s['duration'] for s in segs)
+
+    def add(row, ident, sid, a, b, text, kind, src='auto', **extra):
+        a, b = max(0.0, a), min(total, b)
+        if b > a:
+            layers[row].append(dict(id=ident, sid=sid, t0=round(a, 3), t1=round(b, 3),
+                                    text=text, kind=kind, src=src, **extra))
+
+    previous = None
+    last_picture = next((s for s in reversed(segs) if s['type'] == 'picture'), None)
+    for seg in segs:
+        if seg['type'] == 'sponsor':
+            add('sponsors', seg['sponsor'], '', seg['start'], seg['start'] + seg['duration'],
+                seg['script'], 'sponsor')
+        if seg['type'] != 'picture':
+            continue
+        group = [(slides[q['id']], q['duration']) for q in seg['paragraphs']]
+        cue_rows = {}
+        if cuts.is_cut(project.style.format):
+            lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, group[0][0])
+            cue_rows = {sid: cues for sid, cues, _ in cuts.timed_cues(
+                project, group, seg['duration'] + cuts.transition_for(project.style), lead)}
+        for q in seg['paragraphs']:
+            slide, timing = slides[q['id']], q['timing']
+            if (slide.title and timing['title_hold']['value'] > 0
+                    and project.style.format != 'essay' and not cuts.is_cut(project.style.format)):
+                a = timing['title_at']['start']
+                add('titles', slide.id, slide.id, a,
+                    a + timing['title_hold']['value'] + project.frame.arrive_s * project.frame.exit_ratio,
+                    slide.title, 'title', timing['title_at']['src'])
+            if project.style.format == 'essay':
+                chunks = titles.essay_chunks(slide.narration)
+                spoken = float((slide.take or {}).get('duration') or 0) or q['duration'] * 0.85
+                shares = _caption_timings(chunks, min(q['duration'], spoken), project.frame)
+                if seg is last_picture and q is seg['paragraphs'][-1] and shares:
+                    shares[-1] = max(shares[-1], project.frame.last_line_min_s)
+                a = q['start'] - cuts.head_pad_for(project, group[0][0]) - seg['skip']
+                for i, (text, share) in enumerate(zip(chunks, shares)):
+                    b = min(seg['start'] + seg['duration'] + seg['skip'] - 0.05, a + share)
+                    if b > a + 0.25:
+                        add('titles', f'{slide.id}:cap{i}', slide.id, a, b, text, 'title')
+                    a += share
+            for i, (cue, span) in enumerate(zip(cue_rows.get(slide.id, []), timing['cues'])):
+                add('cues', f'{slide.id}:{i}', slide.id, span['start'], span['end'],
+                    next((cue[k] for k in ('text', 'caption', 'headline', 'title') if cue.get(k)), ''),
+                    'cue', span['src'], cue=i, cue_kind=cue.get('kind', ''))
+            if chapter_title(project, slide) and previous:
+                end = previous['start'] + previous['duration']
+                add('chapters', slide.id, slide.id, end + previous['skip'] - timing['chapter_hold']['value'],
+                    end, chapter_title(project, slide), 'chapter', timing['chapter_hold']['src'])
+        previous = seg
+    music = pick_music(project)
+    stings = _stings_for(project, any(s['type'] == 'intro' for s in segs),
+                         any(s['type'] == 'outro' for s in segs))
+    if music:
+        opening = next((s for s in segs if s['type'] == 'intro'), None)
+        start = max(0, opening['duration'] - 0.35) if opening and 'intro' in stings else 0
+        add('music', 'music', '', start, total, music.name, 'music')
+    for role, (path, spec) in stings.items():
+        seg = next(s for s in segs if s['type'] == role)
+        from .intro import sting_window
+        _, span, _ = sting_window(spec, seg['duration'])
+        add('stings', role, '', seg['start'], seg['start'] + span, path.name, 'sting')
+    return layers
+
+
 def _stat(path: Path | None) -> list[int] | None:
     try:
         s = path.stat()      # type: ignore[union-attr]
@@ -1819,7 +1911,7 @@ def _stat(path: Path | None) -> list[int] | None:
 
 
 def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
-               index: int, channel: Any) -> str:
+               index: int, channel: Any, hide: frozenset = frozenset()) -> str:
     """Everything a proxy's pixels or sound depend on, as one short hash.
 
     The timeline plays cached proxies, so "is this one still right" has to be
@@ -1843,7 +1935,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         slides.append([row, d, _stat(root / take) if take else None])
     pic = _chosen(project, lead)[0]
     blob = json.dumps(
-        [PROXY_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
+        [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
          index, slides, _stat(pic),
          [c for c in _picture_source(project, lead).candidates
           if c["id"] == _picture_source(project, lead).chosen_id],
@@ -1858,16 +1950,17 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
 
-def _proxy_paths(project: Project, lead: Slide) -> tuple[Path, Path]:
+def _proxy_paths(project: Project, lead: Slide, hide: frozenset = frozenset()) -> tuple[Path, Path]:
     cache = project_dir(project.id) / "cache"
-    return cache / f"seg_{lead.id}.webm", cache / f"seg_{lead.id}.key"
+    suffix = _hidden_suffix(hide)
+    return cache / f"seg_{lead.id}{suffix}.webm", cache / f"seg_{lead.id}{suffix}.key"
 
 
-def _proxy_ready(project: Project, groups, index: int, channel: Any) -> bool:
-    out, keyfile = _proxy_paths(project, groups[index][0][0])
+def _proxy_ready(project: Project, groups, index: int, channel: Any, hide: frozenset = frozenset()) -> bool:
+    out, keyfile = _proxy_paths(project, groups[index][0][0], hide)
     try:
         return (out.exists() and out.stat().st_size > 0
-                and keyfile.read_text() == _proxy_key(project, groups, index, channel))
+                and keyfile.read_text() == _proxy_key(project, groups, index, channel, hide))
     except OSError:
         return False
 
@@ -1888,14 +1981,14 @@ def _segment_timing(project: Project, groups, index: int) -> tuple[float, float,
 
 
 def _build_proxy(project: Project, groups, index: int, progress: Progress,
-                 *, reuse: bool, download: bool = True) -> dict:
+                 *, reuse: bool, download: bool = True, hide: frozenset = frozenset()) -> dict:
     from . import channels as channels_mod
     group = groups[index]
     lead = group[0][0]
     channel = channels_mod.load_or_none(project.channel_id)
-    out, keyfile = _proxy_paths(project, lead)
+    out, keyfile = _proxy_paths(project, lead, hide)
     size = preview_size()
-    key = _proxy_key(project, groups, index, channel)
+    key = _proxy_key(project, groups, index, channel, hide)
     dur, T, seg_len = _segment_timing(project, groups, index)
 
     def result() -> dict:
@@ -1920,7 +2013,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
     out.parent.mkdir(parents=True, exist_ok=True)
     # `.webm` is what makes these play in the app's own window on a Linux
     # desktop that has no H.264 decoder — see `ffutil.video_args`.
-    mute = out.with_name(f"seg_{lead.id}_mute.webm")
+    mute = out.with_name(out.stem + "_mute.webm")
 
     progress(f"Picture {index + 1} of {len(groups)}: {seg_len:.1f}s "
              f"at {size[0]}×{size[1]}, {PREVIEW_FPS}fps")
@@ -1929,14 +2022,14 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
                     channel=channel, chapter=chapter, size=size,
                     dip_out=_dips_into(groups, index + 1),
                     op=camera_plan(project, groups)[index], camera_index=index,
-                    last_line=index == len(groups) - 1,
+                    last_line=index == len(groups) - 1, hide=hide,
                     fps=PREVIEW_FPS, crf=PREVIEW_CRF, preset="ultrafast",
                     threads=max(2, min(8, os.cpu_count() or 4)))
 
     # Where the voice lands inside the segment: half a crossfade in, plus the
     # opening silence if this is the top of the video. The same arithmetic the
     # full render's narration bed uses, for one group of paragraphs.
-    voice = out.with_name(f"seg_{lead.id}.wav")
+    voice = out.with_suffix(".wav")
     try:
         audio_mod.build_slice(project, [s for s, _d in group], voice,
                               T / 2 + (HEAD_PAD if index == 0 else 0.0))
@@ -1982,7 +2075,8 @@ def preview_segment(project: Project, slide_id: str,
 
 
 def proxy_segment(project: Project, index: int,
-                  progress: Progress = lambda m: None, *, download: bool = True) -> dict:
+                  progress: Progress = lambda m: None, *, download: bool = True,
+                  hide: frozenset = frozenset()) -> dict:
     """The same small render, kept: the timeline plays these back to back, so
     one that is still right for the current script is reused rather than drawn
     again."""
@@ -1991,7 +2085,7 @@ def proxy_segment(project: Project, index: int,
     groups = _groups_for_preview(project)
     if not 0 <= index < len(groups):
         raise ValueError("That picture is not in the cut.")
-    return _build_proxy(project, groups, index, progress, reuse=True, download=download)
+    return _build_proxy(project, groups, index, progress, reuse=True, download=download, hide=hide)
 
 
 # ------------------------------------------------------------ timeline slates
@@ -2092,13 +2186,13 @@ def _build_slate_proxy(project: Project, kind: str, progress: Progress) -> dict:
 
 
 def proxy_ref(project: Project, ref: str, progress: Progress = lambda m: None,
-              *, download: bool = True) -> dict:
+              *, download: bool = True, hide: frozenset = frozenset()) -> dict:
     """Draw one timeline entry: "intro", "outro", or a picture's number."""
     if ref in ("intro", "outro"):
         if not _slate_has(project, ref):
             raise ValueError("There is no such card in this video.")
         return _build_slate_proxy(project, ref, progress)
-    out = proxy_segment(project, int(ref), progress, download=download)
+    out = proxy_segment(project, int(ref), progress, download=download, hide=hide)
     out["ref"] = ref
     return out
 
@@ -2133,9 +2227,10 @@ def _layout(project: Project) -> dict:
             "body": body, "pre": pre, "total": total, "sponsors": entries}
 
 
-def _mix_paths(project: Project) -> tuple[Path, Path]:
+def _mix_paths(project: Project, hide: frozenset = frozenset()) -> tuple[Path, Path]:
     cache = project_dir(project.id) / "cache"
-    return cache / "timeline_mix.webm", cache / "timeline_mix.key"
+    suffix = _hidden_suffix(hide)
+    return cache / f"timeline_mix{suffix}.webm", cache / f"timeline_mix{suffix}.key"
 
 
 def _stings_for(project: Project, intro: bool = True, outro: bool = True) -> dict:
@@ -2174,7 +2269,7 @@ def _sting_params(spec) -> dict:
             else {k: v for k, v in vars(spec).items() if not k.startswith("_")})
 
 
-def _mix_key(project: Project, lay: dict) -> str:
+def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     import dataclasses
     import hashlib
     import json
@@ -2186,7 +2281,7 @@ def _mix_key(project: Project, lay: dict) -> str:
     stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     card = _slate_channel(project) if lay["outro"] else None
     blob = json.dumps(
-        [PROXY_VERSION, takes, lay["body"], lay["pre"], lay["total"],
+        [PROXY_VERSION, sorted(hide), takes, lay["body"], lay["pre"], lay["total"],
          lay["intro"] and lay["intro"]["length"], lay["outro"] and lay["outro"]["length"],
          audio_mod.paragraph_gaps(project),
          str(music), _stat(music),
@@ -2199,13 +2294,13 @@ def _mix_key(project: Project, lay: dict) -> str:
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
 
-def _mix_state(project: Project, lay: dict) -> dict:
-    music = pick_music(project)
-    sting = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
+def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> dict:
+    music = None if "music" in hide else pick_music(project)
+    sting = {} if "stings" in hide else _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     audible = bool(music or sting or any(s.take for s in project.slides)
                    or any(slot.take for slot, _ in lay["sponsors"]))
-    out, keyfile = _mix_paths(project)
-    key = _mix_key(project, lay) if audible else ""
+    out, keyfile = _mix_paths(project, hide)
+    key = _mix_key(project, lay, hide) if audible else ""
     have = out.exists() and out.stat().st_size > 0
     try:
         fresh = have and keyfile.read_text() == key
@@ -2217,7 +2312,8 @@ def _mix_state(project: Project, lay: dict) -> dict:
             "sting": bool(sting), "stings": sorted(sting)}
 
 
-def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
+def build_mix(project: Project, progress: Progress = lambda m: None, *,
+              hide: frozenset = frozenset()) -> dict:
     """The whole cut's sound, as one file: narration, the slate's sting and the
     music bed under the voice.
 
@@ -2227,12 +2323,12 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
     picture proxies silently against it.
     """
     lay = _layout(project)
-    state = _mix_state(project, lay)
+    state = _mix_state(project, lay, hide)
     if not state["audible"]:
         return state
     if state["ready"]:
         return state
-    out, keyfile = _mix_paths(project)
+    out, keyfile = _mix_paths(project, hide)
     root = project_dir(project.id)
     out.parent.mkdir(parents=True, exist_ok=True)
     T, pre, total = lay["T"], lay["pre"], lay["total"]
@@ -2249,7 +2345,7 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
     inputs = ["-i", str(narration)]
     n = 1
     sting_audio = []
-    stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
+    stings = {} if "stings" in hide else _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     if "intro" in stings:
         sting_audio.append((n, 0.0, lay["intro"]["length"], stings["intro"][1], "intro"))
         inputs += ["-i", str(stings["intro"][0])]
@@ -2260,7 +2356,7 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
         inputs += ["-i", str(stings["outro"][0])]
         n += 1
     sponsor_audio, n = _sponsor_audio(project, lay["sponsors"], inputs, n)
-    music = pick_music(project, progress)
+    music = None if "music" in hide else pick_music(project, progress)
     if music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
     music_fade = 5.0
@@ -2277,11 +2373,11 @@ def build_mix(project: Project, progress: Progress = lambda m: None) -> dict:
                 "-t", f"{total:.3f}", "-ar", "48000",
                 *ffutil.audio_args(out, bitrate="96k"), str(out)], timeout=900)
     narration.unlink(missing_ok=True)
-    keyfile.write_text(_mix_key(project, lay))
-    return _mix_state(project, lay)
+    keyfile.write_text(_mix_key(project, lay, hide))
+    return _mix_state(project, lay, hide)
 
 
-def timeline(project: Project) -> dict:
+def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
     """The cut laid out in time, without rendering anything.
 
     Every number is the one the full render uses — the same durations, the
@@ -2328,11 +2424,10 @@ def timeline(project: Project) -> dict:
         _, _, segment_length = _segment_timing(project, groups, i)
         paragraph_offset = 0.0
         for n, (s, d) in enumerate(group):
-            arrival, title_hold = _title_timing(project, s, d, file_lead,
-                                                i == len(groups) - 1 and n == len(group) - 1)
-            title_hold = max(0.0, min(title_hold, segment_length
-                             - project.frame.arrive_s * project.frame.exit_ratio
-                             - paragraph_offset - arrival))
+            start, end, title_hold = _title_window(project, s, d, file_lead, paragraph_offset,
+                                      segment_length,
+                                      i == len(groups) - 1 and n == len(group) - 1)
+            arrival = start - paragraph_offset
             timing = {
                 "title_at": {"value": round(arrival - file_lead, 3),
                              "start": round(pt + arrival - file_lead, 3),
@@ -2379,12 +2474,12 @@ def timeline(project: Project) -> dict:
         # as the paragraphs change, so a long run there is not a still picture.
         if dur > 25 and project.style.format == "kenburns":
             problems.append(f"the same picture holds for {dur:.0f}s")
-        out, _keyfile = _proxy_paths(project, lead)
+        out, _keyfile = _proxy_paths(project, lead, hide)
         segments.append({
             "ref": str(i), "type": "picture", "n": i + 1, "group": i, "lead": lead.id,
             "start": round(t, 3), "duration": round(dur, 3), "skip": round(T / 2, 3),
             "kind": kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
-            "ready": _proxy_ready(project, groups, i, channel),
+            "ready": _proxy_ready(project, groups, i, channel, hide),
             # Something to play, even if the script has moved on since.
             "have": out.exists() and out.stat().st_size > 0,
             "stamp": round(out.stat().st_mtime) if out.exists() else 0,
@@ -2412,10 +2507,11 @@ def timeline(project: Project) -> dict:
     size = preview_size()
     pres = project.presenter
     return {
+        "layers": _layers(project, segments),
         "segments": segments, "total": round(t, 3), "fps": PREVIEW_FPS,
         "width": size[0], "height": size[1],
         "format": project.style.format,
-        "mix": _mix_state(project, lay),
+        "mix": _mix_state(project, lay, hide),
         "camera_clip": bool(pres.usable() and (project_dir(project.id) / pres.path).exists()),
         "estimated": any(not s.take for s in project.slides),
     }

@@ -191,7 +191,7 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
                    image_for=None, size=None, fps: int = FPS, crf: int = 18,
                    lead_in: float = 0.0, cache_dir: Path | None = None,
                    chapter: tuple[str, str] | None = None, hold: float = 0.0,
-                   frames: tuple[int, int] | None = None) -> Path:
+                   frames: tuple[int, int] | None = None, hide=frozenset()) -> Path:
     """One held group of paragraphs in the video's cut, to exactly `seg_len`.
 
     `lead_in` is where the voice starts inside the segment — the opening
@@ -239,7 +239,12 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
             while k + 1 < len(beats) and t >= starts[k + 1] - 1e-9:
                 k += 1
             beat = beats[k]
-            frame = module.frame(beat, ctx, min(t - starts[k], max(0.0, beat.length - 1e-3)))
+            if 'cues' in hide:
+                from PIL import Image
+                frame = (kit.cover(beat.picture, *ctx.size).convert('RGB') if beat.picture
+                         else Image.new('RGB', ctx.size, '#12131a'))
+            else:
+                frame = module.frame(beat, ctx, min(t - starts[k], max(0.0, beat.length - 1e-3)))
             if card_at is not None and t >= card_at:
                 frame = draw_card(ctx, title, frame, t - card_at)
             yield frame

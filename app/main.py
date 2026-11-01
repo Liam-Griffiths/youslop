@@ -2481,12 +2481,19 @@ def get_check(pid: str) -> dict:
     return ops.check(pid, {}, lambda msg: None)
 
 
+def _preview_hide(value: str) -> frozenset:
+    hidden = frozenset(filter(None, value.split(',')))
+    if hidden - render.PREVIEW_LAYERS:
+        raise HTTPException(400, 'Unknown preview layer')
+    return hidden
+
+
 @app.get("/api/projects/{pid}/timeline")
-def get_timeline(pid: str) -> dict:
+def get_timeline(pid: str, hide: str = "") -> dict:
     """The cut laid out in time, and which pictures already have a proxy to
     play. Renders nothing."""
     p = _load(pid)
-    tl = render.timeline(p)
+    tl = render.timeline(p, _preview_hide(hide))
     result = check.run(p)
     decisions = review.read_notes(pid).get('notes', [])
     for finding in result['findings']:
@@ -2499,11 +2506,24 @@ def get_timeline(pid: str) -> dict:
         seg["findings"] = [f for f in result["findings"] if a <= f["t"] < b]
     tl["check"] = result
     tl["review"] = get_review(pid)
+    notes = [dict(n, text=n['msg'], severity=n['level'], source='check') for n in result['findings']]
+    notes += [n for n in tl['review'].get('notes', []) if n.get('source') != 'check']
+    notes += tl['review'].get('warnings_kept', [])
+    weakest = tl['review'].get('weakest')
+    if weakest:
+        notes.append(dict(weakest, id='weakest', problem=weakest['why'], severity='P2'))
+    for i, n in enumerate(notes):
+        if n.get('state', 'open') not in ('open', 'kept'):
+            continue
+        t = max(0, float(n.get('t', 0)))
+        tl['layers']['notes'].append(dict(id=n.get('id', f'note:{i}'), sid=n.get('slide_id', ''),
+            t0=t, t1=min(tl['total'], t + 0.8), kind='note', src=n.get('source', 'review'),
+            text=n.get('text') or n.get('problem', ''), severity=n.get('severity', 'P2')))
     return tl
 
 
 @app.post("/api/projects/{pid}/timeline/proxy")
-def timeline_proxy(pid: str, payload: dict = Body(...)) -> dict:
+def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
     """Make the small playable proxy for some of the timeline's entries.
 
     `refs` are what the timeline lists: "intro", "outro" or a picture's number.
@@ -2512,6 +2532,7 @@ def timeline_proxy(pid: str, payload: dict = Body(...)) -> dict:
     the playhead and the next, never the whole cut.
     """
     _load(pid)
+    hidden = _preview_hide(hide)
     refs = [str(r) for r in (payload.get("refs") or [])][:16]
     if not refs or any(r not in ("intro", "outro") and not r.isdigit() for r in refs):
         raise HTTPException(400, "refs must be intro, outro or picture numbers")
@@ -2532,23 +2553,25 @@ def timeline_proxy(pid: str, payload: dict = Body(...)) -> dict:
         with lock:
             p = store.load(pid)
             for r in refs:
-                done.append(render.proxy_ref(p, r, progress, download=False))
+                done.append(render.proxy_ref(p, r, progress, download=False, hide=hidden))
         return {"segments": done}
 
     return {"job": jobs.start("timeline proxy", pid, work)}
 
 
 @app.post("/api/projects/{pid}/timeline/mix")
-def timeline_mix(pid: str) -> dict:
+def timeline_mix(pid: str, hide: str = "") -> dict:
     """Mix the whole cut's sound (narration, slate sting, ducked music bed) into
     one file for the timeline to play. Audio only, so it is quick."""
     _load(pid)
+
+    hidden = _preview_hide(hide)
 
     def work(progress):
         import threading
         lock = _PROXY_LOCKS.setdefault(pid + ":mix", threading.Lock())
         with lock:
-            return render.build_mix(store.load(pid), progress)
+            return render.build_mix(store.load(pid), progress, hide=hidden)
 
     return {"job": jobs.start("timeline sound", pid, work)}
 

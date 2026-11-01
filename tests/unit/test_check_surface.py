@@ -10,8 +10,9 @@ def test_endpoints_and_gate(project, monkeypatch):
                    msg='Missing opening picture', fix={'kind': 'picture'})
     result = dict(ok=False, counts={'P0': 1, 'P1': 0, 'P2': 0}, findings=[finding])
     monkeypatch.setattr(check, 'run', lambda p: result)
-    monkeypatch.setattr(render, 'timeline', lambda p: {
-        'segments': [dict(start=0, duration=2), dict(start=2, duration=3)]})
+    monkeypatch.setattr(render, 'timeline', lambda p, hide=frozenset(): {
+        'segments': [dict(start=0, duration=2), dict(start=2, duration=3)],
+        'layers': {'notes': []}, 'total': 5})
     started = []
     monkeypatch.setattr(main.jobs, 'start', lambda *args: started.append(args) or 'job1')
     assert main.get_check(project.id) == result

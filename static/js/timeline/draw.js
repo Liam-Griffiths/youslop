@@ -55,15 +55,13 @@ function tlDraw() {
         title="${esc(q.text.slice(0, 140))}">
         ${q.chapter ? '<span class="tl-flag">⚑</span>' : ''}<span>${esc(q.text)}</span>
       </button>`).join('');
-  const titles = tlParas().filter((q) => q.title).map((q) => `<button class="tl-title-marker"
-    data-title="${q.id}" style="left:${q.timing.title_at.start * z}px;width:${Math.max(8, q.timing.title_hold.value * z)}px"
-    title="${esc(q.title)}">${esc(q.title)}</button>`).join('');
   track.innerHTML = `
     <div class="tl-ruler">${ticks}</div>
     <div class="tl-lane"><em>pictures</em>${pics}</div>
     <div class="tl-lane para"><em>voice</em>${paras}</div>
-    <div class="tl-lane"><em>titles</em>${titles}</div>
+    ${tlLayerRows()}
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
+  tlWireLayers();
   tlPaintProblems();
   tlPaintReview();
   TL.lastPara = '';
@@ -219,13 +217,13 @@ function tlPaintProblems() {
 function tlPaintHead() {
   const d = TL.data;
   if (!d || !$('#tl-line')) return;
-  $('#tl-line').style.left = `${TL.cur * TL.zoom}px`;
+  $('#tl-line').style.left = `${104 + TL.cur * TL.zoom}px`;
   $('#tl-clock').textContent =
     `${tlClock(TL.cur)} / ${tlClock(d.total)}  ·  frame ${Math.round(TL.cur * d.fps)}`;
   $('#tl-play').textContent = TL.playing ? '❚❚' : '▶';
   tlSelectionPaint();
   // Keep the playhead on screen while it plays or is stepped.
-  const sc = $('#tl-scroll'), x = TL.cur * TL.zoom;
+  const sc = $('#tl-scroll'), x = 104 + TL.cur * TL.zoom;
   if (sc && !TL.scrubbing && (x < sc.scrollLeft + 20 || x > sc.scrollLeft + sc.clientWidth - 40)) {
     sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.3);
   }

@@ -1,18 +1,19 @@
 // One explicit selection, independent of playback and scrubbing.
 function tlItems(kind) {
-  if (kind === 'music') return [{kind, id: 'music', sid: '', t0: 0, t1: TL.data.total}];
+  const row = Object.keys(TL_LAYER_KINDS).find((key) => TL_LAYER_KINDS[key] === kind);
+  if (row) {
+    const items = TL.data.layers?.[row] || [];
+    // Keep the inspector's add-title/chapter/music controls for empty lanes.
+    if (kind === 'music' && !items.length) return [{kind, id: 'music', sid: '', t0: 0, t1: TL.data.total}];
+    if (['title', 'chapter'].includes(kind)) return [...items, ...tlParas()
+      .filter((q) => !items.some((item) => item.sid === q.id))
+      .map((q) => ({kind, id: q.id, sid: q.id, t0: q.start, t1: q.start + q.duration}))];
+    return items;
+  }
   if (kind === 'picture' || kind === 'slate') return tlSegs()
     .filter((s) => kind === 'picture' ? s.type === 'picture' : ['intro', 'outro'].includes(s.type))
     .map((s) => ({kind, id: s.ref, sid: s.lead, t0: s.start, t1: s.start + s.duration}));
-  return tlParas().flatMap((q) => {
-    const slide = state.project.slides.find((s) => s.id === q.id);
-    if (kind === 'cue') return ((slide.cues || {})[state.project.style.format] || []).map((c, i) => ({
-      kind, id: `${q.id}:${i}`, sid: q.id, cue: i,
-      t0: q.timing.cues[i]?.start ?? q.start, t1: q.timing.cues[i]?.end ?? q.start + q.duration}));
-    return [{kind, id: q.id, sid: q.id,
-      t0: kind === 'title' ? q.timing.title_at.start : q.start,
-      t1: kind === 'title' ? q.timing.title_at.start + q.timing.title_hold.value : q.start + q.duration}];
-  });
+  return tlParas().map((q) => ({kind, id: q.id, sid: q.id, t0: q.start, t1: q.start + q.duration}));
 }
 
 function tlSelect(sel) {
@@ -22,9 +23,10 @@ function tlSelect(sel) {
 }
 
 function tlSelectionPaint() {
-  document.querySelectorAll('#tl-track [data-seg], #tl-track [data-para]').forEach((el) => {
+  document.querySelectorAll('#tl-track [data-seg], #tl-track [data-para], #tl-track [data-layer]').forEach((el) => {
     const s = TL.selection;
-    el.classList.toggle('sel', !!s && (el.dataset.para === s.sid && s.kind === 'paragraph'
+    el.classList.toggle('sel', !!s && (el.dataset.layer && TL.data.layers[el.dataset.layer][+el.dataset.item]?.id === s.id
+      && TL_LAYER_KINDS[el.dataset.layer] === s.kind || el.dataset.para === s.sid && s.kind === 'paragraph'
       || el.dataset.seg !== undefined && ['picture', 'slate'].includes(s.kind)
       && tlSegs()[+el.dataset.seg]?.ref === s.id));
   });
@@ -49,7 +51,7 @@ function tlInspector() {
   const box = $('#tl-inspector');
   if (!box) return;
   const sel = TL.selection, p = state.project;
-  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music'];
+  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor'];
   box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
     <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask">Ask</button><div id="tl-fields"></div>`;
   $('#tl-ask').onclick = tlAsk;
@@ -103,6 +105,7 @@ function tlInspector() {
       if ((channel || p).outro?.enabled && p.use_outro !== false) html += field('music_fade', 'Fade over end card', (channel || p).outro.music_fade, 's');
     }
   }
+  if (['sting', 'note', 'sponsor'].includes(sel.kind)) html += `<p>${esc(sel.text)}</p>`;
   body.innerHTML = html;
   if ($('#tl-edit-text')) $('#tl-edit-text').onclick = () => tlEditText(slide.id);
   if ($('#tl-picture')) $('#tl-picture').onclick = () => tlEditPicture(slide.id);

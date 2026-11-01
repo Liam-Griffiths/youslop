@@ -69,7 +69,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T4.1 | Split app.js and timeline.js into files | M | — | done | 2026-10-31 Codex; 20 files under static/js, lines preserved; owner: click through every tab + timeline playback |
 | T4.2 | Retime fields in the schema | S | T0.6 | done | 2026-10-31 Codex; 391 tests; skill reference regenerated |
 | T4.3 | Selection and per-kind inspector | M | T4.1, T4.2 | done | 2026-10-31 Codex; one selection, per-kind inspector, titles lane, keys; fixed music select; owner: try title timing edits |
-| T4.4 | Layers rows | M | T4.3, T0.7 | todo | |
+| T4.4 | Layers rows | M | T4.3, T0.7 | done | 2026-10-31 Codex; layer rows (titles/cues/chapters/music/stings/notes/sponsors), hide in preview; owner: play with a layer hidden |
 | T4.5 | Drag and resize timing | M | T4.4 | todo | |
 | T4.6 | Razor (keeps audio) | M | T4.3, T0.6 | todo | rewritten 2026-10-26: split takes, never delete |
 | T4.7 | Variables panel | S | T4.3, T1.1 | todo | |

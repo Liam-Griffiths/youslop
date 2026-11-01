@@ -275,7 +275,7 @@ def _encode(clip, out, seconds, size, fps, crf):
 
 def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
                    fps=FPS, crf=18, chapter=None, lead_in=0.0, hold=0.0,
-                   channel=None) -> Path:
+                   channel=None, hide=frozenset()) -> Path:
     """Render a group on the full composition, then encode at the output size."""
     ctx = context_base(project, channel)
     ctx.update(slides=[{**asdict(slide), "duration": dur} for slide, dur in group],
@@ -284,6 +284,12 @@ def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
                cues=(cuts.timed_cues(project, group, seg_len, lead_in)
                      if cuts.is_cut(project.style.format) else []),
                chapter=chapter, lead_in=lead_in, hold=hold)
+    if 'cues' in hide:
+        ctx['cues'] = []
+    if 'titles' in hide:
+        ctx['titles'] = []
+        for slide in ctx['slides']:
+            slide['title'] = ''
     clip = ensure_clip(project, f"{project.style.format}/segment.html", ctx,
                        seconds=seg_len, size=(ctx['width'], ctx['height']), fps=fps)
     _encode(clip, out, seg_len, size, fps, crf)

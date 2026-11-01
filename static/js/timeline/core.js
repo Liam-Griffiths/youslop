@@ -19,6 +19,7 @@
 // `render()` repaints the whole page whenever a job ends, so this state and
 // its media elements live out here and are re-attached on every mount.
 const TL = {
+  hidden: {titles: false, cues: false, chapters: false, music: false, stings: false, notes: false},
   pid: '', data: null, host: null, selection: null,
   inspectorTemplates: [], inspectorEndTemplates: [], inspectorMusic: [], inspectorChannel: null,
   cur: 0, playing: false, speed: 1, loop: false, zoom: 10,
@@ -32,7 +33,7 @@ const TL = {
 const tlFps = () => (TL.data && TL.data.fps) || 15;
 const tlSegs = () => (TL.data && TL.data.segments) || [];
 const tlParas = () => tlSegs().flatMap((s) => s.paragraphs.map((q) => ({ ...q, seg: s.index })));
-const tlKey = (s) => `${s.ref}:${s.stamp}`;
+const tlKey = (s) => `${s.ref}:${s.path}:${s.stamp}`;
 const tlLabel = (s) => (s.type === 'intro' ? 'slate' : s.type === 'outro' ? 'end'
   : String(s.n).padStart(2, '0'));
 const tlName = (s) => (s.type === 'intro' ? 'the opening slate' : s.type === 'outro'
@@ -67,7 +68,7 @@ async function tlMount() {
   if (!TL.audio) { TL.audio = new Audio(); TL.audio.preload = 'auto'; }
   if (TL.pid !== p.id) {
     tlPause();
-    Object.assign(TL, { pid: p.id, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
+    Object.assign(TL, { pid: p.id, hidden: {}, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
                         pending: new Set(), wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
     TL.vids.forEach((v) => { v.removeAttribute('src'); v.dataset.seg = ''; v.load(); });
     TL.audio.removeAttribute('src'); TL.audio.load();
@@ -135,8 +136,10 @@ async function tlMount() {
 async function tlRefresh(redrawCurrent = false) {
   if (!TL.host || !document.body.contains(TL.host)) return;
   let data;
-  try { data = await api(`/api/projects/${state.project.id}/timeline`); }
+  const query = tlHideQuery();
+  try { data = await api(`/api/projects/${state.project.id}/timeline${query}`); }
   catch (e) { const n = $('#tl-note'); if (n) n.textContent = e.message; return; }
+  if (query !== tlHideQuery()) return;
   TL.data = data;
   TL.vids.forEach((v) => {
     const ref = v.dataset.seg.split(':')[0];

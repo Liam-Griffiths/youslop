@@ -146,7 +146,7 @@ def test_mix_input_indices_and_cache(cut, monkeypatch, tmp_path):
     cut.sponsors[0].take["path"] = "takes/replacement.wav"
     assert render._mix_key(cut, render._layout(cut)) != original
     args = []
-    monkeypatch.setattr(render, "_mix_paths", lambda _p: (tmp_path / "mix.webm", tmp_path / "mix.key"))
+    monkeypatch.setattr(render, "_mix_paths", lambda _p, hide=frozenset(): (tmp_path / "mix.webm", tmp_path / "mix.key"))
     monkeypatch.setattr(audio, "build_narration", lambda *a, **kw: None)
     monkeypatch.setattr(render.ffutil, "run", lambda command, **kw: args.extend(command))
     monkeypatch.setattr(render, "pick_music", lambda *a: tmp_path / "music.wav")

@@ -8,7 +8,7 @@ async function tlEnsureMix() {
   if (!d) return;
   const mix = d.mix;
   const src = `/api/projects/${state.project.id}/file/${mix.path}?v=${mix.stamp}`;
-  if (mix.audible && mix.have && TL.audio.getAttribute('src') !== src && mix.stamp !== TL.mixStamp) {
+  if (mix.audible && mix.have && TL.audio.getAttribute('src') !== src) {
     // Something to play now, possibly an older mix; a fresh one follows.
     TL.mixStamp = mix.stamp;
     TL.audio.src = src;
@@ -16,12 +16,13 @@ async function tlEnsureMix() {
     tlRate();
   }
   tlPaintNote();
+  if (!mix.audible) { TL.audio.removeAttribute('src'); TL.mixStamp = 0; }
   if (!mix.audible || mix.ready || TL.mixBusy || TL.mixFailed) return;
   TL.mixBusy = true;
-  const pid = state.project.id;
+  const pid = state.project.id, query = tlHideQuery();
   tlPaintNote();
   try {
-    const r = await api(`/api/projects/${pid}/timeline/mix`, { method: 'POST' });
+    const r = await api(`/api/projects/${pid}/timeline/mix${query}`, { method: 'POST' });
     const j = await tlWaitJob(r.job);
     if (TL.pid !== pid) return;
     if (j.state === 'error') throw new Error(j.error);
@@ -245,15 +246,16 @@ async function tlPump() {
   TL.running = true;
   const pid = state.project.id;
   while (TL.queue.length && TL.pid === pid) {
-    const ref = TL.queue.shift();
+    const ref = TL.queue.shift(), query = tlHideQuery();
     TL.drawing = ref;
     tlPaintStatus();
     let learned = false;
     try {
-      const r = await api(`/api/projects/${pid}/timeline/proxy`,
+      const r = await api(`/api/projects/${pid}/timeline/proxy${query}`,
         { method: 'POST', body: JSON.stringify({ refs: [ref] }) });
       const j = await tlWaitJob(r.job);
       if (TL.pid !== pid) break;
+      if (query !== tlHideQuery()) { TL.drawing = ''; continue; }
       if (j.state === 'error') throw new Error(j.error);
       const out = (j.result.segments || [])[0];
       const seg = tlSegs().find((x) => x.ref === ref);
@@ -263,6 +265,7 @@ async function tlPump() {
         learned = seg.type !== 'picture' && seg.estimated;
       }
     } catch (e) {
+      if (query !== tlHideQuery()) { TL.drawing = ''; continue; }
       TL.failed.add(ref);
       toast(`${ref === 'intro' ? 'Slate' : ref === 'outro' ? 'End card' : 'Picture ' + (+ref + 1)}: ${e.message}`, true);
       learned = ref === 'intro' || ref === 'outro';
@@ -302,7 +305,7 @@ function tlWireScrub() {
   if (!track) return;
   const at = (e) => {
     const r = track.getBoundingClientRect();
-    return Math.max(0, (e.clientX - r.left) / TL.zoom);
+    return Math.max(0, (e.clientX - r.left - 104) / TL.zoom);
   };
   track.onpointerdown = (e) => {
     if (e.button !== 0) return;
@@ -329,11 +332,9 @@ function tlWireScrub() {
 }
 
 function tlSelectTarget(target) {
-  const title = target.closest('[data-title]');
   const para = target.closest('[data-para]');
   const picture = target.closest('[data-seg]');
-  if (title) tlSelect(tlItems('title').find((s) => s.id === title.dataset.title));
-  else if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para));
+  if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para));
   else if (picture) {
     const seg = tlSegs()[+picture.dataset.seg];
     const kind = seg.type === 'picture' ? 'picture' : 'slate';
