@@ -56,6 +56,7 @@ class Clip:
     quality: dict = field(default_factory=dict)  # Empty until analyzed; old manifests default safely.
     duplicate_group: str = ''
     best_take: str = ''
+    labels: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, raw: dict) -> Clip:

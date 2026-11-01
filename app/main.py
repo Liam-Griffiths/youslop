@@ -45,6 +45,7 @@ from . import diagram as diagram_mod
 from . import slide_styles
 from . import youtube as youtube_mod
 from . import transfer
+from . import footage_export_ui
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
 from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
 from .store import project_dir
@@ -56,6 +57,13 @@ from .paths import resource_root
 ensure_dirs()
 
 app = FastAPI(title=brand.NAME)
+
+# Stopgap export page until the footage logger (T11.5). Registered as plain
+# routes: an included router breaks code that walks app.routes for `.path`.
+app.add_api_route('/footage/export', footage_export_ui.export_dialog,
+                  methods=['GET'], response_class=HTMLResponse)
+app.add_api_route('/footage/export', footage_export_ui.export_selected,
+                  methods=['POST'], response_class=HTMLResponse)
 
 # Set by run.sh whenever the server is bound past loopback. Everything here can
 # read, edit and delete projects, so a second machine has to bring the token;
