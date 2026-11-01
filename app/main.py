@@ -1454,8 +1454,8 @@ def diagram_kinds() -> dict:
 def diagram_preview(payload: dict = Body(...)) -> Response:
     """Draw a spec and hand back the PNG, without touching any project.
 
-    The editor redraws on every keystroke that parses, so this writes nothing
-    to disk — the image comes back in the response body.
+    Scene captures use a disposable scratch directory; the image comes back
+    in the response body without touching a project.
     """
     try:
         spec = diagram_mod.normalise(payload.get("spec") or payload)
@@ -1464,7 +1464,8 @@ def diagram_preview(payload: dict = Body(...)) -> Response:
     accent = str(payload.get("accent") or "#E8C36A")
     hand = str(payload.get("hand") or diagram_mod.DEFAULT_HAND)
     buf = io.BytesIO()
-    diagram_mod.render_still(spec, accent, hand=hand).save(buf, "PNG")
+    engine = 'pillow' if payload.get('engine') == 'pillow' else 'scene'
+    diagram_mod.render_still(spec, accent, hand=hand, engine=engine).save(buf, "PNG")
     return Response(buf.getvalue(), media_type="image/png",
                     headers={"Cache-Control": "no-store"})
 
@@ -1488,12 +1489,16 @@ def slide_diagram(pid: str, sid: str, payload: dict = Body(...)) -> dict:
 
     with store.lock_for(pid):
         p = _load(pid)
+        _slide(p, sid)
+    cand = diagram_mod.candidate(
+        spec, project_dir(pid) / "media", p.style.accent, motion=motion,
+        seconds=seconds, hand=getattr(p.style, "board_hand", "marker"),
+        engine=p.style.board_engine)
+    if not cand:
+        raise HTTPException(500, "Could not draw that diagram.")
+    with store.lock_for(pid):
+        p = _load(pid)
         s = _slide(p, sid)
-        cand = diagram_mod.candidate(
-            spec, project_dir(pid) / "media", p.style.accent, motion=motion,
-            seconds=seconds, hand=getattr(p.style, "board_hand", "marker"))
-        if not cand:
-            raise HTTPException(500, "Could not draw that diagram.")
         s.candidates.insert(0, cand)
         s.chosen_id = cand["id"]
         s.diagram = spec

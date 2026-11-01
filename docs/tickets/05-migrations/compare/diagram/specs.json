@@ -1,0 +1,5 @@
+[
+  {"kind":"flow","title":"Request path","nodes":[{"id":"a","label":"Browser"},{"id":"b","label":"Edge","accent":true},{"id":"c","label":"Server","note":"Origin"}],"edges":[{"from":"a","to":"b","label":"GET /"},{"from":"b","to":"c","label":"miss","dashed":true}],"note":"A source"},
+  {"kind":"tree","title":"Request path","nodes":[{"id":"a","label":"Browser"},{"id":"b","label":"Edge","accent":true},{"id":"c","label":"Server","note":"Origin"}],"note":"A source"},
+  {"kind":"cycle","title":"Request path","nodes":[{"id":"a","label":"Browser"},{"id":"b","label":"Edge","accent":true},{"id":"c","label":"Server","note":"Origin"}],"note":"A source"}
+]

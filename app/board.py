@@ -205,6 +205,8 @@ class Sheet:
     """One finished board: what to draw, under what, in what order."""
     marks: list[Mark] = field(default_factory=list)
     photos: list[Photo] = field(default_factory=list)
+    seed: int = 1
+    reveal: str = 'sequence'
 
     @property
     def beats(self) -> int:
@@ -603,10 +605,11 @@ def _t_diagram(c, ctx) -> Sheet:
     if not spec.get("note") and c["note"]:
         spec["note"] = c["note"]
     try:
-        marks = dg.marks_for(spec, dg.FULL, ctx["accent"], ctx["hand"])
+        geometry = dg.layout(spec, box=dg.FULL, accent=ctx["accent"], hand=ctx["hand"])
     except ValueError:
         return _t_bullets(c, ctx)
-    return Sheet(marks)
+    return Sheet([Mark(**m) for m in geometry['marks']], seed=geometry['seed'],
+                 reveal=dg.normalise(spec)['reveal'])
 
 
 DRAW = {
@@ -655,7 +658,7 @@ def _compose(base: Image.Image, sheet: Sheet, reveal: dict[int, float],
 
 def reveal_plan(sheet: Sheet, seconds: float, settle: float = 0.5):
     """Shared normalized beat starts and arrival durations for both engines."""
-    return dg.schedule(sheet.beats, seconds, settle=settle)
+    return dg.schedule(sheet.beats, seconds, sheet.reveal, settle=settle)
 
 
 def frames(sheet: Sheet, seconds: float, ground: Image.Image, hand: str,

@@ -40,7 +40,7 @@ import json
 import math
 import random
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -193,6 +193,8 @@ class Mark:
     font: str = "hand"                   # hand | mono
     alpha: float = 1.0                   # ink strength at full reveal
     radius: float = 0.0                  # wash only
+    node_box: tuple[float, float, float, float] | None = None
+    node_id: str = ""
 
 
 def _hex(color: str, alpha: int = 255) -> tuple[int, int, int, int]:
@@ -447,6 +449,8 @@ def _node_box_marks(order: int, node: dict, box: Box, rng: random.Random,
     color = accent if node["accent"] else INK
     marks = _rect_marks(order, box.x, box.y, box.w, box.h, rng, color=color,
                         width=4 if node["accent"] else 3)
+    marks[0].node_box = (box.x, box.y, box.w, box.h)
+    marks[0].node_id = node["id"]
     note = node["note"]
     label_marks, label_h = text_block(
         order, node["label"], box.x + box.w / 2, box.y + box.h / 2, size,
@@ -808,6 +812,16 @@ LAYOUTS = {
 def marks_for(spec: dict, box: Box | None = None, accent: str = "#E8C36A",
               hand: str = DEFAULT_HAND) -> list[Mark]:
     """Every mark in one diagram, in the order it should be drawn."""
+    return [Mark(**m) for m in layout(spec, box=box, accent=accent, hand=hand)['marks']]
+
+
+def layout(spec: dict, *, box: Box | None = None, accent: str = "#E8C36A",
+           hand: str = DEFAULT_HAND, seconds: float = 7.0) -> dict:
+    """JSON-ready geometry and reveal times, shared by Pillow and SVG.
+
+    Paths include the original seeded bow, overshoot, arrowheads and dashes.
+    Circular nodes remain paths; boxes carry their exact layout bounds.
+    """
     spec = normalise(spec)
     box = box or FULL
     rng = random.Random(_seed(json.dumps(spec, sort_keys=True)))
@@ -820,7 +834,13 @@ def marks_for(spec: dict, box: Box | None = None, accent: str = "#E8C36A",
     index = {o: i for i, o in enumerate(seen)}
     for m in marks:
         m.order = index[m.order]
-    return marks
+    plan = schedule(len(seen), seconds, spec['reveal'])
+    return dict(seed=_seed(json.dumps(spec, sort_keys=True)),
+                marks=[asdict(m) for m in marks], beats=plan,
+                nodes=[dict(id=m.node_id, box=m.node_box, order=m.order)
+                       for m in marks if m.node_box is not None],
+                paths=[dict(points=m.pts, order=m.order) for m in marks
+                       if m.kind == 'stroke'])
 
 
 # ---------------------------------------------------------------- the surface
@@ -965,8 +985,14 @@ def reveal_at(plan: list[tuple[float, float]], t: float) -> dict[int, float]:
 # -------------------------------------------------------------------- output
 def render_still(spec: dict, accent: str = "#E8C36A", *, box: Box | None = None,
                  hand: str = DEFAULT_HAND, grain: float = 0.5,
-                 ground_color: str = GROUND) -> Image.Image:
+                 ground_color: str = GROUND, engine: str = 'pillow') -> Image.Image:
     """The finished diagram, every mark inked, on the board."""
+    if engine == 'scene':
+        import io
+        from . import diagram_scenes
+        return Image.open(io.BytesIO(diagram_scenes.still(
+            spec, accent, hand=hand, grain=grain, box=box,
+            ground_color=ground_color))).convert('RGB')
     marks = marks_for(spec, box, accent, hand)
     layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw_marks(layer, marks, {m.order: 1.0 for m in marks}, hand)
@@ -1020,7 +1046,8 @@ DEFAULT_SECONDS = 7.0
 
 def candidate(spec: dict, dest: Path, accent: str = "#E8C36A", *,
               motion: str = "reveal", seconds: float = DEFAULT_SECONDS,
-              hand: str = DEFAULT_HAND, grain: float = 0.5) -> dict | None:
+              hand: str = DEFAULT_HAND, grain: float = 0.5,
+              engine: str = 'pillow') -> dict | None:
     """Render a spec into `dest` and hand back a media candidate for it.
 
     `motion` is "reveal" for the drawn-in clip or "still" for one flat frame.
@@ -1034,13 +1061,19 @@ def candidate(spec: dict, dest: Path, accent: str = "#E8C36A", *,
     poster = ""
     if motion == "still":
         out = dest / f"{stem}.png"
-        render_still(spec, accent, hand=hand, grain=grain).save(out)
+        render_still(spec, accent, hand=hand, grain=grain, engine=engine).save(out)
         kind, local = "image", out.name
         duration = 0.0
     else:
         out = dest / f"{stem}.mp4"
         seconds = max(2.5, min(20.0, float(seconds)))
-        n = _encode(frames(spec, seconds, accent, hand=hand, grain=grain), out)
+        if engine == 'scene':
+            from . import diagram_scenes
+            ctx, ground_image = diagram_scenes.context(dest, spec, accent, hand, seconds, grain)
+            diagram_scenes.render(dest, ctx, ground_image, out)
+            n = round(seconds * FPS)
+        else:
+            n = _encode(frames(spec, seconds, accent, hand=hand, grain=grain), out)
         if not n:
             return None
         kind, local = "video", out.name
@@ -1049,7 +1082,7 @@ def candidate(spec: dict, dest: Path, accent: str = "#E8C36A", *,
         # the picker would otherwise show a broken thumbnail. Same convention
         # the generated establishing shots use — see app/maps.py.
         shot = dest / f"{stem}_poster.jpg"
-        render_still(spec, accent, hand=hand, grain=grain).save(shot, quality=88)
+        render_still(spec, accent, hand=hand, grain=grain, engine=engine).save(shot, quality=88)
         poster = f"media/{shot.name}" if dest.name == "media" else shot.name
     cand = MediaCandidate(
         id=f"diagram_{uuid.uuid4().hex[:8]}",

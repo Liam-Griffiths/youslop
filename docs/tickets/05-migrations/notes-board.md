@@ -44,5 +44,10 @@ that crop and only until its arrival ends. Photo beats (including split's
 shared divider/photo beat) and washes use fades without geq.
 
 The chapter scene tail remains in render._chapter_tail. No board template
-includes a chapter card. Diagram and board_engine=pillow keep the old path.
+includes a chapter card. board_engine=pillow keeps the old path. T5.2b adds
+diagram scenes: native SVG rectangles, original point-list arrows/circles,
+fixed seeded displacement, and paused GSAP path-length draw-on. Only each
+beat's short arrival and settled endpoint are captured as transparent PNG
+video; ffmpeg clones the endpoint for holds and offsets each beat to its
+shared reveal start. Diagram `reveal=all` also uses the shared schedule.
 Timing and still comparisons require the reviewer's Chromium environment.

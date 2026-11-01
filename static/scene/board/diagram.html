@@ -1,0 +1,45 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>{% include 'board/_board.css' %}
+.board path,.board rect { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+{% if plate %}html,body { background:transparent!important; }{% endif %}</style>
+{% endblock %}
+{% block body %}
+<div class="board" {% if not plate %}style="--board-ground:url('{{ ground_url }}')"{% endif %}>
+<svg viewBox="0 0 1920 1080">
+<defs><filter id="hand-wobble" x="-10%" y="-10%" width="120%" height="120%">
+<feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="2" seed="{{ seed }}" result="noise"/>
+<feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G"/>
+</filter></defs>
+{% for start,arrival in beats %}{% set order=loop.index0 %}
+{% if active_order is none or active_order == order %}
+<g class="clip" data-start="0" data-duration="{{ duration }}" data-track-index="{{ order }}" data-reveal-start="{{ start }}" data-arrival="{{ arrival }}" filter="url(#hand-wobble)">
+{% set ns=namespace(skip=0) %}
+{% for m in marks if m.order == order %}
+{% if m.kind == 'text' %}<text x="{{ m.x }}" y="{{ m.y }}" font-size="{{ m.size }}" fill="{{ m.color }}" opacity="{{ m.alpha }}">{{ m.text }}</text>
+{% elif m.node_box %}<rect x="{{ m.node_box[0] }}" y="{{ m.node_box[1] }}" width="{{ m.node_box[2] }}" height="{{ m.node_box[3] }}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>{% set ns.skip=3 %}
+{% elif ns.skip > 0 %}{% set ns.skip=ns.skip-1 %}
+{% elif m.kind == 'stroke' %}<path d="M {% for x,y in m.pts %}{{ x }},{{ y }} {% if not loop.last %}L {% endif %}{% endfor %}" stroke="{{ m.color }}" stroke-width="{{ m.width }}" opacity="{{ m.alpha }}"/>
+{% endif %}{% endfor %}</g>
+{% endif %}{% endfor %}</svg></div>
+{% endblock %}
+{% block script %}
+<script>
+// Runs during parsing, before runtime.__ready resolves or capture seeks.
+const draw = gsap.timeline({paused:true});
+{% if not settled %}
+for (const beat of document.querySelectorAll('[data-reveal-start]')) {
+  const start = Number(beat.dataset.revealStart), duration = Number(beat.dataset.arrival);
+  for (const line of beat.querySelectorAll('path,rect')) {
+    const length = line.getTotalLength();
+    line.style.strokeDasharray = String(length);
+    draw.fromTo(line, {strokeDashoffset:length}, {strokeDashoffset:0, duration, ease:'power1.out'}, start);
+  }
+  for (const text of beat.querySelectorAll('text')) {
+    draw.fromTo(text, {opacity:0}, {opacity:Number(text.getAttribute('opacity')), duration, ease:'power1.out'}, start);
+  }
+}
+{% endif %}
+window.__timelines.diagram = draw;
+</script>
+{% endblock %}

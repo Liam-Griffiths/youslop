@@ -17,9 +17,9 @@ from .config import FPS, HEIGHT, WIDTH
 
 
 def handles(project, key):
-    return (project.style.board_engine != 'pillow' and key != 'diagram'
+    return (project.style.board_engine != 'pillow'
             and key in ('statement', 'bullets', 'steps', 'versus', 'code',
-                        'stat', 'quote', 'taped', 'split')
+                        'stat', 'quote', 'taped', 'split', 'diagram')
             and (scenes.SCENE_DIR / 'board' / f'{key}.html').is_file())
 
 
@@ -41,17 +41,9 @@ def _write(path, data):
     temporary.replace(path)
 
 
-def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=None):
-    from . import board
-    ctx = scenes.context_base(project, channel)
-    directory = scenes._directory(project)
-    root = Path(ctx['asset_roots']['project_root'])
-
-    def url(path):
-        return scenes.ASSETS_URLS['project'] + quote(path.relative_to(root).as_posix())
-
+def svg_marks(source, hand):
     marks = []
-    for mark in sheet.marks:
+    for mark in source:
         item = asdict(mark)
         if mark.kind == 'text':
             font = dg.font_for(mark.font, mark.size, hand)
@@ -61,6 +53,19 @@ def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=N
             item['x'] = mark.pts[0][0] + anchored[0] - baseline[0]
             item['y'] = mark.pts[0][1] + anchored[1] - baseline[1]
         marks.append(item)
+    return marks
+
+
+def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=None):
+    from . import board
+    ctx = scenes.context_base(project, channel)
+    directory = scenes._directory(project)
+    root = Path(ctx['asset_roots']['project_root'])
+
+    def url(path):
+        return scenes.ASSETS_URLS['project'] + quote(path.relative_to(root).as_posix())
+
+    marks = svg_marks(sheet.marks, hand)
     photos = [dict(order=p.order, x=p.xy[0], y=p.xy[1],
                    w=p.tile.width, h=p.tile.height, url=url(_asset(directory, p.tile)))
               for p in sheet.photos]
@@ -70,7 +75,8 @@ def context(project, slide, key, sheet, ground, hand, seconds, settle, channel=N
                ground_url=url(_asset(directory, ground)),
                margin=board.MARGIN, body=asdict(board.BODY),
                beats=board.reveal_plan(sheet, seconds, settle),
-               active_order=None, plate=False, settled=False, duration=seconds)
+               active_order=None, plate=False, settled=False, duration=seconds,
+               seed=sheet.seed)
     return ctx
 
 
@@ -138,6 +144,9 @@ def without_scale(extra):
 
 
 def render(project, key, ctx, ground, out, *, crf, extra):
+    if key == 'diagram':
+        from . import diagram_scenes
+        return diagram_scenes.render(project, ctx, ground, out, crf=crf, extra=extra)
     # Capture at the actual preview size; composition coordinates stay at 1080p.
     size = (WIDTH, HEIGHT)
     if '-vf' in extra:

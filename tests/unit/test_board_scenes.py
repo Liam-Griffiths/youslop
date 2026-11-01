@@ -91,7 +91,7 @@ def test_still_routes_and_pillow_escape(project, slide, tmp_path, monkeypatch, k
 
 
 def test_diagram_and_missing_template_fallback(project, monkeypatch):
-    assert not board_scenes.handles(project, 'diagram')
+    assert board_scenes.handles(project, 'diagram')
     assert not scenes.handles('board')
     monkeypatch.setattr(scenes, 'SCENE_DIR', scenes.SCENE_DIR / 'missing')
     assert not board_scenes.handles(project, 'bullets')
@@ -192,6 +192,9 @@ def test_capture_stills_forwards_probe(tmp_path, monkeypatch):
 
 
 def test_segment_mixed_engines_and_length(project, slide, tmp_path, monkeypatch):
+    handles = board_scenes.handles
+    monkeypatch.setattr(board_scenes, 'handles',
+                        lambda p, key: key != 'diagram' and handles(p, key))
     second = Slide.from_dict({**asdict(slide), 'id': 'diagram', 'board_template': 'diagram'})
     project.slides.append(second)
     slide.board_template = 'bullets'
