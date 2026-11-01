@@ -2670,7 +2670,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                                 "end": round(pt + w["end"], 3)}
                                for w in (s.take or {}).get("words", [])],
                 "effective_cues": cue_times.get(s.id, ([], []))[0],
-                "recorded": bool(s.take), "section": s.section,
+                "recorded": bool(s.take), "section": s.section, "on_camera": s.on_camera,
             })
             pt += d
             paragraph_offset += d

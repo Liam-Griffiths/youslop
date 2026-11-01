@@ -94,8 +94,10 @@ class Slide:
     candidates: list[dict] = field(default_factory=list)
     chosen_id: str = ""
     # The take the video uses: this paragraph's entry in `takes` for the
-    # project's chosen voice (`Project.voice_track`). Everything downstream —
+    # project's chosen voice (`Project.voice_track`), or camera when on_camera.
+    # Everything downstream —
     # the renderer, the timeline, the recorded counts — reads only this.
+    on_camera: bool = False
     take: dict | None = None
     # Every voice this paragraph has been read in, kept side by side so trying
     # another voice never costs the one already there: "mic", "kokoro",
@@ -885,11 +887,13 @@ class Project:
         }
 
     # --------------------------------------------------------------- voices
+    def active_take(self, slide: "Slide") -> dict | None:
+        """The paragraph camera overrides only its own voice-over read."""
+        return slide.takes.get(CAMERA_TRACK if slide.on_camera else self.voice_track)
+
     def set_take(self, slide: "Slide", track: str, take: dict | None,
                  reason: str = "") -> None:
-        """Store (or clear) one paragraph's read in one voice. It becomes the
-        take the video uses only if that voice is the video's voice — or if
-        the video has no voice yet, in which case this one becomes it."""
+        """Store or clear a read; camera never selects a project voice."""
         old = slide.takes.get(track)
         if old and (not take or old.get("path") != take.get("path")):
             slide.history.append({**deepcopy(old), "track": track,
@@ -901,17 +905,16 @@ class Project:
             slide.takes[track] = take
         else:
             slide.takes.pop(track, None)
-        if not self.voice_track and take:
+        if not self.voice_track and take and track != CAMERA_TRACK:
             self.use_track(track)
-        elif track == self.voice_track:
-            slide.take = take
+        slide.take = self.active_take(slide)
 
     def use_track(self, track: str) -> None:
         """Make `track` the voice of the whole video. Nothing is deleted:
         paragraphs not read in it yet simply have no take until they are."""
         self.voice_track = track
         for s in self.slides:
-            s.take = s.takes.get(track)
+            s.take = self.active_take(s)
 
     def track_counts(self) -> dict[str, int]:
         """How many paragraphs each voice has read."""
@@ -924,26 +927,19 @@ class Project:
     def sync_takes(self) -> None:
         """Keep `take` and `takes` agreeing.
 
-        On load, a project from before voices were kept apart has only `take`;
-        each one is filed under the voice it was read in, and the voice most of
-        the script was read in becomes the video's. Before a save, the active
-        take is written back to its voice, because a good deal of code adjusts
-        `slide.take` in place (a corrected duration, a re-cleaned recording)."""
+        Old projects with only `take` migrate into `takes`. Afterwards the
+        track dictionary is authoritative and `take` aliases the active entry,
+        so in-place metadata edits persist without copying between tracks.
+        """
         for s in self.slides:
             if s.take and not s.takes:
                 s.takes[take_track(s.take)] = s.take
         if not self.voice_track:
-            counts = self.track_counts()
+            counts = {k: v for k, v in self.track_counts().items() if k != CAMERA_TRACK}
             if counts:
                 self.voice_track = max(counts, key=counts.get)
-                for s in self.slides:
-                    s.take = s.takes.get(self.voice_track)
-            return
         for s in self.slides:
-            if s.take:
-                s.takes[self.voice_track] = s.take
-            else:
-                s.takes.pop(self.voice_track, None)
+            s.take = self.active_take(s)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Project":
@@ -983,16 +979,29 @@ class Project:
             intro=intro,
             outro=outro,
         )
+        # Older saves treated the serialized active take as authoritative.
+        # Preserve that read (including corrected metadata) before migrating
+        # to per-paragraph camera selection.
+        if p.voice_track:
+            for slide, raw_slide in zip(p.slides, d.get("slides", [])):
+                if "on_camera" not in raw_slide:
+                    if slide.take:
+                        slide.takes[p.voice_track] = slide.take
+                    else:
+                        slide.takes.pop(p.voice_track, None)
         p.sync_takes()
         return p
 
 
 MIC_TRACK = "mic"
+CAMERA_TRACK = "camera"
 
 
 def take_track(take: dict) -> str:
     """Which voice a take was read in: the engine for a synthetic read, the
     microphone otherwise."""
+    if take.get("kind") == "camera":
+        return CAMERA_TRACK
     if take.get("synthetic"):
         return str(take.get("engine") or "kokoro")
     return MIC_TRACK

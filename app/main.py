@@ -23,6 +23,7 @@ from PIL import Image
 
 from . import brand, check, edits, ops, review, storyboard, razor
 from .audio_files import next_raw_path, next_take_path
+from . import camera
 from . import audio as audio_mod
 from . import reactions
 from . import llm as llm_mod
@@ -48,7 +49,7 @@ from . import youtube as youtube_mod
 from . import transfer
 from . import footage_export_ui
 from .config import CACHE_DIR, DATA, MUSIC_DIR, STATIC_DIR, ensure_dirs
-from .schema import MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
+from .schema import CAMERA_TRACK, MIC_TRACK, VOICE_PRESETS, Presenter, Slide, Voice, new_channel, take_track
 from .store import project_dir
 from .paths import resource_root
 
@@ -1100,6 +1101,8 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         s = _slide(p, sid)
         try:
             edits.patch_slide_fields(s, payload)
+            if "on_camera" in payload:
+                s.take = p.active_take(s)
         except edits.EditError as exc:
             raise HTTPException(exc.status, str(exc)) from exc
         store.save(p)
@@ -1926,6 +1929,55 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
         if p.status in ("scripted", "media"):
             p.status = "recording"
         store.save(p)
+    return {"slide": s.to_dict(), "recorded_seconds": p.recorded_seconds()}
+
+
+@app.post("/api/projects/{pid}/slides/{sid}/camera")
+async def upload_camera(pid: str, sid: str, file: UploadFile) -> dict:
+    body = await file.read()
+    with store.lock_for(pid):
+        p = _load(pid)
+        s = _slide(p, sid)
+        narration = s.narration
+        root = project_dir(pid)
+        suffix = Path(file.filename or "clip.webm").suffix.lower()
+        if suffix not in {".mp4", ".mov", ".m4v", ".webm", ".mkv"}:
+            raise HTTPException(400, "That is not a video file I can read.")
+        raw = next_raw_path(root, sid, suffix)
+        raw.write_bytes(body)
+        if not body:
+            raw.unlink()  # only this new, empty upload
+            raise HTTPException(400, "That recording is empty.")
+        voice = deepcopy(p.voice)
+    # Slow processing never holds the project lock. Raw uploads survive failure.
+    with tempfile.TemporaryDirectory(prefix=".camera-", dir=root) as folder:
+        wav, mp4 = Path(folder) / "voice.wav", Path(folder) / "picture.mp4"
+        try:
+            meta = camera.process_camera_take(raw, wav, mp4, voice)
+            try:
+                meta["words"] = words_mod.estimate(wav, narration)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not estimate camera word times")
+                meta["words"] = []
+        except Exception as exc:
+            raise HTTPException(400, f"Could not process that camera take: {exc}") from exc
+        with store.lock_for(pid):
+            p = _load(pid)
+            s = _slide(p, sid)
+            out = next_take_path(root, CAMERA_TRACK, sid)
+            video = next_take_path(root, CAMERA_TRACK, sid, ".mp4")
+            os.link(wav, out)
+            os.link(mp4, video)
+            s.on_camera = True
+            p.set_take(s, CAMERA_TRACK, {**meta, "narration": narration,
+                       "path": out.relative_to(root).as_posix(),
+                       "video": video.relative_to(root).as_posix(),
+                       "raw_path": raw.relative_to(root).as_posix()})
+            store.log(p, f"Camera {sid}: audio/video offset {meta['av_offset']:+.3f}s"
+                      + ("; check sync (>100 ms)" if meta["sync_warning"] else ""))
+            if p.status in ("scripted", "media"):
+                p.status = "recording"
+            store.save(p)
     return {"slide": s.to_dict(), "recorded_seconds": p.recorded_seconds()}
 
 

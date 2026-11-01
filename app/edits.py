@@ -15,7 +15,7 @@ class EditError(ValueError):
 
 
 EDITABLE = {"narration", "title", "visual_note", "chapter", "queries",
-            "prefer_kind", "board_template", "board_lead", "board_note",
+            "on_camera", "prefer_kind", "board_template", "board_lead", "board_note",
             "board_points", "diagram", "picture_mode", "cues", "chosen_id", "focal"} | TIMING_FIELDS
 
 
@@ -44,6 +44,10 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
             elif key == "title_at" and s.take:
                 value = min(float(s.take.get("duration") or 0), value)
         setattr(s, key, value)
+    if "on_camera" in payload:
+        if not isinstance(payload["on_camera"], bool):
+            raise EditError("on_camera must be a boolean")
+        s.on_camera = payload["on_camera"]
     if "narration" in payload:
         s.narration = str(payload["narration"]).strip()
     if "title" in payload:
