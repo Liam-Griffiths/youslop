@@ -27,7 +27,7 @@ import math
 from pathlib import Path
 
 from ..config import FPS, HEAD_PAD, WIDTH, WORDS_PER_MINUTE
-from .. import brand, ffutil
+from .. import brand, ffutil, scenes
 from . import casefile, flameboat, groupchat, kit, loudmouth, ticker
 
 MODULES = [flameboat, casefile, loudmouth, groupchat, ticker]
@@ -175,16 +175,20 @@ def timed_cues(project, group, seg_len: float, lead_in: float
 
 
 def beat_for(module, ctx, slide, length: float, lead: float, spoken: float,
-             cache_dir: Path | None = None) -> kit.Beat:
+             cache_dir: Path | None = None, *, scene=False) -> kit.Beat:
     cues, times = _cue_times(module, slide, spoken, length, lead)
     slides = ctx.project.slides
     index = next((i for i, s in enumerate(slides) if s.id == slide.id), 0)
     src = source_for(ctx, slide)
     return kit.Beat(slide=slide, cues=cues, times=times, length=length,
                     spoken=spoken, lead=lead,
-                    picture=load_picture(ctx, slide, cache_dir),
+                    picture=None if scene else load_picture(ctx, slide, cache_dir),
                     motion=src if kit.is_motion(src) else None, index=index,
                     last=index == len(slides) - 1)
+
+
+def uses_scene(style) -> bool:
+    return style.cut_engine != "pillow" and scenes.handles_cut(style.format)
 
 
 def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
@@ -206,13 +210,19 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
     size = size or (WIDTH, round(WIDTH * 9 / 16))
     ctx = make_ctx(project, size, fps, channel, image_for)
     ctx.cache["dir"] = cache_dir
+    scene = uses_scene(project.style)
     beats: list[kit.Beat] = []
     for slide, dur, _start, length, lead in _beat_spans(group, seg_len, lead_in):
         beats.append(beat_for(module, ctx, slide, length, lead,
-                              spoken_of(slide, dur), cache_dir))
+                              spoken_of(slide, dur), cache_dir, scene=scene))
 
     title = (chapter[0] if chapter else "").strip()
     card_at = seg_len - hold if title and hold > 0.2 else None
+    if scene:
+        from . import loudmouth_scene
+        return loudmouth_scene.render(project, ctx, beats, [source_for(ctx, b.slide) for b in beats],
+            out, seconds=frame_count(seg_len, fps)/fps, size=size, fps=fps, crf=crf,
+            chapter=title, card_at=card_at, hide=hide, frames=frames)
     draw_card = getattr(module, "chapter", None) or kit.chapter_screen
 
     # Frames are counted off the segment's whole length, not beat by beat.
@@ -276,9 +286,20 @@ def still(project, slide, out: Path, *, channel=None, image_for=None,
     dur = max(2.5, slide.word_count / WORDS_PER_MINUTE * 60 + 0.5)
     spoken = spoken_of(slide, dur)
     length = spoken + 0.5
-    beat = beat_for(module, ctx, slide, length, 0.0, spoken, cache_dir)
+    scene = uses_scene(project.style)
+    beat = beat_for(module, ctx, slide, length, 0.0, spoken, cache_dir, scene=scene)
     t = kit.clamp(at) * (length - 0.05)
     out.parent.mkdir(parents=True, exist_ok=True)
+    if scene:
+        import tempfile
+        from . import loudmouth_scene
+        with tempfile.TemporaryDirectory(dir=out.parent) as work:
+            movie = Path(work) / "still.mp4"
+            first = round(t*FPS)
+            loudmouth_scene.render(project, ctx, [beat], [source_for(ctx, slide)], movie,
+                seconds=frame_count(length, FPS)/FPS, size=ctx.size, fps=FPS, crf=18, frames=(first, first+1))
+            ffutil.run(["-i", str(movie), "-frames:v", "1", str(out)])
+        return out
     try:
         module.frame(beat, ctx, t).save(out)
     finally:

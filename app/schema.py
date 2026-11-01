@@ -366,6 +366,7 @@ class Style:
     board_ground: str = "#3A4552"
     board_grain: float = 0.5
     board_settle: float = 0.5
+    cut_engine: str = "scene"      # scene | pillow (legacy drawn-cut fallback)
     # Which variant of a drawn cut — "paper" for Loudmouth, "light" for Group
     # Chat, and so on (each cut's LOOKS). Empty is the cut's own default.
     cut_look: str = ""

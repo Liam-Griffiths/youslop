@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
 
@@ -44,7 +45,11 @@ _PROBE = r"""(() => {
  const signature = e => [e.outerHTML.replace(/ data-(start|duration|motion[^ =]*)="[^"]*"/g,'').replace(/visibility:\s*(hidden|visible);?/g,''),
      [e,...e.querySelectorAll('*')].map(style)];
  const screens = [...document.querySelectorAll('[data-screen]')].map(e => ({
-   id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration), camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
+   id:e.dataset.screen, start:Number(e.dataset.start), duration:Number(e.dataset.duration),
+   world:e.dataset.world === 'true', signature:[e.outerHTML,style(e)],
+   media:[...e.querySelectorAll('[data-media]')].map(n=>{const r=n.getBoundingClientRect();return {
+     path:n.dataset.media, video:n.dataset.video==='true', time:Number(n.dataset.mediaTime), box:[r.left,r.top,r.right,r.bottom]};}),
+   camera:e.dataset.camera ? JSON.parse(e.dataset.camera) : undefined}));
  const rows = layers.map((e,i) => {
    let r=e.getBoundingClientRect();
    const painted = e.dataset.bounds ? [...e.querySelectorAll(e.dataset.bounds)] :
@@ -61,6 +66,7 @@ _PROBE = r"""(() => {
      motion:e.dataset.motion || e.dataset.anim || 'none', arrival:Number(e.dataset.motionDuration || 0.6),
      ease:e.dataset.motionEase, y:e.dataset.motionY, feather:Number(e.dataset.motionFeather || 1),
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
+     steps:JSON.parse(e.dataset.steps || '[]'),
      box:[r.left,r.top,r.right,r.bottom], signature:signature(e)};
  });
  const clone = document.body.cloneNode(true);
@@ -72,6 +78,33 @@ _PROBE = r"""(() => {
 
 def _value(cdp, session, js):
     return stage._evaluate(cdp, session, js)['result'].get('value')
+
+
+def _world_bounds(keys, width, height, scale):
+    """Conservative swept view, rasterised 1:1 at the closest camera zoom."""
+    _camera(keys, 't', world=True)
+    def bounds(axis, extent):
+        edges = []
+        for k in keys:
+            edges.extend([k[axis]-extent/k['zoom']/2, k[axis]+extent/k['zoom']/2])
+        for a,b in zip(keys,keys[1:]):
+            delta, dz = b[axis]-a[axis], b['zoom']-a['zoom']
+            for sign in (-1,1):
+                if delta and dz and sign*extent*dz/(2*delta)>0:
+                    zoom = math.sqrt(sign*extent*dz/(2*delta))
+                    u = (zoom-a['zoom'])/dz
+                    if 0<u<1:
+                        edges.append(a[axis]+delta*u+sign*extent/zoom/2)
+        return min(edges), max(edges)
+    left,right = bounds('x',width)
+    top,bottom = bounds('y',height)
+    w,h = right-left,bottom-top
+    density = scale*max(k['zoom'] for k in keys)
+    # Match output aspect exactly, so zoompan never distorts the world.
+    divisor = math.gcd(width, height)
+    aw, ah = width//divisor, height//divisor
+    units = math.ceil(max(w*density/aw, h*density/ah))
+    return left, top, density, aw*units, ah*units
 
 
 def _plan(data, seconds, fps):
@@ -111,7 +144,7 @@ def _plan(data, seconds, fps):
 
 def _plates(project, template, ctx, seconds, size, fps, stats):
     key, html, ctx = scenes._prepare(project, template, ctx, seconds, size, fps,
-                                    ('builder-v2', MOTIONS))
+                                    ('builder-v3', MOTIONS))
     manifest = html.with_suffix('.layers.json')
     if manifest.exists():
         data = json.loads(manifest.read_text())
@@ -142,7 +175,7 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                 _value(cdp, session, 'Object.values(window.__timelines).forEach(t=>t.progress(1))')
             css = ('[data-layer], [data-layer] *, [data-screen], [data-screen] * {visibility:hidden!important}' if selector is None else
                    f'html,body {{background:transparent!important}} body * {{visibility:hidden!important}} {selector}, {selector} * {{visibility:visible!important}}')
-            if selector and time is None and layer.get('exit', 0) > 0:
+            if selector and time is None:
                 css += f' {selector} {{opacity:1!important}}'
             _value(cdp, session, f'window.__isolate.textContent={json.dumps(css)}')
             raw = base64.b64decode(cdp.send('Page.captureScreenshot',
@@ -154,6 +187,29 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
             stats['captures'] += 1
             return str(path)
 
+        if any(s.get('world') for s in data['screens']):
+            for n, screen in enumerate(data['screens']):
+                left, top, density, w, h = _world_bounds(screen['camera'], ctx['width'], ctx['height'], sx)
+                screen['raster'] = dict(left=left, top=top, density=density, width=w, height=h)
+                cdp.send('Emulation.setDeviceMetricsOverride', dict(width=math.ceil(w/density),
+                    height=math.ceil(h/density), deviceScaleFactor=density, mobile=False), session)
+                _value(cdp, session, f"document.body.style.transform='translate({-left}px,{-top}px)'; document.querySelectorAll('[data-screen]')[{n}].setAttribute('data-builder-screen','')")
+                screen['ground_path'] = capture([screen['signature'], screen['raster']], (0,0,w,h), '[data-builder-screen] [data-ground]')
+                for layer in [l for l in data['layers'] if l['screen'] == screen['id']]:
+                    x0,y0,x1,y1 = layer['box']
+                    box = [math.floor((x0-left)*density), math.floor((y0-top)*density),
+                           math.ceil((x1-left)*density), math.ceil((y1-top)*density)]
+                    _value(cdp, session, f"document.querySelectorAll('[data-layer]')[{layer['index']}].setAttribute('data-builder-active','')")
+                    layer['path'] = capture([layer['signature'], box, density], box, '[data-builder-active]')
+                    layer['box'] = box
+                    layer['steps'] = [(t, edge*density) for t,edge in layer.get('steps', [])]
+                    _value(cdp, session, "document.querySelector('[data-builder-active]').removeAttribute('data-builder-active')")
+                for media in screen.get('media', []):
+                    media['box'] = [round((v-(left if i%2==0 else top))*density) for i,v in enumerate(media['box'])]
+                _value(cdp, session, "document.querySelector('[data-builder-screen]').removeAttribute('data-builder-screen')")
+            data['ground_color'] = ctx['palette']['ground']
+            _write(manifest, json.dumps(data).encode())
+            return
         data['ground_path'] = capture(data['ground'], (0, 0, *size), None)
         for layer in data['layers']:
             box = [math.floor(layer['box'][0]*sx), math.floor(layer['box'][1]*sy),
@@ -186,8 +242,11 @@ def ease(name, p):
         return f'(1-pow(1-({p}),{2 if name == "quad-out" else 3}))'
     if name == 'expo-out':
         return f'if(gte({p},1),1,1-pow(2,-10*({p})))'
-    if name == 'back-out':
-        return f'(1+2.70158*pow(({p})-1,3)+1.70158*pow(({p})-1,2))'
+    if name == 'cubic-in-out':
+        return f'if(lt({p},0.5),4*pow({p},3),1-pow(-2*({p})+2,3)/2)'
+    if name in ('back-out', 'back-out-1.9'):
+        s = 1.9 if name.endswith('1.9') else 1.70158
+        return f'(1+{s+1}*pow(({p})-1,3)+{s}*pow(({p})-1,2))'
     raise ValueError(f'unsupported ease: {name}')
 
 
@@ -203,13 +262,13 @@ def _motion(layer, clock='t'):
     return {k: value(k, d) for k, d in [('opacity', 1), ('x', 0), ('y', 0), ('scale', 1), ('wipe', 1)]}
 
 
-def _camera(keys, clock):
+def _camera(keys, clock, world=False):
     if len(keys) > 48:
         raise ValueError('at most 48 camera keys per screen')
     keys = sorted(keys, key=lambda k: k['t'])
     for k in keys:
-        if not all(math.isfinite(k.get(v, d)) for v, d in [('t', 0), ('x', 0), ('y', 0), ('zoom', 1)]) or k.get('zoom', 1) < 1:
-            raise ValueError('camera requires finite coordinates and zoom >= 1')
+        if not all(math.isfinite(k.get(v, d)) for v, d in [('t', 0), ('x', 0), ('y', 0), ('zoom', 1)]) or k.get('zoom', 1) <= 0 or (not world and k.get('zoom', 1) < 1):
+            raise ValueError('camera requires finite coordinates and zoom >= 1 (positive for worlds)')
     def expr(name, default):
         result = str(keys[-1].get(name, default)) if keys else str(default)
         for a, b in reversed(list(zip(keys, keys[1:]))):
@@ -229,12 +288,46 @@ def _compile(data, screen, size, fps, directory):
         layer = dict(source)
         if source['screen'] == '':
             layer['start'] -= screen['start']
+        layer['start'] -= screen.get('offset', 0)
+        layer['steps'] = [(t-screen.get('offset', 0), edge) for t,edge in layer.get('steps', [])]
         if layer['start'] < screen['duration'] and layer['start']+layer['duration'] > 0:
             layers.append(layer)
     # Flatten the settled prefix in paint order. Foreground layers retain their order.
-    with Image.open(data['ground_path']) as image:
+    world = screen.get('raster')
+    with Image.open(screen.get('ground_path', data.get('ground_path'))) as image:
         ground = image.convert('RGBA')
-    while layers and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
+    if world:
+        text = ground
+        ground = Image.new('RGBA', text.size, data['ground_color'])
+        videos = []
+        for media in screen.get('media', []):
+            x0,y0,x1,y1 = media['box']
+            if x1<=0 or y1<=0 or x0>=ground.width or y0>=ground.height:
+                continue
+            if media['video']:
+                videos.append(dict(media, id='media', screen=screen['id'], start=0,
+                    duration=screen['duration'], arrival=.001, motion='none',
+                    time=media['time']+screen.get('offset', 0)))
+                continue
+            source = Path(media['path'])
+            stamp = source.stat()
+            path = Path(screen['ground_path']).parent / ('media-'+_hash([str(source),stamp.st_mtime_ns,stamp.st_size,x1-x0,y1-y0])+'.png')
+            if not path.exists():
+                with tempfile.NamedTemporaryFile(dir=path.parent, suffix='.png', delete=False) as stream:
+                    temporary = Path(stream.name)
+                try:
+                    ffutil.run(['-i', str(source), '-vf', f'scale={x1-x0}:{y1-y0}:force_original_aspect_ratio=increase,crop={x1-x0}:{y1-y0},colorchannelmixer=rr=.53:gg=.53:bb=.53', '-frames:v','1',str(temporary)])
+                    temporary.replace(path)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            with Image.open(path) as panel:
+                ground.alpha_composite(panel.convert('RGBA'), (x0,y0))
+        if videos:
+            layers = videos+[dict(id='settled', screen=screen['id'], start=0, duration=screen['duration'],
+                arrival=.001, motion='none', path=screen['ground_path'], box=[0,0,*text.size])]+layers
+        else:
+            ground.alpha_composite(text)
+    while not world and layers and layers[0]['start'] <= 0 and (layers[0]['motion'] == 'none' or layers[0]['start']+layers[0]['arrival'] <= 0) and layers[0]['start']+layers[0]['duration'] >= screen['duration']:
         layer = layers.pop(0)
         with Image.open(layer['path']) as plate:
             ground.alpha_composite(plate.convert('RGBA'), tuple(layer['box'][:2]))
@@ -254,10 +347,20 @@ def _compile(data, screen, size, fps, directory):
             feather = max(1, layer.get('feather', 1) * size[0]/data['width'])
             wipe = (f"clip({alpha['wipe']}/0.3,0,1)*"
                     f"clip((({w}+{2*feather})*{alpha['wipe']}-X)/{2*feather},0,1)")
+        if layer.get('steps'):
+            edge = '0'
+            for t, right in layer['steps']:
+                edge = f'if(gte(T,{t}),{right},{edge})'
+            wipe = f'lte(X,{edge})'
         # Scale/alpha/wipe evaluate only the small crop. Reuse decoded still pixels.
         effect = (f"loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba,"
-                  f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip({alpha['opacity']},0,1)*{wipe}':enable='between(t,{layer['start']},{layer['start']+layer['arrival']})',"
+                  f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip({alpha['opacity']},0,1)*{wipe}':enable='between(t,{layer['start']},{max([layer['start']+layer['arrival']]+[s[0]+.16 for s in layer.get('steps',[])])})',"
                   f"scale=w='max(1,iw*{m['scale']})':h='max(1,ih*{m['scale']})':eval=frame")
+        if layer['motion'] == 'none':
+            effect = f'loop=loop=-1:size=1:start=0,setpts=N/({fps}*TB),format=rgba'
+        if layer.get('video'):
+            inputs[-2:] = ['-stream_loop','-1','-ss',str(layer['time']),'-i',layer['path']]
+            effect = f'setpts=PTS-STARTPTS,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},colorchannelmixer=rr=.53:gg=.53:bb=.53,format=rgba'
         exit_s = min(layer.get('exit', 0), layer['duration']/2)
         if exit_s > 0:
             effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"
@@ -268,7 +371,7 @@ def _compile(data, screen, size, fps, directory):
             inputs[-2:] = ['-r', str(fps), '-f', 'concat', '-safe', '0', '-i', str(sequence)]
             effect = f"setpts=PTS-STARTPTS+{layer['start']}/TB,tpad=stop_mode=clone:stop=-1,format=rgba"
         graph.append(f'[{i}:v]{effect}[l{i}]')
-        sx, sy = size[0]/data['width'], size[1]/data['height']
+        sx, sy = (world['density'], world['density']) if world else (size[0]/data['width'], size[1]/data['height'])
         x = f"{layer['box'][0]}+{sx}*{m['x']}+({w}-overlay_w)/2"
         y = f"{layer['box'][1]}+{sy}*{m['y']}+({h}-overlay_h)/2"
         if layer.get('frames'):
@@ -276,8 +379,13 @@ def _compile(data, screen, size, fps, directory):
         graph.append(f"[{last}][l{i}]overlay=x='{x}':y='{y}':enable='gte(t,{layer['start']})*lt(t,{layer['start']+layer['duration']})':eof_action=repeat:format=auto[v{i}]")
         last = f'v{i}'
     keys = screen.get('camera', data.get('camera', []))
-    x, y, z = _camera(keys, f'(on/{fps}+{screen["start"]})')
-    x, y = f'({x})*{size[0]/data["width"]}', f'({y})*{size[1]/data["height"]}'
+    x, y, z = _camera(keys, f'(on/{fps}+{screen["start"]+screen.get("offset",0)})', world=bool(world))
+    if world:
+        x = f'(({x})-{data["width"]}/(2*({z}))-{world["left"]})*{world["density"]}'
+        y = f'(({y})-{data["height"]}/(2*({z}))-{world["top"]})*{world["density"]}'
+        z = f'({z})*{world["width"]/(data["width"]*world["density"])}'
+    else:
+        x, y = f'({x})*{size[0]/data["width"]}', f'({y})*{size[1]/data["height"]}'
     if data.get('alpha'):
         graph.append(f'[{last}]format=rgba[out]')
     elif not keys:
@@ -308,7 +416,10 @@ def inspect(project, template, ctx, *, seconds, size, fps):
     return stats
 
 
-def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
+PASS_WORKERS = 4
+
+
+def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=(), frames=None):
     extra = list(extra)
     if '-vf' in extra:
         i = extra.index('-vf')
@@ -325,14 +436,34 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=out.parent, prefix='builder-') as work:
-        directory, parts = Path(work), []
+        directory, jobs = Path(work), []
         for n, screen in enumerate(screens):
-            inputs, graph = _compile(data, screen, size, fps, directory)
-            script = directory / f'{n}.ffgraph'
+            first = math.ceil(screen['start']*fps-1e-6)
+            stop = math.ceil((screen['start']+screen['duration'])*fps-1e-6)
+            if frames:
+                first, stop = max(first, frames[0]), min(stop, frames[1])
+            if stop <= first:
+                continue
+            screen = dict(screen, offset=first/fps-screen['start'], duration=(stop-first)/fps)
+            # Each screen gets its own folder so passes can run side by side.
+            folder = directory / str(n)
+            folder.mkdir()
+            inputs, graph = _compile(data, screen, size, fps, folder)
+            script = folder / 'graph.ffgraph'
             script.write_text(graph)
             part = directory / f'{n}{out.suffix}'
-            count = round((screen['start']+screen['duration'])*fps)-round(screen['start']*fps)
-            args = [*inputs, '-filter_complex_threads', str(ffutil._default_threads()), '-filter_complex_script', str(script),
+            jobs.append((inputs, script, part, stop-first))
+            stats['passes'] += 1
+            stats['largest_graph_bytes'] = max(stats['largest_graph_bytes'], len(graph.encode()))
+        # Screens are independent: a few small ffmpeg passes at once, sharing the
+        # usual thread cap between them rather than each taking all of it.
+        workers = max(1, min(PASS_WORKERS, len(jobs)))
+        threads = max(1, ffutil._default_threads() // workers)
+
+        def encode(job):
+            inputs, script, part, count = job
+            args = ['-threads', str(threads), '-filter_threads', str(threads), *inputs,
+                '-filter_complex_threads', str(threads), '-filter_complex_script', str(script),
                 '-map', '[out]', '-frames:v', str(count), '-r', str(fps),
                 *(['-c:v', 'png', '-pix_fmt', 'rgba'] if data.get('alpha') else ffutil.video_args(out, crf=crf)), *extra, '-an', str(part)]
             try:
@@ -342,9 +473,13 @@ def render(project, template, ctx, out, *, seconds, size, fps, crf, extra=()):
                     raise
                 args[args.index('-filter_complex_script')] = '-/filter_complex'
                 ffutil.run(args)
-            parts.append(part)
-            stats['passes'] += 1
-            stats['largest_graph_bytes'] = max(stats['largest_graph_bytes'], len(graph.encode()))
+            return part
+
+        if workers == 1:
+            parts = [encode(job) for job in jobs]
+        else:
+            with ThreadPoolExecutor(workers) as pool:
+                parts = list(pool.map(encode, jobs))
         if len(parts) == 1:
             parts[0].replace(out)
         else:

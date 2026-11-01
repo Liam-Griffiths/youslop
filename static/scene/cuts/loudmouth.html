@@ -1,0 +1,105 @@
+{% extends '_base.html' %}
+{% block head %}<link rel="stylesheet" href="/static/scene/cuts/loudmouth.css">{% endblock %}
+{% block body %}
+<div id="page" class="look-{{ look or 'ink' }}" style="--dim:{{ palette.dim }};--hot:{{ palette.hot }}">
+{% for beat in beats %}<section class="beat" data-beat="{{ loop.index0 }}">
+{% for cue in beat.cues %}<article class="block {% if cue.image and beat.source %}panel{% endif %}">
+{% for word, weight in cue.words %}<span class="word {{ weight }}">{{ word }}</span>{% endfor %}
+</article>{% endfor %}</section>{% endfor %}
+</div>
+{% endblock %}
+{% block script %}<script>
+window.__ready = window.__ready.then(() => {
+  const beats = {{ beats | tojson }}, cardAt = {{ card_at | tojson }}, title = {{ chapter | tojson }};
+  const page = document.querySelector('#page'), hidden = {{ hide_cues | tojson }};
+  document.documentElement.style.overflow='visible'; document.body.style.overflow='visible';
+  let screenIndex = 0, finalScreen;
+  beats.forEach((beat, bi) => {
+    const originals = [...page.querySelectorAll(`[data-beat="${bi}"] .block`)];
+    const blocks = originals.map((el, i) => {
+      // Flex wraps without splitting punctuation from its word. Repack into rows.
+      const groups = new Map();
+      [...el.children].forEach(w => {const y = Math.round(w.getBoundingClientRect().bottom);
+        if (!groups.has(y)) groups.set(y, []); groups.get(y).push(w);});
+      el.replaceChildren(...[...groups.values()].map(words => {
+        const row = document.createElement('div'); row.className = 'row'; row.append(...words); return row;
+      }));
+      el.style.display='grid';
+      const w = el.classList.contains('panel') ? 1920 : Math.max(...[...el.children].map(r => r.scrollWidth));
+      el.style.width = `${w}px`;
+      const h = el.offsetHeight, prev = originals[i-1];
+      let x=0, y=0;
+      if (prev) {x=Number(prev.dataset.x); y=Number(prev.dataset.y);
+        if (beat.cues[i].move === 'right' || beat.cues[i].move === 'turn') x += prev.offsetWidth+120;
+        else y += prev.offsetHeight+50;}
+      Object.assign(el.dataset,{x,y}); Object.assign(el.style,{left:`${x}px`,top:`${y}px`});
+      return {el,x,y,w,h,target:{x:x+w/2,y:y+h/2,zoom:el.classList.contains('panel')?1:Math.min(1500/w,820/h,1)}};
+    });
+    blocks.forEach((block, i) => {
+      const cue=beat.cues[i], start=beat.start+(i ? cue.start : 0);
+      const end=Math.min(bi===beats.length-1 && i===blocks.length-1 ? {{ duration }} : beat.start+cue.end, cardAt ?? Infinity);
+      if (end<=start) return;
+      const screen=document.createElement('section'); screen.dataset.screen=`cue${screenIndex++}`; screen.className='clip';
+      Object.assign(screen.dataset,{start,duration:end-start,world:'true'});
+      page.append(screen); let wordIndex=0;
+      blocks.slice(0,i+1).forEach((b,j) => {
+        const clone=b.el.cloneNode(true); screen.append(clone);
+        if (clone.classList.contains('panel')) {
+          const media=document.createElement('i'); Object.assign(media.dataset,{media:beat.source,video:beat.video,
+            mediaTime:Math.max(0,start-beat.start)});
+          Object.assign(media.style,{position:'absolute',inset:0}); clone.prepend(media);
+        }
+        [...clone.querySelectorAll('.row')].forEach((row,ri) => {
+          if (hidden) {row.style.visibility='hidden'; return;}
+          if (j<i) {row.dataset.ground=''; return;}
+          const box=row.getBoundingClientRect(), steps=[];
+          [...row.children].forEach(w => {const right=w.getBoundingClientRect().right-box.left;
+            steps.push([cue.start+Math.max(.2,(cue.end-cue.start)*.8)*wordIndex++/Math.max(1,cue.words.length)-(start-beat.start),right]);});
+          if (steps[0][0]>=end-start) {row.style.visibility='hidden'; return;}
+          Object.assign(row.dataset,{layer:`${screen.dataset.screen}-r${ri}`,start:Math.max(0,steps[0][0]),
+            duration:end-start-Math.max(0,steps[0][0]),motion:'slam',motionDuration:.16,steps:JSON.stringify(steps)});
+        });
+      });
+      const prev=blocks[Math.max(0,i-1)].target, cur=block.target, travel=Math.min(.45,(cue.end-cue.start)*.4);
+      const key=(t,v,ease='linear')=>({t,...v,ease});
+      const motionStart=beat.start+cue.start, keys=[key(start,prev)];
+      if(motionStart>start) keys.push(key(motionStart,prev));
+      keys.push(key(Math.min(end,motionStart+travel),{...cur,zoom:cur.zoom*(1+.03*Math.min(travel/4,1))},'cubic-in-out'));
+      const pull=beat.start+beat.voice_end+.05;
+      const drift=t=>({...cur,zoom:cur.zoom*(1+.03*Math.min((t-motionStart)/4,1))});
+      if (i===blocks.length-1 && beat.length-beat.voice_end>.5 && blocks.length>1 && pull<end) {
+        if(pull<=keys.at(-1).t) {
+          keys.pop(); const u=Math.max(0,Math.min(1,(pull-motionStart)/travel));
+          const p=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+          keys.push(key(pull,{x:prev.x+(cur.x-prev.x)*p,y:prev.y+(cur.y-prev.y)*p,
+            zoom:(prev.zoom+(cur.zoom-prev.zoom)*p)*(1+.03*Math.min((pull-motionStart)/4,1))},'cubic-in-out'));
+        } else keys.push(key(pull,drift(pull)));
+        const x=Math.min(...blocks.map(b=>b.x)), y=Math.min(...blocks.map(b=>b.y));
+        const w=Math.max(...blocks.map(b=>b.x+b.w))-x, h=Math.max(...blocks.map(b=>b.y+b.h))-y;
+        keys.push(key(Math.min(end,pull+Math.min(.9,beat.length-beat.voice_end)),
+          {x:x+w/2,y:y+h/2,zoom:Math.min(1700/w,940/h,1)},'cubic-in-out'));
+      } else if(end>keys.at(-1).t) keys.push(key(end,drift(end)));
+      screen.dataset.camera=JSON.stringify(keys); finalScreen=screen;
+    });
+  });
+  page.querySelectorAll('.beat').forEach(e=>e.remove());
+  if (cardAt!==null && finalScreen) {
+    // Reuse the final page, now settled, behind the chapter's opaque fade.
+    const screen=finalScreen.cloneNode(true); screen.dataset.screen='chapter';
+    Object.assign(screen.dataset,{start:cardAt,duration:{{ duration }}-cardAt});
+    const keys=JSON.parse(screen.dataset.camera), last=keys.at(-1);
+    screen.dataset.camera=JSON.stringify([{...last,t:cardAt}]);
+    screen.querySelectorAll('[data-media]').forEach(e=>e.dataset.mediaTime=Number(e.dataset.mediaTime)+cardAt-Number(finalScreen.dataset.start));
+    screen.querySelectorAll('[data-layer]').forEach(e=>{delete e.dataset.layer; e.dataset.ground='';});
+    const z=last.zoom, left=last.x-960/z, top=last.y-540/z;
+    const ground=document.createElement('div'); ground.className='chapter-ground';
+    Object.assign(ground.style,{left:`${left}px`,top:`${top}px`,width:`${1920/z}px`,height:`${1080/z}px`});
+    Object.assign(ground.dataset,{layer:'chapter-ground',start:0,duration:{{ duration }}-cardAt,motion:'fade',motionDuration:.12,motionEase:'linear'});
+    const heading=document.createElement('h1'); heading.textContent=title.toUpperCase(); heading.className='chapter-title';
+    Object.assign(heading.style,{left:`${left+110/z}px`,top:`${top+100/z}px`,width:`${1700/z}px`,height:`${880/z}px`,fontSize:`${260/z}px`});
+    Object.assign(heading.dataset,{layer:'chapter-title',start:.1,duration:{{ duration }}-cardAt-.1,motion:'chapter',motionDuration:.35});
+    screen.append(ground,heading); page.append(screen);
+    while(heading.scrollHeight>heading.clientHeight && parseFloat(heading.style.fontSize)>90/z) heading.style.fontSize=`${parseFloat(heading.style.fontSize)*.92}px`;
+  }
+});
+</script>{% endblock %}

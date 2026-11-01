@@ -320,6 +320,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir()
     expected_gpu = bool(ffutil.gpu_status()["active"])
+    scene_cut = cuts.uses_scene(project.style)
     jobs = []
     split: dict[int, int] = {}
     for i, group in enumerate(groups):
@@ -327,7 +328,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
             continue
         seg_len = seg_lens[i + slide_at]
         total = cuts.frame_count(seg_len, FPS)
-        n = max(1, round(total / (CHUNK_SECONDS * FPS)))
+        n = 1 if scene_cut else max(1, round(total / (CHUNK_SECONDS * FPS)))
         split[i] = n
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
@@ -341,7 +342,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
         scratch.rmdir()
         return targets
     cores = os.cpu_count() or 4
-    workers = max(1, min(len(jobs), cores - 1, 15))
+    workers = max(1, min(len(jobs), cores - 1, 3 if scene_cut else 15))
     if free_mb is not None:
         workers = max(1, min(workers, int(free_mb // 800)))
     threads = max(1, cores // workers)
@@ -1031,7 +1032,7 @@ def _render_segment(
     override = _chapter_override(project, group)
     if override is not None:
         hold = min(audio_mod.gap_map(project)[group[-1][0].id], max(0.0, override))
-    if scenes.handles(style.format):
+    if not cuts.is_cut(style.format) and scenes.handles(style.format):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
             chapter=chapter, lead_in=lead_in, hold=hold, channel=channel, hide=hide)

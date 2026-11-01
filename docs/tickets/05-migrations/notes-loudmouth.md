@@ -64,3 +64,16 @@ in ffmpeg may capture short motion windows at target fps and hold between them.
 
 Reviewer still owns visual acceptance and the real-project speed check against
 the approximately 2× Pillow target. No benchmark or owner-media render was run.
+
+## Round 3 implementation contract
+
+Use `scene_builder.render`, one screen per cue, one live layer per browser-wrapped
+row. Earlier rows flatten into that screen's ground. Each row exports word right
+edges and stagger times for a stepped wipe, and shares one 1.55→1 cubic-out pop.
+Camera keys use cubic in-out travel, linear 3% hold drift, and an overview key.
+Capture only the swept world bounds at the closest zoom's pixel density.
+Conservatively drop quarter-turns and nested zoom layouts to bound raster cost;
+map them to right/down. Pictures use ffmpeg cover/darken; videos use beat-local
+time. Chapter ground fades in .12s; title arrives at +.1s with back.out(1.9).
+One scheduler job per picture (maximum three), retaining Pillow chunking.
+No comparison images or accepted scene golden may be fabricated from mocks.

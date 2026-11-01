@@ -19,7 +19,7 @@ from . import channels, cuts, ffutil, sanitise, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
 
-SCENE_VERSION = 4
+SCENE_VERSION = 5
 SCENE_DIR = STATIC_DIR / "scene"
 VENDOR_GSAP = STATIC_DIR / "vendor/gsap/gsap.min.js"
 ASSETS_URLS = {kind: f"/scene/{{token}}/{kind}/" for kind in ('project', 'channel')}
@@ -211,7 +211,10 @@ def lint(html: str, *, asset_root=None) -> list[str]:
 
 def _asset_hash() -> str:
     h = hashlib.sha1()
-    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / 'motion.json', SCENE_DIR / '_base.css', VENDOR_GSAP):
+    # Templates link their own stylesheets (e.g. cuts/loudmouth.css), so every
+    # scene stylesheet is part of the key, not just the base one.
+    for path in (SCENE_DIR / 'runtime.js', SCENE_DIR / 'motion.json', VENDOR_GSAP,
+                 *sorted(SCENE_DIR.rglob('*.css'))):
         h.update(path.read_bytes())
     return h.hexdigest()
 
@@ -367,6 +370,10 @@ def capture(project, template, ctx, *, t, size) -> bytes:
                                  assets_root=ctx.get('block_assets_root', html.parent.parent), **ctx.get('asset_roots', {}))
         png.write_bytes(data)
     return png.read_bytes()
+
+
+def handles_cut(key: str) -> bool:
+    return key == "loudmouth" and (SCENE_DIR / "cuts" / f"{key}.html").is_file()
 
 
 def handles(fmt: str) -> bool:
