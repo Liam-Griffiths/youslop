@@ -520,7 +520,7 @@ def _evaluate(cdp, session, expression):
 
 def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
              frames=1, seek_js="window.__seek({t})", deterministic=True,
-             session_action=None):
+             session_action=None, scene_probe=None):
     """Run scene capture, or a custom action with the same managed CDP session.
 
     session_action(cdp, session, run) owns navigation and capture when supplied.
@@ -608,6 +608,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             for i in range(count):
                 t = item.get("t", i / rate)
                 _evaluate(cdp, session, seek_js.format(t=t))
+                if scene_probe is not None:
+                    scene_probe(cdp, session, item, t)
                 png = base64.b64decode(cdp.send("Page.captureScreenshot", {
                     "format": "png", "fromSurface": True}, session)["data"])
                 if out_dir is None:

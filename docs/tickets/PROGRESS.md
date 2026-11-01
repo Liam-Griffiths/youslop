@@ -173,7 +173,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T12.1 | Corkbored block format and local registry | M | T2.3, T2.7c | done | 2026-10-31 Codex; clean-room block format + registry, 9 built-in blocks wrap our templates; fixed preview default length |
-| T12.2 | Block authoring kit | S | T12.1 | todo | |
+| T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
 | T12.3 | Core block set v1 | L | T12.2 | todo | ~30 blocks, 16:9 and 9:16, four batches |
 | T12.4 | Data blocks from tables | M | T12.3 | todo | number-match check |
 | T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |

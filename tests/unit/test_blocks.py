@@ -164,3 +164,71 @@ def test_range_default_is_a_watchable_length():
     assert ctx['duration'] == 8
     _, ctx = blocks.prepare('chapter')
     assert ctx['duration'] == 5.0
+
+
+def test_authoring_scaffold_and_static_checks(library, monkeypatch, capsys):
+    from app import block_authoring as kit
+    monkeypatch.setattr(stage, '_run_cdp', lambda *a, **k: pytest.fail('browser invoked'))
+    assert cli.main(['block', 'new', 'my-title']) == 0
+    root = blocks.USER_DIR / 'my-title'
+    assert kit.lint('user/my-title') == []
+    assert cli.main(['block', 'check', 'user/my-title', '--static-only']) == 0
+    assert 'browser checks skipped' in capsys.readouterr().out
+    with pytest.raises(FileExistsError):
+        kit.new('my-title')
+    with pytest.raises(ValueError):
+        kit.new('../escape')
+    assert kit.samples(blocks.discover()['user/my-title']['meta']) == {'title':'W'*80}
+    (root / 'block.html').write_text(kit.TEMPLATE.replace('{% block body %}',
+        '{% block body %}<script>Date.now()</script>'))
+    assert any('Date.now' in error for error in kit.lint('user/my-title'))
+
+
+def test_authoring_browser_measurements(library, monkeypatch):
+    from app import block_authoring as kit
+    kit.new('probe')
+    visited = []
+    class CDP:
+        def send(self, method, params, session):
+            if method == 'Page.captureScreenshot':
+                import base64
+                import io
+                from PIL import Image
+                out = io.BytesIO()
+                Image.new('RGB', (2,2)).save(out, format='PNG')
+                return {'data':base64.b64encode(out.getvalue()).decode()}
+            expression = params['expression']
+            return {'result':{'value':['title: text overflow'] if 'querySelectorAll' in expression else None}}
+    def run(job, progress, **kwargs):
+        item = job['items'][0]
+        visited.append((item['W'], item['H']))
+        kwargs['scene_probe'](CDP(), 'session', item, item['t'])
+    monkeypatch.setattr(stage, '_run_cdp', run)
+    errors = kit.check('user/probe')
+    assert len(errors) == 3 and all('title: text overflow' in e for e in errors)
+    assert visited == [(1920,1080), (1080,1920), (1080,1080)]
+
+
+def test_authoring_preview_bundle(library, monkeypatch):
+    from app import block_authoring as kit
+    import io
+    from PIL import Image
+    kit.new('preview')
+    out = io.BytesIO()
+    Image.new('RGB', (480,270)).save(out, format='PNG')
+    times = []
+    def capture(*a, **kw):
+        assert kw['size'] == (480,270)
+        times.append(kw['t'])
+        return out.getvalue()
+    def clip(root, template, ctx, **kw):
+        assert kw['size'] == (480,270) and kw['seconds'] == 3
+        path = root / 'mock.mp4'
+        path.write_bytes(b'mock mp4')
+        return path
+    monkeypatch.setattr(scenes, 'capture', capture)
+    monkeypatch.setattr(scenes, 'ensure_clip', clip)
+    target = library / 'preview-output'
+    assert cli.main(['block','preview','user/preview','--out',str(target)]) == 0
+    assert {p.name for p in target.iterdir()} == {'preview.png','sheet.png','preview.mp4'}
+    assert times == [1.5, 0, .5, 1, 1.5, 2, 2.5]

@@ -243,7 +243,16 @@ def cmd_scene_preview(args):
 
 def cmd_block(args):
     from . import blocks, scenes
-    if args.block_cmd == 'list':
+    from . import block_authoring
+    if args.block_cmd == 'new':
+        print(block_authoring.new(args.id))
+        print(f'id: user/{args.id}  (use this with block check / preview)')
+    elif args.block_cmd == 'check':
+        errors = block_authoring.check(args.id, static_only=args.static_only)
+        if errors:
+            raise ValueError('\n'.join(errors))
+        print('Static lint passed; browser checks skipped' if args.static_only else 'Block checks passed')
+    elif args.block_cmd == 'list':
         _print_json([dict(id=ref, name=b['meta']['name'], kind=b['meta']['kind'])
                      for ref, b in blocks.discover().items()])
     elif args.block_cmd == 'show':
@@ -253,11 +262,16 @@ def cmd_block(args):
         _print_json(block['meta'])
     else:
         values = json.loads(Path(args.vars).read_text()) if args.vars else {}
+        if not args.out or Path(args.out).suffix.lower() != '.png':
+            print(block_authoring.preview(args.id, args.out or 'block-preview',
+                  aspect=args.aspect, values=values, seconds=args.seconds, hero=args.t))
+            return
         template, ctx = blocks.prepare(args.id, values, args.aspect, args.seconds)
         size = (ctx['width'] // 4, ctx['height'] // 4)
         out = Path(args.out or 'frame.png')
         with tempfile.TemporaryDirectory(prefix='corkbored-block-') as temporary:
-            out.write_bytes(scenes.capture(Path(temporary), template, ctx, t=args.t, size=size))
+            out.write_bytes(scenes.capture(Path(temporary), template, ctx,
+                            t=ctx['duration']/2 if args.t is None else args.t, size=size))
         print(out)
 
 
@@ -383,10 +397,14 @@ def main(argv=None):
     block_sub = command.add_subparsers(dest='block_cmd', required=True)
     block_sub.add_parser('list')
     block_sub.add_parser('show').add_argument('id')
+    block_sub.add_parser('new').add_argument('id')
+    child = block_sub.add_parser('check')
+    child.add_argument('id')
+    child.add_argument('--static-only', action='store_true', help='Skip browser measurements')
     child = block_sub.add_parser('preview')
     child.add_argument('id')
     child.add_argument('--aspect', choices=('16:9', '9:16', '1:1'), default='16:9')
-    child.add_argument('--t', type=float, default=1.5)
+    child.add_argument('--t', type=float, help='Hero time (default: midpoint)')
     child.add_argument('--seconds', type=float)
     child.add_argument('--vars', help='JSON file of block variables')
     child.add_argument('--out')

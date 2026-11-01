@@ -57,3 +57,23 @@ context for `scenes.render_html` or `capture`. The CLI supports `block list`,
 `block show <id>` and `block preview <id> --aspect 9:16 --t 1.5` (quarter size,
 with optional `--vars values.json`, `--seconds`, `--out`). Built-in wrappers
 reuse Corkbored templates; no third-party block source is used.
+
+Authoring: `block new my-title` creates `<data>/blocks/my-title` without
+replacing existing work; address it as `user/my-title`. The commented scaffold
+uses Instrument tokens, local Inter and the runtime rise preset in all three
+aspects. `block check user/my-title --static-only` validates metadata and lints
+rendered HTML at maximum text lengths without starting Chromium. This reports
+browser checks as skipped. Full `block check user/my-title` also measures text
+bounds, title safety (portrait excludes the top 15%, bottom 20% and right 15%
+for Shorts controls), opaque text contrast (WCAG 3:1 large / 4.5:1 normal), and
+pixel equality after seeking away and back. It uses wide, unbroken W samples
+and reports the variable name on text failures. Gradient/image backgrounds
+need reviewer contrast judgement; the automated calculation uses the nearest
+opaque ancestor colour. Measure at the midpoint after fonts and runtime ready.
+
+`block preview user/my-title --out /tmp/my-title-preview` writes `preview.png`
+at the midpoint (override with `--t`), `sheet.png` at six times and one
+quarter-size `preview.mp4`. Default copy is locally authored metadata copy;
+`--vars` can replace it. Use a short block or `--seconds` within its duration
+rules. For compatibility, an `--out frame.png` path still captures just one
+PNG. No preview is fetched or written into the block directory by default.
