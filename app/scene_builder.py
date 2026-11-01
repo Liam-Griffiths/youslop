@@ -49,7 +49,7 @@ _PROBE = r"""(() => {
  const rules = [...document.styleSheets].map(sheet => {try {return [...sheet.cssRules].map(r=>r.cssText).join('\n');} catch (err) {return sheet.href || '';}});
  const positional = rules.some(t => /:(nth|first|last|only)-|[+~]\s*[^=\s]/.test(t.replace(/\{[^}]*\}/g,'{}')));
  const chain = e => {const out=[]; for (let n=e.parentElement; n; n=n.parentElement) out.push([n.tagName,n.className?.baseVal ?? n.className,n.getAttribute('style')||'']); return out;};
- const strip = h => h.replace(/ data-(layer|ground|steps|start|duration|motion[^ =]*)="[^"]*"/g,'').replace(/visibility:\s*(hidden|visible);?/g,'');
+ const strip = h => h.replace(/ data-(layer|ground|steps|start|duration|path|clip|motion[^ =]*)="[^"]*"/g,'').replace(/visibility:\s*(hidden|visible);?/g,'');
  const signature = e => positional ? [strip(e.outerHTML), [e,...e.querySelectorAll('*')].map(style)]
    : [strip(e.outerHTML), chain(e).map(c=>[c[0],c[1],strip(c[2])]), rules.length];
  const screens = [...document.querySelectorAll('[data-screen]')].map(e => ({
@@ -100,11 +100,11 @@ _PROBE = r"""(() => {
 })()"""
 
 
-_PLACED = re.compile(r'(?<![\w-])(left|top)\s*:\s*-?[\d.]+px\s*;?\s*')
+_PLACED = re.compile(r'(?<![\w-])(?:(?:left|top)\s*:\s*-?[\d.]+px|translate\s*:\s*-?[\d.]+px(?:\s+-?[\d.]+px)?)\s*;?\s*')
 
 
 def _unplaced(signature):
-    """The signature without the root element's own left/top (its position)."""
+    """The signature without the root element's own left/top/translate (its position)."""
     if not isinstance(signature, list) or not signature or not isinstance(signature[0], str):
         return signature
     markup, *rest = signature

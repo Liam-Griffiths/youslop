@@ -382,6 +382,8 @@ def test_plate_key_ignores_root_position_only():
     c = _unplaced(['<p class="x" style="left:12.5px;top:-3px;width:40px"><b style="left:5px">a</b></p>', [1]])
     assert a == b and a != c
     assert _unplaced({'kind': 'ground'}) == {'kind': 'ground'}
+    moved = _unplaced(['<p class="x" style="width:40px; translate: 0px 182px;"><b style="left:4px">a</b></p>', [1]])
+    assert moved == _unplaced(['<p class="x" style="width:40px; translate: 0px 152px;"><b style="left:4px">a</b></p>', [1]])
 
 
 @pytest.mark.parametrize('motion', ['wipe', 'reveal'])
