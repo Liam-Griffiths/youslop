@@ -195,7 +195,24 @@ def discover():
     return result
 
 
+_VALID = {}
+
+
 def validate_folder(root):
+    """Cached by every file's stat in the folder, so edits are still seen at once."""
+    from copy import deepcopy
+    files = sorted(p for p in Path(root).rglob('*') if p.is_file())
+    signature = (SCHEMA.stat().st_mtime_ns, tuple(
+        (str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in files))
+    cached = _VALID.get(str(root))
+    if cached and cached[0] == signature:
+        return deepcopy(cached[1])
+    meta = _validate_folder(root)
+    _VALID[str(root)] = (signature, deepcopy(meta))
+    return meta
+
+
+def _validate_folder(root):
     schema = json.loads(SCHEMA.read_text())
     meta = json.loads((root / 'block.json').read_text())
     _check(meta, schema, str(root / 'block.json'))

@@ -1,5 +1,6 @@
 // One explicit selection, independent of playback and scrubbing.
 function tlItems(kind) {
+  if (kind === 'sponsor') return tlSponsorItems();
   const row = Object.keys(TL_LAYER_KINDS).find((key) => TL_LAYER_KINDS[key] === kind);
   if (row) {
     const items = TL.data.layers?.[row] || [];
@@ -58,6 +59,11 @@ function tlInspector() {
   $('#tl-kind').onchange = (e) => e.target.value ? tlSelectKind(e.target.value) : tlSelect(null);
   const body = $('#tl-fields');
   if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
+  if (sel.kind === 'sponsor') {
+    const slot = p.sponsors.find((s) => s.id === sel.id);
+    if (slot) { body.innerHTML = tlSponsorFields(slot); tlSponsorWire(slot); }
+    return;
+  }
   const slide = p.slides.find((s) => s.id === sel.sid);
   const para = tlParas().find((q) => q.id === sel.sid);
   const seg = tlSegs().find((s) => s.ref === sel.id);

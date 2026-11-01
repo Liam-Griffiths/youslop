@@ -337,7 +337,7 @@ function tlSelectTarget(target) {
   if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para));
   else if (picture) {
     const seg = tlSegs()[+picture.dataset.seg];
-    const kind = seg.type === 'picture' ? 'picture' : 'slate';
-    tlSelect(tlItems(kind).find((s) => s.id === seg.ref) || null);
+    const kind = seg.type === 'sponsor' ? 'sponsor' : seg.type === 'picture' ? 'picture' : 'slate';
+    tlSelect(tlItems(kind).find((s) => s.id === (seg.sponsor || seg.ref)) || null);
   }
 }

@@ -1010,6 +1010,72 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
     return p.to_dict()
 
 
+@app.post("/api/projects/{pid}/sponsors")
+def add_sponsor(pid: str, payload: dict = Body(...)) -> dict:
+    from .schema import SponsorSlot
+    with store.lock_for(pid):
+        p = _load(pid)
+        slot = SponsorSlot()
+        _apply_sponsor(p, slot, payload)
+        p.sponsors.append(slot)
+        store.save(p)
+    return p.to_dict()
+
+
+def _apply_sponsor(project, slot, payload):
+    for key, limit in (("script", 10000), ("sponsor_id", 100)):
+        if key in payload:
+            if not isinstance(payload[key], str) or len(payload[key]) > limit:
+                raise HTTPException(400, f"Invalid sponsor {key}")
+            setattr(slot, key, payload[key])
+    for key, allowed in (("variant", ("short", "long")), ("placement", ("pre", "mid", "end"))):
+        if key in payload:
+            if payload[key] not in allowed:
+                raise HTTPException(400, f"Invalid sponsor {key}")
+            setattr(slot, key, payload[key])
+            if key == "variant":
+                slot.template = f"sponsor/{slot.variant}.html"
+    if "after_slide_id" in payload:
+        sid = payload["after_slide_id"]
+        if sid and sid not in {s.id for s in project.slides}:
+            raise HTTPException(400, "Unknown paragraph boundary")
+        slot.after_slide_id = sid
+        slot.at_s = None
+    for key in ("enabled", "paid"):
+        if key in payload:
+            if not isinstance(payload[key], bool):
+                raise HTTPException(400, f"Invalid sponsor {key}")
+            setattr(slot, key, payload[key])
+    if "vars" in payload:
+        values = payload["vars"]
+        limits = {"name": 64, "made": 64, "learn": 120, "url": 120, "code": 32, "link": 64}
+        if not isinstance(values, dict) or any(k not in limits or not isinstance(v, str)
+                or len(v) > limits[k] for k, v in values.items()):
+            raise HTTPException(400, "Invalid sponsor copy fields")
+        slot.vars.update(values)
+
+
+@app.patch("/api/projects/{pid}/sponsors/{slot_id}")
+def patch_sponsor(pid: str, slot_id: str, payload: dict = Body(...)) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        slot = next((s for s in p.sponsors if s.id == slot_id), None)
+        if slot is None:
+            raise HTTPException(404, "Sponsor slot not found")
+        _apply_sponsor(p, slot, payload)
+        store.save(p)
+    return p.to_dict()
+
+
+@app.post("/api/projects/{pid}/sponsors/{slot_id}/preview")
+def preview_sponsor(pid: str, slot_id: str) -> dict:
+    p = _load(pid)
+    if not any(s.id == slot_id for s in p.sponsors):
+        raise HTTPException(404, "Sponsor slot not found")
+    return {"job": jobs.start("sponsor preview", pid,
+        lambda progress: render.sponsor_proxy(store.load(pid), slot_id, progress, audible=True))}
+
+
 @app.delete("/api/projects/{pid}")
 def delete_project(pid: str) -> dict:
     store.delete(pid)
@@ -2838,16 +2904,18 @@ def get_timeline(pid: str, hide: str = "") -> dict:
 def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
     """Make the small playable proxy for some of the timeline's entries.
 
-    `refs` are what the timeline lists: "intro", "outro" or a picture's number.
+    `refs` are "intro", "outro", "sponsor:<id>" or a picture's number.
     Only the ones asked for, one after another, and only those whose cached
     proxy no longer matches the script: the player asks for the entry under
     the playhead and the next, never the whole cut.
     """
-    _load(pid)
+    project = _load(pid)
     hidden = _preview_hide(hide)
+    sponsor_refs = {f"sponsor:{s.id}" for s in project.sponsors if s.enabled}
     refs = [str(r) for r in (payload.get("refs") or [])][:16]
-    if not refs or any(r not in ("intro", "outro") and not r.isdigit() for r in refs):
-        raise HTTPException(400, "refs must be intro, outro or picture numbers")
+    if not refs or any(r not in ("intro", "outro") and not r.isdigit()
+            and r not in sponsor_refs for r in refs):
+        raise HTTPException(400, "refs must be intro, outro, sponsor:<id> or picture numbers")
 
     def work(progress):
         import threading

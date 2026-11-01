@@ -65,6 +65,7 @@ function tlDraw() {
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
   tlWireLayers();
   tlWireTiming();
+  tlWireSponsorDrag();
   tlWireCamera();
   tlPaintProblems();
   tlPaintReview();

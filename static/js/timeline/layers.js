@@ -6,10 +6,9 @@ const tlHideQuery = () => '?hide=' + Object.keys(TL.hidden).filter((k) => TL.hid
 function tlLayerRows() {
   return Object.entries(TL_LAYER_KINDS).map(([row, kind]) => {
     const items = TL.data.layers?.[row] || [];
-    if (row === 'sponsors' && !items.length) return '';
     const hidden = !!TL.hidden[row];
-    return `<div class="tl-lane tl-layer ${hidden ? 'hidden' : ''}">
-      <span class="tl-layer-label">${row === 'sponsors' ? row : `<button type="button" data-eye="${row}"
+    return `<div class="tl-lane tl-layer ${row === 'sponsors' ? 'tl-sponsors' : ''} ${hidden ? 'hidden' : ''}">
+      <span class="tl-layer-label">${row === 'sponsors' ? '<button type="button" id="tl-add-sponsor" aria-label="Add a sponsor">+</button>sponsors' : `<button type="button" data-eye="${row}"
         aria-label="${hidden ? 'Show' : 'Hide'} ${row} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>${row}`}</span>
       ${items.map((s, i) => `<button type="button" class="tl-layer-item ${esc(s.severity || '')} ${s.src === 'user' ? 'user' : ''}" data-layer="${row}" data-item="${i}"
         style="left:${s.t0 * TL.zoom}px;width:${Math.max(2, (s.t1 - s.t0) * TL.zoom - 2)}px"
@@ -20,6 +19,8 @@ function tlLayerRows() {
 
 function tlWireLayers() {
   const track = $('#tl-track');
+  $('#tl-add-sponsor').onpointerdown = (e) => e.stopPropagation();
+  $('#tl-add-sponsor').onclick = (e) => { e.stopPropagation(); tlSponsorAdd(); };
   track.querySelectorAll('[data-eye], [data-layer]').forEach((el) => {
     el.onpointerdown = (e) => e.stopPropagation();
     el.onclick = (e) => {

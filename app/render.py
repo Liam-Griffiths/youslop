@@ -2564,9 +2564,58 @@ def _build_slate_proxy(project: Project, kind: str, progress: Progress) -> dict:
     return {"ref": kind, "rendered_at": round(out.stat().st_mtime)}
 
 
+def _sponsor_preview(project, slot):
+    """Prepare a core block at the read's actual duration, without capturing."""
+    from copy import deepcopy
+    from . import blocks, sponsors, scene_builder
+    block_id = 'sponsor_' + slot.variant
+    block = deepcopy(blocks.discover()[block_id])
+    block['meta']['duration'] = dict(mode='range', min=0)
+    ctx = scenes.context_base(project)
+    ctx.update(script=slot.script, take=slot.take, word_offset=0)
+    values = {k: v for k, v in slot.vars.items() if k in block['meta']['variables']}
+    template, ctx = blocks.prepare(block_id, values, '16:9', sponsors.duration(slot),
+                                   context=ctx, _block=block)
+    take_path = (slot.take or {}).get('path')
+    key, _html = scenes._key(template, ctx, sponsors.duration(slot), preview_size(),
+                            PREVIEW_FPS, ('sponsor-proxy-v1', scene_builder.MOTIONS,
+                                          _stat(project_dir(project.id) / take_path) if take_path else None))
+    out = project_dir(project.id) / 'cache' / f'tl_sponsor_{key}.mp4'
+    return template, ctx, out
+
+
+def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
+    import tempfile
+    from . import scene_builder, sponsors
+    slot = next((s for s in project.sponsors if s.id == slot_id), None)
+    if slot is None:
+        raise ValueError('Sponsor slot not found')
+    template, ctx, out = _sponsor_preview(project, slot)
+    seconds = sponsors.duration(slot)
+    if not out.exists() or not out.stat().st_size:
+        progress('Drawing one sponsor segment at quarter size')
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='sponsor-') as work:
+            pending = Path(work) / 'preview.mp4'
+            scene_builder.render(project, template, ctx, pending, seconds=seconds,
+                                 size=preview_size(), fps=PREVIEW_FPS, crf=PREVIEW_CRF)
+            pending.replace(out)
+    if audible and slot.take and slot.take.get('path'):
+        voiced = out.with_name(out.stem + '_voice.mp4')
+        if not voiced.exists():
+            ffutil.run(['-i', str(out), '-i', str(project_dir(project.id) / slot.take['path']),
+                        '-map', '0:v', '-map', '1:a', '-c:v', 'copy',
+                        *ffutil.audio_args(voiced), '-af', 'apad', '-t', str(seconds), str(voiced)])
+        out = voiced
+    return dict(ref=f'sponsor:{slot.id}', path=f'cache/{out.name}',
+                rendered_at=round(out.stat().st_mtime))
+
+
 def proxy_ref(project: Project, ref: str, progress: Progress = lambda m: None,
               *, download: bool = True, hide: frozenset = frozenset()) -> dict:
-    """Draw one timeline entry: "intro", "outro", or a picture's number."""
+    """Draw one timeline entry: a slate, sponsor:<id>, or picture number."""
+    if ref.startswith("sponsor:"):
+        return sponsor_proxy(project, ref.removeprefix("sponsor:"), progress)
     if ref in ("intro", "outro"):
         if not _slate_has(project, ref):
             raise ValueError("There is no such card in this video.")
@@ -2883,13 +2932,16 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             if abs(start - t) > 0.001:
                 continue
             seconds = sponsors.duration(slot)
+            _template, _ctx, out = _sponsor_preview(project, slot)
+            ready = out.exists() and out.stat().st_size > 0
             segments.append({"ref": f"sponsor:{slot.id}", "type": "sponsor", "n": 0,
                              "group": -1, "lead": "", "start": round(t, 3),
                              "duration": seconds, "skip": 0.0, "paragraphs": [],
                              "sponsor": slot.id, "script": slot.script, "variant": slot.variant,
                              "kind": "scene", "problems": [] if slot.take else ["sponsor not recorded"],
-                             "ready": False, "have": False, "estimated": not bool(slot.take),
-                             "stamp": 0, "path": ""})
+                             "ready": ready, "have": ready, "estimated": not bool(slot.take),
+                             "stamp": round(out.stat().st_mtime) if ready else 0,
+                             "path": f"cache/{out.name}"})
             t += seconds
     if lay["outro"]:
         segments.append(slate_row("outro", lay["outro"], t))

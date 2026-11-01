@@ -58,7 +58,7 @@ def console_error(event):
 
 def seed():
     from app import channels, config, library, store
-    from app.schema import Channel, Project
+    from app.schema import Channel, Project, SponsorSlot
     config.ensure_dirs()
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures'))
     source = REPO / 'tests/fixtures/project_min'
@@ -74,7 +74,13 @@ def seed():
         # Keep copied fixture files, but seed unvoiced models so capture draws nothing.
         for slide in raw['slides']:
             slide['take'] = {}
-        store.save(Project.from_dict(raw))
+        project = Project.from_dict(raw)
+        if fmt == 'essay':
+            project.sponsors = [SponsorSlot(id='snapshot-read', after_slide_id=project.slides[0].id,
+                script='Sponsored by Example. Tools for your next project.',
+                vars={'name': 'Example', 'learn': 'Tools for your next project.',
+                      'made': 'Sponsored by', 'url': 'example.test', 'code': ''})]
+        store.save(project)
     library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
 
 
@@ -155,6 +161,8 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/p/psnapessay/render':
+                _evaluate(cdp, session, "tlSelectKind('sponsor'); true")
             png = cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
             path = output_path(out, route)
             path.write_bytes(base64.b64decode(png['data']))

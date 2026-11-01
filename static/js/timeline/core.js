@@ -34,9 +34,9 @@ const tlFps = () => (TL.data && TL.data.fps) || 15;
 const tlSegs = () => (TL.data && TL.data.segments) || [];
 const tlParas = () => tlSegs().flatMap((s) => s.paragraphs.map((q) => ({ ...q, seg: s.index })));
 const tlKey = (s) => `${s.ref}:${s.path}:${s.stamp}`;
-const tlLabel = (s) => (s.type === 'intro' ? 'slate' : s.type === 'outro' ? 'end'
+const tlLabel = (s) => s.type === 'sponsor' ? 'sponsor' : (s.type === 'intro' ? 'slate' : s.type === 'outro' ? 'end'
   : String(s.n).padStart(2, '0'));
-const tlName = (s) => (s.type === 'intro' ? 'the opening slate' : s.type === 'outro'
+const tlName = (s) => s.type === 'sponsor' ? 'the sponsor read' : (s.type === 'intro' ? 'the opening slate' : s.type === 'outro'
   ? 'the end card' : `picture ${s.n}`);
 const tlHasSound = () => !!(TL.data && TL.data.mix.audible && TL.mixStamp && TL.audio
   && TL.audio.getAttribute('src'));
