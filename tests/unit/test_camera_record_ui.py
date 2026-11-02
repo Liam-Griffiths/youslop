@@ -89,12 +89,36 @@ def test_camera_recorder_js(tmp_path):
       await uploadCamera(new Blob(['other']), 'other.mp4', p, p.slides[0]);
       assert(cam.pending === pending, 'failed take cannot be overwritten');
       stopStream(); assert(cam.stream === null && !state.rec.recording, 'cleanup');
+      // Voice uses the same list/history shell without touching stored takes.
+      state.rec.index=0; cam.pending=null; cam.busy=false;
+      cam.overrides['p1/s1']=false;
+      window.isSecureContext=false;
+      p.voice_tracks={mic:1}; p.voice_track='mic'; p.recorded_seconds=2;
+      p.slides[0].takes.mic={path:'mic.wav', duration:2};
+      p.slides[0].take=p.slides[0].takes.mic;
+      const snapshot=JSON.stringify(p);
+      paint();
+      let html=$('#tabbody').innerHTML;
+      assert(html.includes('voice-list') && html.includes('voice-takes'), 'three columns in voice mode');
+      assert(html.includes('old.wav') && html.includes('mic.wav'), 'current and historical playback');
+      assert(html.includes('Use this take') && html.includes('Microphone setup'), 'restore and mic drawer controls');
+      assert(html.includes('Read &lt;this&gt;'), 'voice escapes narration');
+      assert(JSON.stringify(p) === snapshot, 'painting cannot mutate takes');
+      state.rec.recording=true;
+      selectVoiceParagraph(1); assert(state.rec.index === 0, 'voice list locks while recording');
+      jumpNextUnrecorded(); assert(state.rec.index === 0, 'blank navigation locks while recording');
+      await restoreEarlierTake(0); assert(JSON.stringify(p) === snapshot, 'restore locks while recording');
+      state.rec.recording=false;
+      for (let i=2;i<40;i++) p.slides.push({id:'s'+i,narration:'Paragraph '+i,takes:{}});
+      paint(); html=$('#tabbody').innerHTML;
+      assert((html.match(/onclick="selectVoiceParagraph/g)||[]).length === 40, 'all forty paragraphs visible');
+      assert((html.match(/<audio controls/g)||[]).length === 3, 'only selected paragraph loads players');
       window.setTimeout=realTimeout;
       return 'camera checks passed';
     })()
     """
     bootstrap = r"""
-      const window = globalThis, navigator = {}, location = {href:'http://localhost/'};
+      const window = globalThis, navigator = {}, location = {href:'http://localhost/',protocol:'http:',hostname:'localhost'};
       window.isSecureContext = true;
       const nodes = {};
       const $ = s => nodes[s] ||= {innerHTML:'',style:{},currentTime:0,paused:true,
@@ -110,6 +134,7 @@ def test_camera_recorder_js(tmp_path):
       const state = {tab:'record', rec:{index:0}, mic:{}, project:{id:'p1',slides:[
         {id:'s1',narration:'Read <this>',on_camera:true,history:[{path:'old.wav',track:'mic'}]},
         {id:'s2',narration:'Next',takes:{}}]}};
+      const TRACK_ORDER=['mic','kokoro','elevenlabs','openai'];
       function toast(){} function fmtTime(s){return String(s);}
     """
     # Load the real voice hooks as well as camera functions; stub only unrelated UI.

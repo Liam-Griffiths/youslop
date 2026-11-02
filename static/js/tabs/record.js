@@ -17,14 +17,11 @@ function paintRecord() {
   const take = tk(s);
 
   $('#tabbody').innerHTML = `
-    <div class="progress-track"><i style="width:${done / p.slides.length * 100}%"></i></div>
-    <div class="row mono" style="color:var(--ink-faint);font-size:12.5px">
-      <span>${done} of ${p.slides.length} ${ai ? 'read' : 'recorded'} ·
-        ${fmtTime(p.recorded_seconds)} in the can</span>
-      <div class="spacer"></div>
-      <span>paragraph ${i + 1}</span>
-    </div>
-
+    <div class="voice-studio">
+    ${voiceParagraphList(p)}
+    <section class="voice-work" aria-label="Prompter">
+    <div class="voice-meta">¶${i + 1} · ${done} of ${p.slides.length} ${ai ? 'drafted' : 'recorded'} · ${fmtTime(p.recorded_seconds)} in the can</div>
+    <details class="voice-options" ${ai && done < p.slides.length ? 'open' : ''}><summary>Voice &amp; draft settings</summary>
     ${recordModeSwitch()}
     ${voiceBar(p, track)}
 
@@ -41,6 +38,7 @@ function paintRecord() {
     </div>
 
     ${ai ? aiVoicePanel(p, s) : ''}
+    </details>
 
     ${ai || micAvailable() ? '' : `
       <div class="panel warn-panel" style="margin-top:14px">
@@ -59,27 +57,27 @@ function paintRecord() {
         </div>
       </div>`}
 
-    <div class="prompter" style="margin-top:14px"><p>${esc(s.narration)}</p></div>
+    ${voicePrompter(s)}
 
     ${ai ? '' : `
     <div class="row" style="margin:12px 0 -4px">
       <button class="btn sm" onclick="openMicPanel()"
-        ${micAvailable() ? '' : 'disabled'}>mic &amp; voice…</button>
+        ${micAvailable() ? '' : 'disabled'}>Microphone setup</button>
       <span class="mono" style="color:var(--ink-faint)">${esc(voiceSummary())}</span>
     </div>`}
 
     ${ai ? `
     <div class="rec-bar">
-      <button class="btn primary" onclick="voiceOneSlide()">read this paragraph</button>
+      <button class="btn" onclick="voiceOneSlide()">${take ? 'Re-draft' : 'Draft'} this paragraph</button>
       ${take ? `<span class="pill on num"><span class="dot"></span>${take.duration.toFixed(1)}s${
         take.synthetic ? ` · ${esc(voiceLabel(take.voice))}` : ' · your voice'}</span>` : ''}
     </div>` : `
     <div class="rec-bar">
       <button class="btn rec ${state.rec.recording ? 'armed' : ''}" id="recbtn"
         ${micAvailable() ? '' : 'disabled'} onclick="toggleRec()">
-        ${state.rec.recording ? '■ Stop' : '● Record'}</button>
+        ${state.rec.recording ? '■ Stop' : take ? '● Retake' : '● Record'}</button>
       <span class="timer ${state.rec.recording ? 'live' : ''}" id="timer">0:00</span>
-      <div class="level"><i id="level"></i></div>
+      <div class="level" role="meter" aria-label="Input peak" aria-valuemin="-80" aria-valuemax="0"><i id="level"></i></div><span class="mono" id="voice-peak">Peak — dB</span>
       ${take ? `<span class="pill on num"><span class="dot"></span>${take.duration.toFixed(1)}s</span>` : ''}
       ${!state.rec.stream && micAvailable()
         ? `<button class="btn sm ghost" onclick="openMic()">check the microphone</button>` : ''}
@@ -92,7 +90,7 @@ function paintRecord() {
       <button class="btn sm" onclick="jumpTake(-1)" ${i === 0 ? 'disabled' : ''}>← previous</button>
       <button class="btn sm" onclick="jumpTake(1)" ${i >= p.slides.length - 1 ? 'disabled' : ''}>next →</button>
       ${take ? `<button class="btn sm ghost" onclick="playTake()">play back</button>
-                  <button class="btn sm ghost danger" onclick="dropTake()">discard take</button>` : ''}
+                  <button class="btn sm ghost" onclick="dropTake()">retire to history</button>` : ''}
       <div class="spacer"></div>
       ${done && !ai ? `<button class="btn sm ghost" onclick="recleanTakes()"
         title="run every take through the current voice chain again, from the raw recording"
@@ -102,22 +100,12 @@ function paintRecord() {
     ${ai ? '' : `
     <div class="row" style="margin-top:12px;color:var(--ink-faint);font-size:12.5px">
       <kbd>space</kbd> record / stop &nbsp; <kbd>→</kbd> next &nbsp; <kbd>←</kbd> back &nbsp;
-      <kbd>p</kbd> play back &nbsp; <kbd>r</kbd> discard
+      <kbd>p</kbd> play back &nbsp; <kbd>r</kbd> retire to history
     </div>`}
 
-    ${(s.history || []).length ? `
-    <details style="margin-top:12px">
-      <summary>earlier takes (<span class="num">${s.history.length}</span>)</summary>
-      ${s.history.map((t, n) => `<div class="row" style="margin-top:8px">
-        <span class="mono">${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · ${esc(t.reason || '')}${t.narration !== s.narration ? ' · different text' : ''}</span>
-        <audio controls preload="none" src="/api/projects/${p.id}/file/${esc(t.path)}"></audio>
-        <button class="btn sm" onclick="restoreEarlierTake(${n})">use this</button>
-      </div>`).join('')}
-    </details>` : ''}
-    <div class="take-map">
-      ${p.slides.map((x, n) => `<span class="${tk(x) ? 'done' : ''} ${n === i ? 'cur' : ''}"
-        title="${n + 1}" onclick="state.rec.index=${n};paintRecord()"></span>`).join('')}
-    </div>
+    ${voiceNextUp(p, i)}
+    ${voicePresenterOptions(p)}
+    </section>${voiceTakesPanel(p, s)}</div>
     <audio id="player" style="display:none"></audio>`;
 
   if (ai) {
@@ -454,8 +442,8 @@ function localVoicePanel(p, slide) {
               Windows (PowerShell)
             </label>
           </div>
-          <div id="install-cmd" style="margin-top:8px;background:#1a1a1a;border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
-            <code style="color:#4af626;font-size:12px;font-family:monospace;display:block;overflow-x:auto;padding-right:50px" id="cmd-text">pip install kokoro-onnx soundfile</code>
+          <div id="install-cmd" style="margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
+            <code style="color:var(--good);font-size:12px;font-family:monospace;display:block;overflow-x:auto;padding-right:50px" id="cmd-text">pip install kokoro-onnx soundfile</code>
             <button class="btn xs ghost" onclick="copyInstallCommand()" style="position:absolute;top:4px;right:4px">copy</button>
           </div>
           <div id="cmd-note" style="margin-top:6px;font-size:12px;color:var(--ink-faint);display:none"></div>
@@ -482,8 +470,8 @@ function localVoicePanel(p, slide) {
           Two model files (~337MB) need to be downloaded into
           <code class="mono" style="user-select:all">${esc(dir)}</code>
         </div>
-        <div style="margin-top:8px;background:#1a1a1a;border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
-          <pre style="margin:0;color:#4af626;font-size:12px;font-family:monospace;overflow-x:auto;padding-right:50px" id="weights-cmd">${esc(cmd)}</pre>
+        <div style="margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
+          <pre style="margin:0;color:var(--good);font-size:12px;font-family:monospace;overflow-x:auto;padding-right:50px" id="weights-cmd">${esc(cmd)}</pre>
           <button class="btn xs ghost" style="position:absolute;top:4px;right:4px"
             onclick="navigator.clipboard.writeText($('#weights-cmd').textContent).then(() => toast('Copied to clipboard'), () => toast('Failed to copy', true))">copy</button>
         </div>
@@ -688,6 +676,7 @@ function watchSayDraft() {
 }
 
 async function setNarrator(patch) {
+  if (cameraLocked()) return;
   state.project = await api(`/api/projects/${state.project.id}`,
     { method: 'PATCH', body: JSON.stringify({ narrator: patch }) });
   paintRecord();
@@ -749,6 +738,7 @@ function jumpTake(delta) {
 }
 
 function jumpNextUnrecorded() {
+  if (cameraLocked()) return;
   const p = state.project;
   const next = p.slides.findIndex((s, n) => n > state.rec.index && !s.take);
   state.rec.index = next >= 0 ? next : p.slides.findIndex((s) => !s.take);
@@ -835,7 +825,10 @@ function meter() {
     const el = document.getElementById('level');
     if (el) {
       el.style.width = Math.min(100, peak * 145) + '%';
-      el.style.background = peak > 0.92 ? 'var(--bad)' : peak > 0.06 ? 'var(--good)' : '#3a4152';
+      el.style.background = peak > 0.92 ? 'var(--bad)' : peak > 0.06 ? 'var(--good)' : 'var(--line-strong)';
+      el.parentElement.setAttribute('aria-valuenow', dbOf(peak).toFixed(0));
+      const readout = document.getElementById('voice-peak');
+      if (readout) readout.textContent = `Peak ${dbOf(hold).toFixed(0)} dB`;
     }
     micMeter(rms, peak, hold);
     requestAnimationFrame(loop);
@@ -853,7 +846,7 @@ function micMeter(rms, peak, hold) {
   if (!bar) return;
   const db = dbOf(rms), pk = dbOf(peak);
   bar.style.width = meterPos(db) + '%';
-  bar.style.background = pk > -1.5 ? 'var(--bad)' : db > -12 ? '#d9a05e' : 'var(--good)';
+  bar.style.background = pk > -1.5 ? 'var(--bad)' : db > -12 ? 'var(--warn)' : 'var(--good)';
   const mark = document.getElementById('michold');
   if (mark) mark.style.left = meterPos(dbOf(hold)) + '%';
   const read = document.getElementById('micdb');
@@ -957,6 +950,7 @@ function recTrack() {
 }
 
 async function restoreEarlierTake(n) {
+  if (cameraLocked()) return;
   const p = state.project;
   const slide = p.slides[state.rec.index];
   try {
@@ -1079,6 +1073,7 @@ async function recleanTakes() {
 }
 
 async function dropTake() {
+  if (cameraLocked()) return;
   if (cameraMode()) return toast("Use Retake to record again; earlier camera takes are kept.");
   const slide = state.project.slides[state.rec.index];
   const res = await api(`/api/projects/${state.project.id}/slides/${slide.id}/take`
@@ -1099,11 +1094,12 @@ function voiceSummary() {
 
 // ------------------------------------------------------------------- panel
 async function openMicPanel() {
+  if (cameraLocked()) return;
   if (state.mic.el) return;
   const wrap = document.createElement('div');
-  wrap.className = 'modal';
+  wrap.className = 'modal mic-drawer';
   wrap.innerHTML = `
-    <div class="modal-box wide mic-panel">
+    <div class="modal-box wide mic-panel" role="dialog" aria-modal="true" aria-label="Microphone and voice setup" tabindex="-1">
       <div class="row" style="margin-bottom:16px">
         <strong>Microphone &amp; voice</strong>
         <span class="mono" style="color:var(--ink-faint)">
@@ -1121,7 +1117,17 @@ async function openMicPanel() {
   wrap.querySelector('#micclose').onclick = closeMicPanel;
   wrap.onclick = (e) => { if (e.target === wrap) closeMicPanel(); };
 
+  wrap.onkeydown = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeMicPanel(); }
+    if (e.key === 'Tab') {
+      const items = [...wrap.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), audio[controls]')];
+      const first = items[0], last = items.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
   micRefresh();
+  wrap.querySelector('#micclose').focus();
   if (micAvailable()) {
     try { await ensureMic(); } catch (e) { toast('Microphone blocked: ' + e.message, true); }
     micRefresh();
@@ -1138,6 +1144,7 @@ function closeMicPanel() {
   state.mic.el.remove();
   state.mic.el = null;
   paintRecord();
+  document.querySelector('[onclick="openMicPanel()"]')?.focus();
 }
 
 function micRefresh() {
@@ -1443,4 +1450,61 @@ function abReload() {
     el.currentTime = Math.min(at, el.duration || at);
     el.play();
   }, { once: true });
+}
+
+// The list is cheap markup; media elements exist only for the selected paragraph.
+function voiceParagraphList(p) {
+  const done = p.slides.filter(s => s.take).length;
+  return `<aside class="voice-list" aria-label="Paragraphs"><h2>Takes · ${done} of ${p.slides.length} voiced</h2>
+    ${p.slides.map((s, n) => {
+      const take = s.take;
+      const live = n === state.rec.index && state.rec.recording;
+      const kind = live ? 'live' : !take ? 'empty' : take.synthetic ? 'draft' : 'mic';
+      const label = live ? 'recording' : !take ? 'not voiced' : take.synthetic ? 'draft voice' : s.on_camera ? 'camera' : 'mic';
+      return `<button type="button" class="btn ghost voice-paragraph ${kind}" ${cameraLocked() ? 'disabled' : ''}
+        ${n === state.rec.index ? 'aria-current="true"' : ''} onclick="selectVoiceParagraph(${n})">
+        <span class="num">${String(n + 1).padStart(2, '0')}</span><span class="voice-excerpt">${esc(s.narration)}</span><span class="voice-state">${label}</span></button>`;
+    }).join('')}</aside>`;
+}
+function selectVoiceParagraph(n) {
+  if (cameraLocked()) return;
+  state.rec.index = n;
+  paintRecord();
+}
+function voicePrompter(s) {
+  const sentences = s.narration.match(/[^.!?]+[.!?]+[”"']*|[^.!?]+$/g) || [s.narration];
+  return `<div class="prompter voice-prompter"><p>${sentences.map((text, i) => `<span ${i === 0 ? 'class="current"' : ''}>${esc(text)} </span>`).join('')}</p></div>
+    ${sentences.length > 1 ? '<button type="button" class="btn sm ghost" onclick="advanceVoiceSentence()">Next sentence</button>' : ''}`;
+}
+function advanceVoiceSentence() {
+  const current = document.querySelector('.voice-prompter .current');
+  if (current?.nextElementSibling) { current.classList.remove('current'); current.nextElementSibling.classList.add('current'); }
+}
+function voiceNextUp(p, i) {
+  return p.slides[i + 1] ? `<div class="voice-next"><h2>Next up</h2><p>¶${i + 2} · ${esc(p.slides[i + 1].narration)}</p></div>` : '';
+}
+function voiceTakesPanel(p, s) {
+  const locked = cameraLocked() ? 'disabled' : '';
+  const used = s.on_camera ? 'camera' : p.voice_track;
+  const file = path => `/api/projects/${p.id}/file/${esc(path)}`;
+  const media = t => `${t.video ? `<video controls playsinline preload="none" src="${file(t.video)}"></video>` : ''}
+    <audio controls preload="none" aria-label="Play ${t.synthetic ? 'draft' : 'recorded'} take" src="${file(t.path)}"></audio>`;
+  return `<aside class="voice-takes" aria-label="Takes"><h2>¶${state.rec.index + 1} · every take is kept</h2>
+    ${state.rec.recording ? '<div class="voice-take live"><strong>Recording · live</strong><p>The new take is saved when you stop.</p></div>' : ''}
+    ${Object.entries(s.takes || {}).map(([track, t]) => `<div class="voice-take">
+      <strong>${esc(trackLabel(track))}${t.synthetic ? ' · draft' : ''}</strong>
+      <span class="voice-meta">${fmtTime(t.duration || 0)} · ${track === used ? 'in the cut' : 'available'}</span>
+      ${media(t)}${track !== used && track !== 'camera' ? `<button type="button" class="btn sm" ${locked} onclick="useVoiceTrack('${esc(track)}')">Use this voice for the video</button>` : ''}
+    </div>`).join('')}
+    <h2>Earlier takes · ${(s.history || []).length}</h2>
+    ${(s.history || []).map((t, n) => `<div class="voice-take"><strong>${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · history</strong>
+      <span class="voice-meta">${fmtTime(t.duration || 0)} · ${esc(t.reason || '')}${t.narration !== s.narration ? ' · different text' : ''}</span>
+      ${media(t)}<button type="button" class="btn sm" ${locked} onclick="restoreEarlierTake(${n})">Use this take</button></div>`).join('')}
+    ${!Object.keys(s.takes || {}).length && !(s.history || []).length ? '<p>No takes yet. Record or draft this paragraph.</p>' : ''}
+    <p class="voice-meta">Replaced takes move to history and stay on disk. Nothing is deleted.</p></aside>`;
+}
+
+function voicePresenterOptions(p) {
+  return typeof presenterPanel === 'function'
+    ? `<details class="voice-options"><summary>On camera / presenter</summary>${presenterPanel(p)}</details>` : '';
 }

@@ -65,6 +65,8 @@ function paintProjectShell() {
   const format = FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
     <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : '16:9'}</span>
+    ${state.stage === 'voice' ? `<button type="button" class="btn sm" onclick="openMicPanel()">Microphone setup</button>
+      <button type="button" class="btn sm" onclick="setNarrator({mode:'ai'})">Draft voice settings</button>` : ''}
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;
   $('#topbar-right').innerHTML = '';
   paintStageBar();
@@ -81,7 +83,7 @@ function paintStageBar() {
     const active = id === state.stage;
     return `<a class="stage-link ${active ? 'active' : ''} ${info?.status === 'ready' ? 'done' : info?.status === 'warn' ? 'warn' : ''}"
       href="#/p/${p.id}/${id}" ${active ? 'aria-current="step"' : ''}>
-      <span>${i + 1} · ${label}</span><span class="stage-state">${esc(info?.reason || '—')}</span></a>`;
+      <span>${i + 1} · ${id === 'voice' && p.delivery === 'on_camera' ? 'Camera' : label}</span><span class="stage-state">${esc(info?.reason || '—')}</span></a>`;
   }).join('');
 }
 

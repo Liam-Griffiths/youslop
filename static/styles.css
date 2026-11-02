@@ -1050,3 +1050,53 @@ main:has(.plan-layout) { max-width: none; }
 .script-text { resize: none; overflow: hidden; }
 .script-footer .btn.ghost { border-color: transparent; color: var(--dim); }
 .script-footer .btn.ghost:hover, .script-footer .btn.ghost:focus-visible { color: var(--ink); border-color: var(--line); }
+
+/* Voice: paragraph list, focused prompter, and the selected paragraph's takes. */
+main:has(.voice-studio) { max-width: none; padding: 0 0 40px; }
+main:has(.voice-studio) .project-tools { padding: 12px 20px 0; }
+.voice-studio { display: grid; grid-template-columns: 280px minmax(0, 1fr) 320px; min-height: 70vh; }
+.voice-list { border-right: 1px solid var(--line); padding: 16px; min-width: 0; }
+.voice-studio h2 { margin: 0 0 10px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+.voice-paragraph.btn { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; width: 100%; text-align: left; padding: 8px; min-height: 44px; color: var(--ink-2); }
+.voice-paragraph[aria-current] { background: var(--raised); color: var(--ink); }
+.voice-excerpt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-state { font-size: 11px; color: var(--dim); }
+.voice-paragraph.mic .voice-state { color: var(--good); }
+.voice-paragraph.draft .voice-state { color: var(--cool); }
+.voice-paragraph.live .voice-state { color: var(--accent); }
+.voice-work { min-width: 0; padding: 28px 32px; }
+.voice-meta { font-family: var(--mono); font-size: 11px; color: var(--dim); overflow-wrap: anywhere; }
+.voice-options { margin: 16px 0; }
+.voice-options summary { color: var(--dim); cursor: pointer; min-height: 34px; }
+.voice-prompter.prompter { border: 0; background: transparent; padding: 16px 0; min-height: 160px; }
+.voice-prompter p { color: var(--dim); overflow-wrap: anywhere; }
+.voice-prompter .current { color: var(--ink); }
+.voice-work .row, .voice-work .rec-bar { flex-wrap: wrap; }
+.voice-work .btn { min-height: 44px; }
+.voice-work .level { min-width: 100px; height: 12px; background: var(--line); }
+.voice-work .btn.rec { border-radius: 50%; min-height: 64px; min-width: 64px; background: var(--accent); color: var(--bg); }
+.voice-next { margin-top: 22px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.voice-next p { margin: 0; overflow-wrap: anywhere; }
+.voice-takes { background: var(--panel); border-left: 1px solid var(--line); padding: 16px; min-width: 0; }
+.voice-take { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+.voice-take.live { border-color: var(--accent); }
+.voice-take audio, .voice-take video { width: 100%; }
+.voice-studio :focus-visible, .mic-drawer :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+.mic-drawer.modal { justify-content: flex-end; padding: 0; }
+.mic-drawer .mic-panel { width: min(900px, 100%); height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.voice-studio textarea { field-sizing: content; height: auto; min-height: 80px; }
+@media (max-width: 1100px) {
+  .voice-studio { grid-template-columns: 240px minmax(0, 1fr); }
+  .voice-takes { grid-column: 2; border-top: 1px solid var(--line); }
+  .voice-list { grid-row: span 2; }
+}
+@media (max-width: 700px) {
+  .voice-studio { display: flex; flex-direction: column; }
+  .voice-list { display: flex; overflow-x: auto; gap: 8px; border-bottom: 1px solid var(--line); }
+  .voice-list h2 { flex: 0 0 120px; }
+  .voice-paragraph.btn { flex: 0 0 230px; }
+  .voice-work { padding: 20px; }
+}
+
+/* Native media controls follow the dark theme. */
+audio, video { color-scheme: dark; }

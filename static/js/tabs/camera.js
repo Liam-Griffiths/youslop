@@ -33,7 +33,10 @@ function paintCameraRecord() {
   const options = (kind, key) => `<option value="">default</option>` + cam.devices
     .filter(d => d.kind === kind).map(d => `<option value="${esc(d.deviceId)}"
       ${localStorage.getItem(key) === d.deviceId ? 'selected' : ''}>${esc(d.label || kind)}</option>`).join('');
-  $('#tabbody').innerHTML = `${recordModeSwitch()}
+  $('#tabbody').innerHTML = `<div class="voice-studio">${voiceParagraphList(p)}
+    <section class="voice-work" aria-label="Camera and prompter">${recordModeSwitch()}
+    <div class="row"><button class="btn sm" ${locked} onclick="openMicPanel()">Microphone setup</button>
+    <span class="voice-meta">${esc(voiceSummary())}</span></div>
     <div class="row" style="margin:12px 0">
       <label>Camera <select ${locked} onchange="chooseCameraDevice('cb_camera',this.value)">${options('videoinput', 'cb_camera')}</select></label>
       <label>Microphone <select ${locked} onchange="chooseCameraDevice('vb_mic',this.value)">${options('audioinput', 'vb_mic')}</select></label>
@@ -45,6 +48,7 @@ function paintCameraRecord() {
       <div id="camera-prompter" class="camera-prompter" style="font-size:${localStorage.getItem('cb_prompt_font') || 30}px">${esc(s.narration)}</div>
       <strong id="camera-countdown" class="camera-countdown">${cam.countdown || ''}</strong>
     </div>
+    ${voicePrompter(s)}
     <div id="camera-settings" class="mono"></div>
     <div class="row" style="margin-top:10px">
       <label>Type size <input aria-label="Prompter font size" type="range" min="20" max="60" value="${localStorage.getItem('cb_prompt_font') || 30}"
@@ -54,7 +58,7 @@ function paintCameraRecord() {
     </div>
     <div class="rec-bar">
       <button id="recbtn" class="btn rec ${state.rec.recording ? 'armed' : ''}" ${cam.busy ? 'disabled' : ''} onclick="toggleRec()">${state.rec.recording ? '■ Stop' : cam.countdown ? 'Cancel countdown' : '● Record'}</button>
-      <span id="timer" class="timer">0:00</span><div class="level"><i id="level"></i></div>
+      <span id="timer" class="timer">0:00</span><div class="level" role="meter" aria-label="Input peak" aria-valuemin="-80" aria-valuemax="0"><i id="level"></i></div><span class="mono" id="voice-peak">Peak — dB</span>
       <label>Import / drop video <input type="file" accept="video/*,.mkv" ${locked} onchange="importCamera(this.files[0])"></label>
     </div>
     <div class="camera-drop" ondragover="event.preventDefault()" ondrop="event.preventDefault();importCamera(event.dataTransfer.files[0])">Drop a phone or camera clip here</div>
@@ -78,12 +82,9 @@ function paintCameraRecord() {
     <div class="rec-nav"><button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index - 1})">← previous</button>
       <span>paragraph ${state.rec.index + 1} of ${p.slides.length}</span>
       <button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index + 1})">next →</button></div>
-    ${(s.history || []).length ? `<details><summary>Earlier takes (${s.history.length})</summary>${s.history.map((t,n) => `<div class="row">
-      <span>${esc(t.track || 'mic')} · ${esc(t.reason || '')}</span>
-      <audio controls preload="none" src="/api/projects/${p.id}/file/${esc(t.path)}"></audio>
-      <button class="btn sm" ${locked} onclick="restoreEarlierTake(${n})">use this</button></div>`).join('')}</details>` : ''}
     <p>If this desktop cannot record video, open this project in your system browser:
-      <a href="${esc(location.href)}" target="_blank" rel="noopener">open in browser</a></p>`;
+      <a href="${esc(location.href)}" target="_blank" rel="noopener">open in browser</a></p>
+    ${voiceNextUp(p, state.rec.index)}${voicePresenterOptions(p)}</section>${voiceTakesPanel(p, s)}</div>`;
   if (cam.stream) attachCameraPreview();
   if (take) setupCameraReview(p, take);
 }
