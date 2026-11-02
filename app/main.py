@@ -2893,6 +2893,44 @@ def review_action(pid: str, note_id: str, payload: dict = Body(...)) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get("/api/projects/{pid}/script-check")
+def script_check(pid: str) -> dict:
+    result = check.script(_load(pid))
+    dismissed = {n['id'] for n in review.read_notes(pid).get('notes', [])
+                 if n.get('source') == 'script' and n.get('state') == 'dismissed'}
+    result['findings'] = [f for f in result['findings'] if f['id'] not in dismissed]
+    result['counts'] = {level: sum(f['level'] == level for f in result['findings'])
+                        for level in ('P0', 'P1', 'P2')}
+    return result
+
+
+@app.post("/api/projects/{pid}/script-check/{fid}/dismiss")
+def dismiss_script_finding(pid: str, fid: str) -> dict:
+    with store.lock_for(pid):
+        finding = next((f for f in check.script(_load(pid))['findings'] if f['id'] == fid), None)
+        if not finding:
+            raise HTTPException(404, 'Finding changed; refresh the check')
+        notes = review.read_notes(pid)
+        rows = notes.setdefault('notes', [])
+        rows[:] = [n for n in rows if n.get('id') != fid]
+        rows.append(dict(finding, source='script', state='dismissed'))
+        review._write_notes(pid, notes)
+    return {'state': 'dismissed'}
+
+
+@app.post("/api/projects/{pid}/chapters/move")
+def move_chapter(pid: str, payload: dict = Body(...)) -> dict:
+    with store.lock_for(pid):
+        project = _load(pid)
+        source, target = _slide(project, payload.get('source')), _slide(project, payload.get('target'))
+        if source.id != target.id:
+            if not source.chapter or target.chapter:
+                raise HTTPException(409, 'Move a chapter to a paragraph without a chapter')
+            target.chapter, source.chapter = source.chapter, ''
+            store.save(project)
+    return get_project(pid)
+
+
 @app.get("/api/projects/{pid}/check")
 def get_check(pid: str) -> dict:
     _load(pid)

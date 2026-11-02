@@ -35,72 +35,66 @@ function paintScript() {
   }
   const words = p.slides.reduce((n, s) => n + s.word_count, 0);
   const research = p.research || {};
-  const flagsBySlide = {};
-  (research.flags || []).forEach((f) => { flagsBySlide[f.slide_id] = f; });
-
-  let html = sourcesPanel(research);
-  html += `<div class="row" style="margin-bottom:16px">
-    <span class="mono" style="color:var(--ink-faint)">${words} words · ${p.slides.length} paragraphs ·
-      ~${fmtTime(p.est_seconds)} at a documentary pace</span>
-    <div class="spacer"></div>
-    <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list</a>
+  let html = `<div class="script-layout"><section class="script-main" aria-label="Script paragraphs">
+    <div class="script-heading"><h1>Script</h1>
+    <span class="mono script-summary">${words} words · ${p.slides.length} paragraphs · ~${fmtTime(p.est_seconds)}</span>
+    <button class="btn sm" onclick="$('#script-find').hidden=false; $('#script-find input').focus()">Find</button></div>
+    <div id="script-find" hidden><label>Find in script <input type="search" oninput="scriptFind(this.value)"></label>
+      <button class="btn sm ghost" onclick="scriptFind(''); this.previousElementSibling.querySelector('input').value=''; this.parentElement.hidden=true">Close find</button>
+      <span id="script-find-count" class="mono" role="status"></span></div>
+    <div class="row script-tools">
+    <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list for the shoot</a>
     <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
-    ${research.facts && research.facts.length
-      ? `<button class="btn sm ghost" onclick="runFactcheck()">check facts</button>` : ''}
-    ${p.has_source ? `
-      <span class="pill">${esc(p.fidelity)} import</span>
-      <button class="btn sm" onclick="reimport('${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}')">
-        re-split as ${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}</button>
-      <button class="btn sm ghost" onclick="reimport('')">re-split again</button>`
-    : `<button class="btn sm danger" onclick="regenScript()">rewrite whole script</button>`}
-  </div><div id="chapter-proposals"></div>`;
-
+    ${research.facts?.length ? '<button class="btn sm ghost" onclick="runFactcheck()">Check facts</button>' : ''}
+    ${p.has_source ? `<span class="pill">${esc(p.fidelity)} import</span>
+      <button class="btn sm" onclick="reimport('${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}')">Re-split as ${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}</button>
+      <button class="btn sm ghost" onclick="reimport('')">Re-split again</button>`
+      : '<button class="btn sm" onclick="regenScript()">Rewrite whole script</button>'}
+    </div>${sourcesPanel(research)}<div id="chapter-proposals"></div>
+    <p class="sub">J/K or arrows: move · Enter: edit · Esc: leave · Drag chapter handles, or use Alt + arrows.</p>`;
   const stage = isStage(p.style.format), vflags = p.visual_flags || {};
-  const nWarn = Object.values(vflags).filter((f) => f.level === 'warn').length;
+  const nWarn = Object.values(vflags).filter(f => f.level === 'warn').length;
   const nHint = Object.values(vflags).length - nWarn;
   if (stage && (nWarn || nHint)) html += castChangedNote(nWarn, nHint);
-
-  let lastBeat = null;
+  let chapter = 0, seconds = 0;
   p.slides.forEach((s, i) => {
-    if (s.beat !== lastBeat) {
-      lastBeat = s.beat;
-      html += `<div class="section-head">
-        <span class="kicker">${esc(s.section)}</span>
-        <strong>${esc(s.beat || '')}</strong></div>`;
-    }
-    const flag = flagsBySlide[s.id];
-    html += `${s.chapter ? `<div class="chapter-mark">
-        <span class="kicker">chapter</span>
-        <input type="text" value="${esc(s.chapter)}" aria-label="chapter title"
-          onblur="saveChapter('${s.id}',this.value)">
-        <button class="btn sm ghost" title="drop the chapter card"
-          onclick="saveChapter('${s.id}','')">remove</button>
-      </div>` : ''}
-    <div class="card slide-card" data-sid="${s.id}">
-      <div class="slide-num">${String(i + 1).padStart(2, '0')}${s.take ? '<br>●' : ''}</div>
-      <div>
-        <textarea rows="3" onblur="saveSlide('${s.id}',{narration:this.value})"
-          >${esc(s.narration)}</textarea>
-        ${stage ? visualLine(s, vflags[s.id]) : ''}
-        <div class="slide-meta">
-          <input class="title-input" type="text" placeholder="on-screen title (optional)"
-            value="${esc(s.title)}" onblur="saveSlide('${s.id}',{title:this.value})">
-          <span class="mono" style="color:var(--ink-faint)">${s.word_count}w
-            ≈ ${fmtTime(s.word_count / 158 * 60)}</span>
-          ${flag ? `<span class="pill warn" title="${esc(flag.claim)}: ${esc(flag.issue)}">
-              <span class="dot"></span>${flag.severity === 'high' ? 'unsupported claim' : 'check this'}</span>` : ''}
-          <div class="spacer"></div>
-          ${s.take ? '<span class="pill on"><span class="dot"></span>recorded</span>' : ''}
-          ${s.chapter ? '' : `<button class="btn sm ghost" title="a full-frame card before this paragraph"
-            onclick="startChapter('${s.id}')">start a chapter</button>`}
-          <button class="btn sm ghost" onclick="rewrite('${s.id}')">rewrite</button>
-          <button class="btn sm ghost" onclick="splitSlide('${s.id}')">split</button>
-          <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">delete</button>
-        </div>
-      </div>
-    </div>`;
+    html += `<div class="script-unit" data-index="${i}">
+    ${s.chapter ? `<div class="script-chapter">
+      <button type="button" class="btn sm ghost" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${s.id}')"
+        onkeydown="scriptChapterKey(event,${i})" aria-label="Move chapter ${esc(s.chapter)}" title="Drag chapter; Alt + arrows to move">⠿</button>
+      <span class="mono">Chapter ${++chapter} · ${fmtTime(seconds)}</span>
+      <input type="text" value="${esc(s.chapter)}" aria-label="Chapter title" onblur="saveChapter('${s.id}',this.value)">
+      <button class="btn sm ghost" onclick="saveChapter('${s.id}','')">Remove</button></div>` : ''}
+    <article class="script-card" data-sid="${s.id}" tabindex="0" aria-label="Paragraph ${i + 1}"
+      onkeydown="scriptKey(event,${i})" ondragover="event.preventDefault()"
+      ondrop="event.preventDefault(); scriptMoveChapter(event.dataTransfer.getData('text/plain'),'${s.id}')">
+      <div class="script-number"><span>${String(i + 1).padStart(2, '0')}</span><span class="script-dot" aria-hidden="true"></span></div>
+      <div class="script-content">
+        <textarea rows="3" class="script-text" aria-label="Narration, paragraph ${i + 1}" oninput="scriptFit(this)" onblur="scriptSave('${s.id}',{narration:this.value})">${esc(s.narration)}</textarea>
+        <div class="script-fields"><label class="kicker" for="picture-${s.id}">Picture</label>
+          <input id="picture-${s.id}" type="text" value="${esc(s.visual_note || '')}" placeholder="Picture note" onchange="${stage ? 'saveVisual' : 'scriptSaveVisual'}('${s.id}',this.value)">
+          <label class="kicker" for="title-${s.id}">Title</label>
+          <input id="title-${s.id}" type="text" value="${esc(s.title)}" placeholder="On-screen title (optional)" onblur="scriptSave('${s.id}',{title:this.value})"></div>
+        ${stage && vflags[s.id] ? `<div class="visual-line ${vflags[s.id].level}"><span>${esc(vflags[s.id].text)}</span><button class="btn sm ghost" onclick="reviseVisuals(['${s.id}'])">Rewrite visual</button></div>` : ''}
+        <div class="script-inline" data-findings="${s.id}"></div>
+        <div class="script-footer"><span class="mono script-word-count">${s.word_count} words · ${fmtTime(s.word_count / 158 * 60)}</span>
+          <button class="btn sm ghost" onclick="rewrite('${s.id}')">Rewrite</button>
+          <button class="btn sm ghost" onclick="splitSlide('${s.id}')">Split</button>
+          ${s.chapter ? '' : `<button class="btn sm ghost" onclick="startChapter('${s.id}')">Start a chapter</button>`}
+          <span class="script-voice">${s.on_camera ? 'On camera · ' : ''}${s.take ? (s.take.synthetic ? 'Draft voice' : 'Recorded') : 'Not voiced'}</span>
+          <details><summary>More</summary>
+            <label><input type="checkbox" ${s.on_camera ? 'checked' : ''} onchange="scriptCamera('${s.id}',this.checked)"> On camera</label>
+            <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button></details>
+        </div></div></article></div>`;
+    seconds += s.take?.duration || s.word_count / 158 * 60;
   });
+  html += `<details class="script-camera"><summary>On camera / presenter</summary>${presenterPanel(p)}</details>
+    </section><aside class="script-check" aria-label="Script check"><h2 class="kicker">Check · words only</h2>
+      <div id="script-check-results" role="status">Loading check…</div></aside></div>`;
   $('#tabbody').innerHTML = html;
+  document.querySelectorAll('.script-text').forEach(scriptFit);
+  scriptLoadCheck();
+
 }
 
 // The dossier research.gather() found before a word was written — see
@@ -294,4 +288,131 @@ async function applySuggestedChapters(button) {
     state.project = await api(`/api/projects/${pid}`);
     paintScript();
   } catch (e) { toast(e.message, true); button.disabled = false; }
+}
+
+let scriptCheckVersion = 0;
+async function scriptLoadCheck() {
+  const pid = state.project.id, version = ++scriptCheckVersion;
+  try {
+    const result = await api(`/api/projects/${pid}/script-check`);
+    if (state.project?.id !== pid || state.tab !== 'script' || version !== scriptCheckVersion) return;
+    const findings = result.findings;
+    const row = (f, i) => `<div class="script-finding"><span class="script-level ${f.level}">${f.level}</span>
+      <span>${esc(f.msg)}</span><button class="btn sm" onclick="scriptFixFinding(${i})">Fix</button>
+      <button class="btn sm ghost" onclick="scriptDismiss('${f.id}')">Dismiss</button></div>`;
+    state.scriptFindings = findings;
+    const bySlide = new Map();
+    findings.forEach((f, i) => {
+      if (!bySlide.has(f.slide_id)) bySlide.set(f.slide_id, []);
+      bySlide.get(f.slide_id).push(row(f, i));
+    });
+    document.querySelectorAll('[data-findings]').forEach(el => {
+      el.innerHTML = (bySlide.get(el.dataset.findings) || []).join('');
+      el.closest('.script-card').classList.toggle('has-finding', !!el.innerHTML);
+    });
+    $('#script-check-results').innerHTML = `<div class="script-counts mono">${['P0','P1','P2'].map(l => `<span class="${l}">${l} ${result.counts[l]}</span>`).join('')}</div>
+      ${findings.map((f, i) => `<div class="script-check-item"><button class="btn sm ghost mono" onclick="scriptLocate('${f.slide_id}')">${f.level} · ${f.slide_id ? '¶' + (state.project.slides.findIndex(s => s.id === f.slide_id) + 1) : 'Script'}</button>${row(f, i)}</div>`).join('') || '<p>No open word findings.</p>'}
+      <button class="btn sm ghost" onclick="scriptLoadCheck()">Refresh check</button>
+      <h2 class="kicker">Channel rules applied</h2>
+      <p>${result.rules.map(esc).join(' · ') || 'No channel rules set.'}</p>
+      <p class="sub">Rules guide writing. This check covers empty narration, open-loop payoffs and researched claim flags; it does not validate arbitrary prose rules.</p>
+      <button class="btn sm ghost" onclick="scriptEditRules()">Edit rules</button>`;
+  } catch (e) {
+    if (version === scriptCheckVersion && $('#script-check-results'))
+      $('#script-check-results').innerHTML = '<p>Check unavailable.</p><button class="btn sm" onclick="scriptLoadCheck()">Retry check</button>';
+  }
+}
+function scriptLocate(sid) {
+  const el = [...document.querySelectorAll('.script-card')].find(el => el.dataset.sid === sid);
+  if (el) { el.focus(); el.scrollIntoView({block: 'center'}); }
+}
+function scriptFixFinding(i) {
+  const f = state.scriptFindings[i];
+  if (!f.slide_id) return go(`#/p/${state.project.id}/plan`);
+  scriptLocate(f.slide_id);
+  document.activeElement.querySelector('textarea')?.focus();
+  toast('Edit the narration to address the finding; Check facts refreshes researched claims.');
+}
+async function scriptDismiss(id) {
+  try {
+    await api(`/api/projects/${state.project.id}/script-check/${id}/dismiss`, {method: 'POST'});
+    scriptLoadCheck();
+  } catch (e) { toast(e.message, true); }
+}
+async function scriptEditRules() {
+  const p = state.project;
+  try {
+    // The channel list contains summaries, without frame/rules.
+    const channel = p.channel_id ? await api(`/api/channels/${p.channel_id}`) : null;
+    const owner = channel || p;
+    const text = prompt(`${channel ? 'Channel' : 'Project'} writing rules, one per line`, (owner.frame?.rules || []).join('\n'));
+    if (text === null) return;
+    const frame = {...owner.frame, rules: text.split('\n').map(s => s.trim()).filter(Boolean)};
+    await api(channel ? `/api/channels/${channel.id}` : `/api/projects/${p.id}`, {method: 'PATCH', body: JSON.stringify({frame})});
+    owner.frame = frame;
+    if (state.project?.id === p.id) scriptLoadCheck();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function scriptSave(sid, patch) {
+  const s = state.project.slides.find(s => s.id === sid);
+  if (Object.entries(patch).every(([key, value]) => s[key] === value)) return;
+  const saved = await saveSlide(sid, patch);
+  if (saved) {
+    const card = [...document.querySelectorAll('.script-card')].find(el => el.dataset.sid === sid);
+    if (card) card.querySelector('.script-word-count').textContent = `${saved.word_count} words · ${fmtTime(saved.word_count / 158 * 60)}`;
+    const words = state.project.slides.reduce((n, s) => n + s.word_count, 0);
+    if ($('.script-summary')) $('.script-summary').textContent = `${words} words · ${state.project.slides.length} paragraphs · ~${fmtTime(words / 158 * 60)}`;
+    scriptLoadCheck(); // Save boundary only; never on keystrokes.
+  }
+}
+function scriptSaveVisual(sid, value) { return scriptSave(sid, {visual_note: value}); }
+async function scriptCamera(sid, value) {
+  await scriptSave(sid, {on_camera: value});
+  state.project = await api(`/api/projects/${state.project.id}`);
+  paintScript();
+}
+function scriptFind(value) {
+  const query = value.toLocaleLowerCase();
+  let count = 0;
+  document.querySelectorAll('.script-unit').forEach(el => {
+    const s = state.project.slides[Number(el.dataset.index)];
+    el.hidden = ![s.narration, s.title, s.visual_note, s.chapter].some(t => (t || '').toLocaleLowerCase().includes(query));
+    if (!el.hidden) count++;
+  });
+  $('#script-find-count').textContent = `${count} paragraphs`;
+}
+function scriptKey(e, i) {
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.target.blur(); e.currentTarget.focus(); return;
+  }
+  if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.querySelector('textarea').focus(); return; }
+  if (!['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+  e.preventDefault();
+  const cards = [...document.querySelectorAll('.script-unit:not([hidden]) .script-card')];
+  const at = cards.indexOf(e.currentTarget) + (['j','ArrowDown'].includes(e.key) ? 1 : -1);
+  cards[at]?.focus();
+}
+async function scriptMoveChapter(source, target) {
+  if (!source || source === target) return;
+  try {
+    state.project = await api(`/api/projects/${state.project.id}/chapters/move`, {method: 'POST', body: JSON.stringify({source, target})});
+    paintScript(); scriptLocate(target);
+  } catch (e) { toast(e.message, true); }
+}
+async function scriptChapterKey(e, i) {
+  if (!e.altKey || !['ArrowUp','ArrowDown'].includes(e.key)) return;
+  e.preventDefault();
+  const p = state.project, target = p.slides[i + (e.key === 'ArrowUp' ? -1 : 1)];
+  if (target) {
+    await scriptMoveChapter(p.slides[i].id, target.id);
+    document.activeElement.closest('.script-unit')?.querySelector('[draggable]')?.focus();
+  }
+}
+
+// Paragraphs show their whole text; the box grows with it instead of scrolling.
+function scriptFit(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 2 + 'px';
 }

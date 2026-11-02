@@ -534,6 +534,28 @@ def _scene_text(project, sb, ctx, groups, measure):
                                   slide_id=sid, metrics=row))
 
 
+def script(project) -> dict:
+    """Words only: no storyboard, media probes, browser, or model calls."""
+    import hashlib
+    import json
+    from .learning import effective_frame
+    from .script_gen import check_hook
+    findings = []
+    for slide in project.slides:
+        if not slide.narration.strip():
+            findings.append(_finding('empty_narration', 'P0', 0, slide.id,
+                                     'This paragraph has no narration.', 'words').to_dict())
+    for flag in check_hook(project.outline) + (project.research or {}).get('flags', []):
+        findings.append(_finding('script_claim', 'P1' if flag.get('severity') == 'high' else 'P2',
+            0, flag.get('slide_id', ''),
+            ': '.join(filter(None, [flag.get('claim'), flag.get('issue')])), 'words').to_dict())
+    for finding in findings:
+        finding['id'] = 'script-' + hashlib.sha256(json.dumps(finding, sort_keys=True).encode()).hexdigest()[:16]
+    return dict(findings=findings, counts={level: sum(f['level'] == level for f in findings)
+                                         for level in ('P0', 'P1', 'P2')},
+                rules=effective_frame(project).rules)
+
+
 def run(project, measure=False) -> dict:
     from .learning import effective_frame
     frame = effective_frame(project)
