@@ -966,3 +966,42 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
   .home-start { padding: 16px; }
   .home-start h1 { font-size: 36px; }
 }
+
+/* Plan: research at left, chapter columns and hook strip at right. */
+main:has(.plan-layout) { max-width: none; }
+.plan-layout { display: flex; flex-wrap: wrap; border: 1px solid var(--line); }
+.plan-sources { flex: 1 1 260px; min-width: 0; padding: 20px; background: var(--panel); border-right: 1px solid var(--line); }
+.plan-sources h2 { margin-top: 0; }
+.plan-sources form, .plan-outline, .plan-column, .plan-beat { display: flex; flex-direction: column; gap: 12px; }
+.plan-outline { flex: 999 1 700px; min-width: 0; padding: 20px 24px; }
+.plan-outline h1 { margin: 0; }
+.plan-layout label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); }
+.plan-layout input, .plan-layout textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.plan-source.btn { display: flex; flex-direction: column; align-items: flex-start; white-space: normal; text-align: left; width: 100%; margin: 10px 0; padding: 10px 12px; background: var(--bg); overflow-wrap: anywhere; }
+.plan-source span { color: var(--dim); }
+.plan-source.selected { outline: 2px solid var(--cool); }
+.plan-source[hidden] { display: none; }
+.plan-used, .plan-source .plan-used { color: var(--good); }
+.plan-columns { display: flex; gap: 12px; overflow-x: auto; padding: 4px; }
+.plan-column { flex: 1 0 190px; min-width: 190px; }
+.plan-column h2 { font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.plan-beat { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); padding: 10px; gap: 6px; }
+.plan-beat:focus { outline: 2px solid var(--cool); outline-offset: 2px; }
+.plan-beat label { font-size: 11px; }
+.plan-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-tags span { background: var(--raised); color: var(--dim); font-size: 10px; text-transform: uppercase; padding: 1px 6px; border-radius: 2px; }
+.plan-handle, .plan-source { touch-action: none; }
+.plan-handle { cursor: grab; background: none; border: 0; color: var(--dim); font-size: 14px; padding: 0 2px; line-height: 1; }
+.plan-handle:hover, .plan-handle:focus-visible { color: var(--ink); }
+.plan-beat-head { display: flex; align-items: center; gap: 6px; }
+.plan-beat input[type=text], .plan-beat textarea { background: transparent; border-color: transparent; padding: 3px 4px; resize: none; }
+.plan-beat input[type=text]:hover, .plan-beat textarea:hover { border-color: var(--line); }
+.plan-beat input[type=text]:focus, .plan-beat textarea:focus { border-color: var(--line-strong); background: var(--bg); }
+.plan-heading { font-weight: 600; }
+.plan-beat textarea { color: var(--ink-dim, var(--ink)); line-height: 1.45; }
+.plan-words { flex-direction: row !important; align-items: center; gap: 4px !important; margin-left: auto; font-family: var(--mono); font-size: 11px; }
+.plan-words input[type=number] { width: 48px; padding: 1px 4px; background: transparent; border-color: transparent; text-align: right; }
+.plan-words input[type=number]:hover, .plan-words input[type=number]:focus { border-color: var(--line); }
+.plan-citations .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.plan-hook { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 4px; }
+.plan-hook label { flex: 1 1 220px; }

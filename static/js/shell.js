@@ -16,7 +16,7 @@ function canonicalHash(hash) {
 }
 
 function stageTab(stage, subtab) {
-  return {plan: 'script', script: 'script', voice: 'record',
+  return {plan: 'plan', script: 'script', voice: 'record',
     visuals: ['media', 'cast', 'stage'].includes(subtab) ? subtab : 'media',
     edit: 'edit', publish: subtab === 'thumb' ? 'thumb' : 'render'}[stage] || 'script';
 }

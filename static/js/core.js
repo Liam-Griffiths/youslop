@@ -495,7 +495,7 @@ async function render() {
         href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}
     </nav>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+  await ({ plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
   if (state.stage !== 'edit' && typeof tlPause === 'function') tlPause();

@@ -78,6 +78,20 @@ def seed():
         # Keep copied fixture files, but seed unvoiced models so capture draws nothing.
         for slide in raw['slides']:
             slide['take'] = {}
+        # Plan needs populated chapter columns, sources and hook as well as empty states.
+        if fmt == 'essay':
+            raw['research'] = {'facts': [{'claim': 'A synthetic archival fact.',
+                'source': 'Fixture archive', 'url': 'https://example.test/archive'}]}
+            raw['outline'] = {'thesis': 'A synthetic plan for reviewing the studio layout.',
+                'hook': {'muted_image': 'The revolving door at morning rush.', 'first_line': 'Watch this door.'},
+                'sections': [{'heading': name, 'chapter': chapter, 'kind': kind,
+                    'summary': summary, 'words': 100, 'tags': [tag],
+                    'sources': ['https://example.test/archive'] if i == 0 else []}
+                    for i, (name, chapter, kind, summary, tag) in enumerate([
+                        ('Morning rush', 'The door', 'intro', 'The door before the street wakes.', 'footage'),
+                        ('After dark', 'The door', 'main', 'The same door stands empty.', 'footage'),
+                        ('The vote', 'A block before', 'main', 'The commission considers the tower.', 'archive'),
+                        ('Back to the door', 'What now', 'conclusion', 'Return to the opening image.', 'ending')])]}
         project = Project.from_dict(raw)
         if fmt == 'essay':
             project.sponsors = [SponsorSlot(id='snapshot-read', after_slide_id=project.slides[0].id,

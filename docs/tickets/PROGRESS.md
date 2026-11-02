@@ -144,7 +144,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T9.3 | New app shell and routes | M | T9.1, T4.1, T6.1 | done | 2026-11-01 Codex; top bar, stage bar, Next, inspector slot, jobs strip; old tabs inside stages; review: stage bar packing, 1100 px top bar |
 | T9.4 | Stage model and readiness API | S | T9.1, T1.5 | done | 2026-11-01 Codex; app/stages.py, GET .../stages, CLI stages; P0 subset only (full check 36 ms); review: warn colour |
 | T9.5 | Home and start-a-video flow | M | T9.3 | done | 2026-11-01 Codex; mockup Home, projects table with stage, Project.aspect flag; review: search/label styling |
-| T9.6 | Plan stage: sources and the outline in chapter columns | M | T9.3, T9.4 | todo |  |
+| T9.6 | Plan stage: sources and the outline in chapter columns | M | T9.3, T9.4 | done | 2026-11-01 Codex; Plan board (sources, chapter columns, hook, write script); review: compact beat cards |
 | T9.7 | Script stage redesign | M | T9.3, T9.4 | todo |  |
 | T9.8 | Visuals stage: one picker for every source | M | T9.3, T9.4 | todo |  |
 | T9.9 | Voice stage redesign | M | T9.3, T4.9 | todo |  |

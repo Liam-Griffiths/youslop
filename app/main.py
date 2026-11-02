@@ -1100,10 +1100,32 @@ def delete_project(pid: str) -> dict:
     return {"deleted": pid}
 
 
+@app.get("/api/projects/{pid}/plan")
+def get_plan_board(pid: str) -> dict:
+    from .plan_board import outline_for
+    return outline_for(_load(pid))
+
+
+@app.patch("/api/projects/{pid}/plan")
+def save_plan_board(pid: str, payload: dict = Body(...)) -> dict:
+    from . import plan_board
+    with store.lock_for(pid):
+        p = _load(pid)
+        try:
+            plan_board.save(p, payload)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        store.save(p)
+        return plan_board.outline_for(p)
+
+
 # --------------------------------------------------------------------- script
 @app.post("/api/projects/{pid}/script")
 def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
     _load(pid)
+    if payload.get("board"):
+        from .plan_board import write
+        return {"job": jobs.start("script", pid, lambda pr: write(pid, pr))}
     return {"job": jobs.start("script", pid, lambda pr: ops.plan(pid, payload, pr))}
 
 

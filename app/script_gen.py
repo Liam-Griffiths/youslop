@@ -406,6 +406,7 @@ CREATOR'S ORIGINAL IDEA: \"\"\"{project.idea}\"\"\"
 {facts_section}
 SECTIONS BEFORE THIS ONE: {before}
 >>> WRITING NOW: "{sec.get('heading')}" - {sec.get('summary')}
+SOURCES CITED FOR THIS BEAT: {sec.get("sources", [])}
 SECTIONS AFTER THIS ONE: {after}
 
 {kind_note}
