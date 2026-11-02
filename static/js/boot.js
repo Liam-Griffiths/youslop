@@ -25,7 +25,8 @@ document.addEventListener('keydown', (e) => {
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
   if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
-  if (k === '[' || k === ']') tlSelectNext(k === '[' ? -1 : 1);
+  if (k === '?') tlShortcuts();
+  else if (k === '[' || k === ']') tlSelectNext(k === '[' ? -1 : 1);
   else if (k === 's' || k === 'S') tlSplitHere();
   else if (k === 'c' || k === 'C') tlChapterHere(e.shiftKey);
   else if (k === ' ') tlToggle();

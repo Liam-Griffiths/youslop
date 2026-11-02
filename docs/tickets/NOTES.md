@@ -194,3 +194,12 @@ and let ffmpeg do holds, fades, rises, wipes and camera moves. Never build one f
 node per word or letter, and pass generated graphs with `-filter_complex_script`.
 Use `app/scene_builder.py` (T2.8) rather than writing another compositor. Measured
 cost of getting this wrong: Loudmouth 293 s vs Pillow 4.6 s for one picture.
+
+## UI snapshot harness: occasional screenshot stall (2026-11-01)
+
+Since the T9.3 shell, about half of `scripts/ui_snapshots.py` runs (68 routes) fail
+with `Page.captureScreenshot: CDP pipe failed or timed out` on one random route; a
+rerun passes. Before T9.3 (28 routes) 4 of 4 runs passed. Not fixed by retrying the
+capture, forcing a frame with a resize, or making the top bar / jobs strip static.
+Pages render and log no errors; treat a single timeout as a flake and rerun. Worth
+a proper look (one Chromium per N routes, or `Page.startScreencast`) if it worsens.

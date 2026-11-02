@@ -30,11 +30,20 @@ function paintAppNav() {
     }).join('');
 }
 
+// Edit borrows the shell slot inside its player row so the lanes below can
+// span the whole window. Restore it before replacing any stage contents.
+function restoreShellInspector() {
+  const inspector = $('#inspector');
+  $('.app-shell').append(inspector);
+  $('.app-shell').classList.remove('edit-workspace');
+  inspector.replaceChildren();
+}
+
 function resetShell() {
+  restoreShellInspector();
   $('#app-nav').hidden = false;
   $('#project-bar').hidden = true;
   $('#stage-bar').hidden = true;
-  $('#inspector').replaceChildren();
   $('.shell-more').open = false;
   $('#topbar-right').innerHTML = '';
   paintAppNav();
@@ -65,6 +74,7 @@ function paintProjectShell() {
   const format = FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
     <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : '16:9'}</span>
+    ${state.stage === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
     ${state.stage === 'voice' ? `<button type="button" class="btn sm" onclick="openMicPanel()">Microphone setup</button>
       <button type="button" class="btn sm" onclick="setNarrator({mode:'ai'})">Draft voice settings</button>` : ''}
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;

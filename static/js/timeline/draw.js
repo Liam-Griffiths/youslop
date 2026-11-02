@@ -184,6 +184,9 @@ function tlPaintProblems() {
   const box = $('#tl-problems');
   if (!box || !TL.data) return;
   const findings = TL.data.check?.findings || TL.data.segments.flatMap((s) => s.findings || []);
+  const summary = $('#tl-check-summary');
+  if (summary) summary.textContent = 'Check · ' + ['P0', 'P1', 'P2'].map((level) =>
+    `${level} ${findings.filter((f) => f.level === level && (f.state || 'open') === 'open').length}`).join(' · ');
   box.replaceChildren();
   if (!findings.length) {
     box.textContent = 'No check findings.';
@@ -251,4 +254,50 @@ function tlDrawAll() {
     + `${TL.data.width}×${TL.data.height}? It runs one after another in the background and uses a good `
     + 'share of this computer while it does.')) return;
   tlEnsure(segs.map((s) => s.ref));
+}
+
+// Preview only the selected span's segment (or the one under the playhead).
+function tlPreviewBit() {
+  if (!TL.data || !TL.host?.isConnected) return;
+  tlPause();
+  tlSeek(TL.selection?.t0 ?? TL.cur, {ensure: true});
+}
+
+function tlShortcuts() {
+  if (document.querySelector('.modal')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = `<section class="modal-box tl-shortcut-sheet" role="dialog" aria-modal="true" aria-labelledby="tl-shortcut-title" tabindex="-1">
+    <div class="row"><h2 id="tl-shortcut-title">Edit shortcuts</h2><div class="spacer"></div>
+      <button type="button" class="btn sm ghost" id="tl-shortcut-close">Close</button></div>
+    <dl>
+      <dt>Space</dt><dd>Play / pause</dd>
+      <dt>← / →</dt><dd>Step one frame</dd>
+      <dt>Shift + ← / →</dt><dd>Previous / next paragraph</dd>
+      <dt>Home / End</dt><dd>Start / end of timeline</dd>
+      <dt>[ / ]</dt><dd>Previous / next item of the selected kind</dd>
+      <dt>L</dt><dd>Loop picture</dd>
+      <dt>S</dt><dd>Split paragraph at playhead</dd>
+      <dt>C / Shift + C</dt><dd>Add / remove chapter</dd>
+      <dt>Escape</dt><dd>Clear selection / cancel drag / close this sheet</dd>
+      <dt>Alt + drag</dt><dd>Retiming without snapping</dd>
+      <dt>Camera: I / O</dt><dd>Mark source range; Delete cuts it</dd>
+      <dt>Overlay: 1 / 2 / 3</dt><dd>Cutaway / picture in picture / split</dd>
+      <dt>Overlay: P / Delete</dt><dd>Change corner / remove overlay</dd>
+      <dt>?</dt><dd>Open this sheet</dd>
+    </dl></section>`;
+  const previous = document.activeElement;
+  const close = () => {
+    wrap.remove(); document.removeEventListener('keydown', key, true);
+    if (previous?.isConnected) previous.focus();
+  };
+  const key = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    if (e.key === 'Tab') { e.preventDefault(); wrap.querySelector('button').focus(); }
+  };
+  wrap.querySelector('button').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  document.addEventListener('keydown', key, true);
+  document.body.append(wrap);
+  wrap.querySelector('button').focus();
 }

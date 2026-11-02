@@ -1,4 +1,4 @@
-// The timeline on the Render tab: the whole cut laid out in time, scrubbed a
+// The timeline in the Edit stage: the whole cut laid out in time, scrubbed a
 // frame at a time and played from small proxies.
 //
 // A proxy is one picture's segment at quarter size and half rate, drawn by the
@@ -87,37 +87,46 @@ async function tlMount() {
       <label class="row" style="gap:6px;cursor:pointer" title="keep replaying the entry under the playhead">
         <input type="checkbox" id="tl-loop" style="width:auto" ${TL.loop ? 'checked' : ''}>
         <span class="mono tl-note">loop picture</span></label>
-      <button class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
-      <button class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>
-      <button class="btn sm ghost" id="tl-all"
+      <button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
+      <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>
+      <button type="button" class="btn sm ghost" id="tl-all"
         title="draw every picture's proxy now instead of as you reach it">draw all</button>
+      <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>
     </div>
     <div class="tl-main">
-      <div class="tl-stage" id="tl-stage">
-        <div class="tl-msg" id="tl-msg"></div>
-      </div>
-      <div class="tl-side"><div class="tl-inspector" id="tl-inspector"></div><div class="tl-inspector" id="tl-variables"></div></div>
+      <section class="tl-player" aria-label="Player">
+        <div class="tl-stage" id="tl-stage">
+          <div class="tl-msg" id="tl-msg"></div>
+        </div>
+        <div class="tl-transport">
+          <button type="button" class="btn sm ghost" id="tl-prev" aria-label="Previous paragraph" title="previous paragraph (Shift+←)">|◂</button>
+          <button type="button" class="btn sm ghost" id="tl-back" aria-label="Back one frame" title="back one frame (←)">◂</button>
+          <button type="button" class="btn sm tl-play" id="tl-play" aria-label="Play / pause" title="play / pause (Space)">▶</button>
+          <button type="button" class="btn sm ghost" id="tl-fwd" aria-label="Forward one frame" title="forward one frame (→)">▸</button>
+          <button type="button" class="btn sm ghost" id="tl-next" aria-label="Next paragraph" title="next paragraph (Shift+→)">▸|</button>
+          <span class="mono tl-clock" id="tl-clock"></span>
+          <div class="spacer"></div>
+          <label class="row" style="gap:6px"><span class="mono tl-note">zoom</span>
+            <input type="range" id="tl-zoom" min="2" max="60" step="1" value="${TL.zoom}" style="width:130px"></label>
+        </div>
+      </section>
     </div>
-    <div class="tl-transport">
-      <button class="btn sm ghost" id="tl-prev" title="previous paragraph (Shift+←)">|◂</button>
-      <button class="btn sm ghost" id="tl-back" title="back one frame (←)">◂</button>
-      <button class="btn sm tl-play" id="tl-play" title="play / pause (Space)">▶</button>
-      <button class="btn sm ghost" id="tl-fwd" title="forward one frame (→)">▸</button>
-      <button class="btn sm ghost" id="tl-next" title="next paragraph (Shift+→)">▸|</button>
-      <span class="mono tl-clock" id="tl-clock"></span>
-      <div class="spacer"></div>
-      <label class="row" style="gap:6px"><span class="mono tl-note">zoom</span>
-        <input type="range" id="tl-zoom" min="2" max="60" step="1" value="${TL.zoom}" style="width:130px"></label>
-    </div>
-    <div class="tl-scroll" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
-    <div class="tl-problems" id="tl-problems"></div>
-    <div class="tl-problems" id="tl-review"></div>`;
+    <div class="tl-scroll" aria-label="Timeline lanes" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
+    <details class="tl-check"><summary id="tl-check-summary">Check</summary>
+      <div class="tl-problems" id="tl-problems"></div></details>
+    <details class="tl-review"><summary>Review</summary>
+      <div class="tl-problems" id="tl-review"></div></details>`;
+  $('.app-shell').classList.add('edit-workspace');
+  const inspector = $('#inspector');
+  inspector.innerHTML = '<div class="tl-inspector" id="tl-inspector"></div><div class="tl-inspector" id="tl-variables"></div>';
+  host.querySelector('.tl-main').append(inspector);
   const stage = $('#tl-stage');
   TL.vids.forEach((v, i) => { v.className = i === TL.active ? 'on' : ''; stage.prepend(v); });
 
   $('#tl-speed').onchange = (e) => { TL.speed = +e.target.value; tlRate(); };
   $('#tl-loop').onchange = (e) => { TL.loop = e.target.checked; };
   $('#tl-all').onclick = tlDrawAll;
+  $('#tl-shortcuts').onclick = tlShortcuts;
   $('#tl-play').onclick = tlToggle;
   $('#tl-back').onclick = () => tlStep(-1);
   $('#tl-fwd').onclick = () => tlStep(1);

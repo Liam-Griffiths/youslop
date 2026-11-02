@@ -148,7 +148,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T9.7 | Script stage redesign | M | T9.3, T9.4 | done | 2026-11-01 Codex; paragraph cards, inline findings, words-only check column; review: auto-height text, quiet actions |
 | T9.8 | Visuals stage: one picker for every source | M | T9.3, T9.4 | done | 2026-11-01 Codex; shared picker, groups, mix bar; cast/3D on sub-pages, Footage stub; review: tab wrap, a.btn |
 | T9.9 | Voice stage redesign | M | T9.3, T4.9 | done | 2026-11-01 Codex; takes list, prompter, every-take column; review: settings collapsed once voiced, dark audio controls; owner: record a paragraph |
-| T9.10 | Edit stage: the Timeline workspace | M | T9.3, T4.3 | todo |  |
+| T9.10 | Edit stage: the Timeline workspace | M | T9.3, T4.3 | done | 2026-11-01 Codex; full-width Timeline workspace, inspector slot, shortcuts sheet; review: inspector wiped by shell repaint, draw all restored |
 | T9.11 | Review & publish stage | M | T9.3, T3.3 | todo |  |
 | T9.12 | Jobs centre and command palette | S | T9.3 | todo |  |
 | T9.13 | First-run setup | S | T9.3 | todo |  |

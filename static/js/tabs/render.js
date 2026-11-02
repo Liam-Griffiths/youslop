@@ -161,7 +161,7 @@ async function paintRender() {
 }
 
 async function paintEdit() {
-  $('#tabbody').innerHTML = '<div class="panel tl" id="tl"></div>';
+  $('#tabbody').innerHTML = '<section class="tl" id="tl" aria-label="Timeline workspace"></section>';
   await tlMount();
 }
 
