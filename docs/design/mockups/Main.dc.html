@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 980px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; letter-spacing: -0.01em; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <nav aria-label="Main" style="display: flex; gap: 4px; margin-left: 24px; flex-wrap: wrap">
+      <a href="Main.dc.html" style="padding: 6px 12px; border-radius: 4px; background: #1D2026; text-decoration: none; font-weight: 500">Projects</a>
+      <a href="Footage.dc.html" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Footage</a>
+      <a href="#library" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Library</a>
+      <a href="#channels" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Channels</a>
+      <a href="#packs" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Packs</a>
+      <a href="FirstRun.dc.html" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Settings</a>
+    </nav>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE; flex-wrap: wrap">
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #39D98A" aria-hidden="true"></span>Claude · subscription</span>
+      <span>Kokoro · word timings</span>
+      <span>Chromium · scenes</span>
+      <span style="border: 1px solid #23262C; border-radius: 3px; padding: 1px 6px">Ctrl K</span>
+    </div>
+  </header>
+
+  <main style="flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 36px 32px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px">
+
+    <section aria-labelledby="new-h" style="background: #16181C; border: 1px solid #23262C; border-radius: 4px; padding: 28px; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+        <h1 id="new-h" style="margin: 0; font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 44px; line-height: 1; text-transform: uppercase; letter-spacing: -0.01em">Idea in. Episode out.</h1>
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">New video</span>
+      </div>
+
+      <div role="group" aria-label="Start from" style="display: flex; gap: 6px; flex-wrap: wrap">
+        <button type="button" aria-pressed="true" style="background: #F2F2F2; color: #0E0F11; border: 0; border-radius: 4px; padding: 8px 14px; font: 500 13px Inter, sans-serif; min-height: 36px">An idea</button>
+        <button type="button" aria-pressed="false" style="background: #1D2026; color: #F2F2F2; border: 1px solid #23262C; border-radius: 4px; padding: 8px 14px; font: inherit; min-height: 36px">My own script</button>
+        <button type="button" aria-pressed="false" style="background: #1D2026; color: #F2F2F2; border: 1px solid #23262C; border-radius: 4px; padding: 8px 14px; font: inherit; min-height: 36px">A footage shoot</button>
+        <button type="button" aria-pressed="false" style="background: #1D2026; color: #F2F2F2; border: 1px solid #23262C; border-radius: 4px; padding: 8px 14px; font: inherit; min-height: 36px">A saved format</button>
+        <button type="button" aria-pressed="false" style="background: transparent; color: #A0A6AE; border: 1px dashed #2E3239; border-radius: 4px; padding: 8px 14px; font: inherit; min-height: 36px">Open a .corkbored file</button>
+      </div>
+
+      <label for="idea" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">What is the video about?</label>
+      <textarea id="idea" rows="2" style="background: #0E0F11; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; font: 15px/1.5 Inter, sans-serif; padding: 12px 14px; resize: none">The office tower on Fifth Avenue: how one building rewired a city block, told from the street, the lobby and the archive</textarea>
+
+      <div style="display: flex; align-items: center; gap: 12px; background: #0E0F11; border: 1px solid #23262C; border-radius: 4px; padding: 10px 14px; flex-wrap: wrap">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke="#A0A6AE" stroke-width="1.3"></rect><path d="M10.5 6.5l4-2v7l-4-2z" fill="none" stroke="#A0A6AE" stroke-width="1.3"></path></svg>
+        <span>Use footage from <b style="font-weight: 600">Tower on Fifth, 28 Oct</b></span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">1:32:10 · 61 files · 312 clips · labelled</span>
+        <a href="Footage.dc.html" style="margin-left: auto; font-size: 12px; color: #A0A6AE">Open shoot</a>
+      </div>
+
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="ch" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Channel</label>
+          <select id="ch" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 8px 10px; font: inherit; min-width: 190px"><option>Signal and Noise</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="fmt" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Format</label>
+          <select id="fmt" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 8px 10px; font: inherit; min-width: 190px"><option>Documentary</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span id="shape-l" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Shape</span>
+          <div role="group" aria-labelledby="shape-l" style="display: flex; border: 1px solid #23262C; border-radius: 4px; overflow: hidden">
+            <button type="button" aria-pressed="false" style="background: #16181C; color: #A0A6AE; border: 0; padding: 8px 12px; font: inherit; min-height: 36px">Short · 9:16</button>
+            <button type="button" aria-pressed="true" style="background: #1D2026; color: #F2F2F2; border: 0; border-left: 1px solid #23262C; padding: 8px 12px; font: 500 13px Inter, sans-serif; min-height: 36px">Long · 16:9</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="len" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Length</label>
+          <select id="len" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 8px 10px; font: 13px 'JetBrains Mono', monospace; min-width: 110px"><option>12 min</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="res" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Research</label>
+          <select id="res" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 8px 10px; font: inherit; min-width: 120px"><option>Deep</option></select>
+        </div>
+        <a href="Plan.dc.html" style="margin-left: auto; background: {{accent}}; color: #0E0F11; text-decoration: none; font-weight: 600; padding: 10px 20px; border-radius: 4px; min-height: 24px; display: flex; align-items: center">Start video</a>
+      </div>
+    </section>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap">
+      <section aria-labelledby="list-h" style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+          <h2 id="list-h" style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Projects</h2>
+          <label for="q" style="position: absolute; left: -9999px">Search projects</label>
+          <input id="q" type="search" placeholder="Search title, channel or stage" style="margin-left: auto; background: #16181C; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 8px 12px; font: inherit; width: 300px; max-width: 100%">
+        </div>
+        <div style="border: 1px solid #23262C; border-radius: 4px; overflow-x: auto">
+          <div style="min-width: 720px">
+            <div style="display: grid; grid-template-columns: 2.4fr 1.1fr 1.5fr 0.7fr 0.8fr; gap: 16px; padding: 10px 16px; background: #16181C; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">
+              <span>Title</span><span>Channel</span><span>Stage</span><span>Length</span><span>Updated</span>
+            </div>
+            <sc-for list="{{projects}}" as="e" hint-placeholder-count="5">
+              <a href="Plan.dc.html" style="display: grid; grid-template-columns: 2.4fr 1.1fr 1.5fr 0.7fr 0.8fr; gap: 16px; padding: 13px 16px; border-top: 1px solid #23262C; text-decoration: none; color: #F2F2F2; align-items: center">
+                <span style="font-weight: 500">{{e.title}}</span>
+                <span style="color: #A0A6AE">{{e.channel}}</span>
+                <span style="display: flex; align-items: center; gap: 8px"><span style="{{e.chip}}">{{e.stage}}</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{e.detail}}</span></span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums">{{e.len}}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">{{e.when}}</span>
+              </a>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+
+      <aside aria-labelledby="shoots-h" style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+        <h2 id="shoots-h" style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Footage shoots</h2>
+        <sc-for list="{{shoots}}" as="s" hint-placeholder-count="2">
+          <a href="Footage.dc.html" style="display: flex; flex-direction: column; gap: 4px; border: 1px solid #23262C; border-radius: 4px; padding: 12px 14px; background: #16181C; text-decoration: none; color: #F2F2F2">
+            <span style="font-weight: 500">{{s.name}}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{s.stats}}</span>
+            <span style="font-size: 12px; color: {{s.stateColor}}">{{s.state}}</span>
+          </a>
+        </sc-for>
+        <button type="button" style="background: transparent; color: #A0A6AE; border: 1px dashed #2E3239; border-radius: 4px; padding: 10px 14px; font: inherit; min-height: 40px; text-align: left">Import a shoot: folder or camera card</button>
+      </aside>
+    </div>
+  </main>
+
+  <footer aria-label="Jobs" style="height: 32px; border-top: 1px solid #23262C; display: flex; align-items: center; gap: 18px; padding: 0 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE; flex-wrap: wrap">
+    <span style="color: #F2F2F2">Jobs</span>
+    <span>Proxies · Rooftop B-roll · 9 of 14</span>
+    <span>Idle otherwise</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const chip = (bg, fg) => `font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 2px; background: ${bg}; color: ${fg}`;
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      projects: [
+        { title: 'The Tower on Fifth', channel: 'Signal and Noise', stage: 'Edit', detail: 'sponsor placed · 0 P0', len: '11:40', when: '16:02', chip: chip('#2A1A12', accent) },
+        { title: 'How YouTube’s Algorithm Learned to Love Slop', channel: 'Signal and Noise', stage: 'Review & publish', detail: 'rendered · 2 notes', len: '12:08', when: 'yesterday', chip: chip('#1D2026', '#F2F2F2') },
+        { title: 'The Man Who Sold the Moon, Twice', channel: 'Who Were They?', stage: 'Voice', detail: '21 of 34 read', len: '~11:40', when: 'yesterday', chip: chip('#1D2026', '#F2F2F2') },
+        { title: 'A City Built on Salt', channel: 'Who Were They?', stage: 'Published', detail: 'YouTube · −14.1 LUFS', len: '9:52', when: 'Oct 21', chip: chip('#12261C', '#39D98A') },
+        { title: 'Ninety Seconds on the Cobra Effect', channel: 'Shorts lab', stage: 'Published', detail: 'Short · 9:16', len: '0:58', when: 'Oct 18', chip: chip('#12261C', '#39D98A') },
+      ],
+      shoots: [
+        { name: 'Tower on Fifth, 28 Oct', stats: '1:32:10 · 61 files · 312 clips', state: 'Labelled · 247 usable · 41 flagged', stateColor: '#39D98A' },
+        { name: 'Rooftop B-roll', stats: '0:18:40 · 14 files', state: 'Making proxies · 9 of 14', stateColor: '#A0A6AE' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

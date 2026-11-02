@@ -4,13 +4,15 @@ The reference for building the new studio UI (Phase 9) and the features that
 plug into it (Phase 10 sponsors, Phase 11 footage, Phase 4 timeline editor,
 Phase 7 camera). Written 2026-10-31.
 
-**Status: draft for owner approval (T9.1).** When the owner approves, add a
-line here: `Approved by the owner on <date>`. Until then, Phase 9 code tickets
-(T9.3 onward) do not start.
+**Status: Approved by the owner on 2026-11-01** (studio flow canvas and this
+guide, as they stand). Phase 9 code tickets (T9.3 onward) build from them.
 
 **Mockups (the visual source of truth):**
 - Corkbored studio flow canvas: https://claude.ai/artifact/MD9aLnpScZExrv7PuP8FYS
-  (ten screens from first run to the finished video, and three scenario screens)
+  (ten screens from first run to the finished video, and three scenario screens).
+  Snapshot of its artboard sources in `docs/design/mockups/*.dc.html` (2026-11-01):
+  inline-styled HTML, read them for layout; `{{...}}` holes are filled by each file's
+  `renderVals()` at the bottom (accent `#FF5A1F`, display face Archivo 62% / 800).
 - Rostrum app mockup canvas, the original Instrument look this guide keeps:
   https://claude.ai/artifact/NeqUBGKSb8Va4CjbEnwLvw (Episodes, Timeline,
   Review, Channel, Stage)

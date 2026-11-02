@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: First run</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid #23262C">
+    <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+    <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase">Corkbored</span>
+    <span style="margin-left: auto; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Setup · step 3 of 5</span>
+  </header>
+
+  <main style="flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 48px 32px; box-sizing: border-box; display: flex; gap: 40px; flex-wrap: wrap">
+    <nav aria-label="Setup steps" style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+        <a href="#step" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 4px; text-decoration: none; {{s.row}}">
+          <span style="width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 500 11px 'JetBrains Mono', monospace; {{s.dot}}">{{s.n}}</span>
+          <span style="display: flex; flex-direction: column"><span style="font-weight: 500">{{s.name}}</span><span style="font-size: 12px; color: #A0A6AE">{{s.state}}</span></span>
+        </a>
+      </sc-for>
+    </nav>
+
+    <section aria-labelledby="voice-h" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+      <h1 id="voice-h" style="margin: 0; font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 40px; line-height: 1; text-transform: uppercase">A voice for drafts</h1>
+      <p style="margin: 0; color: #A0A6AE; max-width: 600px">Corkbored can read a script aloud on this computer, so you can hear the cut before you record it yourself. The voice model is a one-time 337 MB download and never sends text anywhere.</p>
+
+      <div style="border: 1px solid #23262C; border-radius: 4px; background: #16181C; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <span style="font-weight: 500">Kokoro, with word timings</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">337 MB · local</span>
+          <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px">212 / 337 MB</span>
+        </div>
+        <div role="progressbar" aria-label="Voice model download" aria-valuenow="63" aria-valuemin="0" aria-valuemax="100" style="height: 4px; background: #23262C; border-radius: 2px; overflow: hidden"><div style="width: 63%; height: 100%; background: {{accent}}"></div></div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <label for="voice" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Default voice</label>
+          <select id="voice" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit">
+            <option>George · British, warm</option>
+          </select>
+          <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 12px; font: inherit; min-height: 34px">Play sample</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{checks}}" as="c" hint-placeholder-count="4">
+          <div style="border: 1px solid #23262C; border-radius: 4px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start">
+            <span style="width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: {{c.color}}; flex: none" aria-hidden="true"></span>
+            <span style="display: flex; flex-direction: column"><span style="font-weight: 500">{{c.name}}</span><span style="font-size: 12px; color: #A0A6AE">{{c.detail}}</span></span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap">
+        <a href="#back" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 9px 16px; text-decoration: none">Back</a>
+        <a href="#skip" style="color: #A0A6AE; padding: 9px 4px">Skip, use my own recordings</a>
+        <a href="Main.dc.html" style="margin-left: auto; background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 9px 18px; text-decoration: none">Continue</a>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const done = { row: 'color: #F2F2F2', dot: 'background: #12261C; color: #39D98A' };
+    const now = { row: 'background: #1D2026; color: #F2F2F2', dot: `background: ${accent}; color: #0E0F11` };
+    const later = { row: 'color: #A0A6AE', dot: 'background: #1D2026; color: #A0A6AE' };
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      steps: [
+        { n: '1', name: 'Where projects live', state: '~/Corkbored · 412 GB free', ...done },
+        { n: '2', name: 'Claude', state: 'Claude Code CLI · signed in', ...done },
+        { n: '3', name: 'A voice for drafts', state: 'downloading', ...now },
+        { n: '4', name: 'Research', state: 'search backend', ...later },
+        { n: '5', name: 'YouTube', state: 'optional', ...later },
+      ],
+      checks: [
+        { name: 'ffmpeg 7.1', detail: 'bundled · VA-API encoder works', color: '#39D98A' },
+        { name: 'Chromium', detail: 'scenes and 3D render here, no Node', color: '#39D98A' },
+        { name: 'Graphics', detail: 'Radeon 780M · 16 GB RAM · 6 segments at once', color: '#39D98A' },
+        { name: 'Microphone', detail: 'set up later, in Voice', color: '#A0A6AE' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

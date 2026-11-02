@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Visuals for a talking-head vlog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <span style="color: #A0A6AE">/</span>
+    <span style="font-weight: 500">A Week Without My Phone</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">Field Notes · Piece to camera · 16:9 · 8:20</span>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Auto-edit cutaways</button>
+      <a href="Edit.dc.html" style="background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 7px 16px; text-decoration: none">Next: edit</a>
+    </div>
+  </header>
+
+  <nav aria-label="Stages" style="display: flex; border-bottom: 1px solid #23262C; padding: 0 20px; overflow-x: auto">
+    <sc-for list="{{stages}}" as="st" hint-placeholder-count="6">
+      <a href="{{st.href}}" style="display: flex; flex-direction: column; gap: 1px; padding: 10px 18px 9px; text-decoration: none; border-bottom: 2px solid {{st.line}}; min-width: 120px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{st.numColor}}">{{st.n}} · {{st.name}}</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{st.stateColor}}">{{st.state}}</span>
+      </a>
+    </sc-for>
+  </nav>
+
+  <div style="padding: 12px 20px; border-bottom: 1px solid #23262C; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Visual mix</span>
+    <div aria-hidden="true" style="flex: 1; min-width: 260px; max-width: 520px; display: flex; height: 10px; border-radius: 2px; overflow: hidden">
+      <span style="flex: 62; background: #F2F2F2"></span><span style="flex: 24; background: {{accent}}"></span><span style="flex: 14; background: #6FB7FF"></span>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">you on camera 62% · <span style="color: {{accent}}">cutaways 24%</span> · <span style="color: #6FB7FF">screens and cards 14%</span></span>
+    <span style="margin-left: auto; font-size: 12px; color: #A0A6AE">Format rule: face for opinion, cutaway when you describe a place or a thing.</span>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <aside aria-labelledby="p-h" style="flex: 1 1 290px; min-width: 0; border-right: 1px solid #23262C; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+      <h2 id="p-h" style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Paragraphs · layout each one</h2>
+      <sc-for list="{{paras}}" as="p" hint-placeholder-count="10">
+        <a href="#p" style="display: grid; grid-template-columns: 30px minmax(0, 1fr) 54px; gap: 8px; padding: 7px 6px; border-radius: 4px; text-decoration: none; align-items: center; {{p.row}}">
+          <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">{{p.n}}</span>
+          <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.text}}</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: .06em; text-align: center; padding: 2px 0; border-radius: 2px; {{p.chip}}">{{p.layout}}</span>
+        </a>
+      </sc-for>
+    </aside>
+
+    <section aria-label="Layout" style="flex: 999 1 560px; min-width: 0; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap">
+        <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">¶06 · camera take 2 · 0:11.2 after jump cuts</span>
+        <span style="font-weight: 600">“My screen time on the Sunday before”</span>
+      </div>
+      <div style="position: relative; aspect-ratio: 16 / 9; background: #1A1C21; border-radius: 4px; overflow: hidden; display: flex">
+        <div style="flex: 1; position: relative; background: #24272D">
+          <div style="position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 46%; height: 52%; border-radius: 48% 48% 0 0; background: #3A3F48"></div>
+          <div style="position: absolute; left: 50%; top: 22%; transform: translateX(-50%); width: 24%; aspect-ratio: 1; border-radius: 50%; background: #4A505A"></div>
+          <span style="position: absolute; left: 10px; top: 8px; font-size: 11px; color: #A0A6AE">[you · camera take 2]</span>
+        </div>
+        <div style="flex: 1; display: grid; place-items: center; background: #16181C">
+          <div style="width: 52%; aspect-ratio: 9 / 16; border-radius: 10px; border: 2px solid #3A3F48; background: #0E0F11; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px">
+            <span style="font-size: 10px; color: #A0A6AE; text-transform: uppercase; letter-spacing: .08em">Screen time</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #F2F2F2">6h 41m</span>
+            <span style="font-size: 10px; color: #A0A6AE">Sunday</span>
+          </div>
+        </div>
+        <span style="position: absolute; left: 4%; bottom: 7%; font-size: 13px; background: rgba(14,15,17,.85); padding: 3px 8px; border-left: 3px solid {{accent}}">Sunday · 6 h 41 m</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Jump cuts in this take</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">4 cuts · 3.6 s of pauses and one restart removed</span>
+          <div role="group" aria-label="Cut style" style="margin-left: auto; display: flex; border: 1px solid #23262C; border-radius: 4px; overflow: hidden">
+            <button type="button" aria-pressed="false" style="background: #16181C; color: #A0A6AE; border: 0; padding: 5px 10px; font: inherit; min-height: 30px">Natural</button>
+            <button type="button" aria-pressed="true" style="background: #1D2026; color: #F2F2F2; border: 0; border-left: 1px solid #23262C; padding: 5px 10px; font: 500 13px Inter, sans-serif; min-height: 30px">Tight</button>
+          </div>
+        </div>
+        <div aria-hidden="true" style="display: flex; align-items: center; gap: 2px; height: 36px; background: #16181C; border: 1px solid #23262C; border-radius: 3px; padding: 0 6px">
+          <sc-for list="{{wave}}" as="w" hint-placeholder-count="60">
+            <span style="flex: 1; height: {{w.h}}%; background: {{w.c}}; border-radius: 1px"></span>
+          </sc-for>
+        </div>
+        <span style="font-size: 12px; color: #A0A6AE">Removed parts are struck through, not deleted: the take stays whole on disk.</span>
+      </div>
+    </section>
+
+    <aside aria-label="Sources" style="flex: 1 1 340px; min-width: 0; border-left: 1px solid #23262C; background: #16181C; display: flex; flex-direction: column">
+      <div role="tablist" aria-label="Picture sources" style="display: flex; border-bottom: 1px solid #23262C; overflow-x: auto">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+          <button type="button" role="tab" aria-selected="{{t.sel}}" style="background: transparent; border: 0; border-bottom: 2px solid {{t.line}}; color: {{t.color}}; padding: 10px 12px; font: inherit; min-height: 40px">{{t.name}}</button>
+        </sc-for>
+      </div>
+      <div style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Layout for ¶06</span>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <sc-for list="{{layouts}}" as="l" hint-placeholder-count="4">
+            <button type="button" aria-pressed="{{l.sel}}" style="background: #0E0F11; border: 1px solid {{l.border}}; border-radius: 4px; padding: 8px; color: #F2F2F2; font: inherit; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: left; min-height: 44px">
+              <span style="position: relative; aspect-ratio: 16 / 9; background: #23262C; border-radius: 2px; overflow: hidden; display: block">
+                <span style="position: absolute; {{l.face}}; background: #4A505A; border-radius: 2px"></span>
+                <span style="position: absolute; {{l.other}}; background: {{l.otherColor}}; border-radius: 2px"></span>
+              </span>
+              <span>{{l.name}}</span>
+            </button>
+          </sc-for>
+        </div>
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; margin-top: 4px">Cutaways for words in ¶06–08</span>
+        <sc-for list="{{cuts}}" as="c" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; border-top: 1px solid #23262C; padding-top: 8px">
+            <span style="aspect-ratio: 16 / 9; background: #23262C; border-radius: 2px"></span>
+            <span style="display: flex; flex-direction: column"><span>“{{c.word}}”</span><span style="font-size: 11px; color: #A0A6AE">{{c.clip}}</span></span>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+  </div>
+
+  <section aria-label="Sequence" style="border-top: 1px solid #23262C; padding: 12px 20px 18px; display: flex; flex-direction: column; gap: 6px">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">The video as it will play · camera underneath, cutaways on top</span>
+    <div style="position: relative; height: 22px">
+      <sc-for list="{{over}}" as="o" hint-placeholder-count="8">
+        <span title="{{o.tip}}" style="position: absolute; left: {{o.left}}%; width: {{o.w}}%; top: 0; bottom: 0; border-radius: 2px; background: {{o.bg}}; font-size: 10px; display: flex; align-items: center; padding-left: 4px; overflow: hidden; white-space: nowrap; color: #0E0F11">{{o.label}}</span>
+      </sc-for>
+    </div>
+    <div style="position: relative; height: 22px; background: #2B2F36; border-radius: 2px">
+      <sc-for list="{{cutsAt}}" as="x" hint-placeholder-count="20">
+        <span style="position: absolute; left: {{x}}%; top: 0; bottom: 0; width: 1px; background: #0E0F11"></span>
+      </sc-for>
+      <span style="position: absolute; left: 6px; top: 2px; font-size: 10px; color: #C9CDD3">You · 3 takes · 31 jump cuts</span>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const names = [['Plan', 'Plan.dc.html'], ['Script', 'Script.dc.html'], ['Camera', 'Voice.dc.html'], ['Visuals', 'Visuals.dc.html'], ['Edit', 'Edit.dc.html'], ['Review & publish', 'Publish.dc.html']];
+    const states = ['loose outline', 'talking points', '3 takes · 21 min', '18 of 24', 'not started', ''];
+    const cur = 3;
+    const stages = names.map(([name, href], i) => ({
+      n: String(i + 1), name, href, state: states[i] || '—',
+      line: i === cur ? accent : 'transparent',
+      numColor: i <= cur ? '#F2F2F2' : '#A0A6AE',
+      stateColor: i < cur ? '#39D98A' : (i === cur ? accent : '#A0A6AE'),
+    }));
+    const L = { FULL: 'background: #F2F2F2; color: #0E0F11', SPLIT: 'background: #13202E; color: #6FB7FF', OVER: `background: #2A1A12; color: ${accent}`, PIP: 'background: #23262C; color: #C9CDD3' };
+    const p = (n, text, layout, on) => ({ n, text, layout, chip: L[layout], row: on ? 'background: #1D2026; color: #F2F2F2' : 'color: #C9CDD3' });
+    const wave = [];
+    const cutsIdx = [9, 10, 23, 31, 32, 33, 47];
+    for (let i = 0; i < 60; i++) {
+      const removed = cutsIdx.includes(i);
+      wave.push({ h: String(removed ? 18 : Math.round(25 + 65 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.31)))), c: removed ? accent : '#4A505A' });
+    }
+    const tab = (name, on) => ({ name, sel: on ? 'true' : 'false', line: on ? accent : 'transparent', color: on ? '#F2F2F2' : '#A0A6AE' });
+    const lay = (name, face, other, otherColor, on) => ({ name, face, other, otherColor, sel: on ? 'true' : 'false', border: on ? accent : '#23262C' });
+    const over = [
+      { left: 4, w: 6, label: 'clip', bg: accent, tip: 'drawer of chargers' },
+      { left: 14, w: 9, label: 'screen', bg: '#6FB7FF', tip: 'screen time card' },
+      { left: 27, w: 5, label: 'clip', bg: accent, tip: 'paper map' },
+      { left: 38, w: 8, label: 'clip', bg: accent, tip: 'bus stop timetable' },
+      { left: 52, w: 4, label: 'card', bg: '#6FB7FF', tip: 'day 4' },
+      { left: 63, w: 7, label: 'clip', bg: accent, tip: 'library' },
+      { left: 78, w: 6, label: 'pip', bg: '#C9CDD3', tip: 'walk at dusk' },
+      { left: 90, w: 5, label: 'card', bg: '#6FB7FF', tip: 'Sunday after' },
+    ];
+    const cutsAt = [];
+    for (let i = 1; i < 31; i++) cutsAt.push(((i * 37) % 97 + i * 0.5).toFixed(1));
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      stages, wave, over, cutsAt,
+      paras: [
+        p('01', 'I put my phone in a drawer on Sunday night', 'FULL'),
+        p('02', 'The drawer already had four chargers in it', 'OVER'),
+        p('03', 'The rules: no phone, laptop for work only', 'FULL'),
+        p('04', 'Monday: I reached for it 31 times by noon', 'PIP'),
+        p('05', 'Getting to a meeting with a paper map', 'OVER'),
+        p('06', 'My screen time on the Sunday before', 'SPLIT', true),
+        p('07', 'What I actually missed: the bus app', 'OVER'),
+        p('08', 'What I did not miss at all', 'FULL'),
+        p('09', 'Day four, the library', 'OVER'),
+        p('10', 'The Sunday after', 'SPLIT'),
+      ],
+      tabs: [tab('Layout', true), tab('Footage'), tab('Screens'), tab('Library'), tab('Scenes')],
+      layouts: [
+        lay('Full face', 'inset: 0', 'display: none', 'transparent'),
+        lay('Split', 'left: 0; top: 0; bottom: 0; width: 50%', 'right: 0; top: 0; bottom: 0; width: 50%', '#6FB7FF', true),
+        lay('Cutaway over voice', 'display: none', 'inset: 0', accent),
+        lay('Picture in picture', 'right: 6%; bottom: 8%; width: 28%; height: 34%', 'inset: 0; z-index: -1', accent),
+      ],
+      cuts: [
+        { word: 'paper map', clip: 'Week shoot · clip 044 · map unfolding, close' },
+        { word: 'bus stop', clip: 'Week shoot · clip 061 · timetable, handheld' },
+        { word: 'the library', clip: 'Week shoot · clip 089 · reading room, wide' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Visuals for a 3D explainer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <span style="color: #A0A6AE">/</span>
+    <span style="font-weight: 500">How a Jet Engine Works</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">Machines, Explained · 3D explainer + archive · 16:9 · 9:30</span>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Plan all shots</button>
+      <a href="Edit.dc.html" style="background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 7px 16px; text-decoration: none">Next: edit</a>
+    </div>
+  </header>
+
+  <nav aria-label="Stages" style="display: flex; border-bottom: 1px solid #23262C; padding: 0 20px; overflow-x: auto">
+    <sc-for list="{{stages}}" as="st" hint-placeholder-count="6">
+      <a href="{{st.href}}" style="display: flex; flex-direction: column; gap: 1px; padding: 10px 18px 9px; text-decoration: none; border-bottom: 2px solid {{st.line}}; min-width: 120px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{st.numColor}}">{{st.n}} · {{st.name}}</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{st.stateColor}}">{{st.state}}</span>
+      </a>
+    </sc-for>
+  </nav>
+
+  <div style="padding: 12px 20px; border-bottom: 1px solid #23262C; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Visual mix</span>
+    <div aria-hidden="true" style="flex: 1; min-width: 260px; max-width: 520px; display: flex; height: 10px; border-radius: 2px; overflow: hidden">
+      <span style="flex: 11; background: {{accent}}"></span><span style="flex: 6; background: #C9CDD3"></span><span style="flex: 5; background: #6FB7FF"></span>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px"><span style="color: {{accent}}">3D shots 11</span> · <span style="color: #C9CDD3">archive 6</span> · <span style="color: #6FB7FF">scenes 5</span></span>
+    <span style="margin-left: auto; font-size: 12px; color: #A0A6AE">Format rule: 3D for how it works, archive for who and when, scenes for numbers.</span>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <aside aria-labelledby="g-h" style="flex: 1 1 280px; min-width: 0; border-right: 1px solid #23262C; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+      <h2 id="g-h" style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Pictures · 22 · all planned</h2>
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="10">
+        <a href="#g" style="display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; padding: 6px; border-radius: 4px; text-decoration: none; align-items: center; {{g.row}}">
+          <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; text-align: center; padding: 2px 0; border-radius: 2px; {{g.chip}}">{{g.kind}}</span>
+          <span style="display: flex; flex-direction: column; min-width: 0">
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{g.name}}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{g.meta}}</span>
+          </span>
+        </a>
+      </sc-for>
+    </aside>
+
+    <section aria-label="Shot" style="flex: 999 1 560px; min-width: 0; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap">
+        <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">Picture 9 · ¶11 · 6.8 s from the take</span>
+        <span style="font-weight: 600">Where the fuel burns</span>
+      </div>
+      <div style="position: relative; aspect-ratio: 16 / 9; background: #14161A; border-radius: 4px; overflow: hidden">
+        <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" style="position: absolute; inset: 0">
+          <path d="M18 30 Q22 22 40 22 L118 26 Q132 28 138 38 L138 52 Q132 62 118 64 L40 68 Q22 68 18 60 Z" fill="#23262C" stroke="#3A3F48" stroke-width="0.6"></path>
+          <rect x="24" y="27" width="3" height="36" fill="#4A505A"></rect>
+          <g fill="#3A3F48"><rect x="36" y="32" width="2" height="26"></rect><rect x="40" y="33" width="2" height="24"></rect><rect x="44" y="34" width="2" height="22"></rect><rect x="48" y="35" width="2" height="20"></rect><rect x="52" y="36" width="2" height="18"></rect></g>
+          <rect x="62" y="36" width="24" height="18" rx="3" fill="#3B2316" stroke="{{accent}}" stroke-width="0.8"></rect>
+          <path d="M66 45 Q70 39 74 45 T82 45" fill="none" stroke="{{accent}}" stroke-width="0.8"></path>
+          <g fill="#3A3F48"><rect x="92" y="35" width="2" height="20"></rect><rect x="96" y="34" width="2" height="22"></rect><rect x="100" y="33" width="2" height="24"></rect></g>
+          <rect x="30" y="44" width="96" height="2" fill="#4A505A"></rect>
+          <g stroke="#A0A6AE" stroke-width="0.35" fill="none"><path d="M25 26 L25 14 L34 14"></path><path d="M45 32 L45 16 L56 16"></path><path d="M74 36 L80 12 L90 12"></path><path d="M96 56 L104 76 L114 76"></path></g>
+        </svg>
+        <span style="position: absolute; left: 22%; top: 12%; font-size: 12px; color: #C9CDD3">Fan</span>
+        <span style="position: absolute; left: 35.5%; top: 14%; font-size: 12px; color: #C9CDD3">Compressor</span>
+        <span style="position: absolute; left: 57%; top: 9.5%; font-size: 12px; color: {{accent}}; font-weight: 600">Combustor</span>
+        <span style="position: absolute; left: 72%; top: 80%; font-size: 12px; color: #C9CDD3">Turbine</span>
+        <span style="position: absolute; top: 10px; right: 12px; font-size: 11px; color: #A0A6AE">[3D · section cut · camera dollying in]</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="m" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Model</label>
+          <select id="m" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit"><option>Turbofan · 14 parts</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="sh" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Shot</label>
+          <select id="sh" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit"><option>Dolly in to a part</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="pt" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Subject</label>
+          <select id="pt" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit"><option>Combustor</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Show</span>
+          <label style="display: flex; gap: 8px; align-items: center; min-height: 34px"><input type="checkbox" checked="checked">Section cut + labels</label>
+        </div>
+      </div>
+      <div style="display: flex; gap: 14px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 11px">
+        <span style="color: #39D98A">subject fills 41% of frame</span>
+        <span style="color: #39D98A">0 parts clipped</span>
+        <span style="color: #39D98A">labels clear of each other</span>
+        <span style="color: #A0A6AE">label lands on “burns” at 3.2 s</span>
+      </div>
+    </section>
+
+    <aside aria-label="Sources" style="flex: 1 1 340px; min-width: 0; border-left: 1px solid #23262C; background: #16181C; display: flex; flex-direction: column">
+      <div role="tablist" aria-label="Picture sources" style="display: flex; border-bottom: 1px solid #23262C; overflow-x: auto">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="6">
+          <button type="button" role="tab" aria-selected="{{t.sel}}" style="background: transparent; border: 0; border-bottom: 2px solid {{t.line}}; color: {{t.color}}; padding: 10px 12px; font: inherit; min-height: 40px">{{t.name}}</button>
+        </sc-for>
+      </div>
+      <div style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Cast · models in this video</span>
+        <sc-for list="{{cast}}" as="c" hint-placeholder-count="3">
+          <div style="border: 1px solid #23262C; border-radius: 4px; padding: 10px 12px; background: #0E0F11; display: flex; flex-direction: column; gap: 2px">
+            <span style="display: flex; justify-content: space-between"><span style="font-weight: 500">{{c.name}}</span><span style="font-size: 11px; color: #39D98A">{{c.state}}</span></span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{c.meta}}</span>
+          </div>
+        </sc-for>
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; margin-top: 4px">Shots the planner offers for ¶11</span>
+        <sc-for list="{{shots}}" as="s" hint-placeholder-count="4">
+          <div style="display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #23262C; padding-top: 8px">
+            <span>{{s.name}}</span><span style="font-size: 12px; color: {{s.color}}">{{s.state}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+  </div>
+
+  <section aria-label="Sequence" style="border-top: 1px solid #23262C; padding: 12px 20px 18px; display: flex; flex-direction: column; gap: 8px">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">The video as it will play · 22 pictures</span>
+    <div style="display: flex; gap: 3px; height: 34px">
+      <sc-for list="{{seq}}" as="q" hint-placeholder-count="22">
+        <span title="{{q.tip}}" style="flex: {{q.w}}; border-radius: 2px; {{q.look}}; font-size: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap">{{q.label}}</span>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const names = [['Plan', 'Plan.dc.html'], ['Script', 'Script.dc.html'], ['Voice', 'Voice.dc.html'], ['Visuals', 'Visuals.dc.html'], ['Edit', 'Edit.dc.html'], ['Review & publish', 'Publish.dc.html']];
+    const states = ['14 beats', '26 ¶', '26 of 26 · draft voice', '22 of 22', 'not started', ''];
+    const cur = 3;
+    const stages = names.map(([name, href], i) => ({
+      n: String(i + 1), name, href, state: states[i] || '—',
+      line: i === cur ? accent : 'transparent',
+      numColor: i <= cur ? '#F2F2F2' : '#A0A6AE',
+      stateColor: i < cur ? '#39D98A' : (i === cur ? accent : '#A0A6AE'),
+    }));
+    const K = {
+      '3d': `background: #2A1A12; color: ${accent}`,
+      archive: 'background: #23262C; color: #C9CDD3',
+      scene: 'background: #13202E; color: #6FB7FF',
+    };
+    const g = (kind, name, meta, on) => ({ kind: kind === '3d' ? '3D' : kind, chip: K[kind], name, meta, row: on ? 'background: #1D2026; color: #F2F2F2' : 'color: #C9CDD3' });
+    const tab = (name, on) => ({ name, sel: on ? 'true' : 'false', line: on ? accent : 'transparent', color: on ? '#F2F2F2' : '#A0A6AE' });
+    const seqKinds = ['archive','3d','3d','scene','archive','archive','3d','3d','3d','scene','3d','archive','3d','scene','3d','3d','archive','scene','3d','archive','scene','3d'];
+    const seqW = [6,8,7,5,7,6,9,8,7,5,8,6,9,5,7,8,6,5,9,6,5,10];
+    const seq = seqKinds.map((k, i) => ({ w: seqW[i], look: K[k] + (i === 8 ? `; outline: 2px solid ${accent}; outline-offset: -2px` : ''), label: k === '3d' ? '3D' : k === 'archive' ? 'A' : 'S', tip: `picture ${i + 1} · ${k}` }));
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      stages,
+      seq,
+      groups: [
+        g('archive', 'A test stand, 1937', 'archive photo · licence checked'),
+        g('3d', 'The whole engine, turning', 'orbit 60° · turbofan'),
+        g('3d', 'Air comes in the front', 'dolly in · fan'),
+        g('scene', 'Thirty tonnes of air a minute', 'number card · from ¶05'),
+        g('archive', 'The first flight, 1941', 'archive film · 6 s used'),
+        g('3d', 'Squeezing the air', 'track along · compressor'),
+        g('3d', 'Where the fuel burns', 'dolly in · combustor', true),
+        g('scene', 'Temperature inside vs. the metal', 'chart · two lines'),
+        g('3d', 'Exploded view', 'explode · all 14 parts'),
+        g('archive', 'Cutaway poster, 1950s', 'library scan'),
+      ],
+      tabs: [tab('3D', true), tab('Archive'), tab('Footage'), tab('Library'), tab('Scenes'), tab('Upload')],
+      cast: [
+        { name: 'Turbofan, cutaway', state: 'ready', meta: '14 named parts · CC BY 4.0 · credited' },
+        { name: 'Single compressor blade', state: 'ready', meta: '1 part · made in Blender by you' },
+        { name: 'Airliner, low detail', state: 'ready', meta: 'context shot only' },
+      ],
+      shots: [
+        { name: 'Dolly in to the combustor', state: 'chosen', color: accent },
+        { name: 'Orbit 30° around the combustor', state: 'alternative', color: '#A0A6AE' },
+        { name: 'Section reveal, front to back', state: 'used in ¶07', color: '#A0A6AE' },
+        { name: 'Same angle as picture 7', state: 'avoided: repeat', color: '#A0A6AE' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

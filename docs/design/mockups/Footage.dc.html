@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Footage</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 1080px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <nav aria-label="Main" style="display: flex; gap: 4px; margin-left: 24px; flex-wrap: wrap">
+      <a href="Main.dc.html" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Projects</a>
+      <a href="Footage.dc.html" style="padding: 6px 12px; border-radius: 4px; background: #1D2026; text-decoration: none; font-weight: 500">Footage</a>
+      <a href="#library" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Library</a>
+      <a href="#channels" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Channels</a>
+      <a href="#packs" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Packs</a>
+      <a href="FirstRun.dc.html" style="padding: 6px 12px; border-radius: 4px; text-decoration: none; color: #A0A6AE">Settings</a>
+    </nav>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Export clips</button>
+      <a href="Visuals.dc.html" style="background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 7px 16px; text-decoration: none">Use in The Tower on Fifth</a>
+    </div>
+  </header>
+
+  <div style="padding: 16px 20px 0; display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Shoot</span>
+      <h1 style="margin: 0; font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 32px; line-height: 1; text-transform: uppercase">Tower on Fifth, 28 Oct</h1>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">1:32:10 · 61 files · linked folder, originals untouched · proxies 61/61</span>
+    <div style="margin-left: auto; display: flex; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; flex-wrap: wrap">
+      <span>312 clips</span><span style="color: #39D98A">247 usable</span><span style="color: {{accent}}">41 flagged</span><span style="color: #6FB7FF">24 near-duplicates</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; gap: 0; margin-top: 14px; border-top: 1px solid #23262C">
+    <aside aria-labelledby="lab-h" style="flex: 1 1 220px; min-width: 0; border-right: 1px solid #23262C; padding: 16px; display: flex; flex-direction: column; gap: 6px; background: #16181C">
+      <h2 id="lab-h" style="margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Your labels</h2>
+      <sc-for list="{{labels}}" as="l" hint-placeholder-count="6">
+        <a href="#label" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; text-decoration: none; {{l.row}}">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE; width: 14px">{{l.key}}</span>
+          <span style="flex: 1">{{l.name}}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{l.count}}</span>
+        </a>
+      </sc-for>
+      <h2 style="margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Found by Claude</h2>
+      <sc-for list="{{auto}}" as="a" hint-placeholder-count="5">
+        <span style="display: flex; justify-content: space-between; padding: 4px 8px; color: #C9CDD3"><span>{{a.name}}</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{a.count}}</span></span>
+      </sc-for>
+      <h2 style="margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Show</h2>
+      <label style="display: flex; gap: 8px; align-items: center"><input type="checkbox" checked="checked">Usable</label>
+      <label style="display: flex; gap: 8px; align-items: center"><input type="checkbox">Flagged (blur, shake, dark)</label>
+      <label style="display: flex; gap: 8px; align-items: center"><input type="checkbox">Rejected</label>
+    </aside>
+
+    <section aria-label="Clips" style="flex: 999 1 640px; min-width: 0; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; gap: 16px; flex-wrap: wrap">
+        <div style="flex: 2 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+          <div style="position: relative; aspect-ratio: 16 / 9; background: #1A1C21; border-radius: 4px; overflow: hidden">
+            <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 62%; background: #23262C"></div>
+            <div style="position: absolute; left: 34%; width: 30%; top: 8%; bottom: 0; background: #2E3239; border: 1px solid #3A3F48"></div>
+            <div style="position: absolute; left: 42%; width: 14%; bottom: 0; height: 26%; background: #3A3F48"></div>
+            <span style="position: absolute; top: 10px; left: 12px; font-size: 11px; color: #A0A6AE">[proxy 480p · clip 014 · revolving door, morning]</span>
+            <span style="position: absolute; bottom: 8px; right: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; background: rgba(0,0,0,.7); padding: 1px 6px">08:58:12 · A001_C014.MP4</span>
+          </div>
+          <div aria-label="In and out" style="position: relative; height: 26px; background: #16181C; border: 1px solid #23262C; border-radius: 3px">
+            <div style="position: absolute; left: 18%; width: 46%; top: 0; bottom: 0; background: #2A1A12; border-left: 2px solid {{accent}}; border-right: 2px solid {{accent}}"></div>
+            <div style="position: absolute; left: 41%; top: -3px; bottom: -3px; width: 2px; background: #F2F2F2"></div>
+            <span style="position: absolute; left: calc(18% + 6px); top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: {{accent}}">IN 00:03.40</span>
+            <span style="position: absolute; left: calc(64% - 84px); top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: {{accent}}">OUT 00:11.20</span>
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">
+            <sc-for list="{{keys}}" as="k" hint-placeholder-count="6">
+              <span><span style="border: 1px solid #2E3239; border-radius: 2px; padding: 0 4px; color: #F2F2F2">{{k.k}}</span> {{k.what}}</span>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex: 1 1 260px; min-width: 0; border: 1px solid #23262C; border-radius: 4px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #16181C">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-weight: 600">Clip 014</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">7.8 s used of 14.2</span>
+            <span style="margin-left: auto; color: {{accent}}">Starred</span>
+          </div>
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Labels</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap">
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #F2F2F2; color: #0E0F11; font-weight: 500">Main entrance</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #1D2026">exterior</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #1D2026">people</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #1D2026">medium</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #1D2026">static</span>
+            <span style="font-size: 12px; padding: 2px 8px; border-radius: 2px; background: #1D2026">morning</span>
+          </div>
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Quality</span>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px">
+            <span style="color: #A0A6AE">sharp</span><span style="color: #39D98A">good</span>
+            <span style="color: #A0A6AE">shake</span><span style="color: #39D98A">tripod</span>
+            <span style="color: #A0A6AE">exposure</span><span style="color: #39D98A">good</span>
+            <span style="color: #A0A6AE">audio</span><span>street, −31 dB</span>
+          </div>
+          <span style="font-size: 12px; color: #A0A6AE">Best of 3 similar takes (014, 015, 019).</span>
+          <span style="font-size: 12px; color: #A0A6AE">Matched to ¶01 “Morning rush through one revolving door”.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px">
+        <h2 style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Main entrance · 38 clips</h2>
+        <span style="flex: 1; height: 1px; background: #23262C"></span>
+        <label for="fq" style="position: absolute; left: -9999px">Search clips</label>
+        <input id="fq" type="search" placeholder="Search labels, text in frame, speech" style="background: #16181C; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 6px 10px; font: inherit; width: 280px; max-width: 100%">
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{clips}}" as="c" hint-placeholder-count="12">
+          <figure style="margin: 0; display: flex; flex-direction: column; gap: 4px">
+            <div style="position: relative; aspect-ratio: 16 / 9; background: {{c.bg}}; border-radius: 3px; overflow: hidden; {{c.ring}}">
+              <div style="position: absolute; left: 0; right: 0; bottom: 0; height: {{c.h}}; background: #2E3239"></div>
+              <span style="position: absolute; left: 0; bottom: 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; background: rgba(0,0,0,.7); padding: 0 4px">{{c.dur}}</span>
+              <span style="position: absolute; right: 4px; top: 3px; font-size: 10px; font-weight: 600; color: {{c.flagColor}}">{{c.flag}}</span>
+            </div>
+            <figcaption style="font-size: 11px; color: #A0A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.n}} · {{c.what}}</figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+
+  <footer aria-label="Jobs" style="height: 32px; border-top: 1px solid #23262C; display: flex; align-items: center; gap: 18px; padding: 0 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE; flex-wrap: wrap">
+    <span style="color: #F2F2F2">Jobs</span>
+    <span>Labelling · Rooftop B-roll · 64 of 120 clips · ~3 min · 41k tokens</span>
+    <span>Proxies · done</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const sel = 'background: #1D2026; color: #F2F2F2';
+    const off = 'color: #C9CDD3';
+    const c = (n, what, dur, flag, h, hot) => ({ n, what, dur, flag: flag || '', flagColor: flag === 'blur' || flag === 'dark' ? accent : '#6FB7FF', h, bg: flag === 'dark' ? '#111215' : '#1A1C21', ring: hot ? `outline: 2px solid ${accent}; outline-offset: -2px` : '' });
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      labels: [
+        { key: '1', name: 'Main entrance', count: '38', row: sel },
+        { key: '2', name: 'Plaza', count: '64', row: off },
+        { key: '3', name: 'Fifth Avenue street', count: '71', row: off },
+        { key: '4', name: 'Lobby', count: '52', row: off },
+        { key: '5', name: 'Fountain', count: '19', row: off },
+        { key: '6', name: 'Rooftop', count: '22', row: off },
+        { key: '–', name: 'Unlabelled', count: '46', row: off },
+      ],
+      auto: [
+        { name: 'exterior', count: '201' }, { name: 'interior', count: '74' }, { name: 'people', count: '133' },
+        { name: 'wide · medium · close', count: '96 · 141 · 75' }, { name: 'text in frame', count: '18' }, { name: 'speech', count: '9' },
+      ],
+      keys: [
+        { k: 'J K L', what: 'shuttle' }, { k: 'I', what: 'in' }, { k: 'O', what: 'out' },
+        { k: '1–9', what: 'label' }, { k: 'S', what: 'star' }, { k: 'X', what: 'reject' },
+      ],
+      clips: [
+        c('014', 'door, morning', '14.2', 'best', '62%', true), c('015', 'door, morning', '9.8', 'dup', '62%'),
+        c('019', 'door, morning', '11.0', 'dup', '60%'), c('022', 'door, wide', '18.4', '', '48%'),
+        c('031', 'door, handheld', '6.1', 'blur', '55%'), c('047', 'canopy, tilt up', '12.7', '', '30%'),
+        c('052', 'lobby through glass', '8.4', '', '70%'), c('063', 'door, dusk', '15.0', '', '58%'),
+        c('071', 'pocket shot', '2.3', 'dark', '90%'), c('233', 'door, night, empty', '20.0', '', '62%'),
+        c('240', 'door, night, wide', '17.6', '', '48%'), c('251', 'sign, close', '5.2', '', '40%'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

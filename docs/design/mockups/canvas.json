@@ -1,0 +1,150 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-31T16:10:00-07:00"
+  },
+  "title": "Corkbored studio flow",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "FirstRun.dc.html": {
+      "x": -1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "expand": "fill",
+      "title": "00 \u00b7 First run"
+    },
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 980,
+      "expand": "fill",
+      "title": "01 \u00b7 Home: start a video"
+    },
+    "Plan.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "expand": "fill",
+      "title": "02 \u00b7 Plan"
+    },
+    "Script.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 1040,
+      "expand": "fill",
+      "title": "03 \u00b7 Script"
+    },
+    "Footage.dc.html": {
+      "x": 4560,
+      "y": 0,
+      "w": 1440,
+      "h": 1080,
+      "expand": "fill",
+      "title": "04 \u00b7 Footage: log the shoot"
+    },
+    "Visuals.dc.html": {
+      "x": 0,
+      "y": 1440,
+      "w": 1440,
+      "h": 1000,
+      "expand": "fill",
+      "title": "06 \u00b7 Visuals (documentary with your footage)"
+    },
+    "Voice.dc.html": {
+      "x": -1520,
+      "y": 1440,
+      "w": 1440,
+      "h": 980,
+      "expand": "fill",
+      "title": "05 \u00b7 Voice"
+    },
+    "Edit.dc.html": {
+      "x": 1520,
+      "y": 1440,
+      "w": 1440,
+      "h": 1120,
+      "expand": "fill",
+      "title": "07 \u00b7 Edit: Timeline with sponsor lane"
+    },
+    "Publish.dc.html": {
+      "x": 3040,
+      "y": 1440,
+      "w": 1440,
+      "h": 1060,
+      "expand": "fill",
+      "title": "08 \u00b7 Review & publish"
+    },
+    "Done.dc.html": {
+      "x": 4560,
+      "y": 1440,
+      "w": 1440,
+      "h": 940,
+      "expand": "fill",
+      "title": "09 \u00b7 The finished video"
+    },
+    "ScenarioJet.dc.html": {
+      "x": -1520,
+      "y": 3000,
+      "w": 1440,
+      "h": 1100,
+      "expand": "fill",
+      "title": "Scenario A \u00b7 3D explainer with archive: Visuals"
+    },
+    "ScenarioVlog.dc.html": {
+      "x": 0,
+      "y": 3000,
+      "w": 1440,
+      "h": 1100,
+      "expand": "fill",
+      "title": "Scenario B \u00b7 Talking-head vlog: Visuals"
+    },
+    "ScenarioShort.dc.html": {
+      "x": 1520,
+      "y": 3000,
+      "w": 1440,
+      "h": 1100,
+      "expand": "fill",
+      "title": "Scenario C \u00b7 Vertical data Short: Visuals"
+    }
+  },
+  "order": [
+    "FirstRun.dc.html",
+    "Main.dc.html",
+    "Plan.dc.html",
+    "Script.dc.html",
+    "Footage.dc.html",
+    "Voice.dc.html",
+    "Visuals.dc.html",
+    "Edit.dc.html",
+    "Publish.dc.html",
+    "Done.dc.html",
+    "ScenarioJet.dc.html",
+    "ScenarioVlog.dc.html",
+    "ScenarioShort.dc.html"
+  ],
+  "notes": {
+    "title": {
+      "kind": "title1",
+      "x": -1520,
+      "y": -300,
+      "maxW": 7520,
+      "text": "Corkbored: from opening the app to the finished video"
+    },
+    "scenarios": {
+      "kind": "title1",
+      "x": -1520,
+      "y": 2700,
+      "maxW": 4480,
+      "text": "Same six stages, different videos: what Visuals does for each"
+    }
+  },
+  "designSystems": []
+}

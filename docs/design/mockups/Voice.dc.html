@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Voice</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 980px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <span style="color: #A0A6AE">/</span>
+    <span style="font-weight: 500">The Tower on Fifth</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">Signal and Noise · Documentary · 16:9</span>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Microphone setup</button>
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Draft the rest with George</button>
+      <a href="Visuals.dc.html" style="background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 7px 16px; text-decoration: none">Next: pictures</a>
+    </div>
+  </header>
+
+  <nav aria-label="Stages" style="display: flex; border-bottom: 1px solid #23262C; padding: 0 20px; overflow-x: auto">
+    <sc-for list="{{stages}}" as="st" hint-placeholder-count="6">
+      <a href="{{st.href}}" style="display: flex; flex-direction: column; gap: 1px; padding: 10px 18px 9px; text-decoration: none; border-bottom: 2px solid {{st.line}}; min-width: 120px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{st.numColor}}">{{st.n}} · {{st.name}}</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{st.stateColor}}">{{st.state}}</span>
+      </a>
+    </sc-for>
+  </nav>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <aside aria-labelledby="pl-h" style="flex: 1 1 280px; min-width: 0; border-right: 1px solid #23262C; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+      <h2 id="pl-h" style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Takes · 22 of 34 recorded · 1 sponsor read</h2>
+      <sc-for list="{{paras}}" as="p" hint-placeholder-count="10">
+        <a href="#para" style="display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; padding: 7px 8px; border-radius: 4px; text-decoration: none; align-items: center; {{p.row}}">
+          <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">{{p.n}}</span>
+          <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.text}}</span>
+          <span style="font-size: 11px; color: {{p.stateColor}}">{{p.state}}</span>
+        </a>
+      </sc-for>
+    </aside>
+
+    <section aria-label="Prompter" style="flex: 999 1 560px; min-width: 0; padding: 28px 40px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">¶08 · chapter 3, The plaza</span>
+        <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">target 0:05 · documentary pace</span>
+      </div>
+      <p style="margin: 0; font-size: 34px; line-height: 1.35; font-weight: 500; max-width: 820px"><span style="color: #F2F2F2">Here is the plaza at lunchtime on a Tuesday in October.</span> <span style="color: #6E747D">Count the people who stop.</span></p>
+
+      <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+        <button type="button" aria-label="Stop recording" style="width: 64px; height: 64px; border-radius: 50%; background: {{accent}}; border: 0; display: grid; place-items: center"><span style="width: 18px; height: 18px; border-radius: 2px; background: #0E0F11"></span></button>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 240px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px">Recording 00:03.2</span>
+          <div aria-label="Input level" style="display: flex; gap: 2px; height: 12px">
+            <sc-for list="{{meter}}" as="m" hint-placeholder-count="30">
+              <span style="flex: 1; background: {{m}}; border-radius: 1px"></span>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: #A0A6AE">Peak −9 dB · room: quiet · cleaned with your warm preset</span>
+        </div>
+      </div>
+
+      <div style="border: 1px solid #23262C; border-radius: 4px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: #16181C">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Next up</span>
+        <span>¶09 · “Of the three hundred and twelve who walked through in an hour, eleven sat down. Nine of them were smoking.”</span>
+      </div>
+    </section>
+
+    <aside aria-labelledby="tk-h" style="flex: 1 1 320px; min-width: 0; border-left: 1px solid #23262C; background: #16181C; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+      <h2 id="tk-h" style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">¶08 · every take is kept</h2>
+      <sc-for list="{{takes}}" as="t" hint-placeholder-count="3">
+        <div style="border: 1px solid {{t.border}}; border-radius: 4px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: #0E0F11">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-weight: 500">{{t.name}}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{t.meta}}</span>
+            <span style="margin-left: auto; font-size: 11px; color: {{t.tagColor}}">{{t.tag}}</span>
+          </div>
+          <div aria-hidden="true" style="display: flex; align-items: center; gap: 2px; height: 22px">
+            <sc-for list="{{t.wave}}" as="w" hint-placeholder-count="40">
+              <span style="flex: 1; height: {{w}}%; background: #3A3F48; border-radius: 1px"></span>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 12px; font-size: 12px">
+            <a href="#play" style="color: #F2F2F2">Play</a>
+            <a href="#use" style="color: #A0A6AE">{{t.action}}</a>
+          </div>
+        </div>
+      </sc-for>
+      <span style="font-size: 11px; color: #A0A6AE">Replaced takes move to history and stay on disk. Nothing is deleted.</span>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const names = [['Plan', 'Plan.dc.html'], ['Script', 'Script.dc.html'], ['Voice', 'Voice.dc.html'], ['Visuals', 'Visuals.dc.html'], ['Edit', 'Edit.dc.html'], ['Review & publish', 'Publish.dc.html']];
+    const states = ['19 beats', '34 ¶', '22 of 34', 'not started', '', ''];
+    const cur = 2;
+    const stages = names.map(([name, href], i) => ({
+      n: String(i + 1), name, href, state: states[i] || '—',
+      line: i === cur ? accent : 'transparent',
+      numColor: i <= cur ? '#F2F2F2' : '#A0A6AE',
+      stateColor: i < cur ? '#39D98A' : (i === cur ? accent : '#A0A6AE'),
+    }));
+    const p = (n, text, state, kind, on) => ({ n, text, state, row: on ? 'background: #1D2026; color: #F2F2F2' : 'color: #C9CDD3',
+      stateColor: kind === 'mic' ? '#39D98A' : kind === 'rec' ? accent : kind === 'draft' ? '#6FB7FF' : '#A0A6AE' });
+    const meter = [];
+    for (let i = 0; i < 30; i++) meter.push(i < 19 ? '#39D98A' : i < 24 ? '#F2B134' : i < 25 ? accent : '#23262C');
+    const wave = (seed) => { const a = []; for (let i = 0; i < 40; i++) a.push(String(Math.round(20 + 70 * Math.abs(Math.sin(i * 0.7 + seed) * Math.cos(i * 0.23 + seed))))); return a; };
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      stages,
+      meter,
+      paras: [
+        p('05', 'In 1984 this corner held a diner…', 'mic · take 1', 'mic'),
+        p('06', 'The planning commission voted six…', 'mic · take 2', 'mic'),
+        p('07', 'The brochure promised a “living room”…', 'mic · take 1', 'mic'),
+        p('08', 'Here is the plaza at lunchtime…', 'recording', 'rec', true),
+        p('09', 'Of the three hundred and twelve…', 'draft voice', 'draft'),
+        p('10', 'The benches came later…', 'draft voice', 'draft'),
+        p('SP', 'Sponsor · This video was made with Corkbored…', 'draft voice', 'draft'),
+        p('11', 'Inside, the lobby works like a street…', 'not voiced', 'none'),
+        p('12', 'Security logs from 2019 show…', 'not voiced', 'none'),
+      ],
+      takes: [
+        { name: 'Take 3', meta: '00:03.2 · recording', tag: 'live', tagColor: accent, border: accent, wave: wave(1), action: '' },
+        { name: 'Take 2', meta: '00:05.4 · mic · Oct 30', tag: 'in the cut', tagColor: '#39D98A', border: '#23262C', wave: wave(2), action: 'In use' },
+        { name: 'Take 1', meta: '00:05.1 · George (draft)', tag: 'history', tagColor: '#A0A6AE', border: '#23262C', wave: wave(3), action: 'Use this take' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

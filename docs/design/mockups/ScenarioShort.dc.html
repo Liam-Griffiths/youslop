@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corkbored: Visuals for a vertical data Short</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F2F2F2}a:hover{color:#FFFFFF}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #0E0F11; color: #F2F2F2; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="min-height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #23262C; flex-wrap: wrap">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#C58C52"></rect><g transform="rotate(-5 32 34)"><path d="M13 15 H51 V45 L46 51 H13 Z" fill="#FFD94F"></path><path d="M26.5 24 L26.5 42 L40.5 33 Z" fill="#1B1B1F" stroke="#1B1B1F" stroke-width="2.4" stroke-linejoin="round"></path></g><circle cx="32" cy="15.5" r="4.2" fill="{{accent}}"></circle></svg>
+      <span style="font-family: {{displayFont}}; font-stretch: {{displayStretch}}; font-weight: {{displayWeight}}; font-size: 22px; text-transform: uppercase; color: #F2F2F2">Corkbored</span>
+    </a>
+    <span style="color: #A0A6AE">/</span>
+    <span style="font-weight: 500">Rent vs. Wages, 1995–2025</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">Shorts lab · Kinetic type + charts · 9:16 · 0:52</span>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <button type="button" style="background: #1D2026; border: 1px solid #23262C; color: #F2F2F2; border-radius: 4px; padding: 7px 14px; font: inherit; min-height: 34px">Preview all at ¼ size</button>
+      <a href="Edit.dc.html" style="background: {{accent}}; color: #0E0F11; font-weight: 600; border-radius: 4px; padding: 7px 16px; text-decoration: none">Next: edit</a>
+    </div>
+  </header>
+
+  <nav aria-label="Stages" style="display: flex; border-bottom: 1px solid #23262C; padding: 0 20px; overflow-x: auto">
+    <sc-for list="{{stages}}" as="st" hint-placeholder-count="6">
+      <a href="{{st.href}}" style="display: flex; flex-direction: column; gap: 1px; padding: 10px 18px 9px; text-decoration: none; border-bottom: 2px solid {{st.line}}; min-width: 120px">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{st.numColor}}">{{st.n}} · {{st.name}}</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{st.stateColor}}">{{st.state}}</span>
+      </a>
+    </sc-for>
+  </nav>
+
+  <div style="padding: 12px 20px; border-bottom: 1px solid #23262C; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Visual mix</span>
+    <div aria-hidden="true" style="flex: 1; min-width: 260px; max-width: 520px; display: flex; height: 10px; border-radius: 2px; overflow: hidden">
+      <span style="flex: 8; background: #6FB7FF"></span><span style="flex: 5; background: #F2F2F2"></span><span style="flex: 1; background: {{accent}}"></span>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px"><span style="color: #6FB7FF">chart scenes 8</span> · kinetic type 5 · <span style="color: {{accent}}">stock clip 1</span></span>
+    <span style="margin-left: auto; font-size: 12px; color: #A0A6AE">Format rule: a new visual every 2–4 s; every number is drawn, never searched for.</span>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <aside aria-labelledby="b-h" style="flex: 1 1 280px; min-width: 0; border-right: 1px solid #23262C; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+      <h2 id="b-h" style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE; font-weight: 500">Beats · 14 · each a template with data</h2>
+      <sc-for list="{{beats}}" as="b" hint-placeholder-count="10">
+        <a href="#b" style="display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px; padding: 6px; border-radius: 4px; text-decoration: none; align-items: center; {{b.row}}">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{b.t}}</span>
+          <span style="display: flex; flex-direction: column; min-width: 0">
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{b.say}}</span>
+            <span style="font-size: 11px; color: {{b.kindColor}}">{{b.kind}}</span>
+          </span>
+        </a>
+      </sc-for>
+    </aside>
+
+    <section aria-label="Scene" style="flex: 999 1 600px; min-width: 0; padding: 16px 20px; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start">
+      <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px">
+        <span style="font-family: 'JetBrains Mono', monospace; color: #A0A6AE">Beat 7 · 0:21.4 → 0:24.9</span>
+        <div style="position: relative; width: 270px; height: 480px; background: #101114; border: 1px solid #23262C; border-radius: 6px; overflow: hidden">
+          <span style="position: absolute; left: 18px; top: 26px; right: 18px; font-family: Archivo, sans-serif; font-weight: 800; font-stretch: 62%; font-size: 34px; line-height: .95; text-transform: uppercase">Rent rose<br><span style="color: {{accent}}">2.4×</span> faster</span>
+          <svg viewBox="0 0 100 80" width="234" height="190" aria-hidden="true" style="position: absolute; left: 18px; top: 150px">
+            <g stroke="#23262C" stroke-width="0.4"><line x1="0" y1="20" x2="100" y2="20"></line><line x1="0" y1="40" x2="100" y2="40"></line><line x1="0" y1="60" x2="100" y2="60"></line></g>
+            <polyline points="0,72 15,68 30,61 45,52 60,40 75,30 90,18 100,10" fill="none" stroke="{{accent}}" stroke-width="2"></polyline>
+            <polyline points="0,72 15,70 30,67 45,64 60,61 75,58 90,55 100,53" fill="none" stroke="#C9CDD3" stroke-width="2"></polyline>
+            <circle cx="100" cy="10" r="2.2" fill="{{accent}}"></circle><circle cx="100" cy="53" r="2.2" fill="#C9CDD3"></circle>
+          </svg>
+          <span style="position: absolute; left: 18px; top: 350px; font-size: 12px; color: {{accent}}">Median rent +312%</span>
+          <span style="position: absolute; left: 18px; top: 370px; font-size: 12px; color: #C9CDD3">Median wage +128%</span>
+          <span style="position: absolute; left: 18px; right: 18px; bottom: 54px; font-family: Archivo, sans-serif; font-weight: 800; font-stretch: 62%; font-size: 24px; text-transform: uppercase; text-align: center; background: #F2F2F2; color: #0E0F11; padding: 4px 6px">FASTER THAN PAY</span>
+          <span style="position: absolute; left: 18px; bottom: 18px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #A0A6AE">Source: [statistics agency], 1995–2025</span>
+        </div>
+      </div>
+
+      <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="tpl" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Template</label>
+          <select id="tpl" style="background: #1D2026; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit"><option>Line chart · two series · headline</option></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="hl" style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Headline</label>
+          <input id="hl" value="Rent rose 2.4× faster" style="background: #0E0F11; border: 1px solid #23262C; border-radius: 4px; color: #F2F2F2; padding: 7px 10px; font: inherit">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Data · from research source 3 (CSV)</span>
+          <div style="border: 1px solid #23262C; border-radius: 4px; overflow: hidden; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #16181C; padding: 6px 10px; color: #A0A6AE"><span>year</span><span>rent</span><span>wage</span></div>
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 5px 10px; border-top: 1px solid #23262C"><span>{{r.y}}</span><span>{{r.a}}</span><span>{{r.b}}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 12px">
+          <span style="color: #A0A6AE">Draws in</span><span>on “rose”, 0.6 s</span>
+          <span style="color: #A0A6AE">Caption</span><span>kinetic, word by word</span>
+          <span style="color: #A0A6AE">Safe area</span><span style="color: #39D98A">clear of Shorts UI</span>
+          <span style="color: #A0A6AE">Numbers</span><span style="color: #39D98A">match the script</span>
+        </div>
+      </div>
+    </section>
+
+    <aside aria-label="Templates" style="flex: 1 1 300px; min-width: 0; border-left: 1px solid #23262C; background: #16181C; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+      <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">Blocks for 9:16</span>
+      <sc-for list="{{tpls}}" as="t" hint-placeholder-count="6">
+        <div style="display: flex; justify-content: space-between; gap: 10px; border: 1px solid {{t.border}}; border-radius: 4px; padding: 9px 12px; background: #0E0F11">
+          <span style="display: flex; flex-direction: column"><span>{{t.name}}</span><span style="font-size: 11px; color: #A0A6AE">{{t.from}}</span></span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A0A6AE">{{t.used}}</span>
+        </div>
+      </sc-for>
+      <span style="font-size: 12px; color: #A0A6AE">Corkbored blocks: built in, from packs, or your own. Filling one costs no model call.</span>
+    </aside>
+  </div>
+
+  <section aria-label="Sequence" style="border-top: 1px solid #23262C; padding: 12px 20px 18px; display: flex; flex-direction: column; gap: 8px">
+    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #A0A6AE">The Short as it will play · 14 beats in 52 s</span>
+    <div style="display: flex; gap: 3px; height: 34px">
+      <sc-for list="{{seq}}" as="q" hint-placeholder-count="14">
+        <span title="{{q.tip}}" style="flex: {{q.w}}; border-radius: 2px; {{q.look}}; font-size: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap">{{q.label}}</span>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF5A1F","options":["#FF5A1F","#E84A12","#6FB7FF"]},"displayFace":{"editor":"enum","default":"archivo","options":["archivo","grotesk"]},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#FF5A1F';
+    const grotesk = (this.props.displayFace ?? 'archivo') === 'grotesk';
+    const names = [['Plan', 'Plan.dc.html'], ['Script', 'Script.dc.html'], ['Voice', 'Voice.dc.html'], ['Visuals', 'Visuals.dc.html'], ['Edit', 'Edit.dc.html'], ['Review & publish', 'Publish.dc.html']];
+    const states = ['1 claim, 3 numbers', '14 beats · 131 words', 'draft voice · 0:52', '14 of 14', 'not started', ''];
+    const cur = 3;
+    const stages = names.map(([name, href], i) => ({
+      n: String(i + 1), name, href, state: states[i] || '—',
+      line: i === cur ? accent : 'transparent',
+      numColor: i <= cur ? '#F2F2F2' : '#A0A6AE',
+      stateColor: i < cur ? '#39D98A' : (i === cur ? accent : '#A0A6AE'),
+    }));
+    const K = { chart: ['chart scene', '#6FB7FF', 'background: #13202E; color: #6FB7FF', 'C'], type: ['kinetic type', '#F2F2F2', 'background: #F2F2F2; color: #0E0F11', 'T'], clip: ['stock clip', accent, `background: #2A1A12; color: ${accent}`, 'V'] };
+    const b = (t, say, k, on) => ({ t, say, kind: K[k][0], kindColor: K[k][1], row: on ? 'background: #1D2026; color: #F2F2F2' : 'color: #C9CDD3' });
+    const ks = ['type','clip','chart','type','chart','chart','chart','type','chart','chart','type','chart','chart','type'];
+    const ws = [3,4,4,3,4,3,4,3,4,4,3,4,4,5];
+    const seq = ks.map((k, i) => ({ w: ws[i], look: K[k][2] + (i === 6 ? `; outline: 2px solid ${accent}; outline-offset: -2px` : ''), label: K[k][3], tip: `beat ${i + 1} · ${K[k][0]}` }));
+    return {
+      accent,
+      displayFont: grotesk ? "'Space Grotesk', Inter, sans-serif" : "Archivo, Inter, sans-serif",
+      displayStretch: grotesk ? '100%' : '62%',
+      displayWeight: grotesk ? 500 : 800,
+      stages, seq,
+      beats: [
+        b('0:00', 'Your rent is not normal.', 'type'),
+        b('0:02', 'In 1995 a one-bed cost…', 'clip'),
+        b('0:06', '…[amount] a month', 'chart'),
+        b('0:09', 'Today it is [amount]', 'type'),
+        b('0:12', 'Wages over the same years', 'chart'),
+        b('0:17', 'Put them on one chart', 'chart'),
+        b('0:21', 'Rent rose 2.4× faster', 'chart', true),
+        b('0:25', 'than pay', 'type'),
+        b('0:28', 'Where it went fastest', 'chart'),
+        b('0:33', 'Three cities, side by side', 'chart'),
+      ],
+      rows: [ { y: '1995', a: '100', b: '100' }, { y: '2005', a: '171', b: '131' }, { y: '2015', a: '268', b: '182' }, { y: '2025', a: '412', b: '228' } ],
+      tpls: [
+        { name: 'Line chart · two series', from: 'built in', used: '3 here', border: accent },
+        { name: 'Number slam', from: 'built in', used: '4 here', border: '#23262C' },
+        { name: 'Bar race · cities', from: 'Starter pack', used: '1 here', border: '#23262C' },
+        { name: 'Map highlight', from: 'built in', used: '—', border: '#23262C' },
+        { name: 'Receipt card', from: 'my blocks · made once by Claude', used: '—', border: '#23262C' },
+        { name: 'Kinetic captions', from: 'Loudmouth look', used: 'all beats', border: '#23262C' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
