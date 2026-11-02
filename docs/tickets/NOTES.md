@@ -201,5 +201,7 @@ Since the T9.3 shell, about half of `scripts/ui_snapshots.py` runs (68 routes) f
 with `Page.captureScreenshot: CDP pipe failed or timed out` on one random route; a
 rerun passes. Before T9.3 (28 routes) 4 of 4 runs passed. Not fixed by retrying the
 capture, forcing a frame with a resize, or making the top bar / jobs strip static.
-Pages render and log no errors; treat a single timeout as a flake and rerun. Worth
-a proper look (one Chromium per N routes, or `Page.startScreencast`) if it worsens.
+Pages render and log no errors. The harness now restarts Chromium from the stalled
+route (twice at most), which a fresh browser survives. Stalls were most frequent
+while other GPU-heavy apps (Steam, a browser) were running, so the machine's load
+is a likely factor.

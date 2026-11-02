@@ -157,7 +157,7 @@ def capture(base, out):
         cdp.send('Network.enable', session=session)
         cdp.send('Emulation.setDeviceMetricsOverride', {
             'width': 1600, 'height': 1000, 'deviceScaleFactor': 1, 'mobile': False}, session)
-        for route in routes():
+        for route in pending_routes[:]:
             cdp.clear_events()
             cdp.send('Page.navigate', {'url': 'about:blank'}, session)
             cdp.wait_event('Page.loadEventFired')
@@ -186,9 +186,21 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            pending_routes.pop(0)
         cdp.send('Runtime.evaluate', {'expression': 'true'}, session)  # drain earlier events
 
-    _run_cdp({'items': []}, print, size=(1600, 1000), session_action=visit)
+    # Headless Chromium sometimes stops answering Page.captureScreenshot on a
+    # random route (see docs/tickets/NOTES.md). Retrying in the same browser does
+    # not help; a fresh browser does. Restart from the stalled route, twice at most.
+    pending_routes = routes()
+    for restart in range(3):
+        try:
+            _run_cdp({'items': []}, print, size=(1600, 1000), session_action=visit)
+            break
+        except StageError as exc:
+            if restart == 2 or 'captureScreenshot' not in str(exc):
+                raise
+            print(f'{pending_routes[0]}: screenshot stalled; restarting Chromium')
     return rows, errors
 
 

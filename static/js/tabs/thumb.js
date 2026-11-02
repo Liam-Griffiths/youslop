@@ -119,13 +119,14 @@ async function paintThumb() {
   const src = t.image ? `/api/projects/${p.id}/file/${t.image}?v=${t.rendered_at || 0}` : '';
   const credit = t.credit || {};
 
-  $('#tabbody').innerHTML = `
+  ($('#publish-thumb-tools') || $('#tabbody')).innerHTML = `
     <div class="thumb-wrap">
       <div>
+        <button type="button" class="btn sm" onclick="renderThumb()">Draw thumbnail</button>
         <div class="thumb-stage">
           ${t.rendered_at
             ? `<img id="thumbimg" src="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at}">`
-            : `<div class="empty-note" id="thumbimg">Preparing the thumbnail…</div>`}
+            : `<div class="empty-note" id="thumbimg">Choose a picture, then draw the thumbnail.</div>`}
         </div>
         <div class="row" style="margin-top:10px">
           <span class="mono" id="thumbsize" style="color:var(--ink-faint)">1280×720</span>
@@ -197,8 +198,6 @@ async function paintThumb() {
         </div>
       </div>
     </div>`;
-
-  if (!t.rendered_at) renderThumb();
 }
 
 function saveThumb(patch, repaint = false) {
@@ -265,7 +264,7 @@ async function suggestHeadlines() {
     const box = $('#thumbopts');
     if (!box || !options.length) return;
     box.innerHTML = `<div class="head-opts">
-      ${options.map((o, i) => `<button class="head-opt" onclick="useHeadline(${i})">
+      ${options.map((o, i) => `<button class="btn ghost head-opt" onclick="useHeadline(${i})">
           ${o.kicker ? `<span class="mono">${esc(o.kicker)}</span>` : ''}
           <strong>${esc(o.headline)}</strong></button>`).join('')}
     </div>`;

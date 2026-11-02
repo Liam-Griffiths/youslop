@@ -18,7 +18,7 @@ function canonicalHash(hash) {
 function stageTab(stage, subtab) {
   return {plan: 'plan', script: 'script', voice: 'record',
     visuals: ['media', 'cast', 'stage'].includes(subtab) ? subtab : 'media',
-    edit: 'edit', publish: subtab === 'thumb' ? 'thumb' : 'render'}[stage] || 'script';
+    edit: 'edit', publish: 'render'}[stage] || 'script';
 }
 
 function paintAppNav() {

@@ -331,7 +331,7 @@ async function toggleKind(sid) {
 // The strip under a slide only has room for a dozen options at thumbnail size.
 // This opens the full picker: type any term, ask for photos or clips, and judge
 // the hits large. Picking saves straight away, so you can keep searching.
-function openMediaSearch(sid, query = null, onPick = null) {
+function openMediaSearch(sid, query = null, onPick = null, onClose = null) {
   const s = state.project.slides.find((x) => x.id === sid);
   if (!s) return;
   const term = query ?? ((s.queries || [])[0] || s.visual_note || s.title || s.beat || '');
@@ -412,7 +412,7 @@ function openMediaSearch(sid, query = null, onPick = null) {
   };
 
   const onKey = (e) => { if (e.key === 'Escape') close(); };
-  const close = () => { document.removeEventListener('keydown', onKey); wrap.remove(); paintMedia(); };
+  const close = () => { document.removeEventListener('keydown', onKey); wrap.remove(); if (onClose) onClose(); else paintMedia(); };
   document.addEventListener('keydown', onKey);
   wrap.querySelector('#pdone').onclick = close;
   wrap.onclick = (e) => { if (e.target === wrap) close(); };

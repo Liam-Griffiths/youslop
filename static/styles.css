@@ -1196,3 +1196,32 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   .edit-workspace > main { padding-inline: 12px; }
   .edit-workspace .tl-clock { margin-left: 0; }
 }
+
+/* Review & publish: finish rail, work area, and the finished-file output column. */
+.publish-workspace { display: flex; gap: 24px; align-items: flex-start; }
+.finish-list { flex: 0 0 240px; border-right: 1px solid var(--line); padding-right: 20px; position: sticky; top: 12px; }
+.finish-step.btn { width: 100%; display: flex; text-align: left; justify-content: flex-start; gap: 10px; margin-bottom: 6px; white-space: normal; }
+.finish-step small { display: block; color: var(--ink-dim); font-weight: 400; }
+.finish-number { border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; background: var(--raised); flex: none; font-family: var(--mono); }
+.finish-step.done .finish-number { background: var(--good-tint); color: var(--good); }
+.publish-main { flex: 1; min-width: 0; }
+.publish-step { padding: 16px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
+.publish-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; }
+.publish-note span { flex: 1 1 220px; }
+.publish-cards { display: flex; gap: 18px; flex-wrap: wrap; }
+.publish-cards > section { flex: 1 1 380px; min-width: 0; }
+.publish-cards .thumb-wrap { grid-template-columns: 1fr; }
+.publish-chapters { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
+.finished-video { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+.finished-video > div { flex: 999 1 480px; min-width: 0; }
+.finished-video > aside { flex: 1 1 300px; min-width: 0; }
+.finished-video .panel { margin-bottom: 12px; overflow-wrap: anywhere; }
+#publish-progress progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.render-segments { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+.render-segments span { flex: 1 0 8px; height: 18px; background: var(--raised); border-radius: 2px; }
+.render-segments .done { background: var(--good); }
+@media (max-width: 900px) {
+  .publish-workspace { flex-direction: column; }
+  .finish-list { position: static; flex-basis: auto; width: 100%; border-right: 0; padding-right: 0; }
+  .publish-main { width: 100%; }
+}

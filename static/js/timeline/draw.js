@@ -136,7 +136,7 @@ function tlPaintReview() {
   }
 }
 
-function tlFixButtons(row, note, finding = false) {
+function tlFixButtons(row, note, finding = false, context = null) {
   const kind = note.fix?.kind;
   for (const [action, label] of [['fix', 'Fix'], ['dismiss', 'Dismiss'], ['keep', 'Keep']]) {
     const button = document.createElement('button');
@@ -146,14 +146,16 @@ function tlFixButtons(row, note, finding = false) {
     button.onclick = async () => {
       button.disabled = true;
       try {
-        const send = (action) => api(`/api/projects/${TL.pid}/review/${note.id}`, {
+        const send = (action) => api(`/api/projects/${context?.pid || TL.pid}/review/${note.id}`, {
           method: 'POST', body: JSON.stringify({ action, ...(finding ? { finding: true } : {}) }) });
         const result = await send(action);
-        if (action !== 'fix') return await tlRefresh();
+        if (action !== 'fix') return await (context ? context.refresh() : tlRefresh());
         if (result.unsupported) return toast('This fix is not available yet.');
         const proposal = result.proposal;
         if (proposal.search !== undefined) {
-          tlModal(() => openMediaSearch(proposal.slide_id, proposal.search));
+          if (context) openMediaSearch(proposal.slide_id, proposal.search,
+            cid => saveSlide(proposal.slide_id, {chosen_id: cid}), context.refreshProject);
+          else tlModal(() => openMediaSearch(proposal.slide_id, proposal.search));
           return;
         }
         row.querySelector('.tl-fix-proposal')?.remove();
@@ -168,7 +170,7 @@ function tlFixButtons(row, note, finding = false) {
         apply.textContent = 'Apply';
         apply.onclick = async () => {
           apply.disabled = true;
-          try { await send('apply'); await tlRefreshProject(); }
+          try { await send('apply'); await (context ? context.refreshProject() : tlRefreshProject()); }
           catch (e) { toast(e.message, true); apply.disabled = false; }
         };
         panel.append(diff, apply);

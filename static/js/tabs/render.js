@@ -24,7 +24,13 @@ async function paintRender() {
       .then((r) => r.categories).catch(() => []);
   }
 
-  $('#tabbody').innerHTML = `
+  // Both endpoints are read only; never mount Edit or build its narration mix.
+  const [finish, stages] = await Promise.all([
+    api(`/api/projects/${p.id}/timeline`), api(`/api/projects/${p.id}/stages`),
+  ]);
+  if (state.project !== p || state.stage !== 'publish') return;
+  const upload = await uploadPanel(p);
+  const settings = `<details><summary>Look, sound and opening</summary>
     ${kept ? `<div class="panel row">
       <span>${esc(kept)}</span>
       <button class="btn" onclick="doRender(${state.job.kind === 'preview render'})">Resume</button>
@@ -115,9 +121,8 @@ async function paintRender() {
 
     ${openingPanel(p)}
 
-    ${descriptionPanel(p)}
-
     ${presenterPanel(p)}
+    </details>
 
     <div class="panel" style="margin-top:18px">
       <div class="row">
@@ -135,29 +140,55 @@ async function paintRender() {
       </div>
     </div>
 
-    ${p.render && p.render.output ? `
-      <h2>Last render</h2>
+  `;
+  $('#tabbody').innerHTML = publishLayout(p, finish, stages, settings, upload);
+  for (const row of document.querySelectorAll('.publish-note[data-note]')) {
+    const finding = row.dataset.finding === 'true';
+    const notes = finding ? finish.check.findings : finish.review.notes;
+    const note = notes.find(n => n.id === row.dataset.note);
+    if (note && (note.state || 'open') === 'open') tlFixButtons(row, note, finding, {
+      pid: p.id, refresh: () => render(), refreshProject: async () => {
+        state.project = await api(`/api/projects/${p.id}`); await render();
+      },
+    });
+  }
+  const uploadButton = $('#publish-upload button[onclick="doYoutubeUpload()"]');
+  if (uploadButton) uploadButton.disabled = !state.publishReady.upload;
+  await paintThumb();
+  paintPublishProgress();
+}
+
+function finishedVideo(p, finish) {
+  if (!p.render?.output) return '';
+  return `<section class="finished-video" aria-label="Finished video">
+    <div>
+      <h2>Finished video</h2>
       ${videoTag(`/api/projects/${p.id}/file/${p.render.output}`,
                  { scope: 'project', id: p.id, rel: p.render.output },
                  'id="render-output" controls preload="metadata"')}
-      <div class="row" style="margin-top:12px">
-        <span class="mono" style="color:var(--ink-faint)">
-          ${fmtTime(p.render.duration)} · ${p.render.size_mb} MB · ${p.render.slides} slides
-          ${p.render.preview ? '· preview' : ''}</span>
-        <div class="spacer"></div>
-        <button class="btn sm ghost" title="show the file on disk"
-          onclick="revealFile('project','${p.id}','${esc(encodeURIComponent(p.render.output))}')">
-          open the folder</button>
-        <a class="btn sm" href="/api/projects/${p.id}/download">download</a>
-      </div>
-      ${p.render.verify ? p.render.verify.error
-        ? `<div class="mono">Verification unavailable: ${esc(p.render.verify.error)}</div>`
-        : `<details ontoggle="if(this.open) loadRenderVerification(this)">
-          <summary>Verified: ${p.render.verify.p0} P0, ${p.render.verify.p1} P1</summary>
-          <div class="verify-findings mono">Loading findings…</div>
-        </details>` : ''}
-      ${await uploadPanel(p)}` : ''}
-  `;
+
+      ${publishChapters(finish)}
+      <h2>${esc(p.title || p.idea)}</h2><p class="sub">${esc(p.subtitle || '')}</p>
+    </div>
+    <aside aria-label="Output"><div class="panel"><h3>File</h3>
+      <p class="mono">${esc(p.render.output)}</p>
+      <p class="mono">${fmtTime(p.render.duration)} · ${p.render.size_mb} MB · ${p.render.slides} paragraphs
+        ${p.render.preview ? '· preview' : ''}</p>
+      <button type="button" class="btn sm ghost" onclick="revealFile('project','${p.id}','${esc(encodeURIComponent(p.render.output))}')">Show in folder</button>
+      <a class="btn sm" href="/api/projects/${p.id}/download">Download</a>
+    </div><div class="panel"><h3>Verified after render</h3>
+      ${p.render.verify && !p.render.verify.error ? `<details ontoggle="if(this.open) loadRenderVerification(this)">
+        <summary>${p.render.verify.p0} P0 · ${p.render.verify.p1} P1</summary>
+        <div class="verify-findings mono">Loading findings…</div></details>`
+        : `<p class="sub">${esc(p.render.verify?.error || 'Not verified')}</p>`}
+    </div><div class="panel"><h3>YouTube</h3>
+      ${p.render.youtube_url ? `<a href="${esc(p.render.youtube_url)}" target="_blank" rel="noopener">View uploaded video</a>` : 'Not uploaded'}
+    </div><div class="panel"><h3>From here</h3>
+      <button type="button" class="btn sm" onclick="saveProjectFormat()">Save this look as a format</button>
+      <a class="btn sm ghost" href="#/footage">Footage</a>
+      <a class="btn sm ghost" href="#/">All projects</a>
+    </div></aside>
+  </section>`;
 }
 
 async function paintEdit() {
@@ -341,7 +372,7 @@ function stingBlock(role, spec) {
     : 'Plays as the end card comes up and runs while it is on screen.';
   const set = (k, v) => `saveProject({${role}:{${k}:${v}}})`;
   return `
-    <div class="panel" style="background:#0f1116;margin:12px 0 4px">
+    <div class="panel" style="background:var(--panel);margin:12px 0 4px">
       <div class="row" style="margin-bottom:${has ? '14px' : '0'}">
         <div style="flex:1;min-width:200px">
           <strong>${label}</strong>
@@ -525,6 +556,10 @@ async function uploadPanel(p) {
 }
 
 async function doYoutubeUpload() {
+  if (!state.publishReady?.upload || state.publishReady.pid !== state.project.id) return toast('Render and verify the current cut first.', true);
+  const stages = await api(`/api/projects/${state.project.id}/stages`);
+  if (!stages.some(s => s.id === 'publish' && s.status === 'ready'))
+    return toast('The cut has changed. Render and verify it first.', true);
   const u = state.upload;
   if (u.privacy !== 'private'
       && !confirm(`This will be ${u.privacy} on YouTube as soon as it finishes uploading. Continue?`)) {
@@ -560,11 +595,10 @@ function descriptionPanel(p) {
           ${text ? 'write it again' : 'write it'}</button>
         ${text ? `<button class="btn sm" onclick="copyDescription()">copy</button>` : ''}
       </div>
-      ${text ? `
         <textarea id="desc-text" rows="14" style="width:100%;font-family:var(--mono, monospace);font-size:13px"
-          onchange="saveDescription(this.value)">${esc(text)}</textarea>
+          maxlength="5000" onchange="saveDescription(this.value)">${esc(text)}</textarea>
         <div class="row" style="margin-top:6px">
-          <span class="mono" style="color:${chars > 4800 ? 'var(--warn, #e0a050)' : 'var(--ink-faint)'}">
+          <span class="mono" style="color:${chars > 4800 ? 'var(--warn)' : 'var(--ink-faint)'}">
             ${chars.toLocaleString()} / 5,000 characters</span>
           <div class="spacer"></div>
           ${p.recorded_count < p.slides.length ? `<span class="pill warn">${p.slides.length - p.recorded_count}
@@ -573,10 +607,8 @@ function descriptionPanel(p) {
         </div>
         <label class="field" style="margin:10px 0 0"><span>Tags — comma separated</span>
           <input type="text" value="${esc((p.yt_tags || []).join(', '))}"
-            onchange="saveProject({yt_tags:this.value.split(',').map((t)=>t.trim()).filter(Boolean)})"></label>`
-      : `<div class="mono" style="color:var(--ink-faint)">
-          Chapters use the paragraphs you've marked as chapters (two or more), or the
-          script's outline beats if you haven't. Timestamps are taken from the cut itself.</div>`}
+            onchange="saveProject({yt_tags:this.value.split(',').map((t)=>t.trim()).filter(Boolean)})"></label>
+
     </div>`;
 }
 
@@ -595,6 +627,7 @@ async function writeDescription() {
 async function saveDescription(text) {
   await saveProject({ description: text });
   state.upload = null;      // the upload form starts from the saved one
+  render();
 }
 
 async function copyDescription() {
@@ -745,4 +778,94 @@ async function doRender(preview) {
   }
   watchJob(r.job, preview ? 'preview render' : 'render');
   render();
+}
+
+// Review & publish owns one screen. Timeline data is read without mounting its player.
+function publishChapters(finish) {
+  const points = (finish.segments || []).flatMap(s => s.paragraphs || []).filter(q => q.chapter).map(q => ({t: q.start, title: q.chapter}));
+  points.push(...(finish.segments || []).filter(s => s.type === 'sponsor')
+    .map(s => ({t: s.start, title: 'Sponsor'})));
+  return `<nav class="publish-chapters" aria-label="Chapters">${points.sort((a,b) => a.t-b.t)
+    .map(q => `<button type="button" class="btn sm ghost" onclick="seekRenderFinding(${Number(q.t) || 0})">${fmtTime(q.t)} ${esc(q.title)}</button>`).join('')}</nav>`;
+}
+
+function publishLayout(p, finish, stages, settings, upload) {
+  const findings = finish.check?.findings || [];
+  const p0 = findings.filter(f => f.level === 'P0' && (f.state || 'open') === 'open').length;
+  const reviewed = finish.review?.frames_sent !== undefined;
+  const ready = (stages.stages || stages).find(s => s.id === 'publish')?.status === 'ready';
+  const verified = p.render?.verify && !p.render.verify.error && p.render.verify.p0 === 0;
+  state.publishReady = {pid: p.id, upload: !!(ready && verified)};
+  const steps = [
+    ['check', 'Check', `${p0} P0 · ${findings.length} findings`, !p0],
+    ['review', 'Review by Claude', reviewed ? `${finish.review.frames_sent} frames · ${(finish.review.notes || []).length} notes` : 'Not reviewed', reviewed],
+    ['render', 'Render', ready ? 'Rendered' : p.render?.output ? 'Render again' : 'Not rendered', ready],
+    ['thumb', 'Thumbnail', p.thumb?.rendered_at ? 'Drawn' : 'Choose a thumbnail', !!p.thumb?.rendered_at],
+    ['description', 'Description & chapters', p.description ? 'Ready' : 'Needs a description', !!p.description],
+    ['upload', 'Upload', p.render?.youtube_url ? 'Uploaded' : ready && verified ? 'Ready' : 'Waits for a verified render', !!p.render?.youtube_url],
+  ];
+  const first = steps.find(s => !s[3]) || steps.at(-1);
+  const section = (id, title, content) => `<section class="publish-step" id="publish-${id}" aria-label="${title}"><h2>${title}</h2>${content}
+    ${id !== 'upload' ? `<button type="button" class="btn sm ghost" onclick="publishFocus('${steps[steps.findIndex(s=>s[0]===id)+1][0]}')">Next: ${steps[steps.findIndex(s=>s[0]===id)+1][1]}</button>` : ''}</section>`;
+  return `<div class="publish-workspace"><aside class="finish-list" aria-label="Finish steps"><h3>Finish · 6 steps</h3>
+    ${steps.map(([id, label, reason, done], i) => `<button type="button" class="btn ghost finish-step ${done ? 'done' : ''}" onclick="publishFocus('${id}')">
+      <span class="finish-number">${i+1}</span><span>${label}<small>${esc(reason)}</small></span></button>`).join('')}
+    <button type="button" class="btn primary" onclick="publishFocus('${first[0]}')">Next: ${first[1]}</button>
+    </aside><div class="publish-main"><h1>Review & publish</h1>
+    ${ready ? finishedVideo(p, finish) : ''}
+    ${section('check', 'Check', `<div id="publish-findings">${findings.length ? findings.map(f => publishNote(f, true)).join('') : '<p>No check findings.</p>'}</div>
+      <button type="button" class="btn sm" onclick="render()">Run check again</button>`)}
+    ${section('review', 'Review by Claude', `<p class="sub">Targeted review sends up to 12 frames. Runs only when you click.</p>
+      <button type="button" class="btn sm" onclick="publishReview('targeted')">Review the cut</button>
+      <button type="button" class="btn sm ghost" onclick="publishReview('full')">Review every frame</button>
+      ${finish.review?.weakest ? `<p>Weakest shot: ${esc(finish.review.weakest.why)}</p>` : ''}
+      ${(finish.review?.notes || []).filter(n=>n.source !== 'check').map(n => publishNote(n)).join('')}`)}
+    ${section('render', 'Render', `<div id="publish-progress" aria-live="polite"></div>${settings}
+      ${!ready ? finishedVideo(p, finish) : ''}`)}
+    <div class="publish-cards">${section('thumb', 'Thumbnail', '<div id="publish-thumb-tools"></div>')}
+    ${section('description', 'Description & chapters', descriptionPanel(p) + publishChapters(finish) + `<p class="sub">Paid promotion: ${(p.sponsors || []).some(s=>s.enabled && s.paid) ? 'yes' : 'off'} · Sponsor publishing block is not available yet.</p>`)}</div>
+    ${section('upload', 'Upload', `${!ready || !verified ? '<p class="sub">Upload waits for a current full render with no P0 verification findings.</p>' : ''}${upload}`)}
+    </div></div>`;
+}
+
+function publishFocus(id) {
+  const el = $(`#publish-${id}`);
+  if (!el) return;
+  el.scrollIntoView({block: 'start', behavior: 'smooth'});
+  el.tabIndex = -1;
+  el.focus({preventScroll: true});
+}
+
+function publishNote(n, finding = false) {
+  const row = document.createElement('div');
+  row.className = 'publish-note';
+  row.innerHTML = `<button type="button" class="btn sm ghost" onclick="seekRenderFinding(${Number(n.t) || 0})">${fmtTime(n.t || 0)}</button>
+    <span>${esc(n.level || n.severity || '')} · ${esc(n.msg || n.problem || '')} · ${esc(n.state || 'open')}</span>`;
+  if (n.id) { row.dataset.note = n.id; row.dataset.finding = String(finding); }
+  return row.outerHTML;
+}
+
+async function publishReview(mode) {
+  try {
+    const r = await api(`/api/projects/${state.project.id}/review`, {
+      method: 'POST', body: JSON.stringify({mode})});
+    watchJob(r.job, 'vision review');
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+function paintPublishProgress() {
+  const box = $('#publish-progress');
+  if (!box) return;
+  const j = state.job;
+  if (!j || !['render', 'preview render'].includes(j.kind)) {
+    box.textContent = 'Render starts only when you click Render the video.';
+    return;
+  }
+  const matches = (j.lines || []).map(l => l.match(/(?:segments |reused )(\d+)(?:\/| of )(\d+)/)).filter(Boolean);
+  const m = matches.at(-1), done = m ? +m[1] : 0, total = m ? +m[2] : 0;
+  box.innerHTML = `<p class="mono">${esc(j.lines?.at(-1) || 'Starting render…')} · ${esc(j.done || `${j.elapsed || 0}s`)}</p>
+    <progress aria-label="Render progress" ${total ? `value="${done}" max="${total}"` : ''}></progress>
+    <div class="render-segments">${Array.from({length: total}, (_, i) => `<span class="${i < done ? 'done' : ''}" title="Segment ${i+1}"></span>`).join('')}</div>
+    <p class="sub">Finished segments are kept for the next render. Pause is not available yet.</p>`;
 }

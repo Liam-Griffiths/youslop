@@ -129,6 +129,7 @@ function watchJob(id, kind, onDone) {
 
 function paintJob() {
   paintJobsStrip();
+  paintPublishProgress();
   if (!state.job) return;
   const box = $('#joblog');
   if (box) {
@@ -479,7 +480,7 @@ async function render() {
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = state.stage === 'visuals'
     ? [['media', 'Picture picker'], ...(isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
-    : state.stage === 'publish' ? [['render', 'Render'], ['thumb', 'Thumbnail']] : [];
+    : [];
   if (tabs.length && !tabs.some(([id]) => id === state.tab)) state.tab = tabs[0][0];
   // Stage contents are replaced below; give back any slot the last stage borrowed.
   restoreShellInspector();
