@@ -79,7 +79,7 @@ function paintStageBar() {
   bar.innerHTML = STAGES.map(([id, label], i) => {
     const info = stages.find(s => (s.id || s.stage || s.key) === id);
     const active = id === state.stage;
-    return `<a class="stage-link ${active ? 'active' : ''} ${info?.status === 'ready' ? 'done' : ''}"
+    return `<a class="stage-link ${active ? 'active' : ''} ${info?.status === 'ready' ? 'done' : info?.status === 'warn' ? 'warn' : ''}"
       href="#/p/${p.id}/${id}" ${active ? 'aria-current="step"' : ''}>
       <span>${i + 1} · ${label}</span><span class="stage-state">${esc(info?.reason || '—')}</span></a>`;
   }).join('');

@@ -2085,6 +2085,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
                                       group_indices, T, progress)
     if not preview:
         project.status = "rendered"
+    from .stages import render_signature
+    result['stage_signature'] = render_signature(project)
     project.render = result
     progress(f"Done: {result['output']} — {result['duration'] / 60:.1f} min, "
              f"{result['size_mb']} MB")

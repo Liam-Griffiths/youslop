@@ -796,6 +796,13 @@ def get_project(pid: str) -> dict:
     return d
 
 
+@app.get("/api/projects/{pid}/stages")
+def get_stages(pid: str) -> list[dict]:
+    from .stages import readiness_check, stages
+    project = _load(pid)
+    return stages(project, readiness_check(project))
+
+
 @app.post("/api/projects/{pid}/chapters/suggest")
 def suggest_chapters(pid: str, payload: dict = Body(default={})) -> list[dict]:
     with store.lock_for(pid):

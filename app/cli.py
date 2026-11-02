@@ -126,6 +126,12 @@ def cmd_list(args):
         print(f"{p['id']}\t{p['title']}\t{p['format']}\t{p['status']}")
 
 
+def cmd_stages(args):
+    from .stages import readiness_check, stages
+    project = store.load(args.pid)
+    _print_json(stages(project, readiness_check(project)))
+
+
 def cmd_timeline(args):
     result = render.timeline(store.load(args.pid))
     if args.json:
@@ -368,6 +374,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
+    sub.add_parser('stages').add_argument('pid')
     sub.add_parser("verify").add_argument("file")
     command = sub.add_parser('render')
     command.add_argument('pid')
@@ -481,7 +488,7 @@ def main(argv=None):
     try:
         ensure_dirs()
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
-         "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "timeline": cmd_timeline,
+         "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "stages": cmd_stages, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "pack": cmd_pack, "block": cmd_block, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)

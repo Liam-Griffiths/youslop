@@ -113,6 +113,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .stage-link > :first-child { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .stage-link.active { border-color: var(--accent); color: var(--ink); }
 .stage-link.done .stage-state { color: var(--good); }
+.stage-link.warn .stage-state { color: var(--warn, var(--accent)); }
 .stage-link.active .stage-state { color: var(--accent); }
 .app-shell { display: flex; align-items: stretch; min-height: calc(100vh - 84px); padding-bottom: 32px; }
 main { flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto; padding: 24px 22px 60px; }
