@@ -82,9 +82,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: 22px;
-  padding: 0 22px; height: 56px;
+  padding: 0 20px; min-height: 52px; flex-wrap: wrap;
   background: var(--bg);
-  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line-soft);
 }
 .brand {
@@ -96,82 +95,42 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .topbar-right { display: flex; align-items: center; gap: 10px; font-size: 13px;
   color: var(--ink-dim); margin-left: auto; }
 
-/* The hamburger only ever appears once CSS hides the sidebar at narrow
-   widths — see the media query at the bottom of this section. */
-.sidebar-toggle {
-  display: none; flex-direction: column; justify-content: center; gap: 3px;
-  width: 30px; height: 30px; background: none; border: none; cursor: pointer;
-  padding: 0; margin-right: 2px;
+/* --------------------------------------------------------------- studio shell */
+[hidden] { display: none !important; }
+.brand { text-decoration: none; color: var(--ink); flex: none; }
+#app-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+#app-nav a, .shell-more a { color: var(--dim); text-decoration: none; padding: 8px 12px; }
+#app-nav a[aria-current], #app-nav a:hover, .shell-more a:hover { background: var(--raised); color: var(--ink); }
+.shell-more { position: relative; color: var(--dim); }
+.shell-more summary { cursor: pointer; min-height: 34px; display: flex; align-items: center; }
+.shell-more nav { position: absolute; top: 100%; right: 0; width: 200px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; }
+.project-bar { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.project-title { font-weight: 500; overflow-wrap: anywhere; }
+.topbar-right, .project-meta, .stage-state, .jobs-strip { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dim); }
+.project-bar .primary { margin-left: auto; min-height: 34px; text-decoration: none; display: flex; align-items: center; }
+.stage-bar { display: flex; overflow-x: auto; padding: 0 20px; border-bottom: 1px solid var(--line); }
+.stage-link { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; min-width: 120px; padding: 10px 18px 9px; border-bottom: 2px solid transparent; color: var(--dim); text-decoration: none; }
+.stage-link > :first-child { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.stage-link.active { border-color: var(--accent); color: var(--ink); }
+.stage-link.done .stage-state { color: var(--good); }
+.stage-link.active .stage-state { color: var(--accent); }
+.app-shell { display: flex; align-items: stretch; min-height: calc(100vh - 84px); padding-bottom: 32px; }
+main { flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto; padding: 24px 22px 60px; }
+.shell-inspector { flex: 0 0 340px; width: 340px; background: var(--panel); border-left: 1px solid var(--line); padding: 20px; }
+.shell-inspector:empty { display: none; width: 0; flex-basis: 0; padding: 0; border: 0; }
+.project-tools { margin-bottom: 12px; }
+.project-tools .sub { margin: 0; }
+.stage-subtabs a { text-decoration: none; min-height: 34px; }
+.jobs-strip { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; height: 32px; background: var(--panel); border-top: 1px solid var(--line); display: flex; gap: 20px; align-items: center; padding: 0 20px; }
+#jobs-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1100px) {
+  .topbar { gap: 12px; padding-block: 6px; }
+  .app-shell { flex-wrap: wrap; }
+  .shell-inspector { flex: 1 1 100%; width: auto; border-left: 0; border-top: 1px solid var(--line); }
 }
-.sidebar-toggle span { display: block; width: 16px; height: 1.5px; background: var(--ink-dim); }
-
-/* --------------------------------------------------------------- app shell
-   A sidebar for standing navigation (new video, library, channels, settings)
-   beside a main pane that keeps doing exactly what it always did — route()
-   still just swaps #view's innerHTML. The topbar above it stays for brand
-   and whatever contextual status a page wants to show on the right. */
-.app-shell { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
-
-/* Sticky, not stretched: the page itself scrolls (main's content is often
-   several screens tall), and a sidebar that stretched to match it would put
-   its own footer — Settings — far below the fold. Pinning it to the viewport
-   with its own internal scroll is what "sidebar" means in every app this is
-   trying to feel like. */
-.sidebar {
-  flex: 0 0 222px; width: 222px; display: flex; flex-direction: column;
-  padding: 18px 12px; gap: 4px;
-  border-right: 1px solid var(--line-soft);
-  background: rgba(255,255,255,.012);
-  position: sticky; top: 56px;
-  height: calc(100vh - 56px);
-  overflow-y: auto;
-}
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
-.sidebar-link {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px; border-radius: var(--radius);
-  color: var(--ink-dim); text-decoration: none; cursor: pointer;
-  font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  transition: background .12s, color .12s;
-}
-.sidebar-link:hover { background: var(--panel-2); color: var(--ink); }
-.sidebar-link.active { background: var(--panel-2); color: var(--ink); }
-.sidebar-link.active .sidebar-icon { color: var(--cool); }
-.sidebar-icon { width: 16px; text-align: center; flex: none; color: var(--ink-faint); font-size: 13px; }
-.sidebar-link.new { color: var(--cool); font-weight: 600; }
-.sidebar-link.new .sidebar-icon { color: var(--cool); }
-
-.sidebar-section { margin-top: 16px; }
-.sidebar-section-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 10px; margin-bottom: 4px;
-  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.sidebar-add {
-  background: none; border: none; color: var(--ink-faint); cursor: pointer;
-  font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px;
-}
-.sidebar-add:hover { color: var(--ink); background: var(--panel-2); }
-
-.sidebar-spacer { flex: 1; }
-.sidebar-footer { border-top: 1px solid var(--line-soft); padding-top: 10px; margin-top: 8px; }
-
-main {
-  flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto;
-  padding: 28px 22px 120px;
-}
-
-@media (max-width: 860px) {
-  .sidebar-toggle { display: flex; }
-  .app-shell { position: relative; }
-  .sidebar {
-    position: fixed; top: 56px; bottom: 0; left: 0; z-index: 50;
-    background: var(--bg); transform: translateX(-100%);
-    transition: transform .18s ease; box-shadow: 2px 0 20px rgba(0,0,0,.4);
-  }
-  .sidebar.open { transform: translateX(0); }
-}
+/* Status is configuration only (Settings has it); drop it before the nav wraps. */
+@media (max-width: 1279px) { .topbar-right { display: none; } }
+@media (max-width: 800px) { #app-nav { order: 3; width: 100%; } }
 
 /* ------------------------------------------------------------------- type */
 h1, h2, .display, .wordmark {
@@ -188,7 +147,7 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 }
 .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .mono { font-size: 12.5px; }
-.micro, .kicker, .sidebar-section-head, .section-head h2, .mi-k, .tab, label.field > span {
+.micro, .kicker, .section-head h2, .mi-k, .tab, label.field > span {
   font-family: var(--ui); font-size: 11px; text-transform: uppercase;
   letter-spacing: .08em; color: var(--dim);
 }

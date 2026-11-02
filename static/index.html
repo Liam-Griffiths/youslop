@@ -11,46 +11,30 @@
 <body>
 
 <header class="topbar">
-  <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
-    <span></span><span></span><span></span>
-  </button>
-  <div class="brand" onclick="go('#/')" title="Idea in. Episode out.">
+  <a class="brand" href="#/" title="Idea in. Episode out.">
     <img class="mark" src="/static/brand/corkbored-mark.svg" width="24" height="24" alt="">
     <span class="wordmark">Corkbored</span>
-  </div>
+  </a>
+  <nav id="app-nav" aria-label="App screens"></nav>
+  <div id="project-bar" class="project-bar" hidden></div>
+  <details class="shell-more">
+    <summary>More</summary>
+    <nav aria-label="More screens">
+      <a href="#/">Projects</a><a href="#/footage">Footage</a>
+      <a href="#/library">Library</a><a href="#/channels">Channels</a>
+      <a href="#/packs">Packs</a><a href="#/settings">Settings</a>
+      <a href="#/" onclick="goStandalone();return false">Standalone videos</a>
+      <a href="#/guide">How it works</a>
+    </nav>
+  </details>
   <div id="topbar-right" class="topbar-right"></div>
 </header>
-
+<nav id="stage-bar" class="stage-bar" aria-label="Project stages" hidden></nav>
 <div class="app-shell">
-  <aside class="sidebar" id="sidebar">
-    <nav class="sidebar-nav">
-      <a class="sidebar-link new" onclick="go('#/')">
-        <span class="sidebar-icon">＋</span>New video</a>
-      <a class="sidebar-link" data-route="standalone" onclick="goStandalone()"
-         title="Videos that belong to no channel">
-        <span class="sidebar-icon">▷</span>Standalone videos<span class="count" id="solo-count"></span></a>
-      <a class="sidebar-link" href="/footage/export" title="Export logged clips as files">
-        <span class="sidebar-icon">⇩</span>Export clips</a>
-      <a class="sidebar-link" data-route="library" onclick="go('#/library')">
-        <span class="sidebar-icon">▦</span>Library</a>
-    </nav>
-    <div class="sidebar-section">
-      <div class="sidebar-section-head">
-        <span>Channels</span>
-        <button class="sidebar-add" onclick="newChannel()" title="New channel">＋</button>
-      </div>
-      <nav class="sidebar-nav" id="sidebar-channels"></nav>
-    </div>
-    <div class="sidebar-spacer"></div>
-    <nav class="sidebar-nav sidebar-footer">
-      <a class="sidebar-link" data-route="guide" onclick="go('#/guide')">
-        <span class="sidebar-icon">?</span>How it works</a>
-      <a class="sidebar-link" data-route="settings" onclick="go('#/settings')">
-        <span class="sidebar-icon">⚙</span>Settings</a>
-    </nav>
-  </aside>
   <main id="view"></main>
+  <aside id="inspector" class="shell-inspector" aria-label="Inspector"></aside>
 </div>
+<footer class="jobs-strip" aria-live="polite"><span>Jobs</span><span id="jobs-status">Idle</span></footer>
 
 <div id="toast" class="toast"></div>
 
@@ -82,6 +66,7 @@
 <script src="/static/js/timeline/check.js"></script>
 <script src="/static/js/timeline/review.js"></script>
 <script src="/static/js/timeline/variables.js"></script>
+<script src="/static/js/shell.js"></script>
 <script src="/static/js/boot.js"></script>
 </body>
 </html>

@@ -29,7 +29,6 @@ async function paintRender() {
       <span>${esc(kept)}</span>
       <button class="btn" onclick="doRender(${state.job.kind === 'preview render'})">Resume</button>
     </div>` : ''}
-    <div class="panel tl" id="tl"></div>
     <div class="grid-2">
       <div class="panel">
         <h3>Look</h3>
@@ -159,7 +158,11 @@ async function paintRender() {
         </details>` : ''}
       ${await uploadPanel(p)}` : ''}
   `;
-  tlMount();
+}
+
+async function paintEdit() {
+  $('#tabbody').innerHTML = '<div class="panel tl" id="tl"></div>';
+  await tlMount();
 }
 
 async function loadRenderVerification(el) {

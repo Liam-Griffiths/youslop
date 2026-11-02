@@ -20,15 +20,19 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[1]
 FORMATS = ('kenburns', 'essay', 'loudmouth', 'stage')
+PROJECT_STAGES = ('plan', 'script', 'voice', 'visuals', 'edit', 'publish')
 PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 
 
 def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
-    result = ['#/', '#/library', '#/settings', '#/guide',
-              '#/c/csnapshot', '#/c/csnapshot/setup']
+    result = ['#/', '#/library', '#/settings', '#/guide', '#/projects',
+              '#/footage', '#/packs', '#/channels', '#/channels/csnapshot',
+              '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
-        tabs = PROJECT_TABS + (('cast', 'stage') if fmt == 'stage' else ())
+        tabs = tuple(dict.fromkeys(PROJECT_STAGES + PROJECT_TABS)) + (
+            ('cast', 'stage', 'visuals/cast', 'visuals/stage') if fmt == 'stage' else ())
+        tabs += ('visuals/media', 'publish/render', 'publish/thumb')
         result.extend(f'#/p/psnap{fmt}/{tab}' for tab in tabs)
     return result
 

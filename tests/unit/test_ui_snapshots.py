@@ -3,26 +3,26 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ui_snapshots import FORMATS, console_error, output_path, routes, seed
+from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_path, routes, seed
 
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 28
+    assert len(paths) == len(set(paths)) == 68
     assert paths[:4] == ['#/', '#/library', '#/settings', '#/guide']
     assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
     for fmt in FORMATS:
-        assert {p.rsplit('/', 1)[1] for p in paths if p.startswith(f'#/p/psnap{fmt}/')} == (
-            {'script', 'media', 'record', 'thumb', 'render'} |
-            ({'cast', 'stage'} if fmt == 'stage' else set()))
-    source = (Path(__file__).resolve().parents[2] / 'static/js/core.js').read_text()
-    for tab in ('script', 'media', 'record', 'thumb', 'render', 'cast', 'stage'):
-        assert f"['{tab}'," in source
+        expected = set(PROJECT_STAGES) | {'media', 'record', 'thumb', 'render',
+            'visuals/media', 'publish/render', 'publish/thumb'}
+        if fmt == 'stage':
+            expected |= {'cast', 'stage', 'visuals/cast', 'visuals/stage'}
+        assert {p.removeprefix(f'#/p/psnap{fmt}/') for p in paths
+                if p.startswith(f'#/p/psnap{fmt}/')} == expected
 
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 28
+    assert len(set(paths)) == 68
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)

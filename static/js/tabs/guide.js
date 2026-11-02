@@ -103,8 +103,8 @@ function renderGuide() {
     <div class="panel guide-before">
       <p>A channel is a series. Every video in it shares the same
         opening slate, colours and defaults, so they look like they belong together.</p>
-      <p>Make one with <b>new channel</b> on the New video page or the <b>＋</b> in the
-        sidebar, then open it to set up its slate, music and the faces in its opening
+      <p>Make one with <b>New channel</b> on the Channels screen,
+        then open it to set up its slate, music and the faces in its opening
         titles. Pick the channel when starting a video and it picks up all of that.</p>
       <p>A video doesn't need a channel. Leave it as a
         <i>standalone video</i> to just make one.</p>

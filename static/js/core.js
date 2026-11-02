@@ -69,47 +69,8 @@ function goStandalone() {
   go('#/');
 }
 
-// ------------------------------------------------------------------ sidebar
-// The channel list is fetched once and kept in state.channels — every page
-// that already loads channels (home, a project, a channel) refreshes it, and
-// paintSidebar() just reads whatever is there, so the sidebar never needs a
-// request of its own and never goes stale by more than one navigation.
-function toggleSidebar() {
-  $('#sidebar').classList.toggle('open');
-}
-
-function paintSidebar() {
-  const hash = location.hash || '#/';
-  const chanId = (hash.match(/^#\/c\/([^/]+)/) || [])[1];
-  const onLibrary = hash === '#/library';
-  const onSettings = hash === '#/settings';
-  const onGuide = hash === '#/guide';
-
-  $('.sidebar-link[data-route="guide"]')?.classList.toggle('active', onGuide);
-  $('.sidebar-link[data-route="library"]')?.classList.toggle('active', onLibrary);
-  $('.sidebar-link[data-route="settings"]')?.classList.toggle('active', onSettings);
-
-  // Videos in no channel have no page of their own to link to, so the
-  // sidebar points at their section on the home page. The count comes from
-  // whatever the last projects fetch saw — it is a signpost, not a total.
-  const solo = $('#solo-count');
-  if (solo) solo.textContent = state.soloCount != null ? state.soloCount : '';
-
-  const box = $('#sidebar-channels');
-  if (!box) return;
-  const chans = state.channels || [];
-  box.innerHTML = chans.length
-    ? chans.map((c) => `
-        <a class="sidebar-link ${c.id === chanId ? 'active' : ''}"
-           onclick="go('#/c/${c.id}')" title="${esc(c.name)}">
-          <span class="sidebar-icon">◆</span>${esc(c.name)}</a>`).join('')
-    : `<span class="sidebar-link" style="color:var(--ink-faint);cursor:default">
-         no channels yet</span>`;
-
-  // A narrow-viewport sidebar is an overlay the user opened on purpose;
-  // close it once they've actually gone somewhere.
-  if (window.innerWidth <= 860) $('#sidebar').classList.remove('open');
-}
+// Existing views call this after refreshing the cached channel list.
+function paintSidebar() { paintAppNav(); }
 
 // Channels change rarely enough that one fetch per route is wasted work —
 // cached here and refreshed only when a page already needed the list anyway
@@ -136,6 +97,7 @@ const loadingLine = () => 'Loading…';
 // ---------------------------------------------------------------------- jobs
 function watchJob(id, kind, onDone) {
   state.job = { id, kind, since: 0, lines: [], done: null, tagline: 'Working…' };
+  paintJobsStrip();
   clearInterval(state.poll);
   const step = async () => {
     let j;
@@ -149,6 +111,7 @@ function watchJob(id, kind, onDone) {
     if (j.state !== 'running') {
       clearInterval(state.poll);
       state.job.done = j.state;
+      paintJobsStrip();
       if (j.state === 'error') toast(j.error || 'Job failed', true);
       if (state.project) {
         state.project = await api(`/api/projects/${state.project.id}`);
@@ -165,6 +128,7 @@ function watchJob(id, kind, onDone) {
 }
 
 function paintJob() {
+  paintJobsStrip();
   if (!state.job) return;
   const box = $('#joblog');
   if (box) {
@@ -199,36 +163,48 @@ function jobPanel() {
 
 // ------------------------------------------------------------------ routing
 async function route() {
-  const hash = location.hash || '#/';
-  const proj = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?/);
-  const chan = hash.match(/^#\/c\/([^/]+)(?:\/(\w+))?/);
+  const hash = canonicalHash(location.hash || '#/');
+  if (hash !== (location.hash || '#/')) { location.replace(hash); return; }
+  resetShell();
+  const proj = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(\w+))?/);
+  const chan = hash.match(/^#\/channels\/([^/]+)(?:\/(\w+))?/);
   const lib = hash === '#/library';
   const settingsPage = hash === '#/settings';
   const guidePage = hash === '#/guide';
   stopStream();
-  if (typeof tlPause === 'function' && !(proj && proj[2] === 'render')) tlPause();
+  if (typeof tlPause === 'function' && !(proj && proj[2] === 'edit')) tlPause();
   // Every format picker (home, channel, project) paints from this, so it is
   // loaded once here rather than awaited in three places.
   await ensureSlideStyles();
 
-  if (guidePage) {
+  if (hash === '#/channels') {
+    state.project = null; state.channel = null;
+    await ensureChannelsLoaded();
+    paintChannelsIndex();
+  } else if (hash === '#/packs') {
+    state.project = null; state.channel = null;
+    view.innerHTML = '<h1>Packs</h1><div id="packs-screen"></div>';
+    await renderPacks();
+  } else if (hash.startsWith('#/footage')) {
+    state.project = null; state.channel = null;
+    view.innerHTML = '<h1>Footage</h1><p class="sub">Footage logging is coming in Phase 11.</p><a class="btn" href="/footage/export">Export logged clips</a>';
+  } else if (guidePage) {
     state.project = null;
     state.channel = null;
-    state.job = null;
     renderGuide();
   } else if (settingsPage) {
     state.project = null;
     state.channel = null;
-    state.job = null;
     await renderSettings();
   } else if (lib) {
     state.project = null;
     state.channel = null;
-    state.job = null;
     await renderLibrary();
   } else if (proj) {
     state.channel = null;
-    state.tab = proj[2] || '';          // render() picks the default: Cast first for a 3D explainer
+    state.stage = proj[2] || 'plan';
+    state.subtab = proj[3] || '';
+    state.tab = stageTab(state.stage, state.subtab);
     if (!state.thumbStyles) {
       try { state.thumbStyles = await api('/api/thumbs/templates'); }
       catch { state.thumbStyles = []; }
@@ -253,7 +229,8 @@ async function route() {
       const live = (state.project.jobs || [])[0];
       if (live) watchJob(live.id, live.kind);
     }
-    render();
+    await render();
+    await loadStageStates(state.project);
   } else if (chan) {
     state.project = null;
     state.channelTab = chan[2] === 'setup' ? 'setup' : 'videos';
@@ -285,10 +262,12 @@ async function route() {
   } else {
     state.project = null;
     state.channel = null;
-    state.job = null;
     await renderHome();
   }
   await ensureChannelsLoaded();
+  paintJobsStrip();
+  if (state.project) paintProjectShell();
+  else await loadShellStatus();
 }
 
 // ------------------------------------------------------------ focal picker
@@ -493,52 +472,33 @@ async function deleteSlideStyle(id) {
 }
 
 // ----------------------------------------------------------------- project
-function render() {
+async function render() {
   const p = state.project;
   if (!p) return;
-  const recorded = p.recorded_count, total = p.slides.length;
-  $('#topbar-right').innerHTML =
-    `<span class="mono">${fmtTime(p.recorded_seconds || p.est_seconds)}</span>
-     <span class="pill ${p.status === 'rendered' ? 'on' : ''}">${esc(p.status)}</span>`;
-
-  // A 3D explainer adds a Cast tab — the models it can put on stage — beside
-  // Media, which it still uses for the pictures and slides between 3D shots
-  // (docs/3d-explainer.md). Other formats never see it.
-  const stage = isStage(p.style.format);
-  if (!state.tab) state.tab = stage ? 'cast' : 'script';
-  if (!stage && (state.tab === 'cast' || state.tab === 'stage')) state.tab = 'script';
-  // Story, then cast, then words: a 3D explainer's Cast tab comes first.
-  const tabs = [
-    ...(stage ? [['cast', 'Cast', p.cast_summary ? `${p.cast_summary.ready}/${p.cast_summary.subjects - p.cast_summary.photos}` : (p.cast || []).length]] : []),
-    ['script', 'Script', total],
-    ...(stage ? [['stage', 'Stage', p.stage ? `${p.stage.counts.ok}/${p.stage.total}` : '']] : []),
-    ['media', 'Media', p.slides.filter((s) => s.chosen_id).length],
-    ['record', 'Record', `${recorded}/${total}`],
-    ['thumb', 'Thumbnail', p.thumb && p.thumb.image ? '✓' : ''],
-    ['render', 'Render', ''],
-  ];
-
+  state.stage = state.stage || 'plan';
+  state.tab = stageTab(state.stage, state.subtab);
+  const tabs = state.stage === 'visuals'
+    ? [['media', 'Media'], ...(isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
+    : state.stage === 'publish' ? [['render', 'Render'], ['thumb', 'Thumbnail']] : [];
+  if (tabs.length && !tabs.some(([id]) => id === state.tab)) state.tab = tabs[0][0];
+  paintProjectShell();
   view.innerHTML = `
-    <div class="row" style="align-items:flex-start">
-      <div style="flex:1;min-width:0">
-        <h1>${esc(p.title || p.idea.slice(0, 60))}</h1>
-        <p class="sub">${esc(p.subtitle || p.outline.thesis || '')}</p>
-      </div>
+    <div class="row project-tools">
+      <span class="sub">${esc(p.subtitle || p.outline.thesis || '')}</span>
+      <div class="spacer"></div>
       <button class="btn ghost sm" onclick="saveProjectFile()"
         title="everything in this video as one file, to open on another computer">save project file…</button>
-      <button class="btn ghost sm" onclick="go('#/')">all videos</button>
     </div>
-    <div class="tabs">
-      ${tabs.map(([id, label, count]) => `<div class="tab ${state.tab === id ? 'active' : ''}"
-        onclick="go('#/p/${p.id}/${id}')">${label}<span class="count">${count}</span></div>`).join('')}
-    </div>
-    ${jobPanel()}
-    <div id="tabbody"></div>`;
-
-  ({ script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage, record: paintRecord,
-     thumb: paintThumb, render: paintRender }[state.tab] || paintScript)();
+    ${tabs.length > 1 ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
+      ${tabs.map(([id, label]) => `<a class="tab ${state.tab === id ? 'active' : ''}"
+        ${state.tab === id ? 'aria-current="page"' : ''}
+        href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}
+    </nav>` : ''}
+    ${jobPanel()}<div id="tabbody"></div>`;
+  await ({ script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+    record: paintRecord, thumb: paintThumb, render: paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
-  if (state.tab !== 'render' && typeof tlPause === 'function') tlPause();
+  if (state.stage !== 'edit' && typeof tlPause === 'function') tlPause();
   focusPendingSlide();
 }
 

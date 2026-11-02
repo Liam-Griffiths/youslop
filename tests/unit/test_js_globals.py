@@ -57,5 +57,6 @@ def test_classic_script_dependency_order():
     assert sources[-1] == "boot.js"
     timeline = sources.index("timeline/core.js")
     assert all(source.startswith("tabs/") for source in sources[1:timeline])
-    assert all(source.startswith("timeline/") for source in sources[timeline:-1])
+    assert sources[-2] == "shell.js"
+    assert all(source.startswith("timeline/") for source in sources[timeline:-2])
     assert next(i for i, tag in enumerate(tags) if tag.get("src") == "/static/vendor/leaflet/leaflet.js") < tags.index(scripts[0])
