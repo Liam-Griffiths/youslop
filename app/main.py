@@ -1433,7 +1433,8 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     if kind == "reaction" and not reactions.available():
         raise HTTPException(400, "No Giphy key configured — add one in Settings "
                             "to search reaction GIFs.")
-    found = reactions.search(query) if kind == "reaction" else media.search([query], kind)
+    found = (library.search(query, kind) if payload.get("source") == "library" else
+             reactions.search(query) if kind == "reaction" else media.search([query], kind))
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)

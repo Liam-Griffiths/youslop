@@ -633,7 +633,7 @@ async function paintStage() {
     return [...new Set([...Object.values(named), ...(m.parts || []).filter((q) => !(q.node in named)).map((q) => q.label),
       ...(m.regions || []).map((r) => r.label)].filter(Boolean))];
   };
-  const thumb = (s, j, at) => `<img src="/api/projects/${p.id}/file/stage/thumbs/${s.id}_${j}.jpg?v=${Math.round(at || 0)}"
+  const thumb = (s, j, at) => `<img loading="lazy" src="/api/projects/${p.id}/file/stage/thumbs/${s.id}_${j}.jpg?v=${Math.round(at || 0)}"
       style="width:128px;height:72px;object-fit:cover;border-radius:4px;background:#111" onerror="this.style.visibility='hidden'">`;
   body.innerHTML = `
     <div class="card" style="margin-bottom:18px">

@@ -478,7 +478,7 @@ async function render() {
   state.stage = state.stage || 'plan';
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = state.stage === 'visuals'
-    ? [['media', 'Media'], ...(isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
+    ? [['media', 'Picture picker'], ...(isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
     : state.stage === 'publish' ? [['render', 'Render'], ['thumb', 'Thumbnail']] : [];
   if (tabs.length && !tabs.some(([id]) => id === state.tab)) state.tab = tabs[0][0];
   paintProjectShell();
@@ -489,7 +489,7 @@ async function render() {
       <button class="btn ghost sm" onclick="saveProjectFile()"
         title="everything in this video as one file, to open on another computer">save project file…</button>
     </div>
-    ${tabs.length > 1 ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
+    ${tabs.length > 1 && (state.stage !== 'visuals' || state.tab !== 'media') ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
       ${tabs.map(([id, label]) => `<a class="tab ${state.tab === id ? 'active' : ''}"
         ${state.tab === id ? 'aria-current="page"' : ''}
         href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}

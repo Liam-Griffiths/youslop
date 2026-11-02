@@ -1,0 +1,161 @@
+/* One selected picture at a time. Never generate thumbnails or previews on load. */
+function visualKind(s) {
+  const c = (s.candidates || []).find(c => c.id === s.chosen_id);
+  if (s.on_camera) return 'camera';
+  if (isStage(state.project.style.format) && /^3D:/i.test(s.visual_note || '')) return '3D';
+  if (isCut(state.project.style.format) || state.project.style.format === 'board') return 'drawn';
+  if (c?.provider === 'library') return 'library';
+  if (['diagram', 'custom', 'block', 'scene'].includes(c?.provider)) return 'scene';
+  return c ? 'archive' : 'unpicked';
+}
+
+function visualSources(p) {
+  if (p.delivery === 'on_camera' || p.slides.some(s => s.on_camera))
+    return ['Layout', 'Footage', 'Screens', 'Library', 'Scenes', 'Archive', 'Upload'];
+  if (isStage(p.style.format)) return ['3D', 'Archive', 'Footage', 'Library', 'Scenes', 'Upload'];
+  if (p.aspect === 'portrait') return ['Blocks', 'Archive', 'Library', 'Scenes', 'Upload'];
+  if (p.style.format === 'kenburns') return ['Footage', 'Archive', 'Library', 'Scenes', 'Upload'];
+  return ['Archive', 'Library', 'Scenes', 'Upload'];
+}
+
+function selectVisual(sid) {
+  state.visualSelection = {pid: state.project.id, sid};
+  paintMedia();
+}
+
+function selectVisualSource(source) {
+  state.visualSource = {pid: state.project.id, source};
+  paintMedia();
+}
+
+function paintMedia() {
+  const p = state.project, slides = p.slides;
+  const runs = p.picture_runs || slides.map(s => [s.id]);
+  const byId = Object.fromEntries(slides.map((s, i) => [s.id, {s, i}]));
+  const groups = runs.filter(r => byId[r[0]]).map(r => ({
+    ids: r, ...byId[r[0]], seconds: r.reduce((n, id) => n + (byId[id]?.s.take?.duration || 0), 0),
+  }));
+  const requested = state.focusSlide || (state.visualSelection?.pid === p.id && state.visualSelection.sid);
+  const group = groups.find(g => g.ids.includes(requested)) || groups[0];
+  const tabs = visualSources(p);
+  const source = state.visualSource?.pid === p.id && tabs.includes(state.visualSource.source)
+    ? state.visualSource.source : tabs[0];
+  const kinds = {};
+  groups.forEach(g => { const k = visualKind(g.s); kinds[k] = (kinds[k] || 0) + g.seconds; });
+  // Unvoiced projects have no real durations: show counts, never invented timings.
+  const total = groups.reduce((n,g) => n + g.seconds, 0);
+  if (!total) groups.forEach(g => { const k = visualKind(g.s); kinds[k] = (kinds[k] || 0) + 1; });
+  const denominator = total || groups.length || 1;
+  const rule = isStage(p.style.format) ? '3D for how it works, archive for who and when, scenes for numbers.'
+    : tabs[0] === 'Layout' ? 'Face for opinion, cutaway when you describe a place or a thing.'
+    : p.aspect === 'portrait' ? 'Draw numbers with blocks; keep text clear of the Shorts UI.'
+    : p.style.format === 'kenburns' ? 'Footage for what you shot, archive for context, scenes for numbers.'
+    : 'Use the format’s drawing; archive for context, scenes for numbers.';
+  $('#tabbody').innerHTML = `<div class="visuals-workspace">
+    <div class="visual-mix"><span class="micro-label">Visual mix</span>
+      <div class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) =>
+        `<span class="visual-kind" data-kind="${k}" style="flex:${n}"></span>`).join('')}</div>
+      <span class="mono">${Object.entries(kinds).map(([k,n]) => `${k} ${Math.round(100*n/denominator)}%`).join(' · ')}${total ? ' · by voiced duration' : ' · by group count (unvoiced)'}</span>
+      <span class="visual-rule">Format rule: ${rule}</span>
+    </div>
+    <div class="visual-grid">
+      <aside class="visual-groups" aria-label="Picture groups"><h2 class="micro-label">Picture groups · ${groups.length}</h2>
+        ${groups.map(g => {
+          const c = g.s.candidates.find(c => c.id === g.s.chosen_id);
+          return `<button type="button" class="btn ghost visual-group" data-sid="${g.s.id}"
+            aria-pressed="${g === group}" onclick="selectVisual('${g.s.id}')">
+            <span class="mono">${String(g.i + 1).padStart(2,'0')}</span>
+            ${c ? `<img src="${thumbUrl(c)}" loading="lazy" alt="">` : '<span class="visual-thumb-empty"></span>'}
+            <span class="visual-group-text">${esc(g.s.title || g.s.narration || 'Untitled')}
+              <small class="mono">¶${g.i+1}${g.ids.length > 1 ? '–'+(byId[g.ids.at(-1)].i+1) : ''} · ${g.seconds ? fmtTime(g.seconds) : 'unvoiced'}</small></span>
+            <span class="visual-chip visual-kind" data-kind="${visualKind(g.s)}">${visualKind(g.s)}</span>
+          </button>`;
+        }).join('') || '<p>Write the script to choose pictures.</p>'}
+        <label class="field"><span>Picture every</span><select onchange="savePictureEvery(+this.value)">
+          ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
+        <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
+        ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
+        ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
+      </aside>
+      <section class="visual-preview" aria-label="Selected picture">${group ? visualPreview(group, byId) : ''}</section>
+      <aside class="visual-sources" aria-label="Picture sources"><div class="visual-source-tabs" role="group" aria-label="Choose picture source">
+        ${tabs.map(t => `<button type="button" class="btn sm ghost" aria-pressed="${t === source}" onclick="selectVisualSource('${t}')">${t}</button>`).join('')}</div>
+        <div class="visual-source-body">${group ? visualSourcePanel(group.s, source) : ''}</div>
+      </aside>
+    </div>
+    <section class="visual-sequence" aria-label="Sequence"><span class="micro-label">The video as it will play${total ? '' : ' · durations available after voice'}</span>
+      <div>${groups.map(g => `<button type="button" class="btn sm visual-kind" data-kind="${visualKind(g.s)}" style="flex:${total ? Math.max(g.seconds,.01) : 1}"
+        aria-label="Paragraph ${g.i+1}: ${visualKind(g.s)}" aria-pressed="${g === group}" onclick="selectVisual('${g.s.id}')">${g.i+1}</button>`).join('')}</div>
+    </section></div>`;
+}
+
+function visualPreview(g, byId) {
+  const p = state.project, s = g.s, c = s.candidates.find(c => c.id === s.chosen_id);
+  const drawn = isCut(p.style.format) || p.style.format === 'board';
+  return `<div class="mono">Picture ${g.i+1} · ¶${g.ids.map(id => byId[id].i+1).join(', ')} · ${g.seconds ? fmtTime(g.seconds)+' from the takes' : 'unvoiced'}</div>
+    <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>
+    <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : ''}">
+      ${c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
+        style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
+        : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : visualKind(s) === '3D' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
+    </div>
+    <div class="row"><button type="button" class="btn sm" onclick="previewBit('${s.id}')">Preview this bit · ¼ size</button>
+      ${c ? `<button type="button" class="btn sm ghost" onclick="setSlideFocal('${s.id}','${c.id}')">${c.focal?.length === 2 ? 'Focus set · change' : 'Set focus point'}</button>
+        ${c.kind === 'video' ? `<button type="button" class="btn sm ghost" onclick="playClipFor('${s.id}','${c.id}')">Play source clip</button>` : ''}` : ''}
+      <label><input type="checkbox" ${s.locked_media ? 'checked' : ''} onchange="saveSlide('${s.id}',{locked_media:this.checked})"> Keep on re-plan</label></div>
+    ${c ? `<p class="mono">${esc(c.provider)} · ${c.width || '?'}×${c.height || '?'} · ${esc(c.license || '')}
+      ${c.source_page ? `<a href="${esc(c.source_page)}" target="_blank" rel="noopener">Source</a>` : ''}</p>` : ''}
+    <p>${esc(g.ids.map(id => byId[id].s.narration).join(' '))}</p>
+    <p class="sub">${esc(s.visual_note || '')}</p>
+    ${g.i > 0 ? `<button type="button" class="btn sm ghost" onclick="setPictureMode('${s.id}','${s.picture_mode === 'new' ? 'auto' : 'hold'}')">${s.picture_mode === 'new' ? 'Always its own · use automatic grouping' : 'Hold the last picture'}</button>` : ''}
+    ${g.ids.slice(1).map(id => `<div class="row"><span class="mono">¶${byId[id].i+1} holds this picture</span>
+      <button type="button" class="btn sm ghost" onclick="setPictureMode('${id}','new')">Give this one its own picture</button>
+      ${p.style.format === 'board' ? `<button type="button" class="btn sm ghost" onclick="openBoardEditor('${id}')">Edit its board</button>` : ''}
+      ${isCut(p.style.format) ? `<button type="button" class="btn sm ghost" onclick="openCueEditor('${id}')">Edit its cues</button>` : ''}</div>`).join('')}`;
+}
+
+function visualSourcePanel(s, source) {
+  const p = state.project;
+  if (source === 'Footage') return `<p>Footage matching and in/out trim will be available with the footage picker (T11.6).</p><a class="btn sm ghost" href="#/footage">Open footage logger</a>`;
+  if (source === '3D') return `<h3>Cast and shot options</h3>${(p.cast || []).map(c => `<p>${esc(c.subject)} · ${esc(c.mode)}</p>`).join('')}
+    <a class="btn sm" href="#/p/${p.id}/visuals/cast">Edit cast and named parts</a>
+    <a class="btn sm" href="#/p/${p.id}/visuals/stage">Shots and solver checks</a>
+    ${s.shot?.intent ? `<button type="button" class="btn sm ghost" onclick="openShot('${s.id}')">Open this shot</button>` : ''}`;
+  if (source === 'Layout') return `<h3>Camera layouts and jump cuts</h3><p>Full face, split, cutaway over voice and picture in picture are edited on the camera lanes. Removed parts stay in the take.</p>
+    <button type="button" class="btn sm" onclick="openVisualEdit('${s.id}')">Edit this take’s layout and cutaways</button>`;
+  if (['Scenes','Blocks','Screens'].includes(source)) return `<h3>${source}</h3>
+    ${/\d/.test(s.narration) ? '<p class="mono">Number in narration: use a scene or block to draw it.</p>' : ''}
+    <button type="button" class="btn sm ghost" onclick="openDiagramEditor('${s.id}')">Draw a diagram</button>
+    <button type="button" class="btn sm ghost" onclick="openCustomEditor('${s.id}')">Design a slide</button>
+    <button type="button" class="btn sm ghost" onclick="openVisualEdit('${s.id}')">Open Edit · variables and timeline</button>
+    <a class="btn sm ghost" href="#/library">Reusable blocks in Library</a>
+    ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
+    ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
+  if (source === 'Upload') return `<label class="field"><span>Upload a picture or clip</span><input type="file" accept="image/*,video/*" onchange="uploadMedia('${s.id}',this.files[0])"></label>`;
+  const candidates = s.candidates.filter(c => source === 'Library' ? c.provider === 'library' : c.provider !== 'library');
+  return `<label class="field"><span>Search ${source.toLowerCase()}</span><input type="search" id="visual-query" value="${esc(s.queries?.[0] || s.visual_note || s.title || '')}" onkeydown="if(event.key==='Enter') searchVisual('${s.id}','${source}')"></label>
+    <button type="button" class="btn sm" onclick="searchVisual('${s.id}','${source}')">Search</button>
+    <button type="button" class="btn sm ghost" onclick="toggleKind('${s.id}')">Want ${s.prefer_kind === 'image' ? 'a clip' : 'a photo'}</button>
+    <button type="button" class="btn sm ghost" onclick="openMediaSearch('${s.id}')">Full search picker</button>
+    <button type="button" class="btn sm ghost" onclick="openMapPicker('${s.id}')">Get a map</button>
+    <div id="visual-search-status" role="status"></div><div class="visual-results">${candidates.map(c => `<button type="button" class="btn ghost" aria-pressed="${c.id === s.chosen_id}" onclick="choose('${s.id}','${c.id}')">
+      <img src="${thumbUrl(c)}" loading="lazy" alt=""><span>${esc(c.title || c.provider)}</span><small class="mono">${esc(c.provider)} · ${c.kind === 'video' ? 'clip' : 'photo'}</small></button>`).join('') || '<p>No gathered matches. Search to find options.</p>'}</div>`;
+}
+
+async function searchVisual(sid, source) {
+  const p = state.project, query = $('#visual-query').value.trim();
+  if (!query) return;
+  const status = $('#visual-search-status');
+  status.textContent = `Searching ${source.toLowerCase()}…`;
+  try {
+    const r = await api(`/api/projects/${p.id}/slides/${sid}/search`, {method:'POST', body:JSON.stringify({query,
+      kind:p.slides.find(s => s.id === sid).prefer_kind, source:source.toLowerCase()})});
+    Object.assign(p.slides.find(s => s.id === sid), r.slide);
+    if (state.project === p && state.tab === 'media') paintMedia();
+  } catch(e) { status.textContent = e.message; }
+}
+
+function openVisualEdit(sid) {
+  state.focusSlide = sid;
+  location.hash = `#/p/${state.project.id}/edit`;
+}
