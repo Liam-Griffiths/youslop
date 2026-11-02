@@ -14,6 +14,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 ~09:40 PST:** window reset at 08:24; T12.3 batch 4 (31 core blocks, contact sheet `docs/blocks/core-v1.png`), T5.4, T5.5 and T6.3 done. Codex 5-hour window ~25%, weekly ~63%. Queue empty apart from owner decisions: T9.1 sign-off, house-read opt-in (T10.2/T10.4/T10.7), T1.7 mastering, T6.4 visual review.
 > **2026-11-01 ~14:50 PST:** since the 13:25 reset: T7.4, T8.3, T7.5, T7.7, T10.6 done. Remaining tickets wait on the owner (T9.1 sign-off, house-read opt-in for T10.2/T10.4/T10.7, T8.3 step 3, T6.4) or are optional (T7.8 stretch, T2.7b temporary). Codex 5-hour 40%, weekly 79%.
 > **2026-11-01 ~18:45 PST:** owner approved T9.1. T9.3–T9.10 done (shell, stages API, Home, Plan, Script, Voice, Visuals, Edit). Codex 5-hour 87% (paused for the reset), weekly 87%: T9.11 and maybe T9.12 before the weekly stop at ~90%; T9.13, T11.5/6, T12.5 wait for the weekly reset. UI harness flake noted in NOTES.md.
+> **2026-11-01 ~19:00 PST:** paused by the owner after T9.11. Next: T9.12 (not started), T9.13, then T11.5/T11.6/T12.5 and the owner-decision tickets. Codex weekly 88%. Owner plans user testing once the ticket list is complete.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
