@@ -124,3 +124,13 @@ def stages(project: Project, check_result: dict) -> list[dict]:
                       else 'Render again' if rendered.get('output') else 'Not rendered',
                       'Fix earlier stages' if fresh else 'Render the cut', 'Publish the episode'))
     return result
+
+
+def home_summary(project: Project) -> dict:
+    """Next useful stage, using the same cheap readiness as the stage bar."""
+    rows = stages(project, readiness_check(project))
+    # Imported scripts can be complete without an outline.
+    if project.render.get('output'):
+        return rows[-1]
+    candidates = rows[1:4] if project.slides else rows[:4]
+    return next((r for r in candidates if r['status'] != 'ready'), rows[4])

@@ -781,6 +781,7 @@ class Project:
     # in this record: it can be thousands of words, and project.json is read and
     # rewritten constantly. Only the flag and the mode live here.
     has_source: bool = False
+    aspect: str = "landscape"      # landscape | portrait; rendering stays landscape for now
     delivery: str = "voice_over"    # voice_over | on_camera | mixed
     fidelity: str = "faithful"      # faithful | adapted
     tone: str = "warm documentary"
@@ -868,6 +869,7 @@ class Project:
             "outro": self.outro.to_dict(),
             "has_source": self.has_source,
             "fidelity": self.fidelity,
+            "aspect": self.aspect,
             "delivery": self.delivery,
             "tone": self.tone,
             "target_minutes": self.target_minutes,

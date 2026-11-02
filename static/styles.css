@@ -148,7 +148,7 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 }
 .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .mono { font-size: 12.5px; }
-.micro, .kicker, .section-head h2, .mi-k, .tab, label.field > span {
+.micro, .kicker, .section-head h2, .mi-k, .tab, label.field > span, div.field > span {
   font-family: var(--ui); font-size: 11px; text-transform: uppercase;
   letter-spacing: .08em; color: var(--dim);
 }
@@ -180,14 +180,14 @@ label.field > span b { font-family: var(--mono); font-variant-numeric: tabular-n
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .72 } }
 
 input[type=text], input[type=number], input[type=password], input[type=email],
-input[type=url], textarea, select {
+input[type=url], input[type=search], textarea, select {
   width: 100%; background: #0f1116; border: 1px solid var(--line);
   border-radius: var(--radius); padding: 9px 12px; outline: none; resize: vertical;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--cool); }
 input[type=range] { width: 100%; accent-color: var(--cool); }
 label.field { display: block; margin-bottom: 14px; }
-label.field > span { display: block; font-size: 11px; color: var(--dim); margin-bottom: 5px; }
+label.field > span, div.field > span { display: block; font-size: 11px; color: var(--dim); margin-bottom: 5px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 
@@ -926,3 +926,43 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-sponsors .tl-layer-item { height: 32px; }
 #tl-inspector [data-sp], #sp-slot { width: 100%; }
 #tl-inspector input[type="checkbox"][data-sp] { width: auto; }
+
+/* Home: Start above a searchable project table and the shoots column. */
+.home { max-width: 1280px; margin: 0 auto; }
+.home-start { padding: 28px; margin-bottom: 28px; }
+.home-start h1 { margin: 0; flex: 1; font-size: 44px; }
+.home-start .micro, .home h2 { font: 500 11px var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+.home-start-modes { flex-wrap: wrap; margin: 18px 0 8px; }
+.home [aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.home-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.home-controls .field { margin-bottom: 0; flex: 1 1 130px; }
+.home-controls .field:nth-child(3) { flex: 0 0 auto; }
+.home-controls .row { gap: 0; }
+.home-controls .primary { min-height: 44px; }
+.home-format-preview { display: flex; align-items: center; gap: 14px; margin: 16px 0; color: var(--dim); }
+.home-format-preview svg, .home-format-preview img { width: 140px; height: 78px; flex-shrink: 0; object-fit: cover; }
+.home details summary { cursor: pointer; padding: 10px 0; }
+.home details[open] summary { margin-bottom: 14px; }
+.home #testrun { width: auto; }
+.home-lists { display: flex; gap: 24px; flex-wrap: wrap; }
+.home-lists > section { flex: 999 1 640px; min-width: 0; }
+.home-lists > aside { flex: 1 1 260px; min-width: 0; }
+.home-list-tools { flex-wrap: wrap; margin-bottom: 12px; }
+.home-list-tools input { margin-left: auto; width: 270px; max-width: 100%; }
+.home-list-tools select { width: auto; }
+.home-table-wrap { border: 1px solid var(--line); border-radius: 4px; overflow-x: auto; }
+.home-table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; }
+.home-table th { background: var(--panel); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+.home-table th, .home-table td { padding: 12px 16px; }
+.home-table td { border-top: 1px solid var(--line); }
+.home-table td:first-child { width: 30%; }
+.home-table a { color: var(--ink); text-decoration: none; }
+.home-table a:hover { text-decoration: underline; }
+.home-stage-detail { display: block; font: 11px var(--mono); color: var(--dim); margin-top: 4px; }
+.home-shoot { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; margin: 12px 0; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); text-decoration: none; }
+.home-shoot span { color: var(--dim); }
+.home [hidden] { display: none !important; }
+@media (max-width: 700px) {
+  .home-start { padding: 16px; }
+  .home-start h1 { font-size: 36px; }
+}

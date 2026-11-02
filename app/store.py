@@ -61,7 +61,8 @@ def delete(pid: str) -> None:
     shutil.rmtree(PROJECTS_DIR / pid, ignore_errors=True)
 
 
-def list_projects() -> list[dict]:
+def list_projects(*, include_stage: bool = False) -> list[dict]:
+    from .stages import home_summary
     out = []
     for d in PROJECTS_DIR.iterdir():
         if not (d / "project.json").exists():
@@ -77,6 +78,7 @@ def list_projects() -> list[dict]:
                 "idea": raw.get("idea", ""),
                 "channel_id": raw.get("channel_id", ""),
                 "status": raw.get("status", "new"),
+                **({"stage": home_summary(Project.from_dict(raw))} if include_stage else {}),
                 "updated_at": raw.get("updated_at", 0),
                 "slides": len(raw.get("slides", [])),
                 "recorded": sum(1 for s in raw.get("slides", []) if s.get("take")),

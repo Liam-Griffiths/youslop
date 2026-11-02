@@ -1,197 +1,190 @@
-
 // -------------------------------------------------------------------- home
 async function renderHome() {
-  const [projects, providers, chans] = await Promise.all([
-    api('/api/projects'), api('/api/providers'), api('/api/channels'),
+  const [projects, chans, shoots] = await Promise.all([
+    api('/api/projects'), api('/api/channels'), api('/api/footage/shoots'),
   ]);
   state.channels = chans;
-  $('#topbar-right').innerHTML = providers
-    .map((p) => `<span class="pill ${p.available ? 'on' : ''}" title="${p.available ? 'ready' : 'no API key'}">
-      <span class="dot"></span>${esc(p.name)}</span>`).join('');
-
+  state.soloCount = projects.filter(p => !p.channel_id).length;
+  paintSidebar();
   let homeQuery = '';
   try { homeQuery = localStorage.getItem('corkbored.homeQuery') || ''; } catch (_) {}
-  const byChannel = (id) => projects.filter((p) => (p.channel_id || '') === id);
-  const loose = byChannel('');
-  state.soloCount = loose.length;
-  paintSidebar();
-
-  view.innerHTML = `
-    <div class="row" style="align-items:flex-start">
-      <h1 style="flex:1;min-width:0">Idea in. Episode out.</h1>
-      <button class="btn ghost sm" onclick="$('#projfile').click()"
-        title="a .corkbored file saved from this or another computer">open project file…</button>
-      <input type="file" id="projfile" accept=".corkbored,.youslop" style="display:none"
-        onchange="openProjectFile(this.files[0]); this.value=''">
-    </div>
-    <p class="sub">Describe the story. Claude writes the script, the archives supply the pictures,
-      you supply the voice. <a href="#/guide">New here? See how it works.</a></p>
-
-    <div class="panel">
-      <div class="tabs" style="margin:0 0 18px">
-        <div class="tab ${state.mode !== 'script' ? 'active' : ''}"
-             onclick="state.mode='idea';renderHome()">Start from an idea</div>
-        <div class="tab ${state.mode === 'script' ? 'active' : ''}"
-             onclick="state.mode='script';renderHome()">Paste a script</div>
+  const formats = [...FORMAT_INFO, ...(state.slideStyles || []).map(s => ({key: `custom:${s.id}`, label: s.name}))];
+  view.innerHTML = `<div class="home">
+    <section class="panel home-start" aria-labelledby="start-heading">
+      <div class="row"><h1 id="start-heading">Idea in. Episode out.</h1><span class="micro">New video</span></div>
+      <div class="row home-start-modes" role="group" aria-label="Start from">
+        <button class="btn" data-start="idea" onclick="homeStart('idea')">An idea</button>
+        <button class="btn" data-start="script" onclick="homeStart('script')">My own script</button>
+        <button class="btn" disabled aria-describedby="footage-note">A footage shoot</button>
+        <button class="btn" data-start="format" onclick="homeStart('format')">A saved format</button>
+        <button class="btn ghost" onclick="$('#projfile').click()">Open a .corkbored file</button>
+        <input type="file" id="projfile" accept=".corkbored,.youslop" hidden
+          onchange="openProjectFile(this.files[0]);this.value=''">
       </div>
-
-      ${state.mode === 'script' ? `
-        <label class="field">
-          <span>Your script — paste the whole thing, headings and all</span>
-          <textarea id="script" rows="12" placeholder="Paste your article or script here. Newsletter furniture (subscribe prompts, image captions, links) is stripped automatically, and the text is split into paragraph-sized takes for recording."></textarea>
-        </label>
-        <label class="field">
-          <span>How closely should it stick to your words?</span>
-          <select id="fidelity">
-            <option value="faithful">Faithful — keep my words, just split them for reading</option>
-            <option value="adapted">Adapted — smooth written prose into speech</option>
-          </select>
-        </label>
-      ` : `
-        <label class="field">
-          <span>The idea</span>
-          <textarea id="idea" rows="4" placeholder="How public libraries changed the way cities learn. Follow one library from its first reading room to the present day."></textarea>
-        </label>
-      `}
-      <div class="grid-3">
-        <label class="field">
-          <span>Channel</span>
-          <select id="chan" onchange="channelPicked()">
-            <option value="">— standalone video —</option>
-            ${chans.map((c) => `<option value="${c.id}" ${c.id === state.presetChannel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
-          </select>
-        </label>
-        <label class="field"><span>Saved format</span><select id="saved-format"><option value="">Channel defaults</option></select></label>
-        ${state.mode === 'script' ? `
-          <label class="field">
-            <span>Length comes from your script</span>
-            <input type="text" disabled value="measured after import">
-          </label>` : `
-          <label class="field">
-            <span>Target length — <b id="minsLabel">${state.newTest ? '1 minute (test run)' : '12 minutes'}</b></span>
-            <input type="range" id="mins" min="7" max="22" value="12" ${state.newTest ? 'disabled' : ''}
-                   oninput="document.getElementById('minsLabel').textContent=this.value + ' minutes'">
-            <label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:13px;cursor:pointer"
-                   title="a one-minute video with quick research, to try the whole pipeline cheaply">
-              <input type="checkbox" id="testrun" ${state.newTest ? 'checked' : ''} style="width:auto"
-                     onchange="newTestRun(this.checked)"> test run — 1 minute, quick research</label>
-          </label>`}
-        <label class="field">
-          <span>Delivery</span>
-          <select id="delivery" onchange="state.newDelivery=this.value">
-            <option value="voice_over" ${(state.newDelivery || 'voice_over') === 'voice_over' ? 'selected' : ''}>Voice-over</option>
-            <option value="on_camera" ${state.newDelivery === 'on_camera' ? 'selected' : ''}>On camera</option>
-            <option value="mixed" ${state.newDelivery === 'mixed' ? 'selected' : ''}>Mixed</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Tone</span>
-          <select id="tone">
-            <option>warm documentary</option>
-            <option>cool and analytical</option>
-            <option>plain and understated</option>
-            <option>tense and propulsive</option>
-            <option>wry and literary</option>
-          </select>
-        </label>
+      <p id="footage-note" class="sub">Starting a video from a shoot is coming with footage integration.
+        <a href="#/guide">See how it works</a></p>
+      <label class="field" id="idea-field"><span>What is the video about?</span>
+        <textarea id="idea" rows="2" placeholder="Describe the story you want to tell."></textarea></label>
+      <div id="script-fields" hidden>
+        <label class="field"><span>Your script — paste the whole thing, headings and all</span>
+          <textarea id="script" rows="8" placeholder="Paste your article or script. It will be split into paragraph-sized takes."></textarea></label>
+        <label class="field"><span>How closely should it stick to your words?</span><select id="fidelity">
+          <option value="faithful">Faithful — keep my words, just split them for reading</option>
+          <option value="adapted">Adapted — smooth written prose into speech</option></select></label>
       </div>
-
-      ${state.mode === 'script' ? '' : `
-        <label class="field">
-          <span>Research</span>
-          <select id="research" onchange="state.newResearch=this.value" ${state.newTest ? 'disabled' : ''}>
-            <option value="quick" ${state.newTest || (state.newResearch || 'quick') === 'quick' ? 'selected' : ''}>Quick — one search pass</option>
-            <option value="deep" ${!state.newTest && state.newResearch === 'deep' ? 'selected' : ''}>Deep — Claude's research mode, several rounds (slower, more Claude calls)</option>
-          </select>
-        </label>`}
-
-      <label class="field"><span>Video style</span></label>
-      ${formatPicker(state.newFormat || 'kenburns', '#E8C36A', 'pickNewFormat')}
-      <div id="newmodels">${newModelsPicker()}</div>
-
-      <label class="field">
-        <span id="everyLabel">${pictureEveryLabel(state.newPictureEvery || 1)}</span>
-        <input type="range" id="every" min="1" max="6" value="${state.newPictureEvery || 1}"
-               oninput="state.newPictureEvery=+this.value;
-                 document.getElementById('everyLabel').textContent=pictureEveryLabel(+this.value);"></label>
-      <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
-        1 is a new picture every paragraph. Raise it when the archives for this
-        subject are likely to be thin — fewer pictures to find, each held
-        longer. Changeable later on the Media tab.</div>
-
-      <div class="row">
-        <button class="btn primary" onclick="createProject()">
-          ${isStage(state.newFormat) ? 'Plan the story and cast' : state.mode === 'script' ? 'Break it into a video' : 'Write the script'}</button>
-        <span class="mono" style="color:var(--ink-faint)">takes 1–3 minutes</span>
+      <div class="home-controls">
+        <label class="field"><span>Channel</span><select id="chan" onchange="channelPicked()">
+          <option value="">Standalone video</option>
+          ${chans.map(c => `<option value="${esc(c.id)}" ${c.id === state.presetChannel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          <option value="__new">New channel…</option></select></label>
+        <label class="field"><span>Format</span><select id="home-format" onchange="pickNewFormat(this.value)">
+          ${formats.map(f => `<option value="${esc(f.key)}">${esc(f.label)}</option>`).join('')}</select></label>
+        <div class="field"><span id="shape-label">Shape</span>
+          <div class="row" role="group" aria-labelledby="shape-label">
+            <button class="btn" data-shape="portrait" onclick="homeShape('portrait')">Short · 9:16</button>
+            <button class="btn" data-shape="landscape" onclick="homeShape('landscape')">Long · 16:9</button>
+          </div></div>
+        <label class="field"><span>Length</span><select id="mins"></select></label>
+        <label class="field"><span>Research</span><select id="research" onchange="state.newResearch=this.value">
+          <option value="quick" title="One search pass">Quick</option><option value="deep" title="Several rounds: slower, more Claude calls">Deep</option>
+        </select></label>
+        <button class="btn primary" onclick="createProject(this)">Start video</button>
       </div>
+      <p id="shape-note" class="sub" hidden>Short targets at most 60 seconds. Rendering is landscape only for now.
+        Pasted scripts keep their full length; keep yours under 60 seconds for a Short.</p>
+      <p id="script-length-note" class="sub" hidden>Length comes from your script, measured after import.</p>
+      <form id="home-new-channel" hidden onsubmit="createHomeChannel(event)">
+        <div class="row">
+          <label class="field"><span>Channel name</span><input id="home-channel-name" required></label>
+          <label class="field"><span>What does this channel cover?</span><input id="home-channel-concept"></label>
+          <button class="btn" type="submit">Create channel</button>
+          <button class="btn ghost" type="button" onclick="$('#home-new-channel').hidden=true">Cancel</button>
+        </div>
+      </form>
+      <div id="home-format-preview" class="home-format-preview" aria-live="polite"></div>
+      <details id="home-more"><summary>More options</summary>
+        <div class="grid-3">
+          <label class="field"><span>Saved format</span><select id="saved-format" onchange="homeSavedFormat()"><option value="">Channel defaults</option></select></label>
+          <label class="field"><span>Delivery</span><select id="delivery" onchange="state.newDelivery=this.value">
+            <option value="voice_over">Voice-over</option><option value="on_camera">On camera</option><option value="mixed">Mixed</option></select></label>
+          <label class="field"><span>Tone</span><select id="tone">
+            ${['warm documentary', 'cool and analytical', 'plain and understated', 'tense and propulsive', 'wry and literary'].map(t => `<option>${t}</option>`).join('')}
+          </select></label>
+        </div>
+        <label class="field"><span><input type="checkbox" id="testrun" ${state.newTest ? 'checked' : ''}
+          onchange="newTestRun(this.checked)"> Test run — 1 minute, quick research</span></label>
+        <label class="field"><span>Video style</span></label>
+        ${formatPicker(state.newFormat || 'kenburns', 'var(--accent)', 'pickNewFormat')}
+        <div id="newmodels">${newModelsPicker()}</div>
+        <label class="field"><span id="everyLabel">${pictureEveryLabel(state.newPictureEvery || 1)}</span>
+          <input type="range" id="every" min="1" max="6" value="${state.newPictureEvery || 1}"
+            oninput="state.newPictureEvery=+this.value;$('#everyLabel').textContent=pictureEveryLabel(+this.value)"></label>
+        <p class="sub">1 is a new picture every paragraph. Raise it when archives are thin to hold fewer pictures longer. Changeable later in Visuals.</p>
+      </details>
+    </section>
+    <div class="home-lists">
+      <section id="standalone" aria-labelledby="projects-heading">
+        <div class="row home-list-tools"><h2 id="projects-heading">Projects</h2>
+          <input id="home-query" type="search" aria-label="Search projects" placeholder="Search title, channel or stage" value="${esc(homeQuery)}">
+          <select id="home-channel" aria-label="Filter channel"><option value="*">All channels</option><option value="">Standalone</option>
+            ${chans.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
+          <select id="home-sort" aria-label="Sort projects"><option value="updated">Recently updated</option><option value="title">Title</option></select>
+        </div>
+        <div class="home-table-wrap"><table class="home-table"><thead><tr>
+          <th>Title</th><th>Channel</th><th>Stage</th><th>Length</th><th>Updated</th>
+        </tr></thead><tbody id="home-videos" aria-live="polite"></tbody></table></div>
+      </section>
+      <aside aria-labelledby="shoots-heading"><h2 id="shoots-heading">Footage shoots</h2>
+        ${shoots.map(s => `<a class="home-shoot" href="/footage/export?shoot=${encodeURIComponent(s.id)}">
+          <b>${esc(s.name)}</b><span class="mono">${fmtTime(s.seconds)} · ${s.files} files · ${s.clips} clips</span>
+          <span>${s.labelled} of ${s.clips} clips labelled</span></a>`).join('') || '<p class="empty-note">No shoots yet. Import footage using the footage CLI.</p>'}
+        <button class="btn ghost" disabled aria-describedby="import-shoot-note">Import a shoot: folder or camera card</button>
+        <p class="sub" id="import-shoot-note">The import UI is coming with the footage logger.</p>
+      </aside>
     </div>
-
-    <div class="row" id="standalone" style="margin:34px 0 14px;align-items:baseline;
-         scroll-margin-top:16px">
-      <h2 style="margin:0">Your videos</h2>
-      <span class="mono" style="color:var(--ink-faint)">
-        ${projects.length} video${projects.length === 1 ? '' : 's'}</span>
-    </div>
-    <div class="row" style="flex-wrap:wrap">
-      <label class="field"><span>Search videos</span><input id="home-query" type="search" value="${esc(homeQuery)}"></label>
-      <label class="field"><span>Channel</span><select id="home-channel">
-        <option value="*">All channels</option><option value="">Standalone</option>
-        ${chans.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
-      </select></label>
-      <label class="field"><span>Sort by</span><select id="home-sort">
-        <option value="updated">Recently updated</option><option value="title">Title</option>
-      </select></label>
-    </div>
-    <div id="home-videos" aria-live="polite"></div>
-
-    <div class="row" style="margin:34px 0 14px;align-items:baseline">
-      <h2 style="margin:0">Channels</h2>
-      <span class="mono" style="color:var(--ink-faint)">shared look, shared opening slate</span>
-      <div class="spacer"></div>
-      <button class="btn sm" onclick="newChannel()">new channel</button>
-    </div>
-    ${chans.length === 0
-      ? `<div class="empty-note">No channels yet. Start one and every video in it
-           gets the same look and the same animated opening.</div>`
-      : chans.map((c) => `
-        <div class="proj" onclick="go('#/c/${c.id}')">
-          <span class="swatch" style="background:${esc(c.accent)}"></span>
-          <div style="flex:1;min-width:0">
-            <div class="t">${esc(c.name)}</div>
-            <div class="m">${c.videos} video${c.videos === 1 ? '' : 's'}${c.tagline ? ' · ' + esc(c.tagline) : ''}</div>
-          </div>
-          <span class="pill ${c.intro_ready ? 'on' : 'warn'}">
-            ${c.intro_ready ? `slate: ${c.intro_images} cast` : 'no slate yet'}</span>
-        </div>`).join('')}
-
-  `;
+  </div>`;
+  const names = new Map(chans.map(c => [c.id, c.name]));
   const paintVideos = () => {
     const query = $('#home-query').value.toLocaleLowerCase().trim();
     try { localStorage.setItem('corkbored.homeQuery', $('#home-query').value); } catch (_) {}
     const channel = $('#home-channel').value;
-    const names = new Map(chans.map((c) => [c.id, c.name]));
-    const matches = projects.filter((p) => (channel === '*' || (p.channel_id || '') === channel)
-      && [p.title, p.idea, names.get(p.channel_id) || 'Standalone', p.status]
+    const matches = projects.filter(p => (channel === '*' || (p.channel_id || '') === channel)
+      && [p.title, p.idea, names.get(p.channel_id) || 'Standalone', p.stage?.label, p.stage?.reason]
         .join(' ').toLocaleLowerCase().includes(query));
     matches.sort($('#home-sort').value === 'title'
       ? (a, b) => (a.title || a.idea || '').localeCompare(b.title || b.idea || '')
       : (a, b) => b.updated_at - a.updated_at);
-    $('#home-videos').innerHTML = matches.length
-      ? matches.map(projRow).join('') : '<div class="empty-note">No videos match these filters.</div>';
+    $('#home-videos').innerHTML = matches.map(p => `<tr>
+      <td><a href="#/p/${p.id}/${p.stage.id}">${esc(p.title || p.idea.slice(0, 70))}</a>${p.test ? ' <span class="pill">test</span>' : ''}</td>
+      <td>${esc(names.get(p.channel_id) || 'Standalone')}</td>
+      <td><span class="pill ${p.stage.status === 'ready' ? 'on' : ''}">${esc(p.stage.label)}</span>
+        <span class="home-stage-detail">${esc(p.stage.reason)}</span></td>
+      <td class="mono">~${fmtTime(p.est_seconds)}</td>
+      <td class="mono"><time datetime="${new Date(p.updated_at * 1000).toISOString()}">${esc(new Date(p.updated_at * 1000).toLocaleDateString())}</time></td>
+    </tr>`).join('') || '<tr><td colspan="5">No videos match these filters.</td></tr>';
   };
   $('#home-query').oninput = paintVideos;
   $('#home-channel').onchange = paintVideos;
   $('#home-sort').onchange = paintVideos;
   paintVideos();
-  if (state.presetChannel) {
-    state.presetChannel = null;
+  $('#delivery').value = state.newDelivery || 'voice_over';
+  $('#research').value = state.newResearch || 'quick';
+  homeStart(state.mode === 'script' ? 'script' : 'idea');
+  homeShape(state.newAspect || 'landscape');
+  if (state.presetChannel) { state.presetChannel = null; channelPicked(); }
+  else pickNewFormat(state.newFormat || 'kenburns');
+  // The old card picker uses divs; make its home controls keyboard reachable.
+  $('#fmtpicker').querySelectorAll('.tpl[data-fmt], #newstyletile').forEach(el => {
+    el.tabIndex = 0; el.setAttribute('role', 'button');
+    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } };
+  });
+  if (state.afterHome) { const run = state.afterHome; state.afterHome = null; run(); }
+}
+
+function homeStart(mode) {
+  state.mode = mode === 'script' ? 'script' : 'idea';
+  $('#idea-field').hidden = state.mode === 'script';
+  $('#script-fields').hidden = state.mode !== 'script';
+  $('#script-length-note').hidden = state.mode !== 'script';
+  $('.home-start-modes').querySelectorAll('[data-start]').forEach(b => b.setAttribute('aria-pressed', b.dataset.start === mode));
+  newTestRun(state.newTest);
+  if (mode === 'format') {
+    $('#home-more').open = true;
+    $('#saved-format').focus();
+    if (!$('#chan').value) toast('Choose a channel for its saved formats, or choose a saved video style below.');
+  }
+}
+
+function homeShape(aspect) {
+  state.newAspect = aspect;
+  document.querySelectorAll('[data-shape]').forEach(b => b.setAttribute('aria-pressed', b.dataset.shape === aspect));
+  $('#mins').innerHTML = aspect === 'portrait' ? '<option value="1">≤60 seconds</option>'
+    : Array.from({length: 16}, (_, i) => i + 7).map(n => `<option value="${n}" ${n === 12 ? 'selected' : ''}>${n} min</option>`).join('');
+  $('#shape-note').hidden = aspect !== 'portrait';
+  newTestRun(state.newTest);
+}
+
+function homeSavedFormat() {
+  const c = (state.channels || []).find(c => c.id === $('#chan').value);
+  const f = c?.formats?.find(f => f.name === $('#saved-format').value);
+  pickNewFormat(f?.style?.format || c?.format || 'kenburns', false);
+}
+
+async function createHomeChannel(e) {
+  e.preventDefault();
+  const btn = e.submitter; btn.disabled = true;
+  try {
+    const c = await api('/api/channels', {method: 'POST', body: JSON.stringify({
+      name: $('#home-channel-name').value.trim(), concept: $('#home-channel-concept').value.trim(),
+    })});
+    state.channels = await api('/api/channels');
+    paintSidebar();
+    const option = new Option(c.name, c.id, true, true);
+    $('#chan').add(option, $('#chan').lastElementChild);
+    $('#home-new-channel').hidden = true;
     channelPicked();
-  }
-  if (state.afterHome) {
-    const run = state.afterHome;
-    state.afterHome = null;
-    run();
-  }
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
 }
 
 // ------------------------------------------------------------ project files
@@ -262,6 +255,11 @@ function projRow(p) {
 state.library = { items: [], q: '', kind: '', file: null };
 
 function channelPicked() {
+  if ($('#chan').value === '__new') {
+    $('#chan').value = '';
+    $('#home-new-channel').hidden = false;
+    $('#home-channel-name').focus();
+  }
   const c = (state.channels || []).find((x) => x.id === $('#chan').value);
   const saved = $('#saved-format');
   if (saved) saved.innerHTML = '<option value="">Channel defaults</option>' +
@@ -276,6 +274,7 @@ function channelPicked() {
   const every = $('#every'), label = $('#everyLabel');
   if (every) every.value = state.newPictureEvery;
   if (label) label.textContent = pictureEveryLabel(state.newPictureEvery);
+  pickNewFormat(state.newFormat, false);
   if (c) toast(`New videos will use “${c.name}”’s look and opening slate.`);
 }
 
@@ -283,9 +282,9 @@ function pictureEveryLabel(n) {
   return `New picture every — ${n} ${n === 1 ? 'paragraph' : 'paragraphs'}`;
 }
 
-async function createProject() {
+async function createProject(btn) {
   const scripting = state.mode === 'script';
-  const body = { delivery: $('#delivery').value, tone: $('#tone').value, channel_id: $('#chan').value || '',
+  const body = { aspect: state.newAspect || 'landscape', delivery: $('#delivery').value, tone: $('#tone').value, channel_id: $('#chan').value || '',
                  format: state.newFormat || 'kenburns',
                  picture_every: state.newPictureEvery || 1 };
 
@@ -306,7 +305,6 @@ async function createProject() {
   }
   if (isStage(body.format)) body.models = state.newModels || [];
 
-  const btn = event.target;
   btn.disabled = true;
   try {
     const r = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
@@ -367,7 +365,21 @@ function toggleNewModel(id) {
   $('#newmodels').innerHTML = newModelsPicker();
 }
 
-function pickNewFormat(key) {
+function pickNewFormat(key, clearSaved = true) {
+  if (clearSaved && $('#saved-format')) $('#saved-format').value = '';
+  const select = $('#home-format');
+  if (select) select.value = key;
+  const channel = (state.channels || []).find(c => c.id === $('#chan')?.value);
+  const preview = $('#home-format-preview');
+  if (preview) {
+    const saved = (state.slideStyles || []).find(s => `custom:${s.id}` === key);
+    const preset = channel?.formats?.find(f => f.name === $('#saved-format')?.value);
+    preview.innerHTML = saved
+      ? `<img src="/api/slide-styles/${saved.id}/thumb.jpg" alt="${esc(saved.name)} preview">`
+      : formatArt(key, preset?.style?.accent || channel?.accent || '#FF5A1F');
+    preview.innerHTML += `<span>${esc(FORMAT_INFO.find(f => f.key === key)?.blurb || saved?.name || key)}</span>`;
+  }
+
   state.newFormat = key;
   const nm = $('#newmodels'); if (nm) nm.innerHTML = newModelsPicker();
   const strip = $('#fmtpicker');
@@ -380,8 +392,18 @@ function pickNewFormat(key) {
 // A test run: one minute, quick research — the whole pipeline, cheaply.
 function newTestRun(on) {
   state.newTest = !!on;
-  const mins = $('#mins'), label = $('#minsLabel'), research = $('#research');
-  if (mins) mins.disabled = state.newTest;
-  if (label) label.textContent = state.newTest ? '1 minute (test run)' : `${mins ? mins.value : 12} minutes`;
-  if (research) { research.disabled = state.newTest; if (state.newTest) research.value = 'quick'; }
+  const mins = $('#mins'), research = $('#research');
+  if (mins) {
+    mins.querySelector('[data-test]')?.remove();
+    if (state.newTest && state.mode !== 'script') {
+      const option = new Option('1 min (test run)', '1', true, true);
+      option.dataset.test = 'true'; mins.add(option);
+    }
+    mins.disabled = state.newTest || state.mode === 'script';
+  }
+  if (research) {
+    research.disabled = state.newTest || state.mode === 'script';
+    research.value = state.newTest ? 'quick' : state.newResearch || 'quick';
+  }
+  if ($('#testrun')) $('#testrun').disabled = state.mode === 'script';
 }

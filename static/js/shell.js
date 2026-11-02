@@ -64,7 +64,7 @@ function paintProjectShell() {
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
   const format = FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
-    <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · 16:9</span>
+    <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : '16:9'}</span>
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;
   $('#topbar-right').innerHTML = '';
   paintStageBar();

@@ -25,7 +25,10 @@ def prepare_create(payload):
 
     channel = channels.load_or_none(payload.get("channel_id") or "")
     test = bool(payload.get("test")) and not script
-    minutes = 1 if test else max(5, min(30, int(payload.get("target_minutes")
+    aspect = payload.get("aspect", "landscape")
+    if aspect not in {"landscape", "portrait"}:
+        raise PayloadError("Shape must be landscape or portrait.")
+    minutes = 1 if test or aspect == "portrait" else max(5, min(30, int(payload.get("target_minutes")
                                                 or (channel.default_minutes if channel else 12))))
     tone = payload.get("tone") or (channel.tone if channel else "warm documentary")
     try:
@@ -34,6 +37,7 @@ def prepare_create(payload):
                               delivery=payload.get("delivery", "voice_over"))
     except ValueError as exc:
         raise PayloadError(str(exc)) from exc
+    project.aspect = aspect
     if script:
         project.has_source = True
         project.fidelity = "adapted" if payload.get("fidelity") == "adapted" else "faithful"

@@ -765,10 +765,21 @@ def youtube_upload(pid: str, payload: dict = Body(default={})) -> dict:
                              lambda pr: ops.publish(pid, payload, pr, prepared=prepared))}
 
 
+@app.get("/api/footage/shoots")
+def list_footage_shoots() -> list[dict]:
+    """Home metadata only: no probing, processing or label/model calls."""
+    from . import footage
+    return [dict(id=s.id, name=Path(s.path).name or s.id,
+                 files=len(s.files), clips=len(s.clips),
+                 seconds=sum(f.duration for f in s.files),
+                 labelled=sum(bool(c.labels or c.auto_labels) for c in s.clips))
+            for s in footage.list_shoots()]
+
+
 # ------------------------------------------------------------------- projects
 @app.get("/api/projects")
 def list_projects() -> list[dict]:
-    return store.list_projects()
+    return store.list_projects(include_stage=True)
 
 
 @app.post("/api/projects")

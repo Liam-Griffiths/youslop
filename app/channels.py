@@ -88,7 +88,8 @@ def list_channels() -> list[dict]:
         out.append({
             "id": raw.get("id", d.name),
             "name": raw.get("name", "Untitled channel"),
-            "formats": [{"name": f["name"]} for f in raw.get("formats", [])],
+            "formats": [{"name": f["name"], "style": {k: f.get("style", {}).get(k)
+                         for k in ("format", "accent")}} for f in raw.get("formats", [])],
             "tagline": raw.get("tagline", ""),
             "concept": raw.get("concept", ""),
             "accent": (raw.get("style") or {}).get("accent", "#E8C36A"),
