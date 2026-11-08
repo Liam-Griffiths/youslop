@@ -401,3 +401,16 @@ def test_native_media_keeps_shared_wipe_mask(tmp_path, motion):
     assert "enable='between(t,0.75,1.5)'" in effect
     assert ('lte(X/W' in effect) == (motion == 'reveal')
     assert ('-X)' in effect) == (motion == 'wipe')
+
+
+def test_scale_in_exit_fades_before_the_per_frame_scale(mocked, tmp_path):
+    """fade rejects frames whose size changes, so it must precede scale:eval=frame."""
+    data, _ = mocked
+    data.update(scene(1))
+    data['layers'][0].update(motion='scale-in', start=0, duration=4.5, arrival=.45, exit=.25)
+    stats = dict(captures=0, cache_hits=0, captured_frames=0)
+    plates = b._plates(tmp_path, 'test.html', dict(width=192,height=112), 5, (48,28), 30, stats)
+    plates.update(width=192, height=112, alpha=True)
+    _, graph = b._compile(plates, dict(id='', start=0, duration=5), (48,28), 30, tmp_path)
+    assert 'eval=frame' in graph
+    assert graph.index('fade=t=out') < graph.index('scale=w=')

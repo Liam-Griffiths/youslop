@@ -569,7 +569,14 @@ def _compile(data, screen, size, fps, directory):
                            f":enable='between(t,{layer['start']},{layer['start']+layer['arrival']})'")
         exit_s = min(layer.get('exit', 0), layer['duration']/2)
         if exit_s > 0:
-            effect += f",fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"
+            fade = f"fade=t=out:st={layer['start']+layer['duration']-exit_s}:d={exit_s}:alpha=1"
+            # A per-frame scale (scale-in, pop) changes the frame size, which fade
+            # rejects ("Frame size or format changed"); fade the plate before it.
+            at = effect.find(',scale=')
+            if at >= 0 and 'eval=frame' in effect[at:]:
+                effect = f"{effect[:at]},{fade}{effect[at:]}"
+            else:
+                effect += ',' + fade
         if layer.get('frames'):
             # A concat demuxer sequence is confined to the declared arrival, then holds its settled plate.
             sequence = directory / f'frames-{i}.txt'
