@@ -26,6 +26,7 @@ def setup(project, monkeypatch, tmp_path):
     library = deepcopy(oc.blocks.discover())
     block = deepcopy(library['lower_third_panel'])
     block['meta']['id'] = 'transparent_test'
+    block['meta']['overlay'].pop('panel', None)  # Transparent: no opaque panel.
     library['transparent_test'] = block
     monkeypatch.setattr(oc.blocks, 'discover', lambda: library)
     monkeypatch.setattr(oc, '_geometry', lambda *a: [(.15, .65, .65, .85)])
@@ -194,3 +195,11 @@ def test_cached_geometry_only_and_check_integration(setup, monkeypatch):
     result = check.run(project)
     assert any(f['code'] == 'overlay_anchor_estimated' for f in result['findings'])
     assert project.to_dict() == before
+
+
+def test_new_lower_thirds_declare_their_panel():
+    """Contrast is measured on the panel for every overlay that declares one."""
+    library = oc.blocks.discover()
+    for ref in ('lower_third_kicker', 'lower_third_underline', 'lower_third_pill',
+                'lower_third_reveal', 'lower_third_portrait', 'lower_third_panel'):
+        assert library[ref]['meta']['overlay'].get('panel') is True, ref

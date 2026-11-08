@@ -169,12 +169,11 @@ def run(project, sb):
                                 + ('' if boxes else ' Placement is estimated from the position; text bounds were not measured.')))
                             break
                 ink = colors.get('ink', block['meta'].get('default_colors', {}).get('ink', '#F2F2F2'))
-                # All six core text overlays use the opaque text_base panel,
-                # mixed from the resolved channel/theme bg and ink (95%/5%):
-                # their contrast is ink against the panel, whatever is underneath.
+                # Overlays that declare `overlay.panel` draw their text on an opaque
+                # panel mixed from the resolved bg and ink (95%/5%): their contrast
+                # is ink against the panel, whatever is underneath.
                 panel = image = None
-                if item['block_id'] in {'lower_third_panel', 'lower_third_rule', 'lower_third_stack',
-                                        'kinetic_caption_rise', 'kinetic_caption_words', 'kinetic_caption_slam'}:
+                if (block['meta'].get('overlay') or {}).get('panel'):
                     bg = ImageColor.getrgb(colors['bg'])
                     panel = tuple(round(.95*a+.05*b) for a, b in zip(bg, ImageColor.getrgb(ink)))
                 else:

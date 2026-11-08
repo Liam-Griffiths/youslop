@@ -139,6 +139,9 @@ transparent, optional picture variables are suppressed, and the builder outputs
 PNG RGBA in MOV. Full-frame `slide.cues['blocks']` continues to draw its ground.
 `block check` checks overlay-capable blocks on transparency in each aspect;
 text still needs its own opaque panel for predictable contrast over footage.
+Add `"panel": true` to the overlay object when the text sits on such a panel
+(mixed from `bg` and `ink`); the overlay contrast check then measures ink
+against the panel instead of sampling the picture underneath.
 Lower thirds support corners; caption blocks retain their authored center layout.
 Callout arrows and number slams remain full-frame pictures; a compact number
 badge would be a future block.

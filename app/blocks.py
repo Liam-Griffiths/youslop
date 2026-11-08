@@ -25,7 +25,7 @@ STAGED = ContextVar('staged_blocks', default=())
 
 def _check(value, rule, label):
     """Validate the JSON Schema vocabulary used by block.schema.json (no deps)."""
-    types = {'object': dict, 'array': list, 'string': str, 'number': (int, float), 'integer': int}
+    types = {'object': dict, 'array': list, 'string': str, 'number': (int, float), 'integer': int, 'boolean': bool}
     kind = rule.get('type')
     if kind and (not isinstance(value, types[kind]) or
                  kind in ('number', 'integer') and
