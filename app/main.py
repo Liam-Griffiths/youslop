@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
@@ -359,6 +359,95 @@ def _mtime(path: Path) -> int:
         return int(path.stat().st_mtime)
     except OSError:
         return 0
+
+
+@app.get('/api/sponsors/house')
+def get_house_sponsor() -> dict:
+    from .sponsors import house
+    return house().to_dict()
+
+
+def _library_sponsor(ch, sponsor_id):
+    if sponsor_id == 'house':
+        raise HTTPException(400, 'The built-in house sponsor is read-only')
+    sponsor = next((s for s in ch.sponsors if s.id == sponsor_id), None)
+    if sponsor is None:
+        raise HTTPException(404, 'Sponsor not found')
+    return sponsor
+
+
+@app.get('/api/channels/{cid}/sponsors')
+def list_channel_sponsors(cid: str) -> list[dict]:
+    from .sponsors import library
+    return [s.to_dict() for s in library(_channel(cid))]
+
+
+@app.post('/api/channels/{cid}/sponsors')
+def add_channel_sponsor(cid: str, payload: dict = Body(...)) -> dict:
+    from .sponsors import validate_sponsor
+    with channels.lock_for(cid):
+        ch = _channel(cid)
+        try:
+            sponsor = validate_sponsor(payload)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        ch.sponsors.append(sponsor)
+        channels.save(ch)
+    return sponsor.to_dict()
+
+
+@app.patch('/api/channels/{cid}/sponsors/{sponsor_id}')
+def edit_channel_sponsor(cid: str, sponsor_id: str, payload: dict = Body(...)) -> dict:
+    from .sponsors import validate_sponsor
+    with channels.lock_for(cid):
+        ch = _channel(cid)
+        old = _library_sponsor(ch, sponsor_id)
+        try:
+            sponsor = validate_sponsor(payload, old)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        ch.sponsors[ch.sponsors.index(old)] = sponsor
+        channels.save(ch)
+    return sponsor.to_dict()
+
+
+@app.delete('/api/channels/{cid}/sponsors/{sponsor_id}')
+def delete_channel_sponsor(cid: str, sponsor_id: str) -> dict:
+    with channels.lock_for(cid):
+        ch = _channel(cid)
+        ch.sponsors.remove(_library_sponsor(ch, sponsor_id))
+        channels.save(ch)
+    # Existing slots and immutable logo files remain usable.
+    return {'ok': True}
+
+
+@app.post('/api/channels/{cid}/sponsors/{sponsor_id}/logo')
+def upload_sponsor_logo(cid: str, sponsor_id: str, file: UploadFile = File(...)) -> dict:
+    import io
+    import uuid
+    from PIL import Image, UnidentifiedImageError
+    data = file.file.read(2 * 1024 * 1024 + 1)
+    if len(data) > 2 * 1024 * 1024:
+        raise HTTPException(400, 'Logo must be at most 2 MiB')
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.format not in ('PNG', 'JPEG', 'WEBP') or max(image.size) > 4096:
+                raise ValueError('Use PNG, JPEG or WebP up to 4096 pixels')
+            image.verify()
+        with Image.open(io.BytesIO(data)) as image:
+            converted = image.convert('RGBA')
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise HTTPException(400, 'Invalid logo image') from exc
+    with channels.lock_for(cid):
+        ch = _channel(cid)
+        sponsor = _library_sponsor(ch, sponsor_id)
+        rel = 'sponsors/' + uuid.uuid4().hex + '.png'
+        target = channels.channel_dir(cid) / rel
+        target.parent.mkdir(exist_ok=True)
+        converted.save(target, format='PNG')
+        sponsor.logo = rel
+        channels.save(ch)
+    return sponsor.to_dict()
 
 
 @app.get("/api/channels/{cid}")
@@ -1200,6 +1289,14 @@ def _apply_sponsor(project, slot, payload):
             setattr(slot, key, payload[key])
             if key == "variant":
                 slot.template = f"sponsor/{slot.variant}.html"
+    if payload.get('sponsor_id'):
+        from .sponsors import copy_to_slot
+        from .schema import Channel
+        ch = channels.load_or_none(project.channel_id) or Channel(id='', name='')
+        try:
+            copy_to_slot(ch, slot, payload['sponsor_id'])
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
     if "after_slide_id" in payload:
         sid = payload["after_slide_id"]
         if sid and sid not in {s.id for s in project.slides}:

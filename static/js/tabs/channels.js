@@ -630,6 +630,7 @@ function paintChannelOverview() {
       <button class="btn ghost sm" onclick="go('#/')">all channels</button>
     </div>
     ${jobPanel()}
+    <section class="panel" id="channel-sponsors" aria-label="Sponsors"></section>
     <section class="channel-blocks card" aria-label="Channel blocks" id="channel-blocks"></section>
 
     <div class="row" style="margin:20px 0 14px;align-items:baseline">
@@ -642,6 +643,7 @@ function paintChannelOverview() {
       : c.videos.map(projRow).join('')}
   `;
   paintJob();
+  paintChannelSponsors(c);
   return paintChannelBlocks(c);
 }
 
@@ -1206,5 +1208,58 @@ async function paintChannelBlocks(c) {
         }
       } catch (e) { toast(e.message,true); }
     }; });
+  } catch (e) { if (host.isConnected) host.textContent = e.message; }
+}
+
+
+async function paintChannelSponsors(c) {
+  const host = $('#channel-sponsors');
+  try {
+    const items = await api(`/api/channels/${c.id}/sponsors`);
+    if (!host.isConnected) return;
+    host.innerHTML = `<h2>Sponsors</h2><p class="sub" style="margin-bottom:26px">Choose sponsors in each video's Edit stage. House reads are opt-in. Saved reads keep their copied values.</p>
+      <div id="sponsor-list">${items.map((s) => `<div class="row">
+        ${s.logo ? `<img width="40" height="40" alt="" src="/api/channels/${encodeURIComponent(c.id)}/file/${esc(s.logo)}">` : ''}
+        <span>${esc(s.name)} · ${s.paid ? 'paid' : 'unpaid'}</span>
+        ${s.id === 'house' ? '<span class="dim">Built in</span>' : `<button class="btn sm" data-sponsor-edit="${esc(s.id)}">Edit</button><button class="btn sm ghost" data-sponsor-delete="${esc(s.id)}">Delete</button>`}
+      </div>`).join('')}</div>
+      <button class="btn sm" id="sponsor-new">Add sponsor</button><div id="sponsor-form"></div>`;
+    const edit = (s = {}) => {
+      const form = $('#sponsor-form');
+      const fields = {name: 'Name', url: 'Link', code: 'Promo code', accent: 'Accent colour', ink: 'Ink colour', disclosure: 'Disclosure line'};
+      form.innerHTML = `<form id="sponsor-editor">
+        ${Object.entries(fields).map(([key, label]) => `<label class="field" for="lib-sp-${key}"><span>${label}</span><input type="text" id="lib-sp-${key}" name="${key}" value="${esc(s[key] ?? ({accent:'#FF5A1F', ink:'#1B1B1F', disclosure:'Paid promotion'}[key] || ''))}"></label>`).join('')}
+        ${['short', 'long'].map((v) => `<label class="field" for="lib-sp-${v}"><span>${v} copy</span><textarea id="lib-sp-${v}" name="${v}_copy" maxlength="10000">${esc(s[v + '_copy'] || '')}</textarea></label>`).join('')}
+        <label><input type="checkbox" name="paid" ${s.paid !== false ? 'checked' : ''}> Paid promotion</label>
+        <label class="field" for="lib-sp-logo"><span>Logo · PNG, JPEG or WebP, up to 2 MiB and 4096 px</span><input type="file" id="lib-sp-logo" accept="image/png,image/jpeg,image/webp"></label>
+        <button class="btn sm" type="submit">Save sponsor</button>
+        <button class="btn sm ghost" type="button" id="sponsor-cancel">Cancel</button></form>`;
+      $('#sponsor-cancel').onclick = () => form.replaceChildren();
+      $('#sponsor-editor').onsubmit = async (event) => {
+        event.preventDefault();
+        const el = event.target, payload = {};
+        for (const key of [...Object.keys(fields), 'short_copy', 'long_copy']) payload[key] = el.elements[key].value;
+        payload.paid = el.elements.paid.checked;
+        try {
+          const saved = await api(`/api/channels/${c.id}/sponsors${s.id ? '/' + s.id : ''}`, {method:s.id ? 'PATCH' : 'POST', body:JSON.stringify(payload)});
+          const file = $('#lib-sp-logo').files[0];
+          // Retain the created id if the upload fails, so retry edits this record.
+          s = saved;
+          if (file) {
+            const data = new FormData(); data.append('file', file);
+            await api(`/api/channels/${c.id}/sponsors/${saved.id}/logo`, {method:'POST', body:data});
+          }
+          await paintChannelSponsors(c);
+        } catch (e) { toast(e.message, true); }
+      };
+    };
+    $('#sponsor-new').onclick = () => edit();
+    host.querySelectorAll('[data-sponsor-edit]').forEach((button) => button.onclick = () => edit(items.find((s) => s.id === button.dataset.sponsorEdit)));
+    host.querySelectorAll('[data-sponsor-delete]').forEach((button) => button.onclick = async () => {
+      try {
+        await api(`/api/channels/${c.id}/sponsors/${button.dataset.sponsorDelete}`, {method:'DELETE'});
+        await paintChannelSponsors(c);
+      } catch (e) { toast(e.message, true); }
+    });
   } catch (e) { if (host.isConnected) host.textContent = e.message; }
 }

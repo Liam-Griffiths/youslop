@@ -2668,6 +2668,9 @@ def _sponsor_preview(project, slot):
     block = deepcopy(blocks.discover()[block_id])
     block['meta']['duration'] = dict(mode='range', min=0)
     ctx = scenes.context_base(project)
+    # Ink is supported by the sponsor scene but is not a core-block variable.
+    if 'ink' in slot.vars:
+        ctx['ink'] = slot.vars['ink']
     ctx.update(script=slot.script, take=slot.take, word_offset=0)
     values = {k: v for k, v in slot.vars.items() if k in block['meta']['variables']}
     template, ctx = blocks.prepare(block_id, values, '16:9', sponsors.duration(slot),

@@ -1,4 +1,4 @@
-// Slot data works without a channel library. sponsor_id is reserved for T10.2.
+// Library selections snapshot their values into the slot.
 function tlSponsorItems() {
   return (state.project.sponsors || []).map((slot) => {
     const item = TL.data.layers?.sponsors?.find((s) => s.id === slot.id);
@@ -12,7 +12,9 @@ function tlSponsorFields(slot) {
     <input type="text" id="sp-${key}" data-sp="${key}" maxlength="${max}" value="${esc(value || '')}">`;
   return `<label for="sp-slot">Sponsor read</label><select id="sp-slot">
       ${(state.project.sponsors || []).map((s) => `<option value="${esc(s.id)}" ${s.id === slot.id ? 'selected' : ''}>${esc(s.vars.name || 'Unnamed sponsor')}${s.enabled ? '' : ' · off'}</option>`).join('')}</select>
-    <p class="tl-note">Enter sponsor details here. Channel library linking will be added later.</p>
+    <label for="sp-library">Choose library sponsor</label>
+    <select id="sp-library" style="appearance:none"><option value="">Custom copy</option></select>
+    <p class="tl-note">Choosing a sponsor copies its values. Library edits leave this read unchanged.</p>
     ${input('name', 'Sponsor name', slot.vars.name, 64)}
     <label for="sp-variant">Variant</label><select id="sp-variant" data-sp="variant">
       ${['short', 'long'].map((v) => `<option ${slot.variant === v ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -35,6 +37,20 @@ function tlSponsorFields(slot) {
 }
 
 function tlSponsorWire(slot) {
+  const picker = $('#sp-library');
+  const cid = state.project.channel_id, pid = TL.pid;
+  const fill = (items) => {
+    if (!picker.isConnected || TL.pid !== pid) return;
+    for (const sponsor of items) {
+      const option = document.createElement('option');
+      option.value = sponsor.id; option.textContent = sponsor.name;
+      option.selected = sponsor.id === slot.sponsor_id;
+      picker.append(option);
+    }
+  };
+  if (cid) api(`/api/channels/${encodeURIComponent(cid)}/sponsors`).then(fill).catch((e) => tlMsg(e.message));
+  else api('/api/sponsors/house').then((s) => fill([s])).catch((e) => tlMsg(e.message));
+  picker.onchange = () => { if (picker.value) tlSponsorSave(slot.id, {sponsor_id: picker.value}); };
   $('#sp-slot').onchange = (e) => tlSelect(tlSponsorItems().find((s) => s.id === e.target.value));
   document.querySelectorAll('[data-sp]').forEach((el) => {
     el.onchange = () => {

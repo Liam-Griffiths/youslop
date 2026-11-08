@@ -7,6 +7,7 @@ SLUG = "corkbored"
 ENV_PREFIX = "CORKBORED_"
 LEGACY_ENV_PREFIXES = ("YOUSLOP_", "VB_")
 LEGACY_SLUGS = ("Youslop", "youslop")
+SITE_URL = "corkbored.com"
 PACKS_URL = ""
 FILE_EXT = ".corkbored"
 LEGACY_FILE_EXTS = (".youslop",)

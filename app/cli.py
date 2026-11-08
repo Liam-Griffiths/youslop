@@ -355,12 +355,38 @@ def cmd_learning(args):
     _print_json(result)
 
 
+def cmd_sponsor(args):
+    from . import channels, sponsors
+    if args.sponsor_cmd == 'list':
+        return _print_json([s.to_dict() for s in sponsors.library(channels.load(args.cid))])
+    _guard_write()
+    with channels.lock_for(args.cid):
+        ch = channels.load(args.cid)
+        sponsor = sponsors.validate_sponsor({key: getattr(args, key) for key in
+            ('name', 'url', 'code', 'short_copy', 'long_copy', 'disclosure', 'accent', 'ink', 'paid')})
+        ch.sponsors.append(sponsor)
+        channels.save(ch)
+    _print_json(sponsor.to_dict())
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m app.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
     sub.add_parser('stages').add_argument('pid')
     sub.add_parser("verify").add_argument("file")
+    command = sub.add_parser('sponsor')
+    sponsor_sub = command.add_subparsers(dest='sponsor_cmd', required=True)
+    sponsor_sub.add_parser('list').add_argument('cid')
+    child = sponsor_sub.add_parser('add')
+    child.add_argument('cid')
+    child.add_argument('name')
+    for key in ('url', 'code', 'short-copy', 'long-copy'):
+        child.add_argument('--' + key, default='')
+    child.add_argument('--disclosure', default='Paid promotion')
+    child.add_argument('--accent', default='#FF5A1F')
+    child.add_argument('--ink', default='#1B1B1F')
+    child.add_argument('--unpaid', dest='paid', action='store_false')
     command = sub.add_parser('render')
     command.add_argument('pid')
     mode = command.add_mutually_exclusive_group()
@@ -467,7 +493,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         ensure_dirs()
-        status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
+        status = {"sponsor": cmd_sponsor, "rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "stages": cmd_stages, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
          "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "pack": cmd_pack, "block": cmd_block, "footage": cmd_footage,

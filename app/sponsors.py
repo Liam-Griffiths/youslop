@@ -1,4 +1,5 @@
 """Sponsor placement in the unsponsored cut, always at paragraph boundaries."""
+from . import brand
 from .config import HEAD_PAD, WORDS_PER_MINUTE
 
 
@@ -80,7 +81,7 @@ def scene_context(ctx):
     from urllib.parse import urlsplit
 
     values = {**ctx.get('vars', {}), **ctx}
-    defaults = dict(name='Corkbored', logo='', url='corkbored.com', code='',
+    defaults = dict(name=brand.NAME, logo='', url=brand.SITE_URL, code='',
                     made='This video was made with',
                     learn='Learn how you can build your own videos',
                     link='Link in the description', accent='#FF5A1F', ink='#1B1B1F')
@@ -171,3 +172,51 @@ def scene_context(ctx):
                 raise ValueError(f'sponsor beat {key} is outside the segment')
             beats[key], sources[key] = value, 'explicit'
     return dict(sponsor=sponsor, beats=beats, beat_sources=sources)
+
+
+def house():
+    from .schema import Sponsor
+    return Sponsor(id='house', name=brand.NAME, url=brand.SITE_URL, paid=False,
+                   disclosure='This video was made with', template='sponsor/house_short.html',
+                   short_copy=f'This video was made with {brand.NAME}. Learn how you can build your own videos, with the link in the description below.')
+
+
+def library(channel):
+    return [house(), *[s for s in channel.sponsors if s.id != 'house']]
+
+
+def validate_sponsor(payload, existing=None):
+    """Validate writes; ids, templates and logo paths are owned by the app."""
+    import re
+    from .schema import Sponsor
+    sponsor = Sponsor.from_dict(existing.to_dict()) if existing else Sponsor()
+    limits = dict(name=64, url=120, code=32, short_copy=10000, long_copy=10000, disclosure=64)
+    if set(payload) - {*limits, 'accent', 'ink', 'paid'}:
+        raise ValueError('Unknown or read-only sponsor field')
+    for key, value in payload.items():
+        if key in limits and (not isinstance(value, str) or len(value) > limits[key]):
+            raise ValueError(f'Invalid sponsor {key}')
+        if key in ('accent', 'ink') and (not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value)):
+            raise ValueError('Expected six-digit hex colour')
+        if key == 'paid' and not isinstance(value, bool):
+            raise ValueError('paid must be boolean')
+        setattr(sponsor, key, value)
+    if not sponsor.name.strip():
+        raise ValueError('A sponsor needs a name')
+    return sponsor
+
+
+def copy_to_slot(channel, slot, sponsor_id):
+    """Snapshot library values; never touch recordings or resolve on load."""
+    sponsor = next((s for s in library(channel) if s.id == sponsor_id), None)
+    if sponsor is None:
+        raise ValueError('Sponsor not found')
+    slot.sponsor_id, slot.paid = sponsor.id, sponsor.paid
+    slot.script = sponsor.long_copy if slot.variant == 'long' else sponsor.short_copy
+    slot.template = sponsor.template if slot.variant == 'short' else 'sponsor/long.html'
+    slot.vars = dict(name=sponsor.name, url=sponsor.url, code=sponsor.code,
+                     accent=sponsor.accent, ink=sponsor.ink, made=sponsor.disclosure,
+                     # The house card's middle line; a paid sponsor has no such line.
+                     learn='Learn how you can build your own videos' if sponsor.id == 'house' else '',
+                     link='Link in the description',
+                     logo=('/scene/{token}/channel/' + sponsor.logo) if sponsor.logo else '')

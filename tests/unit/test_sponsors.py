@@ -290,3 +290,127 @@ def test_music_absent_and_preceding_reads_shift_check_time(cut):
     sb['music'] = True
     sb['style']['sponsor_music_db'] = 0
     assert len(check.sponsor_music(sb, cut.frame, check._ctx(sb))) == 2
+
+
+@pytest.fixture
+def sponsor_channel():
+    from app import channels
+    from app.schema import Channel
+    channel = Channel(id='sponsor-library-test', name='Library test')
+    channels.save(channel)
+    return channel
+
+
+def test_channel_library_roundtrip_and_house(sponsor_channel, cut):
+    from app import brand, channels
+    from app.schema import Channel, Sponsor
+    assert Channel.from_dict({'id': 'old', 'name': 'Old', 'future': 1}).sponsors == []
+    sponsor_channel.sponsors = [Sponsor(name='Example', short_copy='A short read')]
+    channels.save(sponsor_channel)
+    raw = sponsor_channel.to_dict()
+    raw['sponsors'][0]['future'] = True
+    assert Channel.from_dict(raw).sponsors == channels.load(sponsor_channel.id).sponsors
+    assert [s.id for s in sponsors.library(sponsor_channel)][0] == 'house'
+    house = sponsors.house()
+    assert house.name == brand.NAME and house.url == brand.SITE_URL and not house.paid
+    assert house.short_copy.startswith(f'This video was made with {brand.NAME}.')
+    assert house.template == 'sponsor/house_short.html'
+    assert not any(s.id == 'house' for s in channels.load(sponsor_channel.id).sponsors)
+    sponsors.suggest_slots(cut)
+    render.timeline(cut)
+    assert cut.sponsors == []
+    assert Project.from_dict(cut.to_dict()).sponsors == []
+
+
+def test_library_crud_snapshots_and_takes(sponsor_channel, cut):
+    from app import channels, main, store
+    cid = sponsor_channel.id
+    created = main.add_channel_sponsor(cid, {'name': 'Example', 'short_copy': 'Short read',
+                                           'long_copy': 'Long read', 'code': 'SAVE'})
+    ident = created['id']
+    assert len(main.list_channel_sponsors(cid)) == 2
+    cut.channel_id = cid
+    cut.sponsors = [slot()]
+    store.save(cut)
+    before = deepcopy(cut.sponsors[0].to_dict())
+    saved = main.patch_sponsor(cut.id, 'read', {'sponsor_id': ident})['sponsors'][0]
+    assert saved['script'] == 'Short read' and saved['vars']['code'] == 'SAVE'
+    assert saved['take'] == before['take'] and saved['history'] == before['history']
+    main.edit_channel_sponsor(cid, ident, {'short_copy': 'Edited library copy'})
+    assert store.load(cut.id).sponsors[0].script == 'Short read'
+    main.patch_sponsor(cut.id, 'read', {'variant': 'long', 'sponsor_id': ident})
+    assert store.load(cut.id).sponsors[0].script == 'Long read'
+    main.delete_channel_sponsor(cid, ident)
+    assert len(main.list_channel_sponsors(cid)) == 1
+    assert store.load(cut.id).sponsors[0].vars['name'] == 'Example'
+    saved = main.patch_sponsor(cut.id, 'read', {'sponsor_id': 'house', 'variant': 'short'})['sponsors'][0]
+    assert saved['script'] == sponsors.house().short_copy and not saved['paid']
+    assert not channels.load(cid).sponsors
+
+
+@pytest.mark.parametrize('payload', [{'name': ''}, {'name': 3}, {'name': 'x', 'paid': 'yes'},
+    {'name': 'x', 'accent': 'red'}, {'name': 'x', 'ink': None}, {'name': 'x', 'url': 'x' * 121},
+    {'name': 'x', 'logo': '../outside.png'}, {'name': 'x', 'id': 'house'}])
+def test_library_validation(sponsor_channel, payload):
+    from app import main
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        main.add_channel_sponsor(sponsor_channel.id, payload)
+    assert exc.value.status_code == 400
+
+
+def test_library_readonly_and_missing(sponsor_channel):
+    from app import main
+    from fastapi import HTTPException
+    for ident, status in [('house', 400), ('missing', 404)]:
+        for operation in (lambda: main.edit_channel_sponsor(sponsor_channel.id, ident, {'name': 'x'}),
+                          lambda: main.delete_channel_sponsor(sponsor_channel.id, ident)):
+            with pytest.raises(HTTPException) as exc:
+                operation()
+            assert exc.value.status_code == status
+
+
+def test_library_logo_validation_and_immutable_files(sponsor_channel):
+    import io
+    from PIL import Image
+    from fastapi import HTTPException, UploadFile
+    from app import channels, main
+    cid = sponsor_channel.id
+    ident = main.add_channel_sponsor(cid, {'name': 'Logo test', 'ink': '#123456'})['id']
+    def upload(data):
+        return main.upload_sponsor_logo(cid, ident, UploadFile(filename='../bad.svg', file=io.BytesIO(data)))
+    for data in (b'<svg/>', b'x' * (2 * 1024 * 1024 + 1)):
+        with pytest.raises(HTTPException) as exc:
+            upload(data)
+        assert exc.value.status_code == 400
+    buf = io.BytesIO()
+    Image.new('RGB', (8, 8), 'red').save(buf, 'PNG')
+    first = upload(buf.getvalue())['logo']
+    second = upload(buf.getvalue())['logo']
+    assert first != second and first.startswith('sponsors/')
+    assert (channels.channel_dir(cid) / first).exists()
+    read = SponsorSlot()
+    sponsors.copy_to_slot(channels.load(cid), read, ident)
+    p = Project(id='logo-preview', idea='test', channel_id=cid)
+    _, ctx, _ = render._sponsor_preview(p, read)
+    assert ctx['asset_roots']['channel_root'] == str(channels.CHANNELS_DIR / cid)
+    assert ctx['sponsor']['logo'] == '/scene/{token}/channel/' + second
+    assert ctx['sponsor']['ink'] == '#123456'
+
+
+def test_sponsor_cli_guard_and_add(sponsor_channel, monkeypatch, capsys):
+    import os
+    import json
+    from app import cli
+    from app.config import CACHE_DIR, ensure_dirs
+    ensure_dirs()
+    marker = CACHE_DIR / 'server.json'
+    marker.write_text(json.dumps({'pid': os.getpid()}))
+    try:
+        assert cli.main(['sponsor', 'list', sponsor_channel.id]) == 0
+        assert cli.main(['sponsor', 'add', sponsor_channel.id, 'Blocked']) == 1
+        assert 'the app is open' in capsys.readouterr().err
+    finally:
+        marker.unlink()
+    assert cli.main(['sponsor', 'add', sponsor_channel.id, 'CLI sponsor', '--short-copy', 'Read']) == 0
+    assert json.loads(capsys.readouterr().out)['short_copy'] == 'Read'

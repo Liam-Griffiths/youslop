@@ -638,6 +638,29 @@ class Thumb:
 
 
 @dataclass
+class Sponsor:
+    id: str = field(default_factory=lambda: _uid("sr"))
+    name: str = ""
+    logo: str = ""                 # immutable relative channel file
+    accent: str = "#FF5A1F"
+    ink: str = "#1B1B1F"
+    url: str = ""
+    code: str = ""
+    short_copy: str = ""
+    long_copy: str = ""
+    disclosure: str = "Paid promotion"
+    paid: bool = True
+    template: str = "sponsor/short.html"
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Sponsor":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class Channel:
     """A series. Videos in one inherit its look and open on its slate."""
     id: str
@@ -663,9 +686,11 @@ class Channel:
     thumb_template: str = "banner"
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    sponsors: list[Sponsor] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "sponsors": [s.to_dict() for s in self.sponsors],
             "block_presets": deepcopy(self.block_presets),
             "id": self.id, "name": self.name, "tagline": self.tagline,
             "concept": self.concept, "default_minutes": self.default_minutes,
@@ -700,8 +725,9 @@ class Channel:
         avatar = AvatarSpec(**{k: v for k, v in (d.get("avatar") or {}).items()
                                if k in AvatarSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"block_presets", "frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
+                 - {"sponsors", "block_presets", "frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
         return cls(**{k: v for k, v in d.items() if k in known},
+                   sponsors=[Sponsor.from_dict(s) for s in (d.get("sponsors") or [])],
                    block_presets=deepcopy(d.get("block_presets") or []),
                    frame=FrameSpec.from_dict(d.get("frame") or {}),
                    style=style, intro=intro, voice=voice, outro=outro,
