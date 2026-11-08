@@ -19,6 +19,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-08 (later):** owner asked for an app-wide block library: T12.8 (top-level Blocks screen `#/blocks`, posters, motion preview, try-with-your-text, use/pin/duplicate) and T12.9 (channel and project presets). T12.5 now builds on T12.8. Queue: T9.12, T9.13, T11.5, T11.6, T12.8, T12.5, T12.9, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > **2026-11-08 (night):** T9.12, T9.13, T11.5, T11.6 done. Owner approved T12.10a/b (block overlays on any picture: blocks over footage, planned and edited). Queue: T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > **Owner decision pending (T12.8c log):** "Duplicate as mine" cannot fork built-in blocks: none of the 39 pass the user-block sandbox. Choose (a) convert built-ins over time, (b) trust unedited forks of built-ins, or (c) presets only. The button is disabled with a reason until then.
+> **2026-11-08 (morning): queue complete; ready for user testing.** Done since the night note: T12.8 (+b, c), T12.5, T12.10a/b/c, T12.9 (+b), T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7 (implemented; owner listens). Owner items: (1) listen to the T1.7 before/after section and keep or revert the linear master; (2) decide "Duplicate as mine" for built-in blocks (T12.8c log); (3) first real paid-sponsor upload confirms the YouTube flag path (T10.7). Codex 5-hour ~40%, weekly ~19%.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
