@@ -33,6 +33,8 @@ class Wikimedia:
     # full-resolution files off Wikimedia for pictures nobody ends up using.
     THUMB_W = 480
     FULL_W = 1920
+    # Standard Commons thumbnail widths (https://w.wiki/GHai), largest first.
+    THUMB_STEPS = (1280, 960, 500, 330, 250)
 
     def available(self) -> bool:
         return True
@@ -53,6 +55,21 @@ class Wikimedia:
         if not pages:
             return None
         info = (pages[0].get("imageinfo") or [{}])[0]
+        width = int(info.get("width") or 0)
+        # Commons hands back the unscaled original when it is narrower than the
+        # width asked for, and rate-limits automated fetches of originals (429).
+        # Ask again for the largest standard thumbnail width below the original.
+        if width and width <= self.FULL_W:
+            step = next((w for w in self.THUMB_STEPS if w < width), None)
+            if step:
+                again = _get(
+                    "https://commons.wikimedia.org/w/api.php", "wikimedia",
+                    params={"action": "query", "format": "json", "formatversion": "2",
+                            "titles": ref, "prop": "imageinfo",
+                            "iiprop": "url|size", "iiurlwidth": str(step)},
+                )
+                more = ((again or {}).get("query") or {}).get("pages") or []
+                info = (more[0].get("imageinfo") or [info])[0] if more else info
         url = info.get("thumburl") or info.get("url")
         if not url:
             return None
