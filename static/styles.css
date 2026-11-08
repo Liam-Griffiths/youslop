@@ -1368,3 +1368,15 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .block-player select { width:auto; min-width:140px; }
 .block-player .row { align-items:center; gap:10px; }
 .block-player .row > h2 { margin:0; margin-right:auto; }
+
+/* Block themes keep photographic Look controls separate. */
+.block-theme { margin: 14px 0; }
+.block-theme-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin:14px 0; }
+.block-theme-token input[type=color] { width:42px; height:34px; padding:3px; border:1px solid var(--line); border-radius:4px; background-color:var(--bg); }
+.block-theme-token select { width:100%; }
+.block-theme-token .row { flex-wrap:wrap; gap:6px; }
+.block-theme-warning { display:block; color:var(--warn); }
+.block-theme-sheet { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.block-theme-sheet button { display:flex; flex-direction:column; padding:6px; gap:6px; }
+.block-theme-sheet img { width:100%; max-height:200px; object-fit:contain; }
+img.themed-pending { opacity:.45; }

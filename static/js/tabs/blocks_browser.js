@@ -1,11 +1,20 @@
 /* Shared library and pick browser. Scratch values never save themselves. */
 let blocksBrowser = null;
+let blockPreviewAs = '';
+let themedPosterObserver = null;
+let themedPosterQueue = [];
+let themedPosterBusy = false;
+let themedPosterSequence = 0;
+const themedPosterCache = new Map();
 
 async function renderBlocks(path = '', options = {}) {
+  themedPosterCache.clear();
   if (options.mode !== 'channel') {
     options.project ||= state.project?.id;
     options.channel ||= state.project?.channel_id;
   }
+  if (options.project && options.project !== blocksBrowser?.options.project) blockPreviewAs = `project:${options.project}`;
+  else if (options.channel && options.channel !== blocksBrowser?.options.channel) blockPreviewAs = `channel:${options.channel}`;
   const route = location.hash;
   const query = path.startsWith('search/') ? decodeURIComponent(path.slice(7)) : '';
   const selected = query ? '' : decodeURIComponent(path);
@@ -22,6 +31,9 @@ async function renderBlocks(path = '', options = {}) {
   view.innerHTML = `<h1>Blocks</h1><p class="sub">Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
     ${options.mode ? '<button type="button" class="btn ghost" id="block-picker-close">Back</button>' : ''}
     <div class="blocks-browser"><aside class="blocks-filters" aria-label="Block filters">
+    <label for="blocks-preview-as">Preview as</label><select id="blocks-preview-as"><option value="">Default</option>
+      ${channels.map(c => `<option value="channel:${esc(c.id)}">${esc(c.name)}</option>`).join('')}
+      ${options.project ? `<option value="project:${esc(options.project)}">This project</option>` : ''}</select>
     <label for="blocks-search">Find a block</label><input type="search" id="blocks-search" value="${esc(query)}" placeholder="Name, tag or variable">
     ${[['category','Category', [...new Set(items.map(b => b.category))].sort()],
        ['aspect','Aspect',['16:9','9:16']], ['source','Source',['built-in','packs','mine']]].map(([key,label,values]) => `
@@ -39,9 +51,17 @@ async function renderBlocks(path = '', options = {}) {
       <button type="button" class="btn" onclick="describeBlock(this)" ${state.job?.kind === 'create block' && !state.job.done ? 'disabled' : ''}>Create block</button>
       <div id="block-result" role="status">${blockCreationResult()}</div></details>
       <p id="blocks-count" class="mono" role="status"></p><div id="blocks-grid" class="blocks-grid"></div></section></div>`;
+  $('#blocks-preview-as').value = blockPreviewAs;
+  blockPreviewAs = $('#blocks-preview-as').value;
+  $('#blocks-preview-as').onchange = e => {
+    blockPreviewAs = e.target.value; blockPreviewSequence++;
+    themedPosterObserver?.disconnect(); themedPosterQueue = [];
+    paintBlocksGrid(); paintBlockDetails();
+  };
   $('#block-description').oninput = e => { state.blockDescription = e.target.value; };
   for (const id of ['search','category','aspect','source','data','sort','favourites','channel','presets']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
   $('#blocks-clear').onclick = () => { for (const el of document.querySelectorAll('.blocks-filters input,.blocks-filters select')) {
+    if (el.id === 'blocks-preview-as') continue;
     if (el.type === 'checkbox') el.checked = false; else el.value = el.id === 'blocks-sort' ? 'recommended' : '';
   } paintBlocksGrid(); };
   if (options.mode) $('#block-picker-close').onclick = () => { $('#inspector').innerHTML = ''; return options.mode === 'channel' ? refreshChannel() : render(); };
@@ -112,9 +132,16 @@ function paintBlocksGrid() {
       cards[Math.max(0,Math.min(cards.length-1,i+step))]?.focus();
     };
   });
+  observeThemedPosters();
 }
 
 function blockPoster(block, aspect) {
+  if (blockPreviewAs) {
+    const url = themedPosterCache.get(`${blockPreviewAs}/${block.ref}/${aspect}`);
+    // Until the themed poster arrives, show the default one dimmed rather than an empty image.
+    const src = url || block.posters[aspect];
+    return `<img ${src ? `src="${esc(src)}"` : ''} ${url ? '' : 'class="themed-pending"'} data-themed-ref="${esc(block.ref)}" data-themed-aspect="${esc(aspect)}" alt="${esc(block.name)}, ${esc(aspect)} themed preview">`;
+  }
   return block.posters[aspect] ? `<img src="${esc(block.posters[aspect])}" alt="${esc(block.name)}, ${esc(aspect)} preview">`
     : `<span class="block-placeholder" role="img" aria-label="${esc(block.name)}, ${esc(aspect)} preview pending">${esc(block.name)}<small>Poster pending</small></span>`;
 }
@@ -200,6 +227,7 @@ function paintBlockDetails(aspect) {
     });
   }; });
   panel.querySelectorAll('[data-aspect]').forEach(button => { button.onclick = () => paintBlockDetails(button.dataset.aspect); });
+  observeThemedPosters();
 }
 
 function blockDuration(d) {
@@ -284,6 +312,7 @@ function previewMessage(target, message, retry) {
 }
 
 async function requestBlockPreview(b, aspect, kind, values, target, options = {}) {
+  options = {...(blockPreviewAs ? {theme_context:browserThemeContext()} : {}),...options};
   const sequence = ++blockPreviewSequence;
   if (target.dataset) target.dataset.previewActive = 'true';
   blockPreviewPending = {b,aspect,kind,values,target,sequence,options};
@@ -337,8 +366,9 @@ async function requestBlockPreview(b, aspect, kind, values, target, options = {}
   blockPreviewBusy = false;
 }
 
-function openBlockPreview(b, aspect, values) {
-  const options = blocksBrowser.options;
+function openBlockPreview(b, aspect, values, previewOptions = {}) {
+  const options = blocksBrowser?.options || {};
+  previewOptions = {...(blockPreviewAs ? {theme_context:browserThemeContext()} : {}),...previewOptions};
   const dialog = studioDialog('block-player', `<div class="row"><h2 id="studio-dialog-title">${esc(b.name)}</h2>
     <button type="button" class="btn sm" id="block-player-close">Close</button></div>
     <div class="block-player-screen">${blockPoster(b,aspect)}</div><p role="status" aria-live="polite"></p>
@@ -356,7 +386,7 @@ function openBlockPreview(b, aspect, values) {
     dialog.querySelector('video')?.pause();
     dialog.querySelector('.block-player-screen').style.aspectRatio = dialog.querySelector('#block-player-aspect').value.replace(':','/');
     requestBlockPreview(b,dialog.querySelector('#block-player-aspect').value,'motion',values,dialog,
-      {scale:2,background:dialog.querySelector('#block-player-background')?.value || 'checker',project:options.project,slide:options.slide});
+      {scale:2,background:dialog.querySelector('#block-player-background')?.value || 'checker',project:options.project,slide:options.slide,...previewOptions});
   };
   dialog.querySelector('#block-player-close').onclick = () => dialog.close();
   dialog.querySelector('#block-player-aspect').onchange = refresh;
@@ -593,4 +623,46 @@ async function blockPresetTarget(b, aspect, values) {
     } catch (e) { $('#preset-status').textContent = e.message; }
   };
   if (current) { $('#preset-update').onclick = () => save(true); $('#preset-delete').onclick = () => save(false,true); }
+}
+
+
+function browserThemeContext() {
+  const [scope,owner] = blockPreviewAs.split(':');
+  return {scope,owner};
+}
+
+function observeThemedPosters() {
+  themedPosterObserver?.disconnect();
+  if (!blockPreviewAs) return;
+  const browser = blocksBrowser, choice = blockPreviewAs;
+  themedPosterObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      themedPosterObserver.unobserve(entry.target);
+      if (entry.target.classList.contains('themed-pending') || !entry.target.getAttribute('src')) themedPosterQueue.push({target:entry.target,browser,choice});
+    }
+    drainThemedPosters();
+  });
+  document.querySelectorAll('[data-themed-ref]').forEach(img => themedPosterObserver.observe(img));
+}
+
+async function drainThemedPosters() {
+  if (themedPosterBusy) return;
+  themedPosterBusy = true;
+  while (themedPosterQueue.length) {
+    const {target,browser,choice} = themedPosterQueue.shift();
+    if (!target.isConnected || blocksBrowser !== browser || blockPreviewAs !== choice) continue;
+    const ref = target.dataset.themedRef, aspect = target.dataset.themedAspect;
+    const key = `${choice}/${ref}/${aspect}`;
+    try {
+      let url = themedPosterCache.get(key);
+      if (!url) {
+        const [scope,id] = choice.split(':');
+        const result = await api('/api/blocks/theme-sheet',{method:'POST',body:JSON.stringify({scope,id,ref,aspect,session:blockPreviewSession+'-posters',sequence:++themedPosterSequence})});
+        url = result.posters?.[0]?.url;
+        if (url && blocksBrowser === browser) themedPosterCache.set(key,url);
+      }
+      if (url && target.isConnected && blockPreviewAs === choice) { target.src = url; target.classList.remove('themed-pending'); }
+    } catch (e) { if (target.isConnected) target.alt = `Preview unavailable: ${e.message}`; }
+  }
+  themedPosterBusy = false;
 }

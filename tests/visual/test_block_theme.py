@@ -35,3 +35,22 @@ def test_themed_title_card(project, tmp_path, monkeypatch):
     best = min(max(abs(a-b) for a, b in zip(image.getpixel((100,y)), (255,51,102)))
                for y in range(44, 55))
     assert best <= 20
+
+
+def test_preview_as_channel_rule_pixels(tmp_path, monkeypatch):
+    """The same on-demand endpoint used by visible Blocks cards, one still."""
+    from app import block_library, paths
+    monkeypatch.setattr(paths, 'data_root', lambda: tmp_path)
+    monkeypatch.setattr(channels, 'CHANNELS_DIR', tmp_path / 'channels')
+    monkeypatch.delenv('CORKBORED_BLOCK_POSTERS', raising=False)
+    channel = Channel(id='preview-as', name='Preview as')
+    channel.style.block_theme = {'accent': '#3DFFDC'}
+    channels.save(channel)
+    result = block_library.theme_sheet(dict(scope='channel', id=channel.id,
+        ref='title_card', aspect='16:9', session='preview-as-pixels', sequence=0))
+    key = result['posters'][0]['url'].split('/')[-2]
+    image = Image.open(block_library.preview_file(key, 'trial')).convert('RGB')
+    assert image.size == (480, 270)
+    best = min(max(abs(a-b) for a,b in zip(image.getpixel((100,y)), (61,255,220)))
+               for y in range(44,55))
+    assert best <= 20

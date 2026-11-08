@@ -109,6 +109,25 @@ assert(opened.path === 'user/receipt' && opened.options.mode === 'pick','new blo
 assert(blockCreationResult().includes('12 input tokens'),'usage preserved');
 await complete({error:'Check failed'});
 assert(blockCreationResult().includes('Check failed'),'job errors preserved');
+blockPreviewAs = 'channel:ctheme';
+for (const kind of ['trial','motion']) {
+  const themed = requestBlockPreview(b,'16:9',kind,{},target);
+  assert(calls.at(-1)[1].theme_context.owner === 'ctheme','trial and hover inherit Preview as');
+  resolve({disabled:true}); await themed;
+}
+const visible = {isConnected:true,dataset:{themedRef:'title_card',themedAspect:'16:9'}};
+const hidden = {...visible,isConnected:false};
+themedPosterQueue = [{target:visible,browser:blocksBrowser,choice:blockPreviewAs},
+                     {target:hidden,browser:blocksBrowser,choice:blockPreviewAs}];
+const beforePosters = calls.length, posters = drainThemedPosters();
+assert(calls.length === beforePosters+1 && calls.at(-1)[1].ref === 'title_card','one visible poster at a time');
+resolve({posters:[{url:'/fixture.png'}]}); await posters;
+assert(visible.src === '/fixture.png' && calls.length === beforePosters+1,'removed cards never render');
+blockPreviewAs = '';
+const defaults = requestBlockPreview(b,'16:9','trial',{},target);
+assert(!calls.at(-1)[1].theme_context,'Default restores authored block theme');
+resolve({disabled:true}); await defaults;
+
 
 
 ''')

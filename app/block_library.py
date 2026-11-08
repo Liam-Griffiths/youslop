@@ -343,3 +343,88 @@ def forkable(ref, item):
         except Exception:
             _FORKABLE[key] = False
     return _FORKABLE[key]
+
+
+SHEET_BLOCKS = ('title_card', 'lower_third_rule', 'number_slam', 'quote_card', 'step_list', 'end_card')
+SHEET_VALUES = {'lower_third_rule': {'picture': '/static/blocks/split_comparison/sample.png'}}
+
+
+def sheet_poster_key(item, theme, aspect, values):
+    import json
+    return hashlib.sha256(json.dumps([signature(item, theme), aspect, values, 'sheet-v1'], sort_keys=True).encode()).hexdigest()
+
+
+def theme_context(scope='', owner='', overrides=None):
+    """Resolve scratch overrides on a fresh owner; never mutate stored settings."""
+    import re
+    from . import block_theme, store
+    if scope not in ('', 'channel', 'project'):
+        raise ValueError('Unknown theme scope')
+    if scope and (not isinstance(owner, str) or not re.fullmatch(r'[\w-]+', owner)):
+        raise ValueError('Choose a theme owner')
+    project = store.load(owner) if scope == 'project' else None
+    channel = channels.load(owner) if scope == 'channel' else None
+    obj = project or channel
+    if overrides is not None:
+        if not isinstance(overrides, dict) or not obj:
+            raise ValueError('Theme overrides need an owner')
+        from .variables import apply
+        for key, value in overrides.items():
+            apply(project, channel, scope, 'block.' + key, value)
+    tokens = block_theme.resolve(project, channel)
+    return dict(tokens=tokens, theme={k: v['value'] for k, v in tokens.items()},
+                aspect='9:16' if obj and getattr(obj, 'aspect', '') == 'portrait' else '16:9')
+
+
+def theme_sheet(payload):
+    """Batch six midpoint posters, or one visible library card, in one session."""
+    import re
+    context = theme_context(payload.get('scope', ''), payload.get('id', ''), payload.get('overrides'))
+    session, sequence = payload.get('session'), payload.get('sequence')
+    if not isinstance(session, str) or not re.fullmatch(r'[\w-]{1,80}', session) or type(sequence) is not int or sequence < 0:
+        raise ValueError('Invalid preview sequence')
+    refs = [payload['ref']] if 'ref' in payload else SHEET_BLOCKS
+    aspect = payload.get('aspect', context['aspect'])
+    found = registry()
+    if any(ref not in found or aspect not in found[ref]['meta']['aspects'] for ref in refs):
+        raise ValueError('Unknown block or unsupported aspect')
+    with _LOCK:
+        if sequence <= _REQUESTS.get(session, -1):
+            return {'stale': True}
+        if len(_REQUESTS) >= 256 and session not in _REQUESTS:
+            _REQUESTS.pop(next(iter(_REQUESTS)))
+        _REQUESTS[session] = sequence
+    rows, items, outputs = [], [], {}
+    disabled = os.environ.get('CORKBORED_BLOCK_POSTERS') == 'off'
+    owner = paths.data_root() / '.cache/blocks'
+    for ref in refs:
+        item = found[ref]
+        values = SHEET_VALUES.get(ref, {})
+        template, ctx = blocks.prepare(ref, values, aspect, _block=item, theme=context['theme'])
+        key = sheet_poster_key(item, context['theme'], aspect, values)
+        out = preview_file(key, 'trial')
+        if disabled and not out.exists():
+            continue
+        rows.append(dict(ref=ref, name=item['meta']['name'], aspect=aspect, values=values,
+                         url=f'/api/block-previews/{key}/trial'))
+        if not out.exists():
+            _, html, ctx = scenes._prepare(owner, template, ctx, ctx['duration'], (ctx['width'], ctx['height']), 30)
+            outputs[ref] = out
+            items.append(dict(clip=ref, url_path=f'/scene/{{token}}/{html.name}', W=ctx['width'], H=ctx['height'],
+                              size=(ctx['width']//4, ctx['height']//4), t=ctx['duration']/2, assets_root=str(item['root'])))
+    def publish(ref, png):
+        out = outputs[ref]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        temporary = out.with_suffix('.part')
+        temporary.write_bytes(png)
+        os.replace(temporary, out)
+    with _RENDER_LOCK:
+        if _REQUESTS.get(session) != sequence:
+            return {'stale': True}
+        # Another session may have filled the same cache while this waited.
+        items = [item for item in items if not outputs[item['clip']].exists()]
+        if items:
+            stage.capture_stills(items, owner / 'scenes', on_still=publish)
+        if _REQUESTS.get(session) != sequence:
+            return {'stale': True}
+    return dict(**context, posters=rows, disabled=disabled)

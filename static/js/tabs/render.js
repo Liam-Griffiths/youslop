@@ -31,6 +31,7 @@ async function paintRender() {
   if (state.project !== p || state.stage !== 'publish') return;
   const upload = await uploadPanel(p);
   const settings = `<details><summary>Look, sound and opening</summary>
+    ${blockThemePanel()}
     ${kept ? `<div class="panel row">
       <span>${esc(kept)}</span>
       <button class="btn" onclick="doRender(${state.job.kind === 'preview render'})">Resume</button>
@@ -142,6 +143,7 @@ async function paintRender() {
 
   `;
   $('#tabbody').innerHTML = publishLayout(p, finish, stages, settings, upload);
+  mountBlockTheme('project', p.id);
   for (const row of document.querySelectorAll('.publish-note[data-note]')) {
     const finding = row.dataset.finding === 'true';
     const notes = finding ? finish.check.findings : finish.review.notes;

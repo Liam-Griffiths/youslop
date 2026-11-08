@@ -699,7 +699,7 @@ function paintChannelSetup() {
             onchange="saveChannel({default_minutes:+this.value})"></label>
       </div>
 
-      <div class="panel">
+      <div><div class="panel">
         <h3>House look</h3>
         <p class="mono" style="color:var(--ink-faint);margin-top:-4px">
           New videos in this channel start from these.</p>
@@ -726,6 +726,8 @@ function paintChannelSetup() {
         <label class="field"><span>Music under voice — <b>${st.music_db.toFixed(0)} dB</b></span>
           <input type="range" min="-40" max="-10" step="1" value="${st.music_db}"
             onchange="saveChannelStyle({music_db:+this.value})"></label>
+      </div>
+      ${blockThemePanel()}
       </div>
     </div>
 
@@ -876,6 +878,7 @@ function paintChannelSetup() {
     </div>
   `;
   paintJob();
+  mountBlockTheme('channel', c.id);
 }
 
 // A channel response carries no video list and no preview flags — those are

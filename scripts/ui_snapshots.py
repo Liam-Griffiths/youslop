@@ -64,7 +64,7 @@ def console_error(event):
 def seed():
     from app import channels, config, library, settings, store, footage, ffutil
     from PIL import Image
-    from app.schema import Channel, Project, SponsorSlot
+    from app.schema import Channel, Project, SponsorSlot, Style
     config.ensure_dirs()
     from app import block_library
     from PIL import ImageDraw
@@ -102,8 +102,22 @@ def seed():
     footage._save(shoot)
     settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures',
+        style=Style(block_theme={'accent':'#3DFFDC'}),
         blocks=['title_card'], block_presets=[dict(id='snapshot-preset', name='Our chapter card',
             block='title_card', values={'title':'The next chapter'})]))
+    # Synthetic cached sheet/grid posters: UI snapshots never start captures.
+    theme = block_library.theme_context('channel', 'csnapshot')['theme']
+    for ref in block_library.SHEET_BLOCKS:
+        for aspect, size in [('16:9', (480,270)), ('9:16', (270,480))]:
+            key = block_library.sheet_poster_key(block_library.registry()[ref], theme, aspect,
+                                                block_library.SHEET_VALUES.get(ref, {}))
+            path = block_library.preview_file(key, 'trial')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image = Image.new('RGB', size, theme['bg'])
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((24,24,size[0]-24,28), fill=theme['accent'])
+            draw.text((24,50), ref.replace('_',' ').upper(), fill=theme['ink'])
+            image.save(path)
     source = REPO / 'tests/fixtures/project_min'
     for fmt in FORMATS:
         pid = f'psnap{fmt}'
@@ -222,6 +236,21 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/channels/csnapshot/setup':
+                _evaluate(cdp, session, """(() => {
+                  const panel = document.querySelector('#block-theme');
+                  if (panel.querySelector('#block-token-accent').value.toUpperCase() !== '#3DFFDC' ||
+                      panel.querySelector('[data-source=accent]').textContent !== 'channel') throw Error('Channel block theme missing');
+                  panel.scrollIntoView(); return true;
+                })()""")
+            if route == '#/blocks':
+                _evaluate(cdp, session, """(async () => {
+                  const input = document.querySelector('#blocks-preview-as');
+                  input.value = 'channel:csnapshot'; input.dispatchEvent(new Event('change'));
+                  await new Promise(r => setTimeout(r, 400));
+                  if (!document.querySelector('[data-themed-ref=title_card]')) throw Error('Themed poster missing');
+                  return true;
+                })()""")
             if route == '#/channels/csnapshot':
                 _evaluate(cdp, session, '''(() => {
                   const host = document.querySelector('#channel-blocks');

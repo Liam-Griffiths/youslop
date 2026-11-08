@@ -11,7 +11,7 @@ def test_publish_lifecycle(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(p).read_text() for p in (
-        'static/js/palette.js', 'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
+        'static/js/tabs/block_theme.js', 'static/js/palette.js', 'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
         'static/js/timeline/draw.js'))
     harness = r'''
 const loop = new imports.gi.GLib.MainLoop(null, false);

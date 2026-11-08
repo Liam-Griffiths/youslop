@@ -109,15 +109,61 @@ def describe_block(payload: dict = Body(...)) -> dict:
     return {'job': jobs.start('create block', '', lambda pr: describe(description, pr))}
 
 
+@app.get('/api/blocks/theme')
+def get_block_theme(scope: str = '', id: str = '') -> dict:
+    from . import block_library, block_theme, themes
+    try:
+        return dict(**block_library.theme_context(scope, id), fonts=block_theme.fonts(), themes=themes.THEMES)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.patch('/api/blocks/theme')
+def save_block_theme(payload: dict = Body(...)) -> dict:
+    from . import block_library, variables
+    scope, owner = payload.get('scope'), payload.get('id')
+    try:
+        block_library.theme_context(scope, owner)  # Validate before choosing a lock/path.
+        if scope not in ('channel', 'project'):
+            raise ValueError('Choose a theme owner')
+        with (channels.lock_for(owner) if scope == 'channel' else store.lock_for(owner)):
+            obj = channels.load(owner) if scope == 'channel' else store.load(owner)
+            edits = payload.get('overrides')
+            if not isinstance(edits, dict):
+                raise ValueError('Theme overrides must be an object')
+            for key, value in edits.items():
+                variables.apply(obj if scope == 'project' else None, obj if scope == 'channel' else None,
+                                scope, 'block.' + key, value)
+            (channels.save if scope == 'channel' else store.save)(obj)
+        return block_library.theme_context(scope, owner)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post('/api/blocks/theme-sheet')
+def block_theme_sheet(payload: dict = Body(...)) -> dict:
+    from .block_library import theme_sheet
+    try:
+        return theme_sheet(payload)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post('/api/blocks/{ref:path}/preview')
 def block_preview(ref: str, payload: dict = Body(...)) -> dict:
-    from .block_library import preview
+    from .block_library import preview, theme_context
     try:
+        selection = payload.get('theme_context')
+        if selection is not None and not isinstance(selection, dict):
+            raise ValueError('Invalid theme context')
+        theme = theme_context(selection.get('scope', ''), selection.get('owner', ''),
+                              selection.get('overrides'))['theme'] if selection is not None else None
         return preview(ref, payload.get('values', {}), payload.get('aspect', '16:9'),
                        payload.get('kind'), payload.get('session'), payload.get('sequence'),
                        scale=payload.get('scale', 4), background=payload.get('background', 'checker'),
-                       project=payload.get('project'), slide=payload.get('slide'))
-    except ValueError as exc:
+                       project=payload.get('project'), slide=payload.get('slide'),
+                       theme=theme)
+    except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
