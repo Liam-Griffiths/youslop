@@ -9,6 +9,7 @@ import string
 import threading
 from typing import Any, Callable
 
+from . import kinds
 from . import research as script_research
 from .config import WORDS_PER_MINUTE
 from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
@@ -706,7 +707,7 @@ def plan_boards(project: Project, slides: list[Slide],
     from . import diagram as diagram_mod
 
     targets = [s for s in slides
-               if not (s.board_lead or s.board_points or s.diagram)]
+               if kinds.kind_for(project, s) == "board" and not (s.board_lead or s.board_points or s.diagram)]
     if not targets:
         return
     from .learning import resolve_choices
@@ -846,7 +847,13 @@ def plan_cues(project: Project, slides: list[Slide],
     """
     from . import cuts
 
-    fmt = project.style.format
+    for fmt in sorted({kinds.kind_for(project, s) for s in slides} & kinds.CUTS):
+        _plan_cues_kind(project, [s for s in slides if kinds.kind_for(project, s) == fmt],
+                        fmt, progress, instruction)
+
+
+def _plan_cues_kind(project, slides, fmt, progress, instruction):
+    from . import cuts
     if not slides or not cuts.is_cut(fmt):
         return
     module = cuts.BY_KEY[fmt]
@@ -1005,8 +1012,7 @@ def generate(project: Project, progress: Progress = lambda m: None,
         raise ValueError("Script generation produced no paragraphs")
 
     plan_visuals(project, slides, progress)
-    if project.style.format == "board":
-        plan_boards(project, slides, progress)
+    plan_boards(project, slides, progress)
     plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
     project.slides = slides
@@ -1192,8 +1198,7 @@ example", a numeral stays a numeral only if you would say it that way.""",
     slides[-1].section = "conclusion"
 
     plan_visuals(project, slides, progress)
-    if project.style.format == "board":
-        plan_boards(project, slides, progress)
+    plan_boards(project, slides, progress)
     plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
     project.slides = slides
@@ -1302,12 +1307,11 @@ def _plan_style_slides(project: Project, slides: list[Slide],
     """Fill the video's saved slide style, if it is staged in one."""
     from . import slide_styles
 
-    style_id = slide_styles.id_from_format(project.style.format)
-    if not style_id:
-        return
-    style = slide_styles.get(style_id)
-    if style:
-        plan_custom_slides(project, slides, style.spec, progress)
+    for fmt in sorted({kinds.kind_for(project, s) for s in slides}):
+        style_id = slide_styles.id_from_format(fmt)
+        style = slide_styles.get(style_id) if style_id else None
+        if style:
+            plan_custom_slides(project, [s for s in slides if kinds.kind_for(project, s) == fmt], style.spec, progress)
 
 
 def plan_custom_slides(project: Project, slides: list[Slide], style_spec: dict,
@@ -1335,7 +1339,7 @@ def plan_custom_slides(project: Project, slides: list[Slide], style_spec: dict,
              if el["type"] in ("text", "image")]
     if not slots:
         return
-    targets = [s for s in slides if not s.custom_html and not (s.custom or {}).get("elements")]
+    targets = [s for s in slides if kinds.kind_for(project, s).startswith("custom:") and not s.custom_html and not (s.custom or {}).get("elements")]
     if not targets:
         return
 

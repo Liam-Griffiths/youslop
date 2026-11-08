@@ -1,6 +1,7 @@
 """Synchronous production operations shared by HTTP jobs and the CLI."""
 import threading
 
+from . import kinds
 from . import render as renderer, youtube as youtube_mod
 
 from . import channels, check as checks, media, models3d, review as reviews, script_gen, store
@@ -118,7 +119,7 @@ def plan(pid, payload, progress):
         store.save(p)
         # A 3D explainer's pictures come from its shots, except for the
         # paragraphs whose visual line is a photo.
-        only = shots_mod.photo_leads(p) if p.style.format == "stage" else None
+        only = shots_mod.photo_leads(p) if "stage" in kinds.kinds_in(p) else None
         if only is None or only:
             media.gather(p, progress, only=only)
             store.save(p)

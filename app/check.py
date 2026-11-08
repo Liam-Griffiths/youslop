@@ -2,6 +2,7 @@
 from dataclasses import asdict, dataclass
 from typing import Callable
 
+from . import kinds
 from . import cuts, render, storyboard, titles
 from .cuts import kit
 from .schema import FrameSpec, Project, Slide, Style
@@ -32,6 +33,10 @@ def _pictures(sb):
     return [s for s in sb['segments'] if s['type'] == 'picture']
 
 
+def _kind(sb, seg):
+    return seg["kind"] if "kinds" in sb["project"] else sb["project"]["format"]
+
+
 def _cues(sb):
     return [(p, c) for p in sb['paragraphs'] for c in p.get('cues', [])]
 
@@ -45,7 +50,6 @@ def _ctx(sb):
     words, overlays, lines = [], [], []
     frame = FrameSpec.from_dict(sb.get('frame', {}))
     paras = {p['id']: p for p in sb['paragraphs']}
-    fmt = sb['project']['format']
     plan_project = Project(id='check', idea='', style=Style(**sb.get('style', {})), frame=frame)
     for p in sb['paragraphs']:
         for w in p.get('take', {}).get('words', []):
@@ -56,9 +60,10 @@ def _ctx(sb):
                 lines.append(dict(c, slide_id=p['id'], type='cue'))
     pictures = _pictures(sb)
     for si, seg in enumerate(pictures):
+        fmt = _kind(sb, seg)
         overlays.append((seg['start'], 'picture', seg['lead']))
         offset = seg['start'] - seg.get('skip', 0)
-        file_end = seg['start'] + seg['duration'] + seg.get('skip', 0)
+        file_end = seg['start'] + seg['duration'] + seg.get('tail_skip', seg.get('skip', 0))
         for pi, para in enumerate(seg['paragraphs']):
             p = paras[para['id']]
             dur = para['duration']
@@ -95,10 +100,12 @@ def empty_first_frame(sb, frame, ctx):
         return []
     first = pictures[0]
     p = next((p for p in sb['paragraphs'] if p['id'] == first['lead']), {})
-    if cuts.is_cut(sb['project']['format']):
+    if cuts.is_cut(_kind(sb, first)):
         cues = p.get('cues', [])
         # A normalised photo/chart cue can be valid without a text field.
         empty = not cues or not cues[0].get('kind')
+    elif _kind(sb, first) in {'board', 'block', 'camera'} or _kind(sb, first).startswith('custom:'):
+        empty = False
     else:
         empty = not p.get('picture', {}).get('path')
     return [_finding('empty_first_frame', 'P0', first['start'], first['lead'],
@@ -133,16 +140,16 @@ def first_word_collision(sb, frame, ctx):
 
 def dead_stretch(sb, frame, ctx):
     spans = []
-    if cuts.is_cut(sb['project']['format']):
-        changes = sorted({c['start'] for _, c in _cues(sb)})
-        for seg in _pictures(sb):
+    changes = sorted({c['start'] for _, c in _cues(sb)})
+    for seg in _pictures(sb):
+        fmt = _kind(sb, seg)
+        if cuts.is_cut(fmt):
             points = [seg['start']] + [t for t in changes if seg['start'] < t < seg['start'] + seg['duration']]
             points.append(seg['start'] + seg['duration'])
             spans.extend((a, b - a, 3, seg['lead']) for a, b in zip(points, points[1:]))
-    elif sb['project']['format'] in {'kenburns', 'essay'}:
-        spans = [(s['start'], s['duration'], min(frame.max_gap_ever_s,
-                  frame.max_gap_first_90_s if s['start'] < 90 else frame.max_gap_after_s), s['lead'])
-                 for s in _pictures(sb)]
+        elif fmt in {'kenburns', 'essay'}:
+            spans.append((seg['start'], seg['duration'], min(frame.max_gap_ever_s,
+                          frame.max_gap_first_90_s if seg['start'] < 90 else frame.max_gap_after_s), seg['lead']))
     return [_finding('dead_stretch', 'P1', t, sid,
                      f'The picture holds for {dur:.1f}s without a change (limit {limit:g}s).',
                      'cues', instruction=f'add a cue at {t + limit:.3f}')
@@ -473,9 +480,9 @@ RULES: list[Rule] = [empty_first_frame, hook_muted, first_word_collision, dead_s
 
 def _scene_text(project, sb, ctx, groups, measure):
     from . import board, board_scenes, custom_scenes, scenes, store
-    fmt = project.style.format
     requests, owners = [], []
     for seg, group in zip(_pictures(sb), groups):
+        fmt = kinds.kind_for(project, group[0][0])
         _, _, length = render._segment_timing(project, groups, seg['group'])
         offset = seg['start'] - seg['skip']
         if fmt == 'board' and project.style.board_engine != 'pillow':
@@ -568,15 +575,16 @@ def run(project, measure=False) -> dict:
     groups = render._picture_groups(project, render._slide_durations(project, True))
     for i, seg in enumerate(pictures):
         if i:
-            seg['transition'] = render._join_for(groups[i-1], groups[i], frame)
-        if i + 1 < len(groups) and project.style.format in {'kenburns', 'essay', 'stage'}:
+            seg['transition'] = ('cut' if any(s.kind for s in project.slides) and render._overlaps(project, groups)[i] == cuts.HARD_CUT
+                                 else render._join_for(groups[i-1], groups[i], frame))
+        if i + 1 < len(groups) and kinds.kind_for(project, groups[i][0][0]) in {'kenburns', 'essay', 'stage'}:
             card = render.chapter_card(project, groups[i+1][0][0])
             if card:
                 from . import audio
                 gap = audio.gap_map(project)[groups[i][-1][0].id]
                 hold = max(project.frame.arrive_s, min(gap, project.frame.arrive_s +
                            project.frame.title_hold_base_s + project.frame.title_hold_per_word_s * len(card[0].split())))
-                end = seg['start'] + seg['duration'] + seg['skip']
+                end = seg['start'] + seg['duration'] + seg.get('tail_skip', seg['skip'])
                 seg['cards'] = [dict(start=max(seg['start'] - seg['skip'] + .2, end - hold),
                                      end=end, text=card[0], slide_id=groups[i+1][0][0].id)]
     channel = render._slate_channel(project)
@@ -595,16 +603,21 @@ def run(project, measure=False) -> dict:
     ctx = _ctx(sb)
     from . import scenes, stage
     can_measure = measure and bool(stage.browser())
-    if project.style.format == 'essay' and project.style.captions_engine != 'pillow':
+    if 'essay' in kinds.kinds_in(project) and project.style.captions_engine != 'pillow':
         lines = [line for line in ctx.lines if line['type'] == 'caption']
         if lines:
             for line, metrics in zip(lines, scenes.measure_captions(
                     project, [l['text'] for l in lines], render=can_measure)):
                 if metrics is not None:
                     line['metrics'] = metrics
-    else:
-        _scene_text(project, sb, ctx, groups, can_measure)
+    _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
+    for para in sb['paragraphs']:
+        slide = next(s for s in project.slides if s.id == para['id'])
+        fmt = kinds.kind_for(project, slide)
+        if cuts.is_cut(fmt) and not cuts.normalise(cuts.BY_KEY[fmt], slide.cues.get(fmt)):
+            findings.append(_finding('no_cues', 'P1', para['start'], slide.id,
+                                     'This paragraph has no planned cues for ' + fmt + '.', 'cues'))
     from . import overlay_checks
     if any(s.overlays for s in project.slides):
         sb['layers'] = render._layers(project, sb['segments'])

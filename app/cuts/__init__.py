@@ -28,7 +28,7 @@ from importlib import import_module
 from pathlib import Path
 
 from ..config import FPS, HEAD_PAD, WIDTH, WORDS_PER_MINUTE
-from .. import brand, ffutil, scenes
+from .. import brand, ffutil, scenes, kinds
 from . import casefile, flameboat, groupchat, kit, loudmouth, ticker
 
 MODULES = [flameboat, casefile, loudmouth, groupchat, ticker]
@@ -168,7 +168,7 @@ def _beat_spans(group, seg_len, lead_in):
 def timed_cues(project, group, seg_len: float, lead_in: float
                ) -> list[tuple[str, list[dict], list[tuple[float, float]]]]:
     """Cue spans in segment-file seconds, using the renderer's beat layout."""
-    module = BY_KEY[project.style.format]
+    module = BY_KEY[kinds.kind_for(project, group[0][0]) if any(s.kind for s in project.slides) else project.style.format]
     out = []
     for slide, dur, start, length, lead in _beat_spans(group, seg_len, lead_in):
         cues, times = _cue_times(module, slide, spoken_of(slide, dur), length, lead)
@@ -208,11 +208,12 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
     the last `hold` seconds of the segment — the silence the narration leaves
     for it — drawn by the cut's own `chapter()` so it looks like it belongs.
     """
-    module = BY_KEY[project.style.format]
+    module = BY_KEY[kinds.kind_for(project, group[0][0])]
+    project = kinds.run_project(project, group[0][0])
     size = size or (WIDTH, round(WIDTH * 9 / 16))
     ctx = make_ctx(project, size, fps, channel, image_for)
     ctx.cache["dir"] = cache_dir
-    scene = uses_scene(project.style)
+    scene = project.style.cut_engine != "pillow" and scenes.handles_cut(module.KEY)
     beats: list[kit.Beat] = []
     for slide, dur, _start, length, lead in _beat_spans(group, seg_len, lead_in):
         beats.append(beat_for(module, ctx, slide, length, lead,
@@ -281,14 +282,15 @@ def still(project, slide, out: Path, *, channel=None, image_for=None,
           at: float = 0.5, cache_dir: Path | None = None) -> Path:
     """One frame of a paragraph in its cut, `at` of the way through — the
     picture the pictures tab shows for it."""
-    module = BY_KEY[project.style.format]
+    module = BY_KEY[kinds.kind_for(project, slide)]
+    project = kinds.run_project(project, slide)
     ctx = make_ctx(project, (WIDTH, round(WIDTH * 9 / 16)), FPS, channel, image_for)
     ctx.k = 0.5
     ctx.cache["dir"] = cache_dir
     dur = max(2.5, slide.word_count / WORDS_PER_MINUTE * 60 + 0.5)
     spoken = spoken_of(slide, dur)
     length = spoken + 0.5
-    scene = uses_scene(project.style)
+    scene = project.style.cut_engine != "pillow" and scenes.handles_cut(module.KEY)
     beat = beat_for(module, ctx, slide, length, 0.0, spoken, cache_dir, scene=scene)
     t = kit.clamp(at) * (length - 0.05)
     out.parent.mkdir(parents=True, exist_ok=True)

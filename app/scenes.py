@@ -15,6 +15,7 @@ from urllib.parse import quote, unquote, urlsplit
 import jinja2
 from jinja2 import meta
 
+from . import kinds
 from . import channels, cuts, ffutil, sanitise, stage, store, themes
 from .config import FPS, HEIGHT, STATIC_DIR, WIDTH
 from .schema import FrameSpec, Style
@@ -404,7 +405,7 @@ def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
                narration="\n\n".join(slide.narration for slide, _ in group),
                titles=[slide.title for slide, _ in group],
                cues=(cuts.timed_cues(project, group, seg_len, lead_in)
-                     if cuts.is_cut(project.style.format) else []),
+                     if cuts.is_cut(kinds.kind_for(project, group[0][0])) else []),
                chapter=chapter, lead_in=lead_in, hold=hold)
     if 'cues' in hide:
         ctx['cues'] = []
@@ -412,7 +413,7 @@ def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
         ctx['titles'] = []
         for slide in ctx['slides']:
             slide['title'] = ''
-    clip = ensure_clip(project, f"{project.style.format}/segment.html", ctx,
+    clip = ensure_clip(project, f"{kinds.kind_for(project, group[0][0])}/segment.html", ctx,
                        seconds=seg_len, size=(ctx['width'], ctx['height']), fps=fps)
     _encode(clip, out, seg_len, size, fps, crf)
     return out

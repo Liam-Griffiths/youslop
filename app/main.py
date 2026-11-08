@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from . import kinds
 from . import brand, check, edits, ops, review, storyboard, razor, packs
 from .audio_files import next_raw_path, next_take_path
 from . import camera
@@ -1084,7 +1085,7 @@ def get_project(pid: str) -> dict:
     d = p.to_dict()
     d["jobs"] = [{"id": j["id"], "kind": j["kind"]} for j in jobs.active_for(pid)]
     d["youtube"] = youtube_mod.status(p.channel_id) if p.channel_id else {"connected": False}
-    if p.style.format == "stage":
+    if "stage" in kinds.kinds_in(p):
         d["cast"] = cast_mod.subjects(p)
         d["cast_summary"] = cast_mod.summary(p)
         d["visual_flags"] = cast_mod.check_visuals(p)
@@ -1991,7 +1992,7 @@ def plan_boards(pid: str, payload: dict = Body(default={})) -> dict:
     def work(progress):
         with store.lock_for(pid):
             p = store.load(pid)
-            slides = [s for s in p.slides if only is None or s.id in only]
+            slides = [s for s in p.slides if kinds.kind_for(p, s) == "board" and (only is None or s.id in only)]
             if redo:
                 for s in slides:
                     s.board_lead, s.board_note = "", ""
@@ -2019,29 +2020,30 @@ def plan_cues(pid: str, payload: dict = Body(default={})) -> dict:
     including any edited by hand; other cuts' cues are never touched.
     """
     p = _load(pid)
-    if not cuts_mod.is_cut(p.style.format):
+    if not kinds.kinds_in(p) & kinds.CUTS:
         raise HTTPException(400, "This video isn't in one of the drawn cuts.")
     redo = bool(payload.get("redo"))
     only = payload.get("slide_ids")
 
     def work(progress):
         p = store.load(pid)
-        slides = [s for s in p.slides if only is None or s.id in only]
+        slides = [s for s in p.slides if cuts_mod.is_cut(kinds.kind_for(p, s)) and (only is None or s.id in only)]
         before = {s.id: (s.narration, dict(s.cues or {})) for s in slides}
-        fmt = p.style.format
+        formats = {s.id: kinds.kind_for(p, s) for s in slides}
         if redo:
             for s in slides:
-                s.cues = {k: v for k, v in (s.cues or {}).items() if k != fmt}
+                s.cues = {k: v for k, v in (s.cues or {}).items() if k != formats[s.id]}
         script_gen.plan_cues(p, slides, progress, instruction=str(payload.get("instruction", "")))
         with store.lock_for(pid):
             current = store.load(pid)
             live = {s.id: s for s in current.slides}
-            if current.style.format != fmt or any(
-                    s.id not in live or (live[s.id].narration, live[s.id].cues) != before[s.id]
+            if any(
+                    s.id not in live or kinds.kind_for(current, live[s.id]) != formats[s.id] or (live[s.id].narration, live[s.id].cues) != before[s.id]
                     for s in slides):
                 raise ValueError("Slides changed while planning cues; try again")
             for s in slides:
                 # An empty planner response must not discard existing cues.
+                fmt = formats[s.id]
                 if s.cues.get(fmt):
                     live[s.id].cues = {**live[s.id].cues, fmt: s.cues[fmt]}
             store.save(current)
@@ -2068,7 +2070,7 @@ def cut_preview(pid: str, sid: str, t: float = 0.5) -> Response:
     """One frame of this paragraph in the video's cut, `t` of the way in."""
     p = _load(pid)
     s = _slide(p, sid)
-    if not cuts_mod.is_cut(p.style.format):
+    if not cuts_mod.is_cut(kinds.kind_for(p, s)):
         raise HTTPException(400, "This video isn't in one of the drawn cuts.")
     out = project_dir(pid) / "cuts" / f"{sid}.png"
     try:
@@ -4143,7 +4145,7 @@ def _save_shots(pid: str, worked: "Project") -> None:
 
 
 def _stage_or_400(p) -> None:
-    if p.style.format != "stage":
+    if "stage" not in kinds.kinds_in(p):
         raise HTTPException(400, "Only a 3D explainer has shots.")
     ok, why = stage_mod.available()
     if not ok:

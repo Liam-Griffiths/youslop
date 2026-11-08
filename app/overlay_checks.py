@@ -2,6 +2,7 @@
 from copy import deepcopy
 from PIL import Image, ImageColor
 
+from . import kinds
 from . import block_overlays, blocks, render, scenes, store
 
 
@@ -12,7 +13,7 @@ def _base_frame(project, lead, seconds, size, cache):
     Clip thumbs are approximate samples; never use composited segment proxies.
     """
     lead = render._picture_source(project, lead)
-    if lead.cues.get('blocks') or (project.style.format == 'stage' and lead.shot):
+    if lead.cues.get('blocks') or (kinds.kind_for(project, lead) == 'stage' and lead.shot):
         return None
     candidate = next((c for c in lead.candidates if c['id'] == lead.chosen_id), {})
     path, sample, unpad = None, 0., None

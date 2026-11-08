@@ -86,6 +86,7 @@ class Slide:
     narration: str = ""
     visual_note: str = ""                 # plain-English description of the shot
     queries: list[str] = field(default_factory=list)
+    kind: str = ""                       # empty = style default; picture group uses its lead
     prefer_kind: str = "image"            # image | video | map
     # Only meaningful when prefer_kind == "map": the point the widget was
     # left on (0/0/0 = never set), so reopening the picker re-centres on it
@@ -1093,7 +1094,8 @@ def chapter_title(project: Project, slide: Slide) -> str:
     marked = (slide.chapter or "").strip()
     if marked:
         return marked
-    if (project.style.format == "essay" and slide.title
+    from .kinds import kind_for
+    if ((kind_for(project, slide) if any(s.kind for s in project.slides) else project.style.format) == "essay" and slide.title
             and not any((s.chapter or "").strip() for s in project.slides)):
         return slide.title
     return ""

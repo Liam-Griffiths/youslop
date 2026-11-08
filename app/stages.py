@@ -3,6 +3,7 @@ from dataclasses import asdict
 import hashlib
 import json
 
+from . import kinds
 from .schema import Project, group_slides
 
 
@@ -26,6 +27,8 @@ def render_signature(project: Project) -> str:
                        if k not in {'takes', 'history', 'queries', 'locked_media'}}
                       for s in project.slides]
     for slide in data['slides']:
+        if not slide['kind']:
+            slide.pop('kind')
         if slide['take']:
             slide['take'] = {'words': [], **slide['take']}
     return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -33,9 +36,11 @@ def render_signature(project: Project) -> str:
 
 def _has_visual(project, run):
     lead = run[0]
-    fmt = project.style.format
+    fmt = kinds.kind_for(project, lead)
     if lead.on_camera:
         return bool((lead.take or {}).get('video'))
+    if fmt == 'block':
+        return True
     if fmt == 'stage':
         from .cast import _split_visual
         kind, fields = _split_visual(lead.visual_note)
@@ -110,6 +115,9 @@ def stages(project: Project, check_result: dict) -> list[dict]:
             f'{len(runs)} pictures' if visuals_ok else f'{len(runs) - pictured} need a picture',
             'Fill the pictures', 'Edit the cut'),
     ]
+    if runs:
+        result[-1]['kinds'] = {k: sum(kinds.kind_for(project, r[0]) == k for r in runs)
+                               for k in sorted(kinds.kinds_in(project))}
     edit_ok = script_ok and voice_ok and visuals_ok and not p0
     result.append(row('edit', 'Edit', 'warn' if p0 else 'ready' if edit_ok
                       else 'in_progress' if total else 'todo',

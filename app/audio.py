@@ -36,6 +36,7 @@ def paragraph_gaps(project: Project) -> list[float]:
     One list, read by both the narration builder and the picture timing, so the
     two can never disagree about where a paragraph ends.
     """
+    from .kinds import kind_for
     base = max(0.05, min(2.5, float(getattr(project.style, "paragraph_gap", PARAGRAPH_GAP))))
     # Every slide, recorded or not: "does a new section start after this one" is
     # a question about the script, not about what happens to be recorded today.
@@ -64,7 +65,7 @@ def paragraph_gaps(project: Project) -> list[float]:
             # by hand in any format, or — in the essay cut, where it has always
             # worked this way — by the next paragraph carrying a title.
             if (nxt.chapter or "").strip() or (
-                    nxt.title and getattr(project.style, "format", "") == "essay"):
+                    nxt.title and (kind_for(project, nxt) if any(s.kind for s in slides) else project.style.format) == "essay"):
                 factor = max(factor, GAP_CHAPTER)
         gaps.append(round(min(10.0, max(0.0, s.gap_override)), 3)
                     if s.gap_override is not None else round(base * factor, 3))

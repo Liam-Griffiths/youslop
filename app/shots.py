@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from . import kinds
 from . import cast as cast_mod
 from . import models3d
 from . import stage as stage_mod
@@ -74,7 +75,7 @@ def leads(project: Project) -> list[tuple[int, Slide, float]]:
     is a 3D shot, in the video's order."""
     out = []
     for i, g in enumerate(groups(project)):
-        if g and is_3d(g[0][0]):
+        if g and kinds.kind_for(project, g[0][0]) == "stage" and is_3d(g[0][0]):
             out.append((i, g[0][0], round(sum(d for _s, d in g), 2)))
     return out
 
@@ -83,7 +84,7 @@ def photo_leads(project: Project) -> list[str]:
     """The paragraphs whose picture comes from Media: every lead that is not
     a 3D shot."""
     from .render import is_lead
-    return [s.id for s in project.slides if is_lead(project, s) and not is_3d(s)]
+    return [s.id for s in project.slides if is_lead(project, s) and not (kinds.kind_for(project, s) == "stage" and is_3d(s))]
 
 
 # ---------------------------------------------------------------- the intent

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import audio as audio_mod
-from . import cuts, ffutil, media, scenes, sysinfo, titles
+from . import cuts, ffutil, kinds, media, scenes, sysinfo, titles
 from . import shots as shots_mod
 from .config import (
     FPS, HEAD_PAD, HEIGHT, MUSIC_DIR, PARAGRAPH_GAP, TAIL_PAD, WIDTH,
@@ -79,13 +79,14 @@ def _join_for(prev_group, next_group, frame) -> str:
 
 
 def _join_graph(seg_lens, T, groups, frame, slide_at, *, group_indices=None, sponsor_indices=()):
-    """Join files with the same overlap regardless of the transition cause."""
+    """Join files with a legacy scalar overlap or one duration per boundary."""
     pad = f"tpad=stop_mode=clone:stop_duration={4 / FPS:.4f}"
     if len(seg_lens) == 1:
         video_graph = "[0:v]null[vout]"
     else:
         parts = [f"[{i}:v]{pad}[p{i}]" for i in range(len(seg_lens))]
-        offset = seg_lens[0] - T
+        overlaps = [T] * (len(seg_lens) - 1) if isinstance(T, (int, float)) else T
+        offset = seg_lens[0] - overlaps[0]
         prev = "[p0]"
         for i in range(1, len(seg_lens)):
             label = "[vout]" if i == len(seg_lens) - 1 else f"[x{i}]"
@@ -98,13 +99,16 @@ def _join_graph(seg_lens, T, groups, frame, slide_at, *, group_indices=None, spo
                 join = choose("join", ["fade", "cut"], frame)
             if i in sponsor_indices or i - 1 in sponsor_indices:
                 join = "cut"
+            overlap = overlaps[i - 1]
+            if isinstance(T, list) and overlap == cuts.HARD_CUT:
+                join = "cut"
             transition = JOIN_XFADE.get(join, f"transition={join}")
             parts.append(
-                f"{prev}[p{i}]xfade={transition}:duration={T:.3f}:"
+                f"{prev}[p{i}]xfade={transition}:duration={overlap:.3f}:"
                 f"offset={offset:.3f}{label}"
             )
             prev = label
-            offset += seg_lens[i] - T
+            offset += seg_lens[i] - (overlaps[i] if i < len(overlaps) else 0)
         video_graph = ";".join(parts)
 
     return video_graph
@@ -134,7 +138,8 @@ def camera_plan(project, groups) -> list[str]:
         lead = group[0][0]
         plan.append(_pick_op(
             frame, i, plan[-1] if plan else None,
-            i > 0 and _join_for(groups[i - 1], group, frame) == "cut",
+            i > 0 and ((_overlaps(project, groups)[i] == cuts.HARD_CUT and any(s.kind for s in project.slides))
+                       or _join_for(groups[i - 1], group, frame) == "cut"),
             bool(lead.chapter) or bool(lead.beat and lead.beat in payoffs)))
     return plan
 
@@ -307,9 +312,10 @@ def _draw_segment(job: tuple) -> tuple[int, int, Path, bool]:
     they all came out of the same encoder.
     """
     (project, group, seg_len, index, out, channel, chapter, threads,
-     i, chunk, frames) = job
+     i, chunk, frames, opts) = job
     _render_segment(project, group, seg_len, index, out, channel=channel,
-                    chapter=chapter, threads=threads, frames=frames)
+                    chapter=chapter, threads=threads, frames=frames,
+                    **opts)
     return i, chunk, out, bool(ffutil.gpu_status()["active"])
 
 
@@ -323,15 +329,16 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir()
     expected_gpu = bool(ffutil.gpu_status()["active"])
-    scene_cut = cuts.uses_scene(project.style)
+    scene_cut = any(project.style.cut_engine != "pillow" and scenes.handles_cut(k) for k in kinds.kinds_in(project))
     jobs = []
     split: dict[int, int] = {}
+    ops = camera_plan(project, groups)
     for i, group in enumerate(groups):
         if _segment_ready(targets[i]):
             continue
         seg_len = seg_lens[i + slide_at]
         total = cuts.frame_count(seg_len, FPS)
-        n = 1 if scene_cut or group[0][0].on_camera or (group[0][0].cues or {}).get('blocks') else max(1, round(total / (CHUNK_SECONDS * FPS)))
+        n = 1 if scene_cut or not cuts.is_cut(kinds.kind_for(project, group[0][0])) else max(1, round(total / (CHUNK_SECONDS * FPS)))
         split[i] = n
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
@@ -340,14 +347,15 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
             a, b = total * c // n, total * (c + 1) // n
             out = scratch / (f"{name}.mp4" if n == 1 else f"{name}.part{c:02d}.mp4")
             jobs.append((project, group, seg_len, i + slide_at, out, channel, chapter,
-                         0, i, c, (a, b)))
+                         0, i, c, (a, b), dict(op=ops[i], camera_index=i,
+                            last_line=i == len(groups) - 1, dip_out=_dips_into(groups, i + 1))))
     if not jobs:
         scratch.rmdir()
         return targets
     cores = os.cpu_count() or 4
     workers = max(1, min(len(jobs), cores - 1, 3 if scene_cut else 15))
     if free_mb is not None:
-        workers = max(1, min(workers, int(free_mb // 800)))
+        workers = max(1, min(workers, int(free_mb // max(SEGMENT_RSS_MB.get(k, SEGMENT_RSS_MB["default"]) for k in kinds.kinds_in(project)))))
     threads = max(1, cores // workers)
     jobs = [j[:7] + (threads,) + j[8:] for j in jobs]
     progress(f"Drawing {len(groups)} pictures as {len(jobs)} pieces, {workers} at a time")
@@ -422,7 +430,7 @@ def _stage_clips(project: Project, groups, seg_lens: list[float], size: tuple[in
                  fps: int, progress: Progress, preview: bool) -> None:
     """Draw every 3D shot the cut needs before the segments are composed.
     Refuses a real render with shots missing; a preview shows a slate."""
-    groups_and_lengths = [(g, seg_lens[i]) for i, g in enumerate(groups) if not g[0][0].on_camera]
+    groups_and_lengths = [(g, seg_lens[i]) for i, g in enumerate(groups) if kinds.kind_for(project, g[0][0]) == "stage"]
     groups = [g for g, _length in groups_and_lengths]
     seg_lens = [length for _g, length in groups_and_lengths]
     if not groups:
@@ -542,7 +550,7 @@ def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
         ctx = custom_scenes.html_context(root, slide.custom_html, spec, seg_len, project)
         return custom_scenes.render(root, ctx, None, out, size=size, fps=fps, crf=crf)
     if not spec.get("elements"):
-        style = slide_styles.get(slide_styles.id_from_format(project.style.format))
+        style = slide_styles.get(slide_styles.id_from_format(kinds.kind_for(project, group[0][0])))
         if not style:
             return None
         spec = style.spec            # unfilled: the style's own placeholders
@@ -687,13 +695,14 @@ def _tail_pad(project, groups):
     """Extend only the final picture when its last line needs more reading time."""
     member, dur = groups[-1][-1]
     frame = project.frame
-    if project.style.format == "essay":
-        lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, groups[-1][0][0])
+    fmt = kinds.kind_for(project, groups[-1][0][0]) if any(s.kind for s in project.slides) else project.style.format
+    if fmt == "essay":
+        lead = _lead_overlap(project, groups[-1][0][0]) / 2 + cuts.head_pad_for(project, groups[-1][0][0])
         plan = _essay_phrases(project, member, dur, lead_in=lead, last_line=True)
         needed = (plan[-1]['t0'] + frame.last_line_min_s + .05
                   if project.style.captions_engine == 'pillow' and plan else
                   plan[-1]['t1'] + .05 if plan else 0)
-    elif project.style.format == "kenburns" and member.title:
+    elif fmt == "kenburns" and member.title:
         needed = frame.arrive_s + max(frame.last_line_min_s,
                                      _title_hold(frame, member.title, dur)) + frame.arrive_s * frame.exit_ratio
     else:
@@ -767,11 +776,12 @@ def _segment_graph(
     Retains title PNG drawing and stage clip generation as side effects;
     photographic formats never run ffmpeg here.
     """
+    fmt = kinds.kind_for(project, group[0][0])
     style = project.style
     frame = project.frame
     w, h = size
-    essay = style.format == "essay" and not group[0][0].on_camera
-    camera_captions = style.format == "essay" and group[0][0].on_camera
+    essay = fmt == "essay" and not group[0][0].on_camera
+    camera_captions = (group[0][0].kind or style.format) == "essay" and group[0][0].on_camera
     slide = group[0][0]
     # Segment proxies use preview_size(); full output uses (WIDTH, HEIGHT).
     src, kind, focal = _chosen(project, slide, preview=size != (WIDTH, HEIGHT))
@@ -780,7 +790,7 @@ def _segment_graph(
     span = ((candidate['in_s'], candidate['out_s'])
             if src and candidate.get('provider') == 'footage' else None)
     dip_in = False
-    if not slide.on_camera and style.format == "stage" and shots_mod.is_3d(slide):
+    if not slide.on_camera and fmt == "stage" and shots_mod.is_3d(slide):
         # The shot, drawn by the stage at exactly this segment's length and
         # frame size; a paragraph with no solved shot gets the slate.
         clip = shots_mod.ensure_clips(project, [(slide, seg_len)], size, fps).get(slide.id)
@@ -893,7 +903,7 @@ def _segment_graph(
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
     if (essay or camera_captions) and style.captions_engine != 'pillow' and 'titles' not in hide:
         plan, offset = [], 0.0
-        lead = cuts.transition_for(style) / 2 + cuts.head_pad_for(project, group[0][0])
+        lead = _lead_overlap(project, group[0][0]) / 2 + cuts.head_pad_for(project, group[0][0])
         for n, (member, dur) in enumerate(group):
             for phrase in _essay_phrases(project, member, dur, lead_in=lead,
                     last_line=last_line and n == len(group) - 1):
@@ -959,7 +969,7 @@ def _segment_graph(
             inputs += _still_input(card, fps)
             n_inputs += 1
             start, fade_out_at, _ = _title_window(
-                project, member, dur, cuts.transition_for(style) / 2
+                project, member, dur, _lead_overlap(project, group[0][0]) / 2
                 + cuts.head_pad_for(project, group[0][0]), offset, seg_len,
                 last_line and n == len(group) - 1)
             if fade_out_at > start:
@@ -1049,7 +1059,7 @@ def _render_segment(
     slide in it supplies the visual; every slide in it can still put its own
     title on screen, at its own moment inside the hold.
 
-    `style.format` decides how that picture is staged: the documentary cut
+    The resolved kind decides how that picture is staged: the documentary cut
     fills the frame and drifts across it, the essay cut sets the whole picture
     inside a bordered slide and puts the narration on screen underneath, and
     the board cut hands the whole segment to `app/board.py`, which draws it
@@ -1061,10 +1071,11 @@ def _render_segment(
     essay card, the blur, the type cards — scales with `size`, so a preview is
     the same picture seen smaller rather than a differently composed one.
     """
+    fmt = kinds.kind_for(project, group[0][0])
     if "chapters" in hide:
         chapter = None
     style = project.style
-    lead_in = (cuts.transition_for(style) / 2
+    lead_in = (_lead_overlap(project, group[0][0]) / 2
                + cuts.head_pad_for(project, group[0][0]))
     hold = max(0.9, min(3.2, audio_mod.gap_map(project).get(
         group[-1][0].id, PARAGRAPH_GAP) - 0.12))
@@ -1075,9 +1086,9 @@ def _render_segment(
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
                                crf=crf, preset=preset, last_line=last_line, hide=hide)
-    if ('graphics' not in hide and any(s.overlays for s, _ in group) and not cuts.is_cut(style.format)
-            and ((group[0][0].cues or {}).get('blocks') or scenes.handles(style.format)
-                 or style.format.startswith('custom:'))):
+    if ('graphics' not in hide and any(s.overlays for s, _ in group) and not cuts.is_cut(fmt)
+            and ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt)
+                 or fmt.startswith('custom:'))):
         from copy import deepcopy
         import tempfile
         from .block_overlays import compose, run_graph
@@ -1117,11 +1128,11 @@ def _render_segment(
                              seconds=seg_len, size=size, fps=fps, crf=crf, frames=frames)
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
-    if not cuts.is_cut(style.format) and scenes.handles(style.format):
+    if not cuts.is_cut(fmt) and scenes.handles(fmt):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
             chapter=chapter, lead_in=lead_in, hold=hold, channel=channel, hide=hide)
-    if style.format.startswith("custom:"):
+    if fmt.startswith("custom:"):
         rendered = _render_custom_style(project, group, seg_len, out, size,
                                         fps, crf)
         if rendered is not None:
@@ -1129,7 +1140,7 @@ def _render_segment(
                                  fps, crf, threads, channel)
         # The style was deleted, or this paragraph has no filled spec yet:
         # fall through to the documentary cut rather than abort the render.
-    if cuts.is_cut(style.format):
+    if cuts.is_cut(fmt):
         # The drawn cuts join on a hard cut, so `seg_len` carries one frame
         # of overlap; the voice starts half of that in, plus the opening
         # silence on the video's first paragraph.
@@ -1139,7 +1150,7 @@ def _render_segment(
             crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
             chapter=chapter, frames=frames,
             hold=hold, hide=hide)
-    if style.format == "board":
+    if fmt == "board":
         from . import board as board_mod
         board_mod.render_segment(
             project, group, seg_len, out, channel=channel,
@@ -1319,7 +1330,7 @@ def _camera_source(project, slide, seg_len, size, fps):
     video = root / take.get("video", "")
     if not take.get("video") or not video.is_file():
         raise ValueError(f"Camera picture missing for paragraph {slide.id}")
-    lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, slide)
+    lead = _lead_overlap(project, slide) / 2 + cuts.head_pad_for(project, slide)
     raw = root / take.get("raw_path", "")
     start, pre, pad = 0.0, 0.0, lead
     src = video
@@ -1764,6 +1775,7 @@ def _block_versions(slide):
 
 def _segment_key(project, group, settings) -> str:
     """Exact inputs of a finished picture segment, excluding unused candidates."""
+    fmt = kinds.kind_for(project, group[0][0]) if any(s.kind for s in project.slides) else project.style.format
     import dataclasses
     import hashlib
     import json
@@ -1773,6 +1785,8 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
+        if not row["kind"]:
+            row.pop("kind")
         if (slide.cues or {}).get('blocks') or slide.overlays:
             row['block_versions'] = _block_versions(slide)
             from .block_theme import values
@@ -1792,12 +1806,14 @@ def _segment_key(project, group, settings) -> str:
             files.append([str(path), _stat(path), digest])
         picture = _chosen(project, slide)[0]
         rows.append([row, duration, files, str(picture), _stat(picture)])
+    if any(s.kind for s in project.slides):
+        rows.append(_kind_context(project, group[0][0]))
     source = _picture_source(project, group[0][0])
     picture = _chosen(project, group[0][0])[0]
     channel = settings.get("channel")
     graph = None
-    if not ((group[0][0].cues or {}).get('blocks') or scenes.handles(project.style.format) or cuts.is_cut(project.style.format)
-            or project.style.format == "board" or project.style.format.startswith("custom:")):
+    if not ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt) or cuts.is_cut(fmt)
+            or fmt == "board" or fmt.startswith("custom:")):
         graph = _segment_graph(project, group, settings["seg_len"], prepare_only=True,
                                **{k: settings[k] for k in (
                                    "op", "channel", "chapter", "size", "fps", "dip_out",
@@ -1893,7 +1909,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         progress(f"{len(failed)} asset(s) could not be downloaded; those slides "
                  "fall back to a graded slate")
 
-    T = cuts.transition_for(project.style)
+    T = _overlaps(project, groups)[0]
 
     # Head and tail padding live on the first and last segments so that every
     # crossfade stays centred on its paragraph boundary. One duration per held
@@ -1915,7 +1931,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
 
     # The camera clip is a segment like any other. Where it lands decides how
     # much of the timeline sits before the first narrated paragraph.
-    pres_src, pres_clean, pres_seg_len = _build_presenter(project, T, progress)
+    pres_T = _overlaps(project, groups)[-1] if project.presenter.position == "end" else T
+    pres_src, pres_clean, pres_seg_len = _build_presenter(project, pres_T, progress)
     pres_index = -1
     if pres_src:
         pos = project.presenter.position
@@ -1932,11 +1949,17 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         durations.append(outro_len)
 
     seg_lens = [d + T for d in durations]
+    if any(s.kind for s in project.slides):
+        first = (1 if intro_path else 0) + (1 if pres_src and pres_index <= (1 if intro_path else 0) else 0)
+        for i in range(len(groups)):
+            seg_lens[first + i] = _segment_timing(project, groups, i)[2]
+        for i in range(first + len(groups), len(seg_lens)):
+            seg_lens[i] = durations[i] + _overlaps(project, groups)[-1]
     # The clip supplies its own footage for the dissolves, so its segment is
     # exactly as long as the trimmed clip rather than d + T.
     if pres_src:
         seg_lens[pres_index] = pres_seg_len
-    total = sum(durations) + T
+    total = sum(durations) + (T + _overlaps(project, groups)[-1]) / 2
 
     # Where the clip's own audio has to land to stay in sync with its picture.
     pres_offset = sum(durations[:pres_index]) if pres_src else 0.0
@@ -1952,7 +1975,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
 
     # A 3D explainer's shots are drawn first, in one browser run, so each
     # scene's models load once; the segments then cut them in like clips.
-    if project.style.format == "stage":
+    if "stage" in kinds.kinds_in(project):
         _stage_clips(project, groups, [seg_lens[i + slide_at] for i in range(len(groups))],
                      (WIDTH, HEIGHT), FPS, progress, preview)
 
@@ -1972,11 +1995,11 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     workers = max(2, min(6, (os.cpu_count() or 4) // 2))
     # Keep the conservative essay budget while Pillow remains available.
     # T5.1 scene RSS must be re-measured with T0.8 before reducing it.
-    per = SEGMENT_RSS_MB.get(project.style.format, SEGMENT_RSS_MB["default"])
+    per = max((SEGMENT_RSS_MB.get(k, SEGMENT_RSS_MB["default"]) for k in kinds.kinds_in(project)), default=SEGMENT_RSS_MB["default"])
     free_mb = sysinfo.available_mb()
     if free_mb is not None:
         workers = max(1, min(workers, int(free_mb // per)))
-    if not cuts.is_cut(project.style.format):
+    if not kinds.kinds_in(project) & kinds.CUTS:
         memory = f"{free_mb:.0f} MB free" if free_mb is not None else "free memory unknown"
         progress(f"{workers} segments at a time ({memory}, {per} MB each)")
     # ffmpeg's decode/encode/filter threading all default to "auto" against
@@ -2003,7 +2026,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
                     crf=18, preset="veryfast", dip_out=_dips_into(groups, i + 1),
                     op=ops[i], camera_index=i, last_line=i == len(groups) - 1,
                     index=i + slide_at,
-                    **({"chunk_seconds": CHUNK_SECONDS} if cuts.is_cut(project.style.format) else {}))
+                    **({"chunk_seconds": CHUNK_SECONDS} if cuts.is_cut(kinds.kind_for(project, group[0][0])) else {}))
         settings.append(opts)
         paths.append(seg_dir / f"{_segment_key(project, group, opts)}.mp4")
     missing = [i for i, path in enumerate(paths) if not _segment_ready(path)]
@@ -2029,7 +2052,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # does not leave every other core idle while it finishes. A drawing
     # process peaks around a quarter of a gigabyte, so cores rather than
     # memory set the count; one core is left for the encoders and the app.
-    if cuts.is_cut(project.style.format):
+    if kinds.kinds_in(project) & kinds.CUTS:
         seg_paths = _draw_segments(project, groups, seg_lens, slide_at, seg_dir,
                                    seg_channel, free_mb, progress, targets=paths)
     else:
@@ -2087,15 +2110,16 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
             ctx = scenes.context_base(project, seg_channel)
             ctx.update(slot.vars)
             ctx["vars"] = {**ctx["vars"], **slot.vars}
-            ctx.update(script=slot.script, variant=slot.variant, take=slot.take, word_offset=T / 2)
+            sponsor_T = _overlaps(project, groups)[gi + 1]
+            ctx.update(script=slot.script, variant=slot.variant, take=slot.take, word_offset=sponsor_T / 2)
             clip = scenes.ensure_clip(project, slot.template, ctx,
-                                      seconds=seconds + T, size=(WIDTH, HEIGHT), fps=FPS)
+                                      seconds=seconds + sponsor_T, size=(WIDTH, HEIGHT), fps=FPS)
             sponsor_indices.add(len(seg_paths))
             sponsor_entries.append((slot, start))
             seg_paths.append(clip)
             durations.append(seconds)
-            seg_lens.append(seconds + T)
-    total = sum(durations) + T
+            seg_lens.append(seconds + sponsor_T)
+    total = sum(durations) + (T + _overlaps(project, groups)[-1]) / 2
     if pres_src:
         pres_offset = sum(durations[:old_to_new[pres_index]])
 
@@ -2168,7 +2192,9 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # over a frozen picture. The padding is overlapped by the next segment or
     # trimmed by -t, so it never shows.
     from .learning import effective_frame
-    video_graph = _join_graph(seg_lens, T, groups, effective_frame(project), slide_at,
+    overlaps = (_chain_overlaps(project, groups, group_indices, len(seg_lens))[1:-1]
+                if any(s.kind for s in project.slides) else T)
+    video_graph = _join_graph(seg_lens, overlaps, groups, effective_frame(project), slide_at,
                               group_indices=group_indices, sponsor_indices=sponsor_indices)
 
     # An end screen is long enough that where the bed gives out is a decision,
@@ -2375,14 +2401,15 @@ def _layers(project, segs):
         if seg['type'] != 'picture':
             continue
         group = [(slides[q['id']], q['duration']) for q in seg['paragraphs']]
+        fmt = kinds.kind_for(project, group[0][0]) if any(s.kind for s in project.slides) else project.style.format
         cue_rows = {}
-        if cuts.is_cut(project.style.format):
-            lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, group[0][0])
+        if cuts.is_cut(fmt):
+            lead = _lead_overlap(project, group[0][0]) / 2 + cuts.head_pad_for(project, group[0][0])
             cue_rows = {sid: cues for sid, cues, _ in cuts.timed_cues(
-                project, group, seg['duration'] + cuts.transition_for(project.style), lead)}
+                project, group, _segment_timing(project, _groups_for_preview(project), seg['group'])[2], lead)}
         for q in seg['paragraphs']:
             slide, timing = slides[q['id']], q['timing']
-            if slide.overlays and not slide.on_camera and not cuts.is_cut(project.style.format):
+            if slide.overlays and not slide.on_camera and not cuts.is_cut(fmt):
                 from . import block_overlays, blocks
                 library = blocks.discover()
                 for item in block_overlays.resolved(slide.take, slide.overlays, q.get('duration')):
@@ -2390,13 +2417,13 @@ def _layers(project, segs):
                     add('graphics', item['id'], slide.id, a, a + item['dur'],
                         library[item['block_id']]['meta']['name'], 'overlay', item['src'])
             if (slide.title and timing['title_hold']['value'] > 0
-                    and project.style.format != 'essay' and not cuts.is_cut(project.style.format)):
+                    and fmt != 'essay' and not cuts.is_cut(fmt)):
                 a = timing['title_at']['start']
                 add('titles', slide.id, slide.id, a,
                     a + timing['title_hold']['value'] + project.frame.arrive_s * project.frame.exit_ratio,
                     slide.title, 'title', 'user' if 'user' in
                     (timing['title_at']['src'], timing['title_hold']['src']) else 'auto')
-            if project.style.format == 'essay':
+            if fmt == 'essay':
                 head = cuts.head_pad_for(project, group[0][0])
                 plan = _essay_phrases(project, slide, q['duration'],
                     lead_in=head + seg['skip'],
@@ -2404,7 +2431,7 @@ def _layers(project, segs):
                 origin = q['start'] - head - seg['skip']
                 for i, phrase in enumerate(plan):
                     a = origin + phrase['t0']
-                    b = min(seg['start'] + seg['duration'] + seg['skip'] - .05, origin + phrase['t1'])
+                    b = min(seg['start'] + seg['duration'] + seg.get('tail_skip', seg['skip']) - .05, origin + phrase['t1'])
                     if b > a + .25:
                         add('titles', f'{slide.id}:cap{i}', slide.id, a, b, phrase['text'], 'title')
             for i, (cue, span) in enumerate(zip(cue_rows.get(slide.id, []), timing['cues'])):
@@ -2413,7 +2440,7 @@ def _layers(project, segs):
                     'cue', span['src'], cue=i, cue_kind=cue.get('kind', ''))
             if chapter_title(project, slide) and previous:
                 end = previous['start'] + previous['duration']
-                add('chapters', slide.id, slide.id, end + previous['skip'] - timing['chapter_hold']['value'],
+                add('chapters', slide.id, slide.id, end + previous.get('tail_skip', previous['skip']) - timing['chapter_hold']['value'],
                     end, chapter_title(project, slide), 'chapter', timing['chapter_hold']['src'])
         previous = seg
     music = pick_music(project)
@@ -2459,6 +2486,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
+        if not row["kind"]:
+            row.pop("kind")
         if (s.cues or {}).get('blocks') or s.overlays:
             row['block_versions'] = _block_versions(s)
             from .block_theme import values
@@ -2474,6 +2503,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
             camera = project.active_take(s) or {}
             slides[-1].append([_stat(root / camera[k]) if camera.get(k) else None
                                for k in ("video", "raw_path")])
+    if any(s.kind for s in project.slides):
+        slides.append(_kind_context(project, lead))
     pic = _chosen(project, lead, preview=True)[0]
     from .camera import target
     if lead.on_camera:
@@ -2509,19 +2540,50 @@ def _proxy_ready(project: Project, groups, index: int, channel: Any, hide: froze
         return False
 
 
+def _kind_context(project, slide):
+    fmt = kinds.kind_for(project, slide)
+    run = kinds.run_project(project, slide).slides if fmt in {'casefile', 'groupchat'} else []
+    return [fmt, _lead_overlap(project, slide),
+            [s.to_dict() for s in run[:next((i for i, s in enumerate(run) if s.id == slide.id), 0)]]]
+
+
+def _chain_overlaps(project, groups, group_indices, count):
+    """Inserted cards/reads inherit the picture boundary's overlap on both sides."""
+    edges = _overlaps(project, groups)
+    return [edges[next((g for n, g in sorted(group_indices.items()) if n >= boundary), len(groups))]
+            for boundary in range(count + 1)]
+
+
+def _overlaps(project, groups):
+    if not any(s.kind for s in project.slides):
+        return [cuts.transition_for(project.style)] * (len(groups) + 1)
+    resolved = [kinds.kind_for(project, g[0][0]) for g in groups]
+    if not resolved:
+        return [cuts.transition_for(project.style)]
+    return [kinds.transition_for(project, a, b) for a, b in
+            zip([resolved[0], *resolved], [*resolved, resolved[-1]])]
+
+
+def _lead_overlap(project, slide):
+    groups = _groups_for_preview(project)
+    index = next((i for i, g in enumerate(groups) if any(s.id == slide.id for s, _ in g)), 0)
+    return _overlaps(project, groups)[index]
+
+
 def _segment_timing(project: Project, groups, index: int) -> tuple[float, float, float]:
     """(screen seconds, crossfade, length of the segment's file).
 
     The screen time carries the opening and closing silence on the first and
-    last picture; the file is longer by one crossfade, half of it either side.
+    last picture; the file carries half the incoming and outgoing overlaps.
     """
-    T = cuts.transition_for(project.style)
+    overlaps = _overlaps(project, groups)
+    T = overlaps[index]
     dur = round(sum(d for _s, d in groups[index]), 3)
     if index == 0:
         dur += HEAD_PAD
     if index == len(groups) - 1:
         dur += _tail_pad(project, groups)
-    return dur, T, dur + T
+    return dur, T, dur + (T + overlaps[index + 1]) / 2
 
 
 def _build_proxy(project: Project, groups, index: int, progress: Progress,
@@ -2804,7 +2866,7 @@ def _layout(project: Project) -> dict:
     from .learning import resolve_choices
     resolve_choices(project)
     groups = _groups_for_preview(project)
-    T = cuts.transition_for(project.style)
+    T = _overlaps(project, groups)[0]
     intro = _slate_state(project, "intro")
     outro = _slate_state(project, "outro")
     body = [_segment_timing(project, groups, i)[0] for i in range(len(groups))]
@@ -3010,13 +3072,15 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
         t += lay["intro"]["length"]
     for i, group in enumerate(groups):
         dur = lay["body"][i]
+        T = _overlaps(project, groups)[i]
         lead = group[0][0]
+        fmt = kinds.kind_for(project, lead) if any(s.kind for s in project.slides) else project.style.format
         head = HEAD_PAD if i == 0 else 0.0
         paras = []
         pt = t + head
         file_lead = T / 2 + cuts.head_pad_for(project, lead)
         cue_times = {}
-        if cuts.is_cut(project.style.format):
+        if cuts.is_cut(fmt):
             _, _, length = _segment_timing(project, groups, i)
             cue_times = {sid: (cues, times) for sid, cues, times in
                          cuts.timed_cues(project, group, length, file_lead)}
@@ -3039,9 +3103,10 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             }
             if chapter_title(project, s) and index_of[s.id] > 0:
                 gap = audio_mod.gap_map(project)[project.slides[index_of[s.id] - 1].id]
-                default = (max(0.9, min(3.2, gap - 0.12)) if scenes.handles(project.style.format)
-                           or cuts.is_cut(project.style.format) or project.style.format == "board"
-                           or project.style.format.startswith("custom:") else
+                card_fmt = kinds.kind_for(project, project.slides[index_of[s.id] - 1])
+                default = (max(0.9, min(3.2, gap - 0.12)) if scenes.handles(card_fmt)
+                           or cuts.is_cut(card_fmt) or card_fmt == "board"
+                           or card_fmt.startswith("custom:") else
                            max(project.frame.arrive_s, min(gap, project.frame.arrive_s
                                + project.frame.title_hold_base_s
                                + project.frame.title_hold_per_word_s * len(chapter_title(project, s).split()))))
@@ -3073,7 +3138,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
-        if not lead.on_camera and not (lead.cues or {}).get('blocks') and not _picture_source(project, lead).chosen_id:
+        if kinds.kind_for(project, lead) in {"kenburns", "essay", "stage"} and not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
         missing = sum(1 for s, _d in group if not s.take)
         if missing:
@@ -3081,13 +3146,14 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                             " (estimated length)")
         # Only the documentary cut holds one frame; every other format redraws
         # as the paragraphs change, so a long run there is not a still picture.
-        if not lead.on_camera and dur > 25 and project.style.format == "kenburns":
+        if not lead.on_camera and dur > 25 and kinds.kind_for(project, lead) == "kenburns":
             problems.append(f"the same picture holds for {dur:.0f}s")
         out, _keyfile = _proxy_paths(project, lead, hide)
         segments.append({
             "ref": str(i), "type": "picture", "n": i + 1, "group": i, "lead": lead.id,
             "start": round(t, 3), "duration": round(dur, 3), "skip": round(T / 2, 3),
-            "kind": "camera" if lead.on_camera else kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
+            **({"tail_skip": _overlaps(project, groups)[i + 1] / 2} if any(s.kind for s in project.slides) else {}),
+            "kind": kinds.kind_for(project, lead) if any(s.kind for s in project.slides) else "camera" if lead.on_camera else kind, "camera": ops[i], "problems": problems, "paragraphs": paras,
             **({"camera_stamp": _stat(project_dir(project.id) / (project.active_take(lead) or {}).get("video", ""))}
                if lead.on_camera else {}),
             "ready": _proxy_ready(project, groups, i, channel, hide),

@@ -24,6 +24,7 @@ import re
 import uuid
 from typing import Any, Callable
 
+from . import kinds
 from . import models3d
 from .llm import MODEL_UTILITY, complete_json
 from .schema import Project
@@ -182,7 +183,7 @@ def digest(project: Project) -> str:
     """What each cast member can show, for the script writer: who plays it,
     its real size, the parts and regions a shot can aim at, its limits — and
     which subjects are photos only. Empty for any other format."""
-    if project.style.format != "stage":
+    if "stage" not in kinds.kinds_in(project):
         return ""
     lines = []
     for s in subjects(project):
@@ -234,7 +235,7 @@ VISUAL_RULE = (
 
 
 def visual_rule(project: Project) -> str:
-    return VISUAL_RULE if project.style.format == "stage" else ""
+    return VISUAL_RULE if "stage" in kinds.kinds_in(project) else ""
 
 
 def summary(project: Project) -> dict[str, Any]:
@@ -291,7 +292,7 @@ def _split_visual(v: str) -> tuple[str, list[str]]:
 def check_visuals(project: Project) -> dict[str, dict]:
     """{slide id: {"level": "warn" | "hint", "text": ...}} for every visual
     line the current cast cannot carry, or could now carry better."""
-    if project.style.format != "stage" or not project.slides:
+    if "stage" not in kinds.kinds_in(project) or not project.slides:
         return {}
     subs = subjects(project)
     models: dict[str, dict | None] = {}
@@ -303,6 +304,8 @@ def check_visuals(project: Project) -> dict[str, dict]:
                 models[s["id"]] = None
     out: dict[str, dict] = {}
     for sl in project.slides:
+        if kinds.kind_for(project, sl) != "stage":
+            continue
         kind, fields = _split_visual(sl.visual_note)
         if kind == "3d" and fields:
             names = [n for n in re.split(r"\s+(?:and|&|with|beside|vs\.?|versus)\s+|,\s*", fields[0]) if n.strip()]

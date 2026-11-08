@@ -2,6 +2,7 @@
 import hashlib
 import re
 
+from . import kinds
 from . import block_overlays, blocks, channels, cuts
 from .data_numbers import extract
 
@@ -35,7 +36,7 @@ def suggest(narration, visual_note='', title='', *, footage=False, channel=None,
 
 def apply(project, slide):
     """Replace auto proposals only; hand graphics retain values and identity."""
-    if slide.on_camera or cuts.is_cut(project.style.format):
+    if slide.on_camera or cuts.is_cut(kinds.kind_for(project, slide)):
         return
     base = next((c for c in slide.candidates if c['id'] == slide.chosen_id), {})
     proposals = suggest(slide.narration, slide.visual_note, slide.title,

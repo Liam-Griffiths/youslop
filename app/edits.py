@@ -16,7 +16,7 @@ class EditError(ValueError):
         self.status = status
 
 
-EDITABLE = {"narration", "title", "visual_note", "chapter", "queries",
+EDITABLE = {"kind", "narration", "title", "visual_note", "chapter", "queries",
             "on_camera", "locked_media", "prefer_kind", "board_template", "board_lead", "board_note",
             "board_points", "diagram", "picture_mode", "cues", "overlays", "chosen_id", "focal"} | TIMING_FIELDS
 
@@ -60,6 +60,11 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
         if not isinstance(payload["on_camera"], bool):
             raise EditError("on_camera must be a boolean")
         s.on_camera = payload["on_camera"]
+    if "kind" in payload:
+        from .kinds import valid
+        if not valid(payload["kind"]):
+            raise EditError("Unknown picture kind")
+        s.kind = payload["kind"]
     if "narration" in payload:
         s.narration = str(payload["narration"]).strip()
     if "title" in payload:

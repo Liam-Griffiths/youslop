@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from . import kinds
 from . import audio, board, channels, check, cuts, edits, ffutil, llm, render, scenes, script_gen, store, storyboard
 from .paths import resource_root
 from .schema import FrameSpec
@@ -77,14 +78,14 @@ def _story(project):
         card = render.chapter_card(project, groups[i+1][0][0])
         if card:
             gap = gaps[groups[i][-1][0].id]
-            fmt = project.style.format
+            fmt = kinds.kind_for(project, groups[i][0][0])
             drawn = scenes.handles(fmt) or cuts.is_cut(fmt) or fmt == 'board' or fmt.startswith('custom:')
             if drawn:
                 hold = max(.9, min(3.2, gap - .12))
             else:
                 hold = max(frame.arrive_s, min(gap, frame.arrive_s + frame.title_hold_base_s +
                            frame.title_hold_per_word_s * len(card[0].split())))
-            end = seg['start'] + seg['duration'] + seg['skip']
+            end = seg['start'] + seg['duration'] + seg.get('tail_skip', seg['skip'])
             start = end - hold
             if not drawn:
                 start = max(seg['start'] - seg['skip'] + .2, start)
@@ -111,14 +112,15 @@ def _grab(project, t, out, size, segments):
             raise ffutil.FFError('Proxy contains no frame at the requested time')
         return out, False
     except (ffutil.FFError, OSError, ValueError):
-        if seg['type'] != 'picture' or not (cuts.is_cut(project.style.format) or project.style.format == 'board'):
+        fmt = seg.get('kind', project.style.format) if any(s.kind for s in project.slides) else project.style.format
+        if seg['type'] != 'picture' or not (cuts.is_cut(fmt) or fmt == 'board'):
             raise
         paras = seg['paragraphs']
         para = next((p for p in reversed(paras) if p['start'] <= t), paras[0])
         slide = next(s for s in project.slides if s.id == para['id'])
         at = min(1., max(0., (t - para['start']) / max(.001, para['duration'])))
         channel = channels.load_or_none(project.channel_id)
-        if cuts.is_cut(project.style.format):
+        if cuts.is_cut(kinds.kind_for(project, slide)):
             cuts.still(project, slide, out, channel=channel, at=at,
                        image_for=lambda s: render._chosen(project, s)[0], cache_dir=out.parent)
         else:
@@ -441,7 +443,7 @@ def _fix_text(project, fix):
 
 def _fix_cue(project, fix):
     slide = _slide(project, fix)
-    fmt = project.style.format
+    fmt = kinds.kind_for(project, slide)
     if not cuts.is_cut(fmt):
         return dict(unsupported='cue')
     old = deepcopy(slide.cues.get(fmt, []))
@@ -502,7 +504,7 @@ def route_fix(project, fix, *, apply=False, proposal=None):
             slide = _slide(current, fix)
             old = slide.cues.get(proposal['format'], []) if field == 'cues' else getattr(slide, field)
             if old != proposal['old'] or (field == 'cues' and
-                    (current.style.format != proposal['format'] or slide.narration != proposal['narration'])):
+                    (kinds.kind_for(current, slide) != proposal['format'] or slide.narration != proposal['narration'])):
                 raise ValueError('Slide changed since proposal; request a new fix')
             if field == 'narration' and slide.narration != proposal['new']:
                 for take in [*slide.takes.values(), slide.take]:

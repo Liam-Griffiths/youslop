@@ -8,10 +8,11 @@ is atomic and uses the same normalisation as the slide API.
 from copy import deepcopy
 from dataclasses import asdict
 
+from . import kinds
 from . import cuts, edits, render
 from .take_edits import take_duration, take_words
 
-EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues", "overlays"} | edits.TIMING_FIELDS
+EDITABLE = {"kind", "narration", "title", "chapter", "picture_mode", "cues", "overlays"} | edits.TIMING_FIELDS
 
 
 _UI_ONLY = {"spoken", "word_times", "effective_cues", "camera_edit"}
@@ -59,13 +60,15 @@ def build(project) -> dict:
                         'video_start', 'width', 'height', 'cuts', 'overlays'}})
             if slide.cues.get('blocks'):
                 paragraphs[-1]['block_cues'] = deepcopy(slide.cues['blocks'])
-    if cuts.is_cut(project.style.format):
+    if kinds.kinds_in(project) & kinds.CUTS or (not any(s.kind for s in project.slides) and cuts.is_cut(project.style.format)):
         by_id = {p["id"]: p for p in paragraphs}
         groups = render._picture_groups(project, render._slide_durations(project, True))
         for seg in segments:
             if seg["type"] != "picture":
                 continue
             group = groups[seg["group"]]
+            if not cuts.is_cut(kinds.kind_for(project, group[0][0]) if any(s.kind for s in project.slides) else project.style.format):
+                continue
             _dur, transition, length = render._segment_timing(project, groups, seg["group"])
             lead = transition / 2 + cuts.head_pad_for(project, group[0][0])
             for sid, cues, times in cuts.timed_cues(project, group, length, lead):
@@ -76,9 +79,14 @@ def build(project) -> dict:
                      "text": cue.get("text", ""),
                      "start": round(offset + a, 3), "end": round(offset + b, 3)}
                     for i, (cue, (a, b)) in enumerate(zip(cues, times))]
+    if any(s.kind for s in project.slides):
+        for para in paragraphs:
+            para["kind"] = slides[para["id"]].kind
+            para["resolved_kind"] = kinds.kind_for(project, slides[para["id"]])
     return {"version": 1,
             "project": {"id": project.id, "title": project.title,
-                        "format": project.style.format, "duration": timeline["total"]},
+                        "format": project.style.format, "duration": timeline["total"],
+                        **({"kinds": sorted(kinds.kinds_in(project))} if any(s.kind for s in project.slides) else {})},
             "sponsors": [slot.to_dict() for slot in project.sponsors],
             "style": project.style.to_dict(), "frame": project.frame.to_dict(),
             "segments": segments, "paragraphs": paragraphs}
