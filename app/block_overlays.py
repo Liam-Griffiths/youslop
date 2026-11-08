@@ -14,6 +14,7 @@ def validate(take, overlays):
     # Stored as written: clipping to a take here would drop graphics planned
     # before recording, or cut them for good when a shorter take replaces one.
     # `resolved` clips to the paragraph's actual length at render time.
+    from .block_presets import provenance
     library, clean, ids = blocks.discover(), [], set()
     for item in overlays:
         if (not isinstance(item, dict) or
@@ -39,7 +40,7 @@ def validate(take, overlays):
             raise ValueError('Overlay at must be zero or more seconds')
         clean.append(dict(id=ident, block_id=ref, vars=values, at=float(item['at']), dur=float(item['dur']),
                           position=position, by=item.get('by', 'hand'),
-                          **({'on': item['on']} if 'on' in item else {})))
+                          **provenance(item), **({'on': item['on']} if 'on' in item else {})))
     return clean
 
 
@@ -72,7 +73,9 @@ def resolved(take, overlays, length=None):
 
 
 def clip(project, item, size, fps, channel=None, *, prepare_only=False):
-    block = deepcopy(blocks.discover()[item['block_id']])
+    block = deepcopy(blocks.discover().get(item['block_id']))
+    if block is None:
+        raise ValueError(f"Block missing: {item['block_id']}")
     # Placement lengths need not satisfy the standalone preview's minimum.
     block['meta']['duration'] = dict(mode='range', min=0)
     ctx = scenes.context_base(project, channel)

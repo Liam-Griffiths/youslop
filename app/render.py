@@ -1103,7 +1103,9 @@ def _render_segment(
         from copy import deepcopy
         slide = group[0][0]
         cue = slide.cues['blocks'][0]  # One background selection; overlays have a separate contract.
-        block = deepcopy(blocks.discover()[cue['block']])
+        block = deepcopy(blocks.discover().get(cue['block']))
+        if block is None:
+            raise ValueError(f"Block missing: {cue['block']}")
         block['meta']['duration'] = dict(mode='range', min=0)
         ctx = scenes.context_base(project, channel)
         ctx.update(narration=slide.narration, take=slide.take, research=project.research)
@@ -1693,6 +1695,9 @@ def _block_versions(slide):
     cues = (slide.cues or {}).get('blocks', [])
     refs = [cue['block'] for cue in cues] + [o['block_id'] for o in slide.overlays]
     library = block_library.registry()
+    missing = [ref for ref in refs if ref not in library]
+    if missing:
+        raise ValueError(f'Block missing: {missing[0]}')
     return [block_library.signature(library[ref]) for ref in refs]
 
 
@@ -2431,7 +2436,7 @@ def _proxy_ready(project: Project, groups, index: int, channel: Any, hide: froze
     try:
         return (out.exists() and out.stat().st_size > 0
                 and keyfile.read_text() == _proxy_key(project, groups, index, channel, hide))
-    except OSError:
+    except (OSError, ValueError):  # ValueError: a block it uses is missing (pack removed)
         return False
 
 

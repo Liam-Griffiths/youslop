@@ -642,6 +642,7 @@ class Channel:
     """A series. Videos in one inherit its look and open on its slate."""
     id: str
     name: str                       # "Who were they?"
+    block_presets: list[dict] = field(default_factory=list)
     tagline: str = ""               # small line under the name on the slate
     concept: str = ""               # what the series covers; steers scripts and casting
     default_minutes: int = 12
@@ -665,6 +666,7 @@ class Channel:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "block_presets": deepcopy(self.block_presets),
             "id": self.id, "name": self.name, "tagline": self.tagline,
             "concept": self.concept, "default_minutes": self.default_minutes,
             "tone": self.tone, "style": self.style.to_dict(),
@@ -698,8 +700,9 @@ class Channel:
         avatar = AvatarSpec(**{k: v for k, v in (d.get("avatar") or {}).items()
                                if k in AvatarSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
+                 - {"block_presets", "frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
         return cls(**{k: v for k, v in d.items() if k in known},
+                   block_presets=deepcopy(d.get("block_presets") or []),
                    frame=FrameSpec.from_dict(d.get("frame") or {}),
                    style=style, intro=intro, voice=voice, outro=outro,
                    narrator=narrator, avatar=avatar,
@@ -767,6 +770,7 @@ class Project:
     title: str = ""
     subtitle: str = ""
     format_look: dict = field(default_factory=dict)
+    block_presets: list[dict] = field(default_factory=list)
     channel_id: str = ""
     use_intro: bool = True
     use_outro: bool = True
@@ -865,6 +869,7 @@ class Project:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "block_presets": deepcopy(self.block_presets),
             "id": self.id,
             "idea": self.idea,
             "title": self.title,
@@ -991,11 +996,12 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
+            block_presets=deepcopy(d.get("block_presets") or []),
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
             sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],

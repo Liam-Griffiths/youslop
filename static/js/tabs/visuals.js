@@ -256,12 +256,15 @@ function visualBlockPanel(p, s) {
   const data = visualBlockData(p), aspect = p.aspect === 'portrait' ? '9:16' : '16:9';
   const suggestions = data.suggestions.get(visualSuggestionKey(s)) || [];
   const available = (data.items || []).filter(b => b.kind === 'segment' && b.aspects.includes(aspect));
-  const refs = [...new Set([...suggestions.map(b => b.block), ...available.map(b => b.ref)])].slice(0,4);
+  const presets = (data.presets || []).filter(pr => !pr.missing && available.some(b => b.ref === pr.block));
+  available.sort((a,b) => blockPriority(b,presets,p.channel_id) - blockPriority(a,presets,p.channel_id));
+  const pinned = available.filter(b => blockPriority(b,presets,p.channel_id)).map(b => b.ref);
+  const refs = [...new Set([...pinned,...suggestions.map(b => b.block), ...available.map(b => b.ref)])].slice(0,4);
   const selected = s.cues?.blocks?.[0];
   return `${selected ? `<div class="visual-block-chosen"><h4>Chosen block · ${esc(selected.block)}</h4>${visualBlockStill(p,s)}
       <button type="button" class="btn sm ghost" onclick="openBlockPicker('${p.id}','${s.id}')">Edit</button>
       <button type="button" class="btn sm ghost" onclick="removeVisualBlock('${s.id}')">Remove</button></div>` : ''}
-    <h4>Suggested blocks</h4><div class="visual-block-strip">${refs.map(ref => {
+    <h4>Suggested blocks</h4><div class="visual-block-strip">${presets.map((pr,i) => `<button type="button" class="btn" data-visual-preset="${i}">${esc(pr.name)} <span class="chip">${esc(pr.badge)}</span></button>`).join('')}${refs.map(ref => {
       const b = available.find(b => b.ref === ref);
       const suggestion = suggestions.find(b => b.block === ref);
       return b ? `<button type="button" class="block-card" data-visual-block="${esc(ref)}">${blockPoster(b,aspect)}
@@ -280,7 +283,8 @@ async function loadVisualBlocks(p, s) {
   };
   if (!data.loading) {
     data.loading = true;
-    Promise.all([api('/api/blocks'), api('/api/blocks/third-party')]).then(async ([items,thirdParty]) => {
+    Promise.all([api('/api/blocks'), api('/api/blocks/third-party'), loadBlockPresets({project:p.id,channel:p.channel_id})]).then(async ([items,thirdParty,presets]) => {
+      data.presets = presets;
       data.items = items; data.thirdParty = thirdParty; repaint();
       // Same one-off poster batch the Blocks screen starts; reload when it ends.
       if (!items.some(b => Object.keys(b.posters || {}).length < b.aspects.length)) return;
@@ -312,6 +316,11 @@ async function loadVisualBlocks(p, s) {
       })
       .catch(e => { data.trials.set(trialKey,{error:e.message}); repaint(); });
   }
+  const presetChoices = (data.presets || []).filter(pr => !pr.missing && (data.items || []).some(b => b.ref === pr.block && b.kind === 'segment' && b.aspects.includes(p.aspect === 'portrait' ? '9:16' : '16:9')));
+  document.querySelectorAll('[data-visual-preset]').forEach(card => { card.onclick = () => {
+    const pr = presetChoices[Number(card.dataset.visualPreset)];
+    openBlockPicker(p.id,s.id,{block:pr.block,vars:pr.values,preset:{id:pr.id,scope:pr.scope}});
+  }; });
   document.querySelectorAll('[data-visual-block]').forEach(card => {
     card.onclick = () => {
       const suggestion = data.suggestions.get(key)?.find(b => b.block === card.dataset.visualBlock);

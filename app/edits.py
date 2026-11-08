@@ -121,7 +121,11 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
                         variables = blocks.validate_vars(library[ref]['meta'], cue.get('vars', {}))
                     except ValueError as exc:
                         raise EditError(str(exc)) from exc
-                    clean.append(dict(block=ref, vars=variables))
+                    from .block_presets import provenance
+                    try:
+                        clean.append(dict(block=ref, vars=variables, **provenance(cue)))
+                    except ValueError as exc:
+                        raise EditError(str(exc)) from exc
                 if clean:
                     cues[key] = clean
                 else:

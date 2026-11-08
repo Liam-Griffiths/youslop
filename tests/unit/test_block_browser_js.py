@@ -15,8 +15,8 @@ def test_preview_queue_and_application(tmp_path):
     script.write_text('''
 const esc = s => String(s ?? '');
 let calls = [], resolve;
-const api = (url,options) => {
-  calls.push([url,JSON.parse(options.body)]);
+const api = (url,options={}) => {
+  calls.push([url,JSON.parse(options.body || '{}')]);
   return new Promise(r => { resolve = r; });
 };
 const document = {querySelectorAll:() => []};
@@ -64,6 +64,26 @@ await openChannelBlockBrowser('ctest','number_slam');
 assert(opened.options.mode === 'channel' && opened.options.channel === 'ctest','reusable channel mode');
 const nodes = {'#block-description':{value:'A receipt'},'#block-result':{textContent:''},'#blocks-grid':{}};
 const $ = key => nodes[key];
+const pr = {id:'preset1',scope:'project',name:'Our chapter',block:'number_slam',values:{value:9},badge:'This project'};
+blocksBrowser = {presets:[pr],items:[],options:{aspect:'9:16'}};
+assert(blockPresetCard(pr).includes('This project'),'preset badge');
+assert(blockPresetCard({...pr,missing:true}).includes('Block missing'),'missing block labelled');
+assert(blockPriority({ref:'number_slam',channels:[]},[pr],'c1') > blockPriority({ref:'other',channels:[]},[pr],'c1'),'project preset ranks first');
+const beforePresets = calls.length;
+const standalonePresets = loadBlockPresets({project:'p1'},[{id:'c1',name:'Other channel'}]);
+await Promise.resolve(); await Promise.resolve();
+assert(calls.length === beforePresets+1 && calls.at(-1)[0] === '/api/projects/p1/block-presets','standalone excludes other channel presets');
+resolve([pr]);
+assert((await standalonePresets)[0].badge === 'This project','project scope badge');
+const gridPaint = paintBlocksGrid, detailPaint = paintBlockDetails;
+let detailAspect;
+paintBlocksGrid = () => {};
+paintBlockDetails = aspect => { detailAspect = aspect; };
+chooseBlockPreset(pr);
+assert(blocksBrowser.trial.values.value === 9 && blocksBrowser.trial.preset.scope === 'project','values and provenance selected');
+assert(detailAspect === '9:16','project aspect retained');
+paintBlocksGrid = gridPaint; paintBlockDetails = detailPaint;
+
 const location = {hash:'#/blocks'};
 let complete;
 const watchJob = (id,kind,fn) => { assert(kind === 'create block','creation job'); complete = fn; };

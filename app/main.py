@@ -60,6 +60,8 @@ ensure_dirs()
 packs.scan()
 
 app = FastAPI(title=brand.NAME)
+from . import block_presets
+block_presets.register(app)
 
 # Stopgap export page until the footage logger (T11.5). Registered as plain
 # routes: an included router breaks code that walks app.routes for `.path`.

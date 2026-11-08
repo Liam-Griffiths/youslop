@@ -2,13 +2,20 @@
 let blocksBrowser = null;
 
 async function renderBlocks(path = '', options = {}) {
+  if (options.mode !== 'channel') {
+    options.project ||= state.project?.id;
+    options.channel ||= state.project?.channel_id;
+  }
   const route = location.hash;
   const query = path.startsWith('search/') ? decodeURIComponent(path.slice(7)) : '';
   const selected = query ? '' : decodeURIComponent(path);
   const [items, channels] = await Promise.all([api('/api/blocks' + (options.overlay ? '?overlay=1' : '')), api('/api/channels')]);
   if (location.hash !== route) return;
   if (!options.mode && !location.hash.startsWith('#/blocks')) return;
-  blocksBrowser = {items, selected, options, trial:options.selection ? {ref:options.selection.block, values:options.selection.vars} : null};
+  const presets = await loadBlockPresets(options, channels);
+  if (location.hash !== route) return;
+  blocksBrowser = {items, presets, channels, selected, options, trial:options.selection ? {ref:options.selection.block, values:options.selection.vars} : null};
+  if (options.selection?.preset && blocksBrowser.trial) blocksBrowser.trial.preset = options.selection.preset;
   // The Edit stage moves #inspector inside the view; take it back before the
   // view is replaced, or the detail panel has nowhere to paint (picker from G).
   if (typeof restoreShellInspector === 'function' && view.contains($('#inspector'))) restoreShellInspector();
@@ -22,6 +29,7 @@ async function renderBlocks(path = '', options = {}) {
       ${values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>`).join('')}
     <label><input type="checkbox" id="blocks-data"> Works with data</label>
     <label><input type="checkbox" id="blocks-favourites"> Favourites</label>
+    <label><input type="checkbox" id="blocks-presets"> Presets</label>
     <label for="blocks-channel">Pinned to channel</label><select id="blocks-channel"><option value="">All</option>${channels.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
     <label for="blocks-sort">Sort</label><select id="blocks-sort"><option value="recommended">Recommended</option><option value="recent">Recently used</option><option value="name">A–Z</option></select>
     <button type="button" class="btn ghost" id="blocks-clear">Clear filters</button></aside>
@@ -32,8 +40,8 @@ async function renderBlocks(path = '', options = {}) {
       <div id="block-result" role="status">${blockCreationResult()}</div></details>
       <p id="blocks-count" class="mono" role="status"></p><div id="blocks-grid" class="blocks-grid"></div></section></div>`;
   $('#block-description').oninput = e => { state.blockDescription = e.target.value; };
-  for (const id of ['search','category','aspect','source','data','sort','favourites','channel']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
-  if (options.channel) $('#blocks-channel').value = options.channel;
+  for (const id of ['search','category','aspect','source','data','sort','favourites','channel','presets']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
+  if (options.mode === 'channel') $('#blocks-channel').value = options.channel;
   $('#blocks-clear').onclick = () => { for (const el of document.querySelectorAll('.blocks-filters input,.blocks-filters select')) {
     if (el.type === 'checkbox') el.checked = false; else el.value = el.id === 'blocks-sort' ? 'recommended' : '';
   } paintBlocksGrid(); };
@@ -60,12 +68,14 @@ async function renderBlocks(path = '', options = {}) {
 function paintBlocksGrid() {
   const q = $('#blocks-search').value.toLowerCase();
   const category = $('#blocks-category').value, aspect = $('#blocks-aspect').value, source = $('#blocks-source').value;
-  let items = blocksBrowser.items.filter(b => [b.name,b.description,...b.tags,...Object.keys(b.variables)].join(' ').toLowerCase().includes(q)
+  let items = blocksBrowser.items.filter(b => [b.name,b.description,...b.tags,...Object.keys(b.variables),...blocksBrowser.presets.filter(p => p.block === b.ref).map(p => p.name)].join(' ').toLowerCase().includes(q)
     && (!category || b.category === category) && (!aspect || b.aspects.includes(aspect))
     && (!source || b.source === source || source === 'packs' && b.ref.startsWith('pack/'))
+    && (!$('#blocks-presets').checked || blocksBrowser.presets.some(p => p.block === b.ref))
     && (!$('#blocks-channel').value || b.channels.includes($('#blocks-channel').value))
     && (!$('#blocks-favourites').checked || b.favourite)
     && (!$('#blocks-data').checked || b.works_with_data));
+  if ($('#blocks-sort').value === 'recommended') items.sort((a,b) => blockPriority(b, blocksBrowser.presets, blocksBrowser.options.channel) - blockPriority(a, blocksBrowser.presets, blocksBrowser.options.channel));
   if ($('#blocks-sort').value === 'name') items.sort((a,b) => a.name.localeCompare(b.name));
   if ($('#blocks-sort').value === 'recent') items.sort((a,b) => (b.recent || 0) - (a.recent || 0));
   $('#blocks-count').textContent = `${items.length} blocks`;
@@ -73,8 +83,11 @@ function paintBlocksGrid() {
     const a = aspect || b.aspects[0];
     return `<div class="block-card-wrap"><button type="button" class="block-card" data-ref="${esc(b.ref)}" aria-pressed="${b.ref === blocksBrowser.selected}">
       ${blockPoster(b,a)}<strong>${esc(b.name)}</strong><span>${esc(b.description)}</span><span class="mono">${esc(b.source)} · ${esc(b.category)}</span></button>
-      <button type="button" class="btn sm block-star" data-star="${esc(b.ref)}" aria-label="Favourite ${esc(b.name)}" aria-pressed="${!!b.favourite}">${b.favourite ? '★' : '☆'}</button></div>`;
+      <button type="button" class="btn sm block-star" data-star="${esc(b.ref)}" aria-label="Favourite ${esc(b.name)}" aria-pressed="${!!b.favourite}">${b.favourite ? '★' : '☆'}</button>${blocksBrowser.presets.filter(p => p.block === b.ref).map(blockPresetCard).join('')}</div>`;
   }).join('') || '<p>No blocks match. Clear filters, or <button type="button" class="btn ghost" id="block-describe-empty">Describe a block</button>.</p>';
+  const missing = blocksBrowser.presets.filter(p => p.missing && (!q || `${p.name} ${p.block}`.toLowerCase().includes(q)));
+  $('#blocks-grid').insertAdjacentHTML('beforeend', missing.map(blockPresetCard).join(''));
+  document.querySelectorAll('[data-preset-index]').forEach(button => { button.onclick = () => chooseBlockPreset(blocksBrowser.presets[Number(button.dataset.presetIndex)]); });
   $('#block-describe-empty')?.addEventListener('click', () => { $('.block-create').open = true; $('#block-description').focus(); });
   document.querySelectorAll('[data-star]').forEach(button => { button.onclick = () => toggleBlockFavourite(button.dataset.star); });
   const cards = [...document.querySelectorAll('#blocks-grid .block-card')];
@@ -111,7 +124,9 @@ function paintBlockDetails(aspect) {
   blockPreviewSequence++;
   aspect ||= blocksBrowser.options.aspect || b.aspects[0];
   if (!b.aspects.includes(aspect)) aspect = b.aspects[0];
-  const scratch = blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial.values : {};
+  const saved = blocksBrowser.presets.filter(p => p.block === b.ref && (p.scope === 'project' && p.owner === blocksBrowser.options.project || p.scope === 'channel' && p.owner === blocksBrowser.options.channel));
+  const scratch = {...saved.find(p => p.scope === 'channel')?.values, ...saved.find(p => p.scope === 'project')?.values,
+    ...(blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial.values : {})};
   panel.innerHTML = `<div class="block-detail"><h2>${esc(b.name)}</h2><p>${esc(b.description)}</p><div id="block-trial-image">${blockPoster(b,aspect)}</div>
     <div class="row"><button type="button" class="btn sm" id="block-play">Play · ¼ size</button>
       ${b.aspects.map(a => `<button type="button" class="btn sm" aria-pressed="${a === aspect}" data-aspect="${esc(a)}">${esc(a)}</button>`).join('')}</div>
@@ -123,6 +138,7 @@ function paintBlockDetails(aspect) {
       <button type="button" class="btn sm" id="block-duplicate" ${b.forkable ? '' : 'disabled aria-describedby="block-fork-note"'}>Duplicate as mine</button>
       ${b.forkable ? '' : '<small id="block-fork-note">Built-in blocks use trusted template features that copies cannot keep. Save your values as a preset or describe a new block instead.</small>'}
       <button type="button" class="btn sm" data-star="${esc(b.ref)}" aria-pressed="${!!b.favourite}">${b.favourite ? '★' : '☆'} Favourite</button></div>
+    <button type="button" class="btn sm" id="block-save-preset">Save as preset…</button><div id="block-preset-target"></div>
     <div id="block-channel-target"></div>
     <p class="mono block-meta">${esc(blockDuration(b.duration))} · ${esc(b.source)} · ${esc(b.licence)}<br>${esc(b.check_status)}
     ${b.origin ? `<br>Origin: ${esc(Object.entries(b.origin).map(([k, v]) => `${k.replaceAll('_', ' ')} ${v}`).join(' · '))}` : ''}</p>
@@ -140,18 +156,20 @@ function paintBlockDetails(aspect) {
     clearTimeout(timer);
     // Invalidate immediately, before the debounce, so old pixels cannot win.
     blockPreviewSequence++;
-    blocksBrowser.trial = {ref:b.ref,values:Object.fromEntries([...detail.querySelectorAll('[data-key]')].map(el => [el.dataset.key,el.value]))};
+    blocksBrowser.trial = {...(blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial : {}),ref:b.ref,values:Object.fromEntries([...detail.querySelectorAll('[data-key]')].map(el => [el.dataset.key,el.value]))};
     detail.querySelectorAll('[data-max]').forEach(input => {
       input.nextElementSibling.textContent = `${input.dataset.max - input.value.length} characters remaining`;
     });
     timer = setTimeout(() => { if (detail.isConnected) refresh('trial'); },600);
   };
-  $('#block-reset').onclick = () => { blocksBrowser.trial = null; paintBlockDetails(aspect); const fresh = $('#inspector .block-detail'); requestBlockPreview(b,aspect,'trial',readBlockTrial(b,fresh),fresh); };
+  $('#block-save-preset').onclick = () => blockPresetTarget(b, aspect, values).catch(e => toast(e.message,true));
+  $('#block-reset').onclick = () => { blocksBrowser.trial = {ref:b.ref,values:Object.fromEntries(Object.entries(b.variables).map(([k,v]) => [k,v.default]))}; paintBlockDetails(aspect); const fresh = $('#inspector .block-detail'); requestBlockPreview(b,aspect,'trial',readBlockTrial(b,fresh),fresh); };
   $('#block-play').onclick = () => refresh('motion');
   const use = $('#block-use');
   if (use) use.onclick = async () => {
     try {
       const selection = {block:b.ref, vars:values()};
+      if (blocksBrowser.trial?.ref === b.ref && blocksBrowser.trial.preset) selection.preset = blocksBrowser.trial.preset;
       if (blocksBrowser.options.mode === 'pick') await blocksBrowser.options.onUse(selection);
       else await blockProjectTarget(selection);
     } catch (e) { blockTrialError(detail, e.message); }
@@ -304,7 +322,7 @@ async function blockProjectTarget(selection) {
 async function openBlockPicker(pid, sid, selection = null) {
   const p = state.project;
   selection ||= p?.slides.find(s => s.id === sid)?.cues?.blocks?.[0];
-  await renderBlocks(selection?.block || '', {mode:'pick', selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
+  await renderBlocks(selection?.block || '', {mode:'pick', project:pid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
     await applyBlockToSlide(pid,sid,selection);
     state.project = await api(`/api/projects/${pid}`);
     await render();
@@ -383,4 +401,72 @@ async function describeBlock(button) {
       }
     });
   } catch (e) { toast(e.message, true); button.disabled = false; }
+}
+
+
+async function loadBlockPresets(options, channels = null) {
+  channels ||= await api('/api/channels');
+  const channelRows = await Promise.all(channels.filter(c => options.project && !options.channel ? false : !options.channel || c.id === options.channel).map(async c =>
+    (await api(`/api/channels/${c.id}/block-presets`)).map(p => ({...p,scope:'channel',owner:c.id,badge:c.name}))));
+  const project = options.project ? (await api(`/api/projects/${options.project}/block-presets`))
+    .map(p => ({...p,scope:'project',owner:options.project,badge:'This project'})) : [];
+  return [...project,...channelRows.flat()];
+}
+function blockPriority(b, presets, channel) {
+  return (presets.some(p => p.block === b.ref && p.scope === 'project') ? 3 : 0)
+    + (presets.some(p => p.block === b.ref && p.scope === 'channel') ? 2 : 0)
+    + (channel && b.channels?.includes(channel) ? 1 : 0);
+}
+function blockPresetCard(p) {
+  const index = blocksBrowser.presets.indexOf(p);
+  return `<button type="button" class="btn block-preset" data-preset-index="${index}" ${p.missing ? 'disabled' : ''}>
+    ${esc(p.name)} <span class="chip">${esc(p.badge)}</span>${p.missing ? ' · Block missing' : ''}</button>`;
+}
+function chooseBlockPreset(p) {
+  blocksBrowser.selected = p.block;
+  blocksBrowser.trial = {ref:p.block,values:p.values,preset:{id:p.id,scope:p.scope}};
+  paintBlocksGrid(); paintBlockDetails(blocksBrowser.options.aspect || p.aspect);
+  $('#block-play')?.focus();
+}
+async function blockPresetTarget(b, aspect, values) {
+  const browser = blocksBrowser, projects = await api('/api/projects');
+  if (blocksBrowser !== browser) return;
+  const host = $('#block-preset-target');
+  const choices = [
+    ...projects.map(p => ({value:`projects/${p.id}`,label:p.title || p.id})),
+    ...browser.channels.map(c => ({value:`channels/${c.id}`,label:c.name}))];
+  const current = browser.presets.find(p => p.id === browser.trial?.preset?.id && p.scope === browser.trial.preset.scope);
+  host.innerHTML = `<label for="preset-name">Preset name</label><input type="text" id="preset-name" maxlength="120" value="${esc(current?.name || b.name)}">
+    <label for="preset-scope">Save to</label><select id="preset-scope">${choices.map(c => `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('')}
+    ${browser.options.project && browser.options.channel ? '<option value="both">This project and channel</option>' : ''}</select>
+    <button type="button" class="btn sm" id="preset-create">Save preset</button>
+    ${current ? '<button type="button" class="btn sm" id="preset-update">Save changes to this preset</button><button type="button" class="btn sm ghost" id="preset-delete">Delete preset</button><button type="button" class="btn sm ghost" id="preset-count">Update slides using this preset…</button><div id="preset-affected"></div><small>Slides keep their copied values until you update them.</small>' : ''}
+    <p role="status" id="preset-status"></p>`;
+  $('#preset-scope').value = browser.options.project ? `projects/${browser.options.project}` : browser.options.channel ? `channels/${browser.options.channel}` : choices[0]?.value;
+  const save = async (update = false, remove = false) => {
+    try {
+      const target = $('#preset-scope').value;
+      const targets = update || remove ? [`${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}`]
+        : target === 'both' ? [`projects/${browser.options.project}`,`channels/${browser.options.channel}`] : [target];
+      const payload = remove ? null : {name:$('#preset-name').value,block:b.ref,values:values(),aspect};
+      for (const dest of targets) await api(`/api/${dest}/block-presets${update || remove ? '/'+current.id : ''}`, {
+        method:remove ? 'DELETE' : update ? 'PATCH' : 'POST',
+        ...(remove ? {} : {body:JSON.stringify(payload)})});
+      browser.presets = await loadBlockPresets(browser.options,browser.channels);
+      paintBlocksGrid(); $('#preset-status').textContent = remove ? 'Preset deleted. Slides keep their values.' : 'Preset saved. Slides keep their values.';
+    } catch (e) { $('#preset-status').textContent = e.message; }
+  };
+  $('#preset-create').onclick = () => save();
+  if (current) $('#preset-count').onclick = async () => {
+    try {
+      const url = `/api/${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}/block-presets/${current.id}/slides`;
+      const count = await api(url);
+      $('#preset-affected').innerHTML = `<p>${count.slides} slides use this preset.</p><button type="button" class="btn sm" id="preset-apply-slides" ${count.slides ? '' : 'disabled'}>Update ${count.slides} slides</button>`;
+      $('#preset-apply-slides').onclick = async () => {
+        try { const result = await api(url,{method:'POST'}); $('#preset-status').textContent = `${result.slides} slides updated`; }
+        catch (e) { $('#preset-status').textContent = e.message; }
+      };
+    } catch (e) { $('#preset-status').textContent = e.message; }
+  };
+  if (current) { $('#preset-update').onclick = () => save(true); $('#preset-delete').onclick = () => save(false,true); }
 }

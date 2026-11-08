@@ -1344,3 +1344,5 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .visual-frame { position:relative; }
 .visual-graphics { position:absolute; inset:auto 10px 10px; display:flex; flex-wrap:wrap; gap:4px; }
 .visual-graphics .visual-chip { background:var(--panel); }
+.block-preset { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; margin-top: 6px; }
+.block-preset .chip { margin: 0; white-space: nowrap; }

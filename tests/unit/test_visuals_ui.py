@@ -19,6 +19,7 @@ def test_visual_picker_js(tmp_path):
       const isStage = f => f === 'stage', isCut = f => f === 'loudmouth';
       const fmtTime = s => s+'s', thumbUrl = c => '/thumb/'+c.id;
       const document = {querySelectorAll: () => []};
+      const loadBlockPresets = async () => [], blockPriority = () => 0;
       const blockPoster = b => `<img src="/poster/${b.ref}" alt="${b.name}">`;
       const location = {}, state = {tab:'media', project:{id:'p1',aspect:'landscape',style:{format:'kenburns'},
         slides:Array.from({length:40},(_,i)=>({id:'s'+i,title:'Picture <'+i+'>',narration:'Paragraph '+i,

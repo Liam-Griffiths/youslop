@@ -101,7 +101,9 @@ def seed():
             clip.thumbs.append(f'thumbs/{clip.id}-{i}.jpg')
     footage._save(shoot)
     settings.save_file({'setup_complete': 'true'})
-    channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures'))
+    channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures',
+        blocks=['title_card'], block_presets=[dict(id='snapshot-preset', name='Our chapter card',
+            block='title_card', values={'title':'The next chapter'})]))
     source = REPO / 'tests/fixtures/project_min'
     for fmt in FORMATS:
         pid = f'psnap{fmt}'
