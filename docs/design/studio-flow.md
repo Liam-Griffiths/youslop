@@ -339,7 +339,7 @@ panel and preview controls do.
 | Documentary with footage | footage clips + archive stills | Footage · Archive · Library · Scenes · Upload | camera move, source in, speed, lock | Fill the rest from footage |
 | 3D explainer (+ archive) | 3D shots | 3D (cast + shot options) · Archive · Footage · Library · Scenes · Upload | model, shot, subject part, section cut + labels; solver checks shown in mono (subject fill, parts clipped, label overlap) | Plan all shots |
 | Piece to camera (vlog) | camera takes, jump-cut | Layout · Footage · Screens · Library · Scenes | layout per paragraph (full face, split, cutaway over voice, picture in picture), jump-cut strip with Natural/Tight | Auto-edit cutaways |
-| Vertical data Short | Corkbored blocks + data | Blocks (built in, packs, mine; third-party only if enabled, labelled) | template, headline, data table from a research source, draw-in word, caption style, safe-area and number-match checks | Preview all at ¼ size |
+| Vertical data Short | Corkbored blocks + data | Blocks (built in, packs, mine) | template, headline, data table from a research source, draw-in word, caption style, safe-area and number-match checks | Preview all at ¼ size |
 | Essay / board / drawn cuts | the format's own drawing | Archive · Library · Scenes | format-specific fields (existing) | Fill the rest |
 
 Rules:
@@ -364,10 +364,8 @@ Rules:
 - Every block passes `block check` (text fit at max lengths, safe areas,
   contrast, no remote assets, deterministic seek) and has locally generated
   previews.
-- **Third-party blocks (Hyperframes catalog) are temporary and quarantined**
-  (T2.7c): off by default, labelled "third-party" with their licence, never
-  showing upstream previews or branding, never in packs or defaults; retired
-  by T12.7. Our runtime stays compatible with that composition style.
+- The runtime supports local compositions using typed composition variables,
+  paused timelines and mounted templates.
 - The model chooses blocks by id and fills variables; it writes a new block
   only on request (T12.6), once, and the result is reused for free.
 - **Blocks are app-wide** (owner, 2026-11-08). The Blocks screen is the one
@@ -451,7 +449,7 @@ shown in Review & publish and the jobs strip) so the cost claim is measured.
 6. Stages in flow order: T9.5 Home, T9.6 Plan, T9.7 Script, T9.9 Voice,
    T9.8 Visuals, T9.10 Edit, T9.11 Review & publish; then T9.12 jobs/palette,
    T9.13 first run.
-7. T2.7c (quarantine the catalog) early; Phase 12 blocks T12.1–T12.3 alongside Phase 9.
+7. Phase 12 blocks T12.1–T12.3 alongside Phase 9.
 8. Phase 10 and Phase 11 data tickets can run in parallel from now; their UI
    tickets plug into T9.8 / T9.10 / the Footage screen.
 

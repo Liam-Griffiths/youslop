@@ -81,12 +81,6 @@ def list_blocks(q: str = '', category: str = '', aspect: str = '', source: str =
     return browse(q, category, aspect, source, channel, data, overlay)
 
 
-@app.get('/api/blocks/third-party')
-def third_party_blocks() -> list[dict]:
-    from . import catalog
-    return catalog.installed() if catalog.ui_enabled() else []
-
-
 @app.post('/api/blocks/posters')
 def start_block_posters() -> dict:
     from .block_library import start_posters

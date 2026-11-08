@@ -302,21 +302,6 @@ def cmd_pack(args):
     return 0
 
 
-def cmd_catalog(args):
-    from . import catalog
-    if args.catalog_cmd == 'search':
-        print('WebGPU items excluded.', file=sys.stderr)
-        _print_json(catalog.search(args.query))
-    elif args.catalog_cmd == 'fetch':
-        path = catalog.fetch(args.name)
-        print(path)
-        source = json.loads((path / 'SOURCE.json').read_text())
-        for error in source['lint']:
-            print('Lint: ' + error, file=sys.stderr)
-    else:
-        _print_json(catalog.installed())
-
-
 def cmd_doctrine(args):
     from . import doctrine
     if args.write is not None:
@@ -458,11 +443,6 @@ def main(argv=None):
         child = pack_sub.add_parser(name)
         child.add_argument('folder')
         child.add_argument('--static-only', action='store_true', help='Skip browser previews')
-    command = sub.add_parser("catalog")
-    catalog_sub = command.add_subparsers(dest="catalog_cmd", required=True)
-    catalog_sub.add_parser("list")
-    catalog_sub.add_parser("search").add_argument("query")
-    catalog_sub.add_parser("fetch").add_argument("name")
     command = sub.add_parser('footage')
     footage_sub = command.add_subparsers(dest='footage_cmd', required=True)
     child = footage_sub.add_parser('import', help='Import or resume a shoot from the same path')
@@ -490,7 +470,7 @@ def main(argv=None):
         status = {"rule": cmd_learning, "look": cmd_learning, "format": cmd_learning, "render": cmd_render, "publish": cmd_publish, "new": cmd_new, "plan": cmd_plan, "research": cmd_plan,
          "doctrine": cmd_doctrine, "check": cmd_check, "verify": cmd_verify, "list": cmd_list, "stages": cmd_stages, "timeline": cmd_timeline,
          "storyboard": cmd_storyboard, "apply": cmd_apply, "snapshot": cmd_snapshot,
-         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "catalog": cmd_catalog, "pack": cmd_pack, "block": cmd_block, "footage": cmd_footage,
+         "scene-check": cmd_scene_check, "scene-preview": cmd_scene_preview, "pack": cmd_pack, "block": cmd_block, "footage": cmd_footage,
          "review": cmd_review, "fix": cmd_fix, "ask": cmd_ask}[args.cmd](args)
         sys.stdout.flush()
         return status or 0

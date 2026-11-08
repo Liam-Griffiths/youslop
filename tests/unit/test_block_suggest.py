@@ -3,7 +3,7 @@ import pytest
 import asyncio
 import httpx
 
-from app import blocks, catalog, main, store
+from app import blocks, main, store
 from app.block_suggest import suggest
 from app.schema import Project, Slide
 
@@ -70,14 +70,6 @@ def test_endpoint_shape_and_remove_preserves_other_cues(tmp_path, monkeypatch):
             assert response.json()['chosen_id'] == 'candidate-kept'
 
     asyncio.run(request())
-
-
-def test_third_party_gate_is_local_and_allowlisted(monkeypatch):
-    monkeypatch.setattr(catalog, 'installed', lambda: [{'name': 'local', 'license': 'Apache-2.0', 'third_party': True}])
-    monkeypatch.setattr(catalog, 'ui_enabled', lambda: False)
-    assert main.third_party_blocks() == []
-    monkeypatch.setattr(catalog, 'ui_enabled', lambda: True)
-    assert main.third_party_blocks()[0]['third_party'] is True
 
 
 def test_csv_error_reaches_preview_response():

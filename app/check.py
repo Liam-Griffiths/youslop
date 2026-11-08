@@ -609,6 +609,13 @@ def run(project, measure=False) -> dict:
     if any(s.overlays for s in project.slides):
         sb['layers'] = render._layers(project, sb['segments'])
     findings.extend(overlay_checks.run(project, sb))
+    from .retired_catalog import references
+    for slide in project.slides:
+        for ref in references(slide.to_dict()):
+            findings.append(_finding('retired_catalog', 'P1', next(
+                (p['start'] for p in sb['paragraphs'] if p['id'] == slide.id), 0),
+                slide.id, f'Retired catalog block: {ref}. A placeholder is shown; '
+                'choose a Corkbored block in Visuals.'))
     from . import packs
     for ref in sorted(set(packs.missing_items(project.to_dict()) +
                           packs.missing_items(channel.to_dict() if channel else {}))):

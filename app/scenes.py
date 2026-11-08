@@ -144,23 +144,12 @@ def _local_file(url: str, base: Path, asset_root=None) -> Path:
         if not target.is_relative_to(root):
             raise ValueError(f'component outside block directory: {url}')
         return target
-    from .catalog import CATALOG_DIR
     if path.startswith('/catalog/'):
-        target = (CATALOG_DIR / path[len('/catalog/'):]).resolve()
-        if not target.is_relative_to(CATALOG_DIR.resolve()) or '_index' in target.parts:
-            raise ValueError(f"component outside catalog directory: {url}")
-        relative = target.relative_to(CATALOG_DIR.resolve())
-        if relative.parts:
-            source = CATALOG_DIR / relative.parts[0] / 'SOURCE.json'
-            if source.is_file():
-                failures = json.loads(source.read_text()).get('lint', [])
-                if failures:
-                    raise ValueError('Catalog lint: ' + '; '.join(failures))
-        return target
+        from .retired_catalog import placeholder
+        return placeholder(url)
     target = (STATIC_DIR / path[len('/static/'):] if path.startswith('/static/')
               else base / path).resolve()
     if not (target.is_relative_to(SCENE_DIR.resolve()) or
-            target.is_relative_to(CATALOG_DIR.resolve()) or
             asset_root and target.is_relative_to(Path(asset_root).resolve())):
         raise ValueError(f"component outside scene directory: {url}")
     return target

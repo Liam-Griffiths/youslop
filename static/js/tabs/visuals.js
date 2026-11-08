@@ -271,9 +271,7 @@ function visualBlockPanel(p, s) {
         <strong>${esc(b.name)}</strong><small>${esc(suggestion?.reason || b.category)}</small></button>` : '';
     }).join('')}</div>
     <p role="status">${esc(data.error || '')}</p>
-    <button type="button" class="btn sm ghost" onclick="openBlockPicker('${p.id}','${s.id}')">More blocks…</button>
-    ${data.thirdParty?.length ? `<section aria-label="Third-party blocks"><h4>Third-party blocks · installed</h4>
-      ${data.thirdParty.map(b => `<p>${esc(b.name)} · third-party · ${esc(b.license || 'Licence not recorded')}</p>`).join('')}</section>` : ''}`;
+    <button type="button" class="btn sm ghost" onclick="openBlockPicker('${p.id}','${s.id}')">More blocks…</button>`;
 }
 async function loadVisualBlocks(p, s) {
   if (s.on_camera) return;
@@ -283,9 +281,9 @@ async function loadVisualBlocks(p, s) {
   };
   if (!data.loading) {
     data.loading = true;
-    Promise.all([api('/api/blocks'), api('/api/blocks/third-party'), loadBlockPresets({project:p.id,channel:p.channel_id})]).then(async ([items,thirdParty,presets]) => {
+    Promise.all([api('/api/blocks'), loadBlockPresets({project:p.id,channel:p.channel_id})]).then(async ([items,presets]) => {
       data.presets = presets;
-      data.items = items; data.thirdParty = thirdParty; repaint();
+      data.items = items; repaint();
       // Same one-off poster batch the Blocks screen starts; reload when it ends.
       if (!items.some(b => Object.keys(b.posters || {}).length < b.aspects.length)) return;
       const {job} = await api('/api/blocks/posters', {method:'POST'});

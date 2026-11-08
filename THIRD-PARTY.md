@@ -71,21 +71,35 @@ credits block. Tile and API terms are the user's to honour — see the
 "Licensing" section of the README, which says plainly that the tool records
 provenance but does not clear rights for you.
 
-## Third-party scene catalog (temporary compatibility)
+## Retired scene catalog
 
-The Hyperframes catalog is retained for compatibility only, pending replacement
-by Corkbored's own blocks. Catalog search, fetch and list are currently CLI-only.
-The `third_party_blocks` setting defaults to off; any future catalog UI must
-honour it and label each item **third-party** with its licence. Shared catalog
-metadata excludes upstream preview URLs and branding. Never fetch or display
-upstream previews; any future posters must be rendered locally with neutral
-sample values. Downloads retain upstream licences and SOURCE.json provenance.
+The Hyperframes catalog was retired by T12.7 on 2026-11-08. The app no longer
+fetches, lists or offers catalog blocks; the catalog CLI, API and setting have
+been removed. The fetcher was deleted rather than retained as a developer script:
+clean-room Corkbored blocks replace it, and porting third-party block source is
+not part of the authoring workflow. No downloaded files or projects are deleted.
 
+Retirement criteria: every catalog block used in a local project has a Corkbored
+equivalent, and all four core batches have shipped. Both are met:
+
+- Usage evidence supplied by the reviewer (read-only check, 2026-11-08): no
+  catalog block references in the owner's local project JSON files or the repo's
+  projects. The only matches were narration words "catalogue" and "cataloguing".
+  The implementer did not read or touch either location.
+- T12.3 shipped all four batches: 31 core blocks, with contact sheet
+  `docs/blocks/core-v1.png`.
+- The replacement mapping is empty: code offered no default catalog ids.
+  `lower-third` and `lower-third-gpu` in the former offline fetcher tests were
+  synthetic registry fixtures, not defaults. There are no evidenced variable
+  mappings or project/bulk/finding replacement actions to offer.
+
+Old `/catalog/` mounts resolve to a local "Catalog block retired" placeholder,
+even when the old cache is missing or unsafe. The project check reports a
+`retired_catalog` finding directing the user to choose a Corkbored block in
+Visuals. Saved project references remain intact for manual replacement.
 Packs, built-in defaults and new-channel templates must never reference catalog
-blocks (`/catalog/`); T8.3 pack lint must reject these references when pack tooling
-is implemented. Existing project compositions remain compatible.
+blocks.
 
-Retirement criteria (T12.7): every catalog block used by any local project has a
-Corkbored equivalent, and the core set has shipped all four batches. Provide a
-catalog-to-block variable mapping and replacement action before removing the
-catalog CLI and setting; keep runtime compatibility for old compositions.
+Runtime compatibility with Hyperframes-style compositions remains: local
+templates can use `data-composition-variables`, `window.__timelines` and the
+mount shim. This contract does not depend on the retired catalog.

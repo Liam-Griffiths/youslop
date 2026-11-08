@@ -31,7 +31,7 @@ def test_visual_picker_js(tmp_path):
       let calls=[];
       const api = async (url, opts={}) => {
         calls.push([url,JSON.parse(opts.body || '{}')]);
-        if (url === '/api/footage/shoots' || url === '/api/blocks/third-party') return [];
+        if (url === '/api/footage/shoots') return [];
         if (url === '/api/blocks') return ['number_slam','percentage_ring','quote_card'].map(ref =>
           ({ref,name:ref,kind:'segment',aspects:['16:9','9:16'],category:'data'}));
         if (url.endsWith('/block-suggestions')) return [{block:'number_slam',vars:{value:42},reason:'Number'}];
