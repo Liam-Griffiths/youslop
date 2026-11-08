@@ -325,13 +325,16 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
     return template, ctx
 
 
-def render(block_id, vars=None, aspect='16:9', seconds=None, *, project=None, context=None):
+def render(block_id, vars=None, aspect='16:9', seconds=None, *, project=None, context=None,
+           size=None, max_seconds=None):
     if hasattr(project, 'research'):
         context = {**(scenes.context_base(project) if context is None else context), 'research': project.research}
         project = paths.data_root() / 'projects' / project.id
     template, ctx = prepare(block_id, vars, aspect, seconds, context=context)
+    if max_seconds is not None:
+        ctx['duration'] = min(ctx['duration'], max_seconds)
     owner = project if project is not None else paths.data_root() / '.cache/blocks'
-    size, fps = (ctx['width'], ctx['height']), ctx.get('fps', 30)
+    size, fps = size or (ctx['width'], ctx['height']), ctx.get('fps', 30)
     _, html, ctx = scenes._prepare(owner, template, ctx, ctx['duration'], size, fps,
                                   ('block-builder-v1', scene_builder.MOTIONS))
     out = html.with_suffix('.mp4')

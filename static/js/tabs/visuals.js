@@ -2,6 +2,7 @@
 function visualKind(s) {
   const c = (s.candidates || []).find(c => c.id === s.chosen_id);
   if (s.on_camera) return 'camera';
+  if (s.cues?.blocks?.length) return 'scene';
   if (isStage(state.project.style.format) && /^3D:/i.test(s.visual_note || '')) return '3D';
   if (isCut(state.project.style.format) || state.project.style.format === 'board') return 'drawn';
   if (c?.provider === 'footage') return 'footage';
@@ -103,7 +104,7 @@ function visualPreview(g, byId) {
   return `<div class="mono">Picture ${g.i+1} · ¶${g.ids.map(id => byId[id].i+1).join(', ')} · ${g.seconds ? fmtTime(g.seconds)+' from the takes' : 'unvoiced'}</div>
     <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>
     <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : ''}">
-      ${c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
+      ${s.cues?.blocks?.length && !s.on_camera ? `<p>Block: ${esc(s.cues.blocks[0].block)} · preview on click</p>` : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
         : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : visualKind(s) === '3D' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
     </div>
@@ -149,6 +150,7 @@ function visualSourcePanel(s, source) {
     <button type="button" class="btn sm ghost" onclick="openCustomEditor('${s.id}')">Design a slide</button>
     <button type="button" class="btn sm ghost" onclick="openVisualEdit('${s.id}')">Open Edit · variables and timeline</button>
     <a class="btn sm ghost" href="#/blocks">Browse reusable blocks</a>
+    ${!s.on_camera ? `<button type="button" class="btn sm" onclick="openBlockPicker('${p.id}','${s.id}')">Choose a block for this paragraph</button>` : ''}
     ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
     ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
   if (source === 'Upload') return `<label class="field"><span>Upload a picture or clip</span><input type="file" accept="image/*,video/*" onchange="uploadMedia('${s.id}',this.files[0])"></label>`;

@@ -113,7 +113,8 @@ def make_posters(progress):
 
     if items:
         # One browser/session for the entire batch, including pack/user assets.
-        stage.capture_stills(items, owner / 'scenes', scene_probe=checkpoint, on_still=publish)
+        with _RENDER_LOCK:
+            stage.capture_stills(items, owner / 'scenes', scene_probe=checkpoint, on_still=publish)
     return {'posters': len(items)}
 
 
@@ -130,3 +131,64 @@ def start_posters():
             return {'job': None}
         _POSTER_JOB = jobs.start('block posters', '', make_posters, cancellable=True)
         return {'job': _POSTER_JOB}
+
+
+# Motion and trial captures share a gate, including the poster batch.
+_RENDER_LOCK = threading.Lock()
+_REQUESTS = {}
+_PREVIEW_RENDERS = 0
+
+
+def preview(ref, values, aspect, kind, session, sequence):
+    """Explicit scratch preview. Superseded queued requests never capture."""
+    global _PREVIEW_RENDERS
+    import json
+    import re
+    if kind not in ('motion', 'trial') or not isinstance(session, str) or not re.fullmatch(r'[\w-]{1,80}', session):
+        raise ValueError('Invalid preview request')
+    if type(sequence) is not int or sequence < 0:
+        raise ValueError('Invalid preview sequence')
+    item = registry().get(ref)
+    if item is None:
+        raise ValueError('Unknown block')
+    values = blocks.validate_vars(item['meta'], values)
+    template, ctx = blocks.prepare(ref, values, aspect, _block=item)
+    if os.environ.get('CORKBORED_BLOCK_POSTERS') == 'off':
+        return {'disabled': True}
+    with _LOCK:
+        if sequence <= _REQUESTS.get(session, -1):
+            return {'stale': True}
+        if len(_REQUESTS) >= 256 and session not in _REQUESTS:
+            _REQUESTS.pop(next(iter(_REQUESTS)))
+        _REQUESTS[session] = sequence
+    key = hashlib.sha256(json.dumps([signature(item), values, aspect, kind], sort_keys=True).encode()).hexdigest()
+    out = preview_file(key, kind)
+    with _RENDER_LOCK:
+        if _REQUESTS.get(session) != sequence:
+            return {'stale': True}
+        if not out.exists():
+            _PREVIEW_RENDERS += 1
+            out.parent.mkdir(parents=True, exist_ok=True)
+            size = (ctx['width']//4, ctx['height']//4)
+            owner = paths.data_root() / '.cache/blocks'
+            if kind == 'motion':
+                clip = blocks.render(ref, values, aspect, size=size, max_seconds=6,
+                                     context={**ctx, 'library_signature': signature(item)})
+                data = clip.read_bytes()
+            else:
+                ctx['library_signature'] = signature(item)
+                t = ctx['duration']/2 if item['meta']['kind'] == 'chapter' else max(0, ctx['duration']-.1)
+                data = scenes.capture(owner, template, ctx, t=t, size=size)
+            temporary = out.with_suffix('.part')
+            temporary.write_bytes(data)
+            os.replace(temporary, out)
+        if _REQUESTS.get(session) != sequence:
+            return {'stale': True}
+    return {'url': f'/api/block-previews/{key}/{kind}', 'values': values}
+
+
+def preview_file(key, kind):
+    import re
+    if not re.fullmatch(r'[a-f0-9]{64}', key) or kind not in ('motion', 'trial'):
+        raise ValueError('Invalid preview file')
+    return paths.data_root() / '.cache/blocks/previews' / (key + ('.mp4' if kind == 'motion' else '.png'))

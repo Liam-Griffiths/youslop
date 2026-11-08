@@ -182,6 +182,7 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
         if (getattr(slide, "chapter", "") or "").strip():
             mode = "new"
         if (not runs or slide.on_camera or runs[-1][-1].on_camera
+                or (slide.cues or {}).get('blocks') or (runs[-1][-1].cues or {}).get('blocks')
                 or mode == "new" or (mode != "hold" and n >= every)):
             runs.append([])
             n = 0

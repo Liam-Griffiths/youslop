@@ -277,6 +277,8 @@ def main(argv=None):
                 rows, errors = capture(base, args.out)
             from app import jobs
             assert not any(j['kind'] == 'block posters' for j in jobs.recent()), 'Snapshots started a poster batch'
+            from app import block_library
+            assert block_library._PREVIEW_RENDERS == 0, 'Snapshots started a motion/trial render'
             from app.review import sheet
             sheet(rows, args.out / 'sheet.png')
             (args.out / 'errors.json').write_text(json.dumps(errors, indent=2) + '\n')

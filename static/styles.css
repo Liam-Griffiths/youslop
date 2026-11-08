@@ -1303,7 +1303,14 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .block-placeholder { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; width:100%; min-height:150px; background:var(--raised); color:var(--dim); }
 .block-card .mono,.block-placeholder small { font-size:11px; }
 .block-detail { overflow-wrap:anywhere; }
+.block-detail form { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.block-detail input,.block-detail select,.block-detail textarea { width:100%; min-width:0; box-sizing:border-box; }
+.block-card video,.block-detail video { width:100%; max-height:300px; }
+.block-card { position:relative; }
+.block-card video { position:absolute; inset:12px; width:calc(100% - 24px); height:150px; background:var(--bg); }
 .block-detail dd { margin:4px 0 14px; color:var(--dim); }
 .block-detail img { height:auto; max-height:300px; }
 .blocks-browser :focus-visible,.block-detail :focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
 @media(max-width:700px) { .blocks-browser { grid-template-columns:minmax(0,1fr); } .blocks-filters { width:100%; } }
+.block-detail .block-meta { color: var(--dim); margin-top: 16px; line-height: 1.6; }
+.block-detail #block-trial label { display: block; margin-top: 8px; }

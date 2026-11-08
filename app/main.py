@@ -106,6 +106,28 @@ def describe_block(payload: dict = Body(...)) -> dict:
     return {'job': jobs.start('create block', '', lambda pr: describe(description, pr))}
 
 
+@app.post('/api/blocks/{ref:path}/preview')
+def block_preview(ref: str, payload: dict = Body(...)) -> dict:
+    from .block_library import preview
+    try:
+        return preview(ref, payload.get('values', {}), payload.get('aspect', '16:9'),
+                       payload.get('kind'), payload.get('session'), payload.get('sequence'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get('/api/block-previews/{key}/{kind}')
+def block_preview_file(key: str, kind: str):
+    from .block_library import preview_file
+    try:
+        path = preview_file(key, kind)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not path.exists():
+        raise HTTPException(404, 'Preview not found')
+    return FileResponse(path, media_type='video/mp4' if kind == 'motion' else 'image/png')
+
+
 @app.post('/api/channels/{cid}/blocks')
 def add_channel_block(cid: str, payload: dict = Body(...)) -> dict:
     from . import blocks
@@ -1346,6 +1368,12 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
                 if 'camera_focal' in payload:
                     take['focal'] = edits._focal(payload['camera_focal'])
             edits.patch_slide_fields(s, payload)
+            if isinstance(payload.get('cues'), dict) and payload['cues'].get('blocks'):
+                from . import blocks
+                aspect = '9:16' if p.aspect == 'portrait' else '16:9'
+                found = blocks.discover()
+                if s.on_camera or any(aspect not in found[c['block']]['meta']['aspects'] for c in s.cues['blocks']):
+                    raise edits.EditError('Choose a non-camera paragraph with a supported aspect.')
             if "on_camera" in payload:
                 s.take = p.active_take(s)
         except edits.EditError as exc:

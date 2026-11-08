@@ -191,6 +191,7 @@ async function route() {
     view.innerHTML = '<h1>Packs</h1><div id="packs-screen"></div>';
     await renderPacks();
   } else if (hash === '#/blocks' || hash.startsWith('#/blocks/')) {
+    if (state.project) state.blocksProjectId = state.project.id;
     state.project = null; state.channel = null;
     await renderBlocks(hash.slice(9));
   } else if (hash.startsWith('#/footage')) {

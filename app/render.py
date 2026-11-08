@@ -329,7 +329,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
             continue
         seg_len = seg_lens[i + slide_at]
         total = cuts.frame_count(seg_len, FPS)
-        n = 1 if scene_cut or group[0][0].on_camera else max(1, round(total / (CHUNK_SECONDS * FPS)))
+        n = 1 if scene_cut or group[0][0].on_camera or (group[0][0].cues or {}).get('blocks') else max(1, round(total / (CHUNK_SECONDS * FPS)))
         split[i] = n
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
@@ -1067,6 +1067,21 @@ def _render_segment(
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
                                crf=crf, preset=preset, last_line=last_line, hide=hide)
+    if (group[0][0].cues or {}).get('blocks'):
+        from . import blocks, scene_builder
+        from copy import deepcopy
+        slide = group[0][0]
+        cue = slide.cues['blocks'][0]  # One background selection; overlays have a separate contract.
+        block = deepcopy(blocks.discover()[cue['block']])
+        block['meta']['duration'] = dict(mode='range', min=0)
+        ctx = scenes.context_base(project, channel)
+        ctx.update(narration=slide.narration, take=slide.take, research=project.research)
+        template, ctx = blocks.prepare(cue['block'], cue['vars'],
+            '9:16' if project.aspect == 'portrait' else '16:9', seg_len, context=ctx, _block=block)
+        scene_builder.render(project_dir(project.id), template, ctx, out,
+                             seconds=seg_len, size=size, fps=fps, crf=crf, frames=frames)
+        return _chapter_tail(project, out, chapter, seg_len, hold, size,
+                             fps, crf, threads, channel)
     if not cuts.is_cut(style.format) and scenes.handles(style.format):
         return scenes.render_segment(
             project, group, seg_len, out, size=size, fps=fps, crf=crf,
@@ -1633,6 +1648,12 @@ def _memory_check(progress: Progress) -> None:
 SEGMENT_VERSION = 1
 
 
+def _block_versions(slide):
+    from . import block_library
+    cues = (slide.cues or {}).get('blocks', [])
+    return [block_library.signature(block_library.registry()[cue['block']]) for cue in cues]
+
+
 def _segment_key(project, group, settings) -> str:
     """Exact inputs of a finished picture segment, excluding unused candidates."""
     import dataclasses
@@ -1643,6 +1664,8 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
+        if (slide.cues or {}).get('blocks'):
+            row['block_versions'] = _block_versions(slide)
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(slide) or {}).get('overlays', [])} if slide.on_camera else set()
         row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id or c['id'] in overlay_ids]
         if overlay_ids:
@@ -1662,7 +1685,7 @@ def _segment_key(project, group, settings) -> str:
     picture = _chosen(project, group[0][0])[0]
     channel = settings.get("channel")
     graph = None
-    if not (scenes.handles(project.style.format) or cuts.is_cut(project.style.format)
+    if not ((group[0][0].cues or {}).get('blocks') or scenes.handles(project.style.format) or cuts.is_cut(project.style.format)
             or project.style.format == "board" or project.style.format.startswith("custom:")):
         graph = _segment_graph(project, group, settings["seg_len"], prepare_only=True,
                                **{k: settings[k] for k in (
@@ -2314,6 +2337,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
+        if (s.cues or {}).get('blocks'):
+            row['block_versions'] = _block_versions(s)
         # Search results nobody picked cannot change the picture on screen.
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(s) or {}).get('overlays', [])} if s.on_camera else set()
         row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id or c['id'] in overlay_ids]
@@ -2399,7 +2424,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
             and keyfile.exists() and keyfile.read_text() == key):
         return result()
 
-    if download and not lead.on_camera and media.download_chosen(project, progress, only=[_picture_source(project, lead)]):
+    if download and not lead.on_camera and not (lead.cues or {}).get('blocks') and media.download_chosen(project, progress, only=[_picture_source(project, lead)]):
         progress("That picture could not be downloaded; this is the graded "
                  "slate the render would fall back to")
 
@@ -2919,7 +2944,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
-        if not lead.on_camera and not _picture_source(project, lead).chosen_id:
+        if not lead.on_camera and not (lead.cues or {}).get('blocks') and not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
         missing = sum(1 for s, _d in group if not s.take)
         if missing:

@@ -17,7 +17,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 ~19:00 PST:** paused by the owner after T9.11. Next: T9.12 (not started), T9.13, then T11.5/T11.6/T12.5 and the owner-decision tickets. Codex weekly 88%. Owner plans user testing once the ticket list is complete.
 > **2026-11-08:** owner decisions: house read opt-in (T10.2/T10.4/T10.7 unblocked); packs permissive, MIT (T8.3 step 3 reopened); mastering two-pass linear loudnorm approved (T1.7 reopened, owner listens to one quarter-size preview); T6.4 closed (dropdown contrast fixed); T0.10 parked; T7.8 and T2.7b dropped. Queue: T9.12, T9.13, T11.5, T11.6, T12.5, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > **2026-11-08 (later):** owner asked for an app-wide block library: T12.8 (top-level Blocks screen `#/blocks`, posters, motion preview, try-with-your-text, use/pin/duplicate) and T12.9 (channel and project presets). T12.5 now builds on T12.8. Queue: T9.12, T9.13, T11.5, T11.6, T12.8, T12.5, T12.9, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
-> **2026-11-08 (night):** T9.12, T9.13, T11.5, T11.6 done. Owner approved T12.10a/b (block overlays on any picture: blocks over footage, planned and edited). Queue: T12.8b, T12.5, T12.10a, T12.10b, T12.9, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
+> **2026-11-08 (night):** T9.12, T9.13, T11.5, T11.6 done. Owner approved T12.10a/b (block overlays on any picture: blocks over footage, planned and edited). Queue: T12.5, T12.8c, T12.10a, T12.10b, T12.9, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -195,7 +195,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.6 | Make a block from a description | M | T12.2 | done | 2026-11-01 Codex; sandboxed generation, checked before saving; real model run and Library UI await the owner |
 | T12.7 | Retire the third-party catalog | S | T12.3, T12.5 | todo | owner: third-party blocks are temporary |
 | T12.8 | Block library: browse, preview and use blocks app-wide | L | T12.1, T12.3, T9.3 | done | 2026-11-08 Codex + review; #/blocks screen, search/filters, local posters (41 blocks in 9 s); rest split to T12.8b |
-| T12.8b | Block library: motion, trials and actions | L | T12.8 | todo | split from T12.8 (600-line rule); before T12.5 (pick mode) |
+| T12.8b | Block library: motion, trials and actions | L | T12.8 | done | 2026-11-08 Codex + review; motion (cold 1.0 s), trials, use in project, pick mode, block-as-picture render |
+| T12.8c | Block library: preferences, forks and remaining actions | M | T12.8b | todo | favourites/recent, image picker, channel mode, duplicate as mine, Describe moves, Library cleanup |
 | T12.9 | Channel and project block presets | M | T12.8, T12.5 | todo | presets, not copies of block code |
 | T12.10a | Block overlays on any picture: data and render | M | T11.6, T12.5, T2.10 | todo | owner 2026-11-08: blocks over footage; after T12.5, before T12.9 |
 | T12.10b | Block overlays: planning and editing | M | T12.10a, T4.4, T12.8 | todo | plan proposes base + overlays; Timeline Graphics row; checks |
