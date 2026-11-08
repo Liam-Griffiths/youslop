@@ -25,7 +25,9 @@ def test_stale_style_keys_ignored(model):
 @pytest.mark.parametrize('has_music,has_sting', [(False, False), (False, True),
                                                (True, False), (True, True)])
 @pytest.mark.parametrize('master', [-14.0, -12.5])
-def test_master_loudness(project, has_music, has_sting, master):
+def test_single_pass_fallback_loudness(project, has_music, has_sting, master):
+    # The unmeasured graph deliberately retains the original fallback master;
+    # test_master_loudnorm covers the measured graph used by both callers.
     project.frame.voice_lufs = master
     stings = [(2, 0.0, 3.0, IntroSpec(), 'intro')] if has_sting else None
     graph = _audio_graph(project, 1, 12.0, has_music, sting=stings)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -308,6 +309,11 @@ def _measure(raw_path: Path, span: Span, voice: Voice | None) -> dict | None:
         _, log = ffutil.capture(["-i", str(raw_path), "-af", chain, "-f", "null", "-"])
     except ffutil.FFError:
         return None
+    return _parse_loudnorm(log)
+
+
+def _parse_loudnorm(log: str) -> dict | None:
+    """Read the last loudnorm report (the master when buses are also levelled)."""
     blocks = re.findall(r"\{[^{}]*input_i[^{}]*\}", log, re.S)
     if not blocks:
         return None
@@ -316,7 +322,10 @@ def _measure(raw_path: Path, span: Span, voice: Voice | None) -> dict | None:
     except json.JSONDecodeError:
         return None
     need = ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")
-    if any(got.get(k) in (None, "-inf", "inf", "nan") for k in need):
+    try:
+        if not all(math.isfinite(float(got[k])) for k in need):
+            return None
+    except (KeyError, TypeError, ValueError, OverflowError):
         return None
     return got
 

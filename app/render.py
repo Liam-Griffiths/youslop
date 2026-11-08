@@ -7,6 +7,8 @@ import os
 import random
 import re
 import shutil
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -1660,6 +1662,61 @@ def _audio_graph(project: Project, n_video: int, total: float, has_music: bool,
     )
 
 
+def _master_audio_graph(project: Project, inputs: list[str], graph: str,
+                        total: float, n_video: int, progress: Progress) -> str:
+    """Measure only the sound, then preserve its dynamics with a linear master.
+
+    `_audio_graph` ends with the master loudnorm; earlier loudnorms belong to
+    the voice/bed/sting buses and stay untouched, including on fallback.
+    """
+    before, _ = graph.rsplit("loudnorm=", 1)
+    target = project.frame.voice_lufs
+    # Segment inputs are plain -i/path pairs. All subsequent inputs are audio
+    # sources, including a camera file whose video must never be decoded here.
+    audio_inputs = []
+    for arg in inputs[2 * n_video:]:
+        if arg == "-i":
+            audio_inputs.append("-vn")
+        audio_inputs.append(arg)
+    measure_graph = re.sub(r"\[(\d+):a\]",
+                           lambda m: f"[{int(m[1]) - n_video}:a]", before)
+    measure_graph += f"loudnorm=I={target:.1f}:TP=-1.0:LRA=20:print_format=json[aout]"
+    progress("Measuring the audio for linear master normalization")
+    started = time.monotonic()
+    try:
+        _, log = ffutil.capture([
+            *audio_inputs, "-filter_complex_threads", "2",
+            "-filter_complex", measure_graph, "-map", "[aout]",
+            "-t", f"{total:.3f}", "-f", "null", "-"], timeout=900)
+        measured = audio_mod._parse_loudnorm(log)
+        if measured is None:
+            raise ValueError("silent audio or invalid loudnorm report")
+        i, tp, lra, thresh, offset = (float(measured[k]) for k in
+                                     ("input_i", "input_tp", "input_lra",
+                                      "input_thresh", "target_offset"))
+        # ffmpeg falls back to dynamic if either of these bounds is exceeded.
+        # 20 LU accommodates normal mixes; expand for unusual material rather
+        # than compressing it. Keep a little headroom for report rounding.
+        master_lra = max(20, math.ceil(lra + 0.1))
+        safe_target = min(target, -1.0 - tp + i - max(0.0, offset) - 0.1)
+        safe_target = round(safe_target, 3)
+        if not (-70 <= i <= 0 and -99 <= tp <= 99 and 0 <= lra <= 50
+                and -99 <= thresh <= 0 and -99 <= offset <= 99
+                and master_lra <= 50 and -70 <= safe_target <= -5):
+            raise ValueError("loudnorm measurement outside supported bounds")
+    except (ffutil.FFError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        progress(f"Warning: master measurement failed ({exc}); using single-pass normalization")
+        return graph
+    if safe_target < target:
+        progress(f"Master target reduced from {target:.1f} to {safe_target:.3f} LUFS "
+                 "to keep linear normalization below -1 dBTP")
+    progress(f"Master normalization: linear, target {safe_target:.3f} LUFS, "
+             f"LRA {master_lra} (audio measurement {time.monotonic() - started:.2f}s)")
+    return (before + f"loudnorm=I={safe_target:.3f}:TP=-1.0:LRA={master_lra}:"
+            f"measured_I={i}:measured_TP={tp}:measured_LRA={lra}:"
+            f"measured_thresh={thresh}:offset={offset}:linear=true:print_format=summary[aout]")
+
+
 MEMORY_LOW_MB = 4096      # below this, a long render risks getting OS-killed
 SWAP_PRESSURE_HIGH = 0.85  # swap this full means the system has nowhere left to page to
 
@@ -2115,11 +2172,13 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         if card:
             music_fade = float(card.outro.music_fade)
 
-    graph = video_graph + ";" + _audio_graph(project, len(seg_paths), total,
-                                             bool(music), presenter_audio, sting_audio,
-                                             music_fade, sponsor_audio,
-                                             [(start + T / 2, sponsors.duration(slot))
-                                              for slot, start in sponsor_entries])
+    audio_graph = _audio_graph(project, len(seg_paths), total,
+                               bool(music), presenter_audio, sting_audio,
+                               music_fade, sponsor_audio,
+                               [(start + T / 2, sponsors.duration(slot))
+                                for slot, start in sponsor_entries])
+    graph = video_graph + ";" + _master_audio_graph(
+        project, inputs, audio_graph, total, len(seg_paths), progress)
 
     safe = "".join(c if c.isalnum() or c in " -_" else "" for c in (project.title or "video"))
     out_name = (safe.strip().replace(" ", "_") or "video")[:60] + (
@@ -2809,7 +2868,8 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     card = _slate_channel(project) if lay["outro"] else None
     blob = json.dumps(
-        [PROXY_VERSION, sorted(hide), takes, lay["body"], lay["pre"], lay["total"],
+        [PROXY_VERSION, "linear-master-v1", project.frame.voice_lufs,
+         sorted(hide), takes, lay["body"], lay["pre"], lay["total"],
          lay["intro"] and lay["intro"]["length"], lay["outro"] and lay["outro"]["length"],
          audio_mod.paragraph_gaps(project),
          str(music), _stat(music),
@@ -2895,6 +2955,7 @@ def build_mix(project: Project, progress: Progress = lambda m: None, *,
     from . import sponsors
     graph = _audio_graph(project, 0, total, bool(music), None, sting_audio, music_fade,
                          sponsor_audio, [(start, sponsors.duration(slot)) for slot, start in lay["sponsors"]])
+    graph = _master_audio_graph(project, inputs, graph, total, 0, progress)
     progress("Mixing the sound for the whole cut"
              + (f" with the bed “{music.stem}”" if music else ", narration only"))
     ffutil.run([*inputs, "-filter_complex", graph, "-map", "[aout]",

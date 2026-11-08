@@ -46,7 +46,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T1.4 | ffmpeg camera vocabulary and title timing | M | T1.1, T0.5 | done | 2026-10-31 Codex; 163 tests; preview checked by Claude, owner: watch a join |
 | T1.5 | check.py findings | L | T1.1, T0.6, T0.7 | done | 2026-10-31 Codex; 14 rules, 189 tests; real project: P0 0 / P1 12 / P2 13 |
 | T1.6 | Check in the UI, CLI and render gate | S | T1.5 | done | 2026-10-31 Codex; panel checked headless; owner: click through render gate |
-| T1.7 | Audio doctrine defaults | S | T1.1 | todo | owner 2026-11-08: approved two-pass linear loudnorm; implement, measure gap, owner listens to one quarter-size preview |
+| T1.7 | Audio doctrine defaults | S | T1.1 | blocked | 2026-11-08 two-pass linear master implemented + measured on real voice (gap 17.9 → 18.3 dB at default; master ~1.3 dB quieter); owner: listen to the before/after clips |
 
 ## Phase 2: scene engine
 
