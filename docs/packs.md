@@ -27,7 +27,7 @@ The manifest is a JSON object:
 
 ```json
 {"id":"my-pack","name":"My pack","version":"1.0.0","author":"Your name",
- "licence":"GPL-3.0-or-later","licence_url":"","corkbored":">=1.0",
+ "licence":"MIT","licence_url":"","corkbored":">=1.0",
  "description":"A theme and title card for essays."}
 ```
 
@@ -68,9 +68,11 @@ pack licence; each block also declares its licence. Include font/model licence
 notices beside those assets. `music/credits.json` maps each filename to a JSON
 object with `title`, `artist`, `licence` and `url` strings. These track credits
 flow into video description credits. You must have permission to distribute
-all included content. Templates extending the app's base files are GPL like
-the app for now; this may change after an owner licensing decision. The app's
-licence headers have not been changed. Other assets retain their own licences.
+all included content. Pack contents may use any licence their authors choose;
+the examples default to MIT. The shared base files that templates extend or load
+are MIT, as listed in [static/scene/LICENSE-MIT](../static/scene/LICENSE-MIT),
+so pack templates can use any licence too. The app stays GPL-3.0-or-later.
+Vendored GSAP and fonts retain their own licences.
 
 ## Complete small example
 
@@ -83,7 +85,7 @@ mkdir -p "$CORKBORED_DATA/drafts/my-pack/themes" "$CORKBORED_DATA/drafts/my-pack
 .venv/bin/python -m app.cli block new title
 cp -R "$CORKBORED_DATA/blocks/title" "$CORKBORED_DATA/drafts/my-pack/blocks/title"
 cat > "$CORKBORED_DATA/drafts/my-pack/pack.json" <<'JSON'
-{"id":"my-pack","name":"My pack","version":"1.0.0","author":"Your name","licence":"GPL-3.0-or-later"}
+{"id":"my-pack","name":"My pack","version":"1.0.0","author":"Your name","licence":"MIT"}
 JSON
 cat > "$CORKBORED_DATA/drafts/my-pack/themes/signal.json" <<'JSON'
 {"key":"signal","label":"Signal","for":"Essays","blurb":"Orange on charcoal",
@@ -94,6 +96,9 @@ JSON
 .venv/bin/python -m app.cli pack check "$CORKBORED_DATA/drafts/my-pack"
 .venv/bin/python -m app.cli pack build "$CORKBORED_DATA/drafts/my-pack"
 ```
+
+The copied scaffold has its own `licence` in `blocks/title/block.json`;
+set that to your chosen block licence (for example, `MIT`) before distributing it.
 
 Check prints problems and exits 1 on failure. Otherwise it writes one midpoint
 PNG per block/aspect to `.check/` (480×270 landscape, 270×480 portrait, 270×270

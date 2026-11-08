@@ -4,6 +4,7 @@ Corkbored is **GPLv3**. That choice is not decorative: the renderer encodes with
 **libx264**, which is GPL, so a bundled ffmpeg carrying it makes the whole
 distribution GPL. Shipping it as free software is the straightforward way to
 honour that, and it is why there is no closed-source or paid build.
+The shared scene base files are MIT; see [static/scene/LICENSE-MIT](static/scene/LICENSE-MIT).
 
 ## ffmpeg and libx264
 

@@ -3,7 +3,7 @@
   "name": "End card",
   "kind": "outro",
   "version": "0.1.0",
-  "licence": "GPL-3.0-or-later",
+  "licence": "MIT",
   "aspects": {
     "16:9": "block.html"
   },

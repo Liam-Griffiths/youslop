@@ -218,4 +218,5 @@ can make well. The name changed to match.
 
 [GPL-3.0](LICENSE). ffmpeg and x264 are bundled under their GPL terms;
 [THIRD-PARTY.md](THIRD-PARTY.md) lists included components and licences.
+The shared scene base files are MIT; see [static/scene/LICENSE-MIT](static/scene/LICENSE-MIT).
 Archive search records provenance; check each asset's rights before publishing.

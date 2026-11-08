@@ -23,6 +23,16 @@ def draft(tmp_path, monkeypatch):
     return root
 
 
+@pytest.mark.parametrize('licence', ['MIT', 'GPL-3.0-or-later', 'My custom pack licence 1.0'])
+def test_check_accepts_declared_licence(draft, licence):
+    # Licensing is author-declared metadata, not an allowlist (including blocks).
+    for path in (draft / 'pack.json', draft / 'blocks/title/block.json'):
+        meta = json.loads(path.read_text())
+        meta['licence'] = licence
+        path.write_text(json.dumps(meta))
+    assert cli.main(['pack', 'check', str(draft), '--static-only']) == 0
+
+
 def test_check_and_build_install(draft, monkeypatch, capsys):
     calls = []
     def capture(root, template, ctx, **kwargs):

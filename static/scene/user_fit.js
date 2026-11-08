@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* App-owned user-block fitting: preserve the complete text and its type floor. */
 window.__ready = window.__ready.then(() => {
   for (const el of document.querySelectorAll('[data-fit]')) {

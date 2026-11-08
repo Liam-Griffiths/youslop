@@ -139,7 +139,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T8.1 | Pack format and loader | M | T0.2, T2.3 | done | 2026-11-01 Codex; pack blocks sandboxed and browser-checked; bad items listed, not offered |
 | T8.2 | Packs screen and install from a file | S | T8.1, T6.1 | done | 2026-11-01 Codex; staged, validated install; Packs screen checked in Chromium; drag and drop untested |
-| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | todo | owner 2026-11-08: step 3 decided, packs permissive (MIT); relicense pack templates + docs/packs.md + Starter manifest |
+| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | done | 2026-11-08 step 3 done (Codex + review): shared scene base files MIT (static/scene/LICENSE-MIT), packs and Starter MIT, app stays GPL |
 
 ## Phase 9: studio flow overhaul
 

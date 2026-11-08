@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Seekable composition runtime. Load before GSAP and all scene scripts. */
 (() => {
   'use strict';
