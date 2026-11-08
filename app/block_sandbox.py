@@ -54,6 +54,9 @@ class Resources(HTMLParser):
 
     def url(self, value):
         value = unquote(unescape(value)).strip()
+        if value.startswith('/scene/{token}/library/'):
+            from .library import block_file
+            return block_file(value)
         if re.fullmatch(r'data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+', value):
             return
         if re.fullmatch(r'/fonts/[\w-]+\.(?:ttf|otf|woff2?)', value):

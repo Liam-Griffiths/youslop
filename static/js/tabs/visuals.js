@@ -158,6 +158,7 @@ function visualSourcePanel(s, source) {
   const candidates = s.candidates.filter(c => source === 'Library' ? c.provider === 'library' : !['library', 'footage'].includes(c.provider));
   return `<label class="field"><span>Search ${source.toLowerCase()}</span><input type="search" id="visual-query" value="${esc(s.queries?.[0] || s.visual_note || s.title || '')}" onkeydown="if(event.key==='Enter') searchVisual('${s.id}','${source}')"></label>
     <button type="button" class="btn sm" onclick="searchVisual('${s.id}','${source}')">Search</button>
+    ${source === 'Library' ? `<button type="button" class="btn sm" onclick="pickVisualLibrary('${s.id}')">Choose from Library…</button>` : ''}
     <button type="button" class="btn sm ghost" onclick="toggleKind('${s.id}')">Want ${s.prefer_kind === 'image' ? 'a clip' : 'a photo'}</button>
     <button type="button" class="btn sm ghost" onclick="openMediaSearch('${s.id}')">Full search picker</button>
     <button type="button" class="btn sm ghost" onclick="openMapPicker('${s.id}')">Get a map</button>
@@ -178,6 +179,18 @@ async function searchVisual(sid, source) {
     else Object.assign(slide, r.slide);
     if (state.project === p && state.tab === 'media') paintMedia();
   } catch(e) { status.textContent = e.message; }
+}
+
+function pickVisualLibrary(sid) {
+  const p = state.project, slide = p.slides.find(s => s.id === sid);
+  openLocalMediaPicker(slide.prefer_kind === 'video' ? 'video' : 'image', async asset => {
+    // The local provider search gathers the selected indexed asset; choose uses
+    // the same saved candidate path as every other Visuals Library result.
+    const result = await api(`/api/projects/${p.id}/slides/${sid}/search`, {method:'POST',
+      body:JSON.stringify({query:asset.title || asset.tags.join(' ') || 'library',kind:asset.kind,source:'library',asset_id:asset.id})});
+    Object.assign(slide,result.slide);
+    await choose(sid,`lib${asset.id}`);
+  });
 }
 
 function openVisualEdit(sid) {

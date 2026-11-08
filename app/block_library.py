@@ -3,6 +3,9 @@ import hashlib
 import os
 from pathlib import Path
 import threading
+import tempfile
+import shutil
+import uuid
 
 from . import blocks, channels, jobs, packs, paths, scenes, stage
 
@@ -52,6 +55,7 @@ def poster_path(ref, aspect, item=None):
 
 
 def browse(q='', category='', aspect='', source='', channel='', data=False):
+    prefs = preferences()
     pinned = {}
     for row in channels.list_channels():
         for ref in channels.load(row['id']).blocks:
@@ -68,9 +72,11 @@ def browse(q='', category='', aspect='', source='', channel='', data=False):
                    source=origin, licence=meta['licence'], origin=meta.get('origin'),
                    check_status='Metadata valid; browser check not recorded',
                    channels=pinned.get(ref, []), variables=meta['variables'],
+                   favourite=ref in prefs['favourites'], recent=prefs['recent'].get(ref, 0),
                    posters={a: f'/api/blocks/{ref}/poster?aspect={a}'
                             for a in meta['aspects'] if poster_path(ref, a, item).exists()},
-                   works_with_data=any(v['type'] == 'table' for v in meta['variables'].values()))
+                   works_with_data=any(v['type'] == 'table' for v in meta['variables'].values()),
+                   forkable=forkable(ref, item))
         haystack = ' '.join([row['name'], row['description'], *row['tags'], *row['variables']]).casefold()
         if (q.casefold() not in haystack or category and category != row['category'] or
                 aspect and aspect not in row['aspects'] or channel and channel not in row['channels'] or
@@ -79,6 +85,63 @@ def browse(q='', category='', aspect='', source='', channel='', data=False):
             continue
         result.append(row)
     return result
+
+
+def preferences(ref=None, *, favourite=None, used=False):
+    """App-wide preferences; serialize read/modify/replace within this process."""
+    import json
+    import time
+    path = paths.data_root() / 'blocks_prefs.json'
+    with _LOCK:
+        prefs = json.loads(path.read_text()) if path.exists() else {}
+        prefs = dict(favourites=prefs.get('favourites', []), recent=prefs.get('recent', {}))
+        if ref is None:
+            return prefs
+        if ref not in registry():
+            raise ValueError('Unknown block')
+        if favourite is not None:
+            if not isinstance(favourite, bool):
+                raise ValueError('Favourite must be a boolean')
+            prefs['favourites'] = sorted((set(prefs['favourites']) - {ref}) | ({ref} if favourite else set()))
+        if used:
+            prefs['recent'][ref] = time.time()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(prefs, stream)
+        try:
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return prefs
+
+
+def duplicate(ref):
+    """Copy only into a fresh user folder, and keep it only if check passes."""
+    import json
+    from . import block_authoring
+    item = registry().get(ref)
+    if item is None:
+        raise ValueError('Unknown block')
+    blocks.USER_DIR.mkdir(parents=True, exist_ok=True)
+    target = blocks.USER_DIR / (item['meta']['id'] + '-' + uuid.uuid4().hex[:12])
+    target.mkdir(exist_ok=False)
+    try:
+        # Reject escaping links before copying any source content.
+        for path in item['root'].rglob('*'):
+            if path.is_file() or path.is_symlink():
+                blocks._file(item['root'], str(path.relative_to(item['root'])))
+        shutil.copytree(item['root'], target, dirs_exist_ok=True)
+        meta = json.loads((target / 'block.json').read_text())
+        meta.update(id=target.name, origin={**(meta.get('origin') or {}), 'forked_from':ref})
+        (target / 'block.json').write_text(json.dumps(meta, indent=2) + '\n')
+        errors = block_authoring.check('user/' + target.name)
+        if errors:
+            raise ValueError('; '.join(errors))
+        return {'id':'user/' + target.name}
+    except Exception:
+        shutil.rmtree(target)
+        raise
 
 
 def make_posters(progress):
@@ -161,7 +224,7 @@ def preview(ref, values, aspect, kind, session, sequence):
         if len(_REQUESTS) >= 256 and session not in _REQUESTS:
             _REQUESTS.pop(next(iter(_REQUESTS)))
         _REQUESTS[session] = sequence
-    key = hashlib.sha256(json.dumps([signature(item), values, aspect, kind], sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(json.dumps([signature(item), ctx.get('block_version'), values, aspect, kind], sort_keys=True).encode()).hexdigest()
     out = preview_file(key, kind)
     with _RENDER_LOCK:
         if _REQUESTS.get(session) != sequence:
@@ -192,3 +255,24 @@ def preview_file(key, kind):
     if not re.fullmatch(r'[a-f0-9]{64}', key) or kind not in ('motion', 'trial'):
         raise ValueError('Invalid preview file')
     return paths.data_root() / '.cache/blocks/previews' / (key + ('.mp4' if kind == 'motion' else '.png'))
+
+
+_FORKABLE = {}
+
+
+def forkable(ref, item):
+    """Whether a copy would pass the user-block sandbox (cached per signature).
+
+    Built-in blocks use trusted template features (other bases, extra blocks,
+    macros), so their copies fail the sandbox that user and pack blocks render in.
+    """
+    from . import block_sandbox
+    key = (ref, signature(item))
+    if key not in _FORKABLE:
+        try:
+            for name in item['meta']['aspects'].values():
+                block_sandbox.parse((item['root'] / name).read_text())
+            _FORKABLE[key] = True
+        except Exception:
+            _FORKABLE[key] = False
+    return _FORKABLE[key]

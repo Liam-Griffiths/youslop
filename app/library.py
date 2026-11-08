@@ -180,6 +180,19 @@ def file_path(asset_id: str) -> Path | None:
     return _FILES / a["filename"] if a["filename"] else None
 
 
+def block_file(reference: str) -> Path:
+    """Resolve an indexed Library reference, never a caller-supplied path."""
+    import re
+    prefix = '/scene/{token}/library/'
+    asset_id = reference.removeprefix(prefix)
+    if not reference.startswith(prefix) or not re.fullmatch(r'[a-zA-Z0-9_-]+', asset_id):
+        raise ValueError('Invalid Library reference')
+    path = file_path(asset_id)
+    if path is None or not path.is_file():
+        raise ValueError('Library file missing')
+    return path.resolve()
+
+
 def thumb_path(asset_id: str) -> Path | None:
     a = get(asset_id)
     if not a:
@@ -467,7 +480,7 @@ def _thumb_url_for(asset_id: str, a: LibraryAsset) -> str:
         else _url_for(asset_id)
 
 
-def search(query: str, kind: str, limit: int = 12) -> list[MediaCandidate]:
+def search(query: str, kind: str, limit: int = 12, *, asset_id=None) -> list[MediaCandidate]:
     """Provider-facing search: your own stock, scored like an archive hit.
 
     Tags count toward relevance by routing scoring through the same
@@ -479,7 +492,7 @@ def search(query: str, kind: str, limit: int = 12) -> list[MediaCandidate]:
 
     q_tokens = _tokens(query or "")
     with _LOCK:
-        assets = [a for a in _load_index() if a.kind == kind]
+        assets = [a for a in _load_index() if a.kind == kind and (asset_id is None or a.id == asset_id)]
 
     out: list[MediaCandidate] = []
     for a in assets:

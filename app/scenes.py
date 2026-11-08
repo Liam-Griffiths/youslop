@@ -135,6 +135,9 @@ def _local_file(url: str, base: Path, asset_root=None) -> Path:
     if parts.scheme or parts.netloc:
         raise ValueError(f"non-local component: {url}")
     path = unquote(parts.path)
+    if path.startswith('/scene/{token}/library/'):
+        from .library import block_file
+        return block_file(path)
     if asset_root and path.startswith('/scene/{token}/assets/'):
         root = Path(asset_root).resolve()
         target = (root / path[len('/scene/{token}/assets/'):]).resolve()

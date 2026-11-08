@@ -156,6 +156,9 @@ def validate_vars(meta, values):
         if kind in ('image', 'clip') and value and (not value.startswith(('/static/', '/scene/')) or
                 '..' in unquote(value) or '\\' in unquote(value)):
             raise ValueError(f'{key}: expected local /static/ or /scene/ reference')
+        if kind in ('image', 'clip') and value.startswith('/scene/{token}/library/'):
+            from . import library
+            library.block_file(value)
         result[key] = value
     return result
 
@@ -322,6 +325,12 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
             _file(root, str(path.relative_to(root)))
             fingerprint.update(str(path.relative_to(root)).encode() + path.read_bytes())
     ctx['block_version'] = fingerprint.hexdigest() + block.get('version', '')
+    for key, spec in meta['variables'].items():
+        if spec['type'] in ('image', 'clip') and values[key].startswith('/scene/{token}/library/'):
+            from . import library
+            asset = library.block_file(values[key])
+            stamp = asset.stat()
+            ctx['block_version'] += f'{asset}:{stamp.st_mtime_ns}:{stamp.st_size}'
     return template, ctx
 
 

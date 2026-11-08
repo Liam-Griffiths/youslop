@@ -25,6 +25,8 @@ def test_visual_picker_js(tmp_path):
           visual_note:'A map',prefer_kind:'image',take:{duration: i+1},candidates:[
             {id:'c'+i,provider:'library',title:'Map '+i,kind:'image',focal:[.2,.3]}],chosen_id:'c'+i}))}};
       const assert = (v,m) => {if(!v) throw Error(m);};
+      let picked, pickKind;
+      const openLocalMediaPicker = (kind, fn) => { pickKind = kind; picked = fn; };
       let calls=[];
       const api = async (url, opts={}) => {
         calls.push([url,JSON.parse(opts.body || '{}')]);
@@ -57,6 +59,13 @@ def test_visual_picker_js(tmp_path):
       assert(calls.at(-1)[1].chosen_id === 'c0', 'shared choose/save path');
       await searchVisual('s0','Library');
       assert(calls.at(-1)[1].source === 'library', 'local source routing');
+      pickVisualLibrary('s0');
+      assert(pickKind === 'image', 'shared local image picker');
+      await picked({id:'1',title:'Exact map',kind:'image'});
+      assert(calls.at(-2)[1].source === 'library' && calls.at(-2)[1].asset_id === '1','exact Library asset, no archive');
+      assert(calls.at(-1)[1].chosen_id === 'lib1','selected local candidate applied');
+      p.slides[0].chosen_id = 'c0';
+
       state.visualHasFootage = true;
       await suggestVisualFootage(p, p.slides[0]);
       assert(p.slides[0].chosen_id === 'c0', 'suggestions preserve selection');

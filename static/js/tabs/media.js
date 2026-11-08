@@ -1,7 +1,7 @@
 
 async function renderLibrary() {
-  const [items, folders, blockList, channels] = await Promise.all([
-    api('/api/library'), api('/api/library/folders'), api('/api/blocks'), api('/api/channels'),
+  const [items, folders] = await Promise.all([
+    api('/api/library'), api('/api/library/folders'),
   ]);
   state.library.items = items;
   state.library.folders = folders;
@@ -11,19 +11,7 @@ async function renderLibrary() {
       and searched alongside the archives for every slide in every project.</p>
 
     ${jobPanel()}
-    <div class="card" style="margin-bottom:22px">
-      <h3>Reusable blocks</h3>
-      <label class="field"><span>Describe a block</span>
-        <textarea id="block-description" maxlength="4000" placeholder="A receipt that prints line by line with a total at the end">${esc(state.blockDescription || '')}</textarea></label>
-      <p class="mono">One-off model call with up to two repairs. Reusing a saved block costs no tokens.</p>
-      <button class="btn" onclick="describeBlock(this)" ${state.job?.kind === 'create block' && !state.job.done ? 'disabled' : ''}>Create block</button>
-      <div id="block-result" role="status">${blockCreationResult()}</div>
-      <div class="row" style="margin-top:14px">
-        <select id="saved-block">${blockList.map(b => `<option value="${esc(b.id)}">${esc(b.name)} · ${esc(b.id)}</option>`).join('')}</select>
-        <select id="block-channel"><option value="">Choose channel</option>${channels.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
-        <button class="btn ghost" onclick="addBlockToChannel()">Add to channel</button>
-      </div>
-    </div>
+    <p>Browse, create and pin <a href="#/blocks">Blocks</a>.</p>
 
     <div class="card" style="margin-bottom:22px">
       <h3>Linked folders</h3>
@@ -89,40 +77,6 @@ async function renderLibrary() {
   `;
   paintLibraryGrid();
   paintModelLibrary();
-  if (state.blockResult?.id) $('#saved-block').value = state.blockResult.id;
-}
-
-function blockCreationResult() {
-  const r = state.blockResult;
-  if (!r) return '';
-  const usage = (r.usage || []).map(u => Object.entries(u.usage)
-    .filter(([k,v]) => k.endsWith('tokens') && typeof v === 'number')
-    .map(([k,v]) => `${v} ${k.replaceAll('_', ' ')}`).join(', ')).filter(Boolean).join('; ');
-  return `<p>${esc(r.id ? `Saved ${r.id}` : (r.errors || []).join('; '))}</p>
-    <p class="mono">One-off token usage: ${esc(usage || 'not reported by the provider')}</p>`;
-}
-
-async function describeBlock(button) {
-  state.blockDescription = $('#block-description').value;
-  button.disabled = true;
-  try {
-    const r = await api('/api/blocks/describe', {method:'POST', body:JSON.stringify({description:state.blockDescription})});
-    state.blockResult = null;
-    $('#block-result').textContent = 'Creating and checking…';
-    watchJob(r.job, 'create block', async j => {
-      state.blockResult = j.result || {errors:[j.error]};
-      if (location.hash === '#/library') await renderLibrary();
-    });
-  } catch (e) { toast(e.message, true); button.disabled = false; }
-}
-
-async function addBlockToChannel() {
-  const cid = $('#block-channel').value;
-  if (!cid) return toast('Choose a channel.', true);
-  try {
-    await api(`/api/channels/${cid}/blocks`, {method:'POST', body:JSON.stringify({id:$('#saved-block').value})});
-    toast('Block added to channel.');
-  } catch (e) { toast(e.message, true); }
 }
 
 // --------------------------------------------------------------- folders

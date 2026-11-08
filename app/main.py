@@ -122,6 +122,26 @@ def block_preview(ref: str, payload: dict = Body(...)) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.post('/api/blocks/{ref:path}/favourite')
+def favourite_block(ref: str, payload: dict = Body(...)) -> dict:
+    from .block_library import preferences
+    try:
+        if not isinstance(payload.get('favourite'), bool):
+            raise ValueError('Favourite must be a boolean')
+        return preferences(ref, favourite=payload['favourite'])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post('/api/blocks/{ref:path}/duplicate')
+def duplicate_block(ref: str) -> dict:
+    from .block_library import duplicate
+    try:
+        return {'job':jobs.start('duplicate block', '', lambda pr: duplicate(ref))}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get('/api/block-previews/{key}/{kind}')
 def block_preview_file(key: str, kind: str):
     from .block_library import preview_file
@@ -1385,6 +1405,10 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         except edits.EditError as exc:
             raise HTTPException(exc.status, str(exc)) from exc
         store.save(p)
+    if isinstance(payload.get('cues'), dict) and payload['cues'].get('blocks'):
+        from .block_library import preferences
+        for cue in s.cues['blocks']:
+            preferences(cue['block'], used=True)
     return s.to_dict()
 
 
@@ -1612,8 +1636,11 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         from .media.footage import suggestions
         found = suggestions(query)
     else:
-        found = (library.search(query, kind) if payload.get("source") == "library" else
-             reactions.search(query) if kind == "reaction" else media.search([query], kind))
+        if payload.get('source') == 'library':
+            found = (library.search('', kind, asset_id=payload['asset_id']) if payload.get('asset_id')
+                     else library.search(query, kind))
+        else:
+            found = reactions.search(query) if kind == 'reaction' else media.search([query], kind)
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)

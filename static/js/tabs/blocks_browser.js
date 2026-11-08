@@ -5,11 +5,11 @@ async function renderBlocks(path = '', options = {}) {
   const route = location.hash;
   const query = path.startsWith('search/') ? decodeURIComponent(path.slice(7)) : '';
   const selected = query ? '' : decodeURIComponent(path);
-  const items = await api('/api/blocks');
+  const [items, channels] = await Promise.all([api('/api/blocks'), api('/api/channels')]);
   if (location.hash !== route) return;
   if (!options.mode && !location.hash.startsWith('#/blocks')) return;
   blocksBrowser = {items, selected, options, trial:options.selection ? {ref:options.selection.block, values:options.selection.vars} : null};
-  view.innerHTML = `<h1>Blocks</h1><p>Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
+  view.innerHTML = `<h1>Blocks</h1><p class="sub">Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
     ${options.mode === 'pick' ? '<button type="button" class="btn ghost" id="block-picker-close">Back to project</button>' : ''}
     <div class="blocks-browser"><aside class="blocks-filters" aria-label="Block filters">
     <label for="blocks-search">Find a block</label><input type="search" id="blocks-search" value="${esc(query)}" placeholder="Name, tag or variable">
@@ -18,10 +18,19 @@ async function renderBlocks(path = '', options = {}) {
       <label for="blocks-${key}">${label}</label><select id="blocks-${key}"><option value="">All</option>
       ${values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>`).join('')}
     <label><input type="checkbox" id="blocks-data"> Works with data</label>
-    <label for="blocks-sort">Sort</label><select id="blocks-sort"><option value="recommended">Recommended</option><option value="name">A–Z</option></select>
+    <label><input type="checkbox" id="blocks-favourites"> Favourites</label>
+    <label for="blocks-channel">Pinned to channel</label><select id="blocks-channel"><option value="">All</option>${channels.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
+    <label for="blocks-sort">Sort</label><select id="blocks-sort"><option value="recommended">Recommended</option><option value="recent">Recently used</option><option value="name">A–Z</option></select>
     <button type="button" class="btn ghost" id="blocks-clear">Clear filters</button></aside>
-    <section aria-label="Blocks"><p id="blocks-count" class="mono" role="status"></p><div id="blocks-grid" class="blocks-grid"></div></section></div>`;
-  for (const id of ['search','category','aspect','source','data','sort']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
+    <section aria-label="Blocks"><details class="card block-create" ${state.blockDescription || state.blockResult ? 'open' : ''}><summary>Describe a new block…</summary>
+      <label for="block-description">What should it show?</label><textarea id="block-description" maxlength="4000" placeholder="A receipt that prints line by line with a total at the end">${esc(state.blockDescription || '')}</textarea>
+      <p class="mono">One-off model call with up to two repairs. Reusing a saved block costs no tokens.</p>
+      <button type="button" class="btn" onclick="describeBlock(this)" ${state.job?.kind === 'create block' && !state.job.done ? 'disabled' : ''}>Create block</button>
+      <div id="block-result" role="status">${blockCreationResult()}</div></details>
+      <p id="blocks-count" class="mono" role="status"></p><div id="blocks-grid" class="blocks-grid"></div></section></div>`;
+  $('#block-description').oninput = e => { state.blockDescription = e.target.value; };
+  for (const id of ['search','category','aspect','source','data','sort','favourites','channel']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
+  if (options.channel) $('#blocks-channel').value = options.channel;
   $('#blocks-clear').onclick = () => { for (const el of document.querySelectorAll('.blocks-filters input,.blocks-filters select')) {
     if (el.type === 'checkbox') el.checked = false; else el.value = el.id === 'blocks-sort' ? 'recommended' : '';
   } paintBlocksGrid(); };
@@ -51,14 +60,20 @@ function paintBlocksGrid() {
   let items = blocksBrowser.items.filter(b => [b.name,b.description,...b.tags,...Object.keys(b.variables)].join(' ').toLowerCase().includes(q)
     && (!category || b.category === category) && (!aspect || b.aspects.includes(aspect))
     && (!source || b.source === source || source === 'packs' && b.ref.startsWith('pack/'))
+    && (!$('#blocks-channel').value || b.channels.includes($('#blocks-channel').value))
+    && (!$('#blocks-favourites').checked || b.favourite)
     && (!$('#blocks-data').checked || b.works_with_data));
   if ($('#blocks-sort').value === 'name') items.sort((a,b) => a.name.localeCompare(b.name));
+  if ($('#blocks-sort').value === 'recent') items.sort((a,b) => (b.recent || 0) - (a.recent || 0));
   $('#blocks-count').textContent = `${items.length} blocks`;
   $('#blocks-grid').innerHTML = items.map(b => {
     const a = aspect || b.aspects[0];
-    return `<button type="button" class="block-card" data-ref="${esc(b.ref)}" aria-pressed="${b.ref === blocksBrowser.selected}">
-      ${blockPoster(b,a)}<strong>${esc(b.name)}</strong><span>${esc(b.description)}</span><span class="mono">${esc(b.source)} · ${esc(b.category)}</span></button>`;
-  }).join('') || '<p>No blocks match. Clear filters, or <a href="#/library">describe a block in Library</a>.</p>';
+    return `<div class="block-card-wrap"><button type="button" class="block-card" data-ref="${esc(b.ref)}" aria-pressed="${b.ref === blocksBrowser.selected}">
+      ${blockPoster(b,a)}<strong>${esc(b.name)}</strong><span>${esc(b.description)}</span><span class="mono">${esc(b.source)} · ${esc(b.category)}</span></button>
+      <button type="button" class="btn sm block-star" data-star="${esc(b.ref)}" aria-label="Favourite ${esc(b.name)}" aria-pressed="${!!b.favourite}">${b.favourite ? '★' : '☆'}</button></div>`;
+  }).join('') || '<p>No blocks match. Clear filters, or <button type="button" class="btn ghost" id="block-describe-empty">Describe a block</button>.</p>';
+  $('#block-describe-empty')?.addEventListener('click', () => { $('.block-create').open = true; $('#block-description').focus(); });
+  document.querySelectorAll('[data-star]').forEach(button => { button.onclick = () => toggleBlockFavourite(button.dataset.star); });
   const cards = [...document.querySelectorAll('#blocks-grid .block-card')];
   cards.forEach((card,i) => {
     card.onclick = () => {
@@ -100,11 +115,16 @@ function paintBlockDetails(aspect) {
     <p id="block-trial-status" role="status" aria-live="polite"></p>
     <h3>Try it</h3><form id="block-trial">${Object.entries(b.variables).map(([key,spec],i) => blockTrialField(key,{...spec,default:scratch[key] ?? spec.default},i)).join('')}
     <button type="button" class="btn sm ghost" id="block-reset">Reset to defaults</button></form>
-    <button type="button" class="btn" id="block-use">${blocksBrowser.options.mode === 'pick' ? 'Use here' : 'Use in a project…'}</button>
+    ${blocksBrowser.options.mode !== 'channel' ? `<button type="button" class="btn" id="block-use">${blocksBrowser.options.mode === 'pick' ? 'Use here' : 'Use in a project…'}</button>` : ''}
+    <div class="row"><button type="button" class="btn sm" id="block-pin">Add to channel…</button>
+      <button type="button" class="btn sm" id="block-duplicate" ${b.forkable ? '' : 'disabled aria-describedby="block-fork-note"'}>Duplicate as mine</button>
+      ${b.forkable ? '' : '<small id="block-fork-note">Built-in blocks use trusted template features that copies cannot keep. Save your values as a preset or describe a new block instead.</small>'}
+      <button type="button" class="btn sm" data-star="${esc(b.ref)}" aria-pressed="${!!b.favourite}">${b.favourite ? '★' : '☆'} Favourite</button></div>
+    <div id="block-channel-target"></div>
     <p class="mono block-meta">${esc(blockDuration(b.duration))} · ${esc(b.source)} · ${esc(b.licence)}<br>${esc(b.check_status)}
     ${b.origin ? `<br>Origin: ${esc(Object.entries(b.origin).map(([k, v]) => `${k.replaceAll('_', ' ')} ${v}`).join(' · '))}` : ''}</p>
     <div id="block-project-target"></div>
-    <a href="#/library">Create a block or add one to a channel in Library</a></div>`;
+    </div>`;
   const detail = panel.querySelector('.block-detail');
   const values = () => readBlockTrial(b, detail);
   const refresh = kind => {
@@ -125,13 +145,34 @@ function paintBlockDetails(aspect) {
   };
   $('#block-reset').onclick = () => { blocksBrowser.trial = null; paintBlockDetails(aspect); const fresh = $('#inspector .block-detail'); requestBlockPreview(b,aspect,'trial',readBlockTrial(b,fresh),fresh); };
   $('#block-play').onclick = () => refresh('motion');
-  $('#block-use').onclick = async () => {
+  const use = $('#block-use');
+  if (use) use.onclick = async () => {
     try {
       const selection = {block:b.ref, vars:values()};
       if (blocksBrowser.options.mode === 'pick') await blocksBrowser.options.onUse(selection);
       else await blockProjectTarget(selection);
     } catch (e) { blockTrialError(detail, e.message); }
   };
+  detail.querySelector('[data-star]').onclick = () => toggleBlockFavourite(b.ref);
+  $('#block-pin').onclick = () => blockChannelTarget(b.ref).catch(e => toast(e.message,true));
+  if (b.forkable) $('#block-duplicate').onclick = async e => {
+    e.target.disabled = true;
+    try {
+      const result = await api(`/api/blocks/${b.ref}/duplicate`, {method:'POST'});
+      watchJob(result.job, 'duplicate block', async job => {
+        if (!job.result?.id) { toast(job.error || 'Block check failed',true); e.target.disabled = false; return; }
+        await renderBlocks(job.result.id, blocksBrowser.options);
+        $('#blocks-source').value = 'mine'; $('#blocks-channel').value = ''; paintBlocksGrid();
+      });
+    } catch (error) { toast(error.message,true); e.target.disabled = false; }
+  };
+  detail.querySelectorAll('[data-pick-local]').forEach(button => { button.onclick = () => {
+    const input = detail.querySelector(`#${button.dataset.pickLocal}`);
+    openLocalMediaPicker(input.dataset.type === 'clip' ? 'video' : 'image', asset => {
+      input.value = `/scene/{token}/library/${asset.id}`;
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+  }; });
   panel.querySelectorAll('[data-aspect]').forEach(button => { button.onclick = () => paintBlockDetails(button.dataset.aspect); });
 }
 
@@ -160,7 +201,7 @@ function blockTrialField(key, spec, i) {
   else field = `<input type="${spec.type === 'number' ? 'number' : 'text'}" ${attr} value="${esc(v)}" ${spec.type === 'number' ? 'step="any"' : ''}
     ${spec.max_length ? `data-max="${spec.max_length}" aria-describedby="${id}-count"` : ''}>
     ${spec.max_length ? `<small id="${id}-count">${spec.max_length - String(v).length} characters remaining</small>` : ''}`;
-  return `<label for="${id}">${esc(key)} · ${esc(spec.type)}</label>${field}<small id="${id}-error" role="status" class="block-field-error"></small>`;
+  return `<label for="${id}">${esc(key)} · ${esc(spec.type)}</label>${field}${['image','clip'].includes(spec.type) ? `<button type="button" class="btn sm" data-pick-local="${id}">Choose from Library…</button>` : ''}<small id="${id}-error" role="status" class="block-field-error"></small>`;
 }
 
 function blockTrialError(detail, message) {
@@ -245,7 +286,12 @@ async function blockProjectTarget(selection) {
       $('#block-slides').innerHTML = `<label for="block-slide">Paragraph</label><select id="block-slide">${project.slides.filter(s => !s.on_camera).map((s,i) =>
         `<option value="${esc(s.id)}">${i+1} · ${esc(s.title || s.narration.slice(0,60))}</option>`).join('')}</select><button type="button" class="btn sm" id="block-apply">Apply block</button>`;
       $('#block-apply').onclick = async () => {
-        try { await applyBlockToSlide(pid,$('#block-slide').value,selection); toast('Block applied'); }
+        try {
+          await applyBlockToSlide(pid,$('#block-slide').value,selection);
+          const b = blocksBrowser.items.find(b => b.ref === selection.block);
+          if (b) b.recent = Date.now()/1000;
+          paintBlocksGrid(); toast('Block applied');
+        }
         catch (error) { toast(error.message,true); }
       };
     } catch (error) { toast(error.message,true); }
@@ -270,4 +316,68 @@ function blockPosterArrived() {
   if (!b || !pending) return;
   const aspect = $('#inspector [data-aspect][aria-pressed="true"]')?.dataset.aspect || b.aspects[0];
   if (b.posters[aspect]) pending.outerHTML = blockPoster(b, aspect);
+}
+
+async function toggleBlockFavourite(ref) {
+  const item = blocksBrowser.items.find(b => b.ref === ref);
+  const restoreFocus = document.activeElement?.dataset.star === ref && document.activeElement.closest('#blocks-grid');
+  try {
+    await api(`/api/blocks/${ref}/favourite`, {method:'POST',body:JSON.stringify({favourite:!item.favourite})});
+    item.favourite = !item.favourite;
+    paintBlocksGrid();
+    if (restoreFocus) [...document.querySelectorAll('#blocks-grid [data-star]')].find(el => el.dataset.star === ref)?.focus();
+    const star = $('#inspector [data-star]');
+    if (star?.dataset.star === ref) {
+      star.setAttribute('aria-pressed', String(item.favourite));
+      star.textContent = `${item.favourite ? '★' : '☆'} Favourite`;
+    }
+  } catch (error) { toast(error.message,true); }
+}
+
+async function blockChannelTarget(ref) {
+  const channels = await api('/api/channels');
+  const host = $('#block-channel-target');
+  host.innerHTML = `<label for="block-pin-channel">Channel</label><select id="block-pin-channel"><option value="">Choose channel</option>${channels.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select><button type="button" class="btn sm" id="block-pin-confirm">Add block</button><p role="status"></p>`;
+  $('#block-pin-channel').value = blocksBrowser.options.channel || '';
+  $('#block-pin-confirm').onclick = async () => {
+    const cid = $('#block-pin-channel').value;
+    if (!cid) return toast('Choose a channel.',true);
+    try {
+      await api(`/api/channels/${cid}/blocks`, {method:'POST',body:JSON.stringify({id:ref})});
+      const b = blocksBrowser.items.find(b => b.ref === ref);
+      if (!b.channels.includes(cid)) b.channels.push(cid);
+      paintBlocksGrid(); host.querySelector('[role=status]').textContent = 'Block added to channel.';
+    } catch (error) { toast(error.message,true); }
+  };
+}
+
+async function openChannelBlockBrowser(cid, ref = '') {
+  await renderBlocks(ref, {mode:'channel', channel:cid});
+}
+
+function blockCreationResult() {
+  const r = state.blockResult;
+  if (!r) return '';
+  const usage = (r.usage || []).map(u => Object.entries(u.usage)
+    .filter(([k,v]) => k.endsWith('tokens') && typeof v === 'number')
+    .map(([k,v]) => `${v} ${k.replaceAll('_', ' ')}`).join(', ')).filter(Boolean).join('; ');
+  return `<p>${esc(r.id ? `Saved ${r.id}` : (r.errors || []).join('; '))}</p>
+    <p class="mono">One-off token usage: ${esc(usage || 'not reported by the provider')}</p>`;
+}
+
+async function describeBlock(button) {
+  state.blockDescription = $('#block-description').value;
+  button.disabled = true;
+  try {
+    const r = await api('/api/blocks/describe', {method:'POST', body:JSON.stringify({description:state.blockDescription})});
+    state.blockResult = null;
+    $('#block-result').textContent = 'Creating and checking…';
+    watchJob(r.job, 'create block', async j => {
+      state.blockResult = j.result || {errors:[j.error]};
+      if (location.hash.startsWith('#/blocks') || $('#blocks-grid')) {
+        const options = blocksBrowser?.options || {};
+        await renderBlocks(state.blockResult.id || blocksBrowser?.selected || '', options);
+      }
+    });
+  } catch (e) { toast(e.message, true); button.disabled = false; }
 }

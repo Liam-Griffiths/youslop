@@ -191,3 +191,132 @@ def test_motion_builder_receives_quarter_size_and_cap(tmp_path, monkeypatch):
     assert prepared.call_args.args[3:5] == (6,(480,270))
     assert builder.call_args.kwargs['size'] == (480,270)
     assert builder.call_args.kwargs['seconds'] == 6
+
+
+def test_preferences_persist_atomically_and_filter_pins(isolated, monkeypatch, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    real_replace = library.os.replace
+    replaced = []
+    def replace(source, target):
+        assert source.parent == target.parent and source != target
+        replaced.append(target)
+        real_replace(source, target)
+    monkeypatch.setattr(library.os, 'replace', replace)
+    with ThreadPoolExecutor(2) as pool:
+        a = pool.submit(library.preferences, 'number_slam', favourite=True)
+        b = pool.submit(library.preferences, 'number_slam', used=True)
+        a.result(); b.result()
+    prefs = json.loads((tmp_path / 'blocks_prefs.json').read_text())
+    assert prefs['favourites'] == ['number_slam'] and prefs['recent']['number_slam'] > 0
+    assert len(replaced) == 2
+    channels.CHANNELS_DIR.mkdir(exist_ok=True)
+    row = library.browse()[0]
+    assert row['favourite'] and row['recent'] == prefs['recent']['number_slam']
+    library.preferences('number_slam', favourite=False)
+    assert library.preferences()['favourites'] == []
+    assert library.preferences()['recent'] == prefs['recent']
+    assert main.favourite_block('number_slam', {'favourite':True})['favourites'] == ['number_slam']
+    with pytest.raises(HTTPException):
+        main.favourite_block('number_slam', {'favourite':'yes'})
+
+
+@pytest.mark.parametrize('failure', [None, 'lint', 'browser', 'exception'])
+def test_duplicate_checks_and_cleans_only_new_folder(tmp_path, monkeypatch, failure):
+    from app import block_authoring as kit, scene_builder
+    monkeypatch.setattr(blocks, 'USER_DIR', tmp_path / 'mine')
+    monkeypatch.setattr(blocks, 'BUILTIN_DIR', tmp_path / 'builtin')
+    source = kit.new('source')
+    reserved = blocks.USER_DIR / 'source-copy'
+    reserved.mkdir()
+    (reserved / 'keep.txt').write_text('existing work')
+    if failure == 'lint':
+        (source / 'block.html').write_text(kit.TEMPLATE.replace('{{ vars.title }}', '{{ forbidden() }}'))
+    before = {p.relative_to(source):p.read_bytes() for p in source.rglob('*') if p.is_file()}
+    # Check's Jinja/sandbox/lint remain real; only its browser operations are mocked.
+    inspect = Mock(return_value={})
+    if failure == 'exception':
+        inspect.side_effect = RuntimeError('browser unavailable')
+    monkeypatch.setattr(scene_builder, 'inspect', inspect)
+    def browser(job, progress, *, scene_probe):
+        if failure == 'browser':
+            raise ValueError('browser check failed')
+    monkeypatch.setattr(kit.stage, '_run_cdp', browser)
+    if failure:
+        with pytest.raises((ValueError, RuntimeError)):
+            library.duplicate('user/source')
+        assert set(blocks.USER_DIR.iterdir()) == {source, reserved}
+        if failure == 'lint': inspect.assert_not_called()
+    else:
+        first = library.duplicate('user/source')['id']
+        second = library.duplicate('user/source')['id']
+        assert first != second and first.startswith('user/source-')
+        for ref in [first, second]:
+            meta = blocks.discover()[ref]['meta']
+            assert meta['origin']['forked_from'] == 'user/source'
+            assert kit.lint(ref) == []
+        assert inspect.call_count == 6
+    assert (reserved / 'keep.txt').read_text() == 'existing work'
+    assert before == {p.relative_to(source):p.read_bytes() for p in source.rglob('*') if p.is_file()}
+
+
+def test_recent_only_after_successful_apply(tmp_path, monkeypatch):
+    from app import store
+    from app.schema import Project, Slide
+    monkeypatch.setattr(paths, 'data_root', lambda: tmp_path)
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
+    p = Project(id='precent', title='Recent', idea='', slides=[Slide(id='s1')])
+    store.save(p)
+    assert library.preferences()['recent'] == {}
+    with pytest.raises(HTTPException):
+        main.patch_slide(p.id, 's1', {'cues':{'blocks':[{'block':'missing'}]}})
+    assert library.preferences()['recent'] == {}
+    main.patch_slide(p.id, 's1', {'cues':{'blocks':[{'block':'number_slam','vars':{}}]}})
+    used = library.preferences()['recent']['number_slam']
+    main.patch_slide(p.id, 's1', {'title':'Other edit'})
+    assert library.preferences()['recent']['number_slam'] == used
+    monkeypatch.setattr(store, 'save', Mock(side_effect=OSError('disk full')))
+    with pytest.raises(OSError):
+        main.patch_slide(p.id, 's1', {'cues':{'blocks':[{'block':'number_slam','vars':{}}]}})
+    assert library.preferences()['recent']['number_slam'] == used
+
+
+def test_library_picker_reference_resolves_in_preview_and_segment(tmp_path, monkeypatch):
+    from app import block_authoring as kit, library as media, render, scenes, scene_builder
+    from app.schema import Project, Slide
+    monkeypatch.setattr(blocks, 'USER_DIR', tmp_path / 'blocks')
+    monkeypatch.setattr(paths, 'data_root', lambda: tmp_path)
+    image = tmp_path / 'linked.png'
+    image.write_bytes(b'image fixture')
+    monkeypatch.setattr(media, 'file_path', lambda asset_id: image if asset_id == 'img1' else None)
+    root = kit.new('picture')
+    meta = json.loads((root / 'block.json').read_text())
+    meta['variables']['picture'] = dict(type='image', default='')
+    meta['duration'] = dict(mode='range', min=1, max=20)
+    (root / 'block.json').write_text(json.dumps(meta))
+    (root / 'block.html').write_text(kit.TEMPLATE.replace('{{ vars.title }}', '{{ vars.title }}<img src="{{ vars.picture }}">'))
+    ref = '/scene/{token}/library/img1'
+    values = dict(picture=ref)
+    assert blocks.validate_vars(meta, values)['picture'] == ref
+    for bad in ['/scene/{token}/library/../img1', '/scene/{token}/library/missing']:
+        with pytest.raises(ValueError): blocks.validate_vars(meta, dict(picture=bad))
+    seen = []
+    def resolve(template, ctx):
+        assert ctx['vars']['picture'] == ref
+        assert ref in scenes.render_html(template, ctx)
+        seen.append(scenes._local_file(ref, tmp_path, ctx['block_assets_root']))
+    def capture(owner, template, ctx, **kw):
+        resolve(template, ctx)
+        return b'preview fixture'
+    monkeypatch.setattr(library.scenes, 'capture', capture)
+    monkeypatch.delenv('CORKBORED_BLOCK_POSTERS', raising=False)
+    assert library.preview('user/picture', values, '16:9', 'trial', 'image-test', 1)['url']
+    p = Project(id='pimage', title='Image', idea='', slides=[Slide(id='s1',cues={'blocks':[{'block':'user/picture','vars':values}]})])
+    p.use_intro = p.use_outro = False
+    monkeypatch.setattr(scene_builder, 'render', lambda owner,template,ctx,*a,**kw: resolve(template,ctx))
+    monkeypatch.setattr(render, '_chapter_tail', lambda p,out,*a: out)
+    render._render_segment(p, [(p.slides[0],5)],5,0,tmp_path/'segment.webm',size=(480,270))
+    assert seen == [image.resolve(),image.resolve()]
+    native = kit.TEMPLATE.replace('{{ vars.title }}', '<span data-media="{{ vars.picture }}"></span>')
+    (root / 'block.html').write_text(native)
+    template, ctx = blocks.prepare('user/picture', values)
+    assert f'data-media="{image.resolve()}"' in scenes.render_html(template, ctx)

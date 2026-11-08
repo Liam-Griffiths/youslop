@@ -125,6 +125,12 @@ def _handler(run: _Run):
                 if ".." in relative:
                     return "/nonexistent"
                 kind, _, rel = relative.partition("/")
+                if kind == 'library':
+                    from .library import block_file
+                    try:
+                        return str(block_file('/scene/{token}/library/' + rel))
+                    except ValueError:
+                        return '/nonexistent'
                 if kind in ("project", "channel"):
                     asset_root = run.job.get(kind + "_root")
                     if not asset_root or not rel:

@@ -60,6 +60,26 @@ renderBlocks = async (path,options) => { opened = {path,options}; };
 await openBlockPicker('p1','s1');
 assert(opened.path === selection.block && opened.options.selection === selection,'edit opens saved scratch');
 assert(opened.options.aspect === '9:16' && calls.length === 3,'opening edit does not apply');
+await openChannelBlockBrowser('ctest','number_slam');
+assert(opened.options.mode === 'channel' && opened.options.channel === 'ctest','reusable channel mode');
+const nodes = {'#block-description':{value:'A receipt'},'#block-result':{textContent:''},'#blocks-grid':{}};
+const $ = key => nodes[key];
+const location = {hash:'#/blocks'};
+let complete;
+const watchJob = (id,kind,fn) => { assert(kind === 'create block','creation job'); complete = fn; };
+blocksBrowser = {selected:'number_slam',options:{mode:'pick'}};
+const before = calls.length, button = {};
+assert(blockCreationResult() === '' && calls.length === before,'painting result never calls model');
+const creation = describeBlock(button);
+assert(button.disabled && calls.at(-1)[0] === '/api/blocks/describe','explicit Create only');
+assert(calls.at(-1)[1].description === 'A receipt','description retained');
+resolve({job:'jcreate'}); await creation;
+await complete({result:{id:'user/receipt',usage:[{usage:{input_tokens:12,output_tokens:6}}]}});
+assert(opened.path === 'user/receipt' && opened.options.mode === 'pick','new block selected in same browser mode');
+assert(blockCreationResult().includes('12 input tokens'),'usage preserved');
+await complete({error:'Check failed'});
+assert(blockCreationResult().includes('Check failed'),'job errors preserved');
+
 
 ''')
     result = subprocess.run([runtime, '-m', str(script)], capture_output=True, text=True, timeout=5)

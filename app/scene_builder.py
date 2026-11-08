@@ -231,6 +231,10 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
         _value(cdp, session, "window.__builderCapture=true; document.body.style.transform='none'; Object.values(window.__timelines).forEach(t=>t.progress(1))")
         _value(cdp, session, "document.querySelectorAll('[data-motion=atlas] .atlas-strip').forEach(e=>e.style.transform='none')")
         data = _value(cdp, session, _PROBE)
+        for screen in data['screens']:
+            for media in screen.get('media', []):
+                if media['path'].startswith('/scene/{token}/library/'):
+                    media['path'] = str(scenes._local_file(media['path'], html.parent, ctx.get('block_assets_root')))
         _plan(data, seconds, fps)  # Budget and graph limits precede any screenshot.
         data['files'] = []
         isolation = """window.__isolate = document.createElement('style');
@@ -297,7 +301,8 @@ def _plates(project, template, ctx, seconds, size, fps, stats):
                 if layer.get('clip'):
                     layer['clip'] = [v*(dx if i%2==0 else dy) for i,v in enumerate(layer['clip'])]
                 if layer.get('native'):
-                    layer['path'] = layer['native']
+                    layer['path'] = str(scenes._local_file(layer['native'], html.parent,
+                        ctx.get('block_assets_root'))) if layer['native'].startswith('/scene/{token}/library/') else layer['native']
                     data['files'].append(layer['path'])
                     continue
                 # Pixels depend on content, size and sub-pixel phase, not on where the
