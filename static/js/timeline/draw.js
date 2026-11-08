@@ -142,8 +142,9 @@ function tlFixButtons(row, note, finding = false, context = null) {
     const button = document.createElement('button');
     button.className = 'btn sm';
     button.textContent = label;
-    button.disabled = action === 'fix' && !['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind);
+    button.disabled = action === 'fix' && !note.fix?.overlay_id && !['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind);
     button.onclick = async () => {
+      if (action === 'fix' && note.fix?.overlay_id) return openGraphicEdit(note.fix.slide_id, note.fix.overlay_id);
       button.disabled = true;
       try {
         const send = (action) => api(`/api/projects/${context?.pid || TL.pid}/review/${note.id}`, {

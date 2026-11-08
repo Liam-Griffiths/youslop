@@ -605,6 +605,10 @@ def run(project, measure=False) -> dict:
     else:
         _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
+    from . import overlay_checks
+    if any(s.overlays for s in project.slides):
+        sb['layers'] = render._layers(project, sb['segments'])
+    findings.extend(overlay_checks.run(project, sb))
     from . import packs
     for ref in sorted(set(packs.missing_items(project.to_dict()) +
                           packs.missing_items(channel.to_dict() if channel else {}))):

@@ -44,6 +44,8 @@ const api=async(path, opts={})=>{
  return [];
 };
 const toast=()=>{};
+let graphicFocus;
+const openGraphicEdit=(sid,id)=>{graphicFocus={sid,id};};
 const tlMount=()=>{throw new Error('Timeline must stay in Edit');};
 let thumbPending={}, thumbTimer;
 const clearTimeout=()=>{}, setTimeout=()=>{saves++;};
@@ -88,6 +90,12 @@ async function run(){
  const proposal=row.children.at(-1);
  await proposal.children[1].onclick();
  check(applied===1,'apply refreshes Publish without mounting Edit');
+ const graphicRow=node(), writes=posts.length;
+ tlFixButtons(graphicRow,{id:'graphic-note',fix:{kind:'none',slide_id:'s1',overlay_id:'o1'}},true,{pid:'p1'});
+ check(!graphicRow.children[0].disabled,'graphic finding can open Fix');
+ await graphicRow.children[0].onclick();
+ check(graphicFocus.sid==='s1' && graphicFocus.id==='o1','graphic Fix opens the selected overlay');
+ check(posts.length===writes,'opening a graphic requests no model fix or write');
 }
 let failure;
 run().catch(e=>failure=e).finally(()=>loop.quit());

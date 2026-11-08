@@ -201,4 +201,4 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.9 | Channel and project block presets | M | T12.8, T12.5 | todo | presets, not copies of block code |
 | T12.10a | Block overlays on any picture: data and render | M | T11.6, T12.5, T2.10 | done | 2026-11-08 Codex + review; slide.overlays, transparent block layers composited by ffmpeg, stored unclipped; ¼ preview checked |
 | T12.10b | Block overlays: planning and editing | M | T12.10a, T4.4, T12.8 | done | 2026-11-08 Codex + review; offline overlay planner, Timeline Graphics row (select/nudge/delete/hide/G), Visuals chips; checks split to T12.10c |
-| T12.10c | Block overlays: checks | S | T12.10b | todo | contrast over the base frame, caption/title overlap, safe area, estimated anchors |
+| T12.10c | Block overlays: checks | S | T12.10b | done | 2026-11-08 Codex + review; contrast (panel-aware), overlap, safe area, estimated anchors; Fix opens the graphic |

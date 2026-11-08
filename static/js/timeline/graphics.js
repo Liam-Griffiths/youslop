@@ -62,6 +62,10 @@ async function openGraphicPicker(sid, at = 0) {
 }
 
 function openGraphicEdit(sid, id) {
+  // Already in Edit (a check's Fix button): the hash would not change, so no
+  // route runs; select the graphic directly instead.
+  const graphic = TL.host?.isConnected && TL.pid === state.project.id && tlItems('overlay').find(g => g.id === id);
+  if (graphic) { tlSelect(graphic); tlSeek(graphic.t0, {ensure:false}); return; }
   state.graphicFocus = {pid:state.project.id, id};
   openVisualEdit(sid);
 }
