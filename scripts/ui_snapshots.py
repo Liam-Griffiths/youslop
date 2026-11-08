@@ -80,8 +80,12 @@ def seed():
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
                 str(root / 'proxies/f1.mp4')], threads=1)
     Image.new('RGB', (1600, 90), (60, 60, 60)).save(root / 'sprites/f1.jpg')
-    for clip in shoot.clips:
-        clip.thumbs = ['sprites/f1.jpg'] * 3
+    (root / 'thumbs').mkdir()
+    for n, clip in enumerate(shoot.clips):
+        clip.thumbs = []
+        for i in range(3):  # The layout real shot detection writes.
+            Image.new('RGB', (320, 180), (70 + 40 * n, 70, 90)).save(root / f'thumbs/{clip.id}-{i}.jpg')
+            clip.thumbs.append(f'thumbs/{clip.id}-{i}.jpg')
     footage._save(shoot)
     settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures'))

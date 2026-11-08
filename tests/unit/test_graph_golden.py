@@ -30,3 +30,20 @@ def test_segment_graph(project, request, name, fmt, size, fps):
     if request.config.getoption("--update-goldens"):
         golden.write_text(actual)
     assert actual == golden.read_text()
+
+
+def test_archive_clip_sources_unchanged(monkeypatch):
+    """Reference captured from HEAD's _clip_source before T11.6 edits."""
+    import json
+    from pathlib import Path
+    for duration, length, expected in json.loads((ROOT / 'tests/golden/archive_clip_sources.json').read_text()):
+        monkeypatch.setattr(render.ffutil, 'duration', lambda p: duration)
+        args, graph = render._clip_source(Path('archive.mp4'), length, 'null')
+        assert [args, graph] == expected
+
+
+def test_video_graph_unchanged(project, request, monkeypatch):
+    candidate = next(c for c in project.slides[0].candidates if c['id'] == project.slides[0].chosen_id)
+    candidate['kind'] = 'video'
+    monkeypatch.setattr(render.ffutil, 'duration', lambda path: 8.0)
+    test_segment_graph(project, request, 'video_full', 'kenburns', (render.WIDTH, render.HEIGHT), render.FPS)

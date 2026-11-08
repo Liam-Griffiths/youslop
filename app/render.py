@@ -473,10 +473,13 @@ def _picture_source(project: Project, slide: Slide) -> Slide:
     return slide
 
 
-def _chosen(project: Project, slide: Slide) -> tuple[Path | None, str, list[float]]:
+def _chosen(project: Project, slide: Slide, *, preview: bool = False) -> tuple[Path | None, str, list[float]]:
     """The slide's downloaded asset, its kind, and its focal point if one is set."""
     slide = _picture_source(project, slide)
     cand = next((c for c in slide.candidates if c["id"] == slide.chosen_id), None)
+    if cand and cand.get("provider") == "footage":
+        from .media.footage import resolve
+        return resolve(cand, preview=preview), "video", (cand.get("focal") or [])
     if not cand or not cand.get("local_path"):
         return None, "image", []
     p = project_dir(project.id) / cand["local_path"]
@@ -562,7 +565,7 @@ def _render_custom_style(project: Project, group: list[tuple[Slide, float]],
 
 
 # ------------------------------------------------------------------- segments
-def _clip_source(src: Path, seg_len: float, crop: str) -> tuple[list[str], str]:
+def _clip_source(src: Path, seg_len: float, crop: str, span: tuple[float, float] | None = None) -> tuple[list[str], str]:
     """Inputs and a filtergraph that make a clip fill `seg_len` seconds.
 
     Archive clips are routinely shorter than the paragraph they sit under. A
@@ -572,10 +575,14 @@ def _clip_source(src: Path, seg_len: float, crop: str) -> tuple[list[str], str]:
     """
     XF = 0.5
     base = f"{crop},fps={FPS}"
+    seek = (["-ss", f"{span[0]:.3f}", "-t", f"{span[1] - span[0]:.3f}"] if span else [])
+    input_args = [*seek, "-i", str(src)]
     try:
-        clip = float(ffutil.duration(src))
+        clip = span[1] - span[0] if span else float(ffutil.duration(src))
     except Exception:
         clip = 0.0
+    if span and clip <= 0.3:
+        return input_args, f"[0:v]{base},tpad=stop_mode=clone:stop_duration={seg_len:.3f}[base]"
     if clip <= 0.3:
         # Unreadable duration: fall back to the blunt loop rather than failing.
         return ["-stream_loop", "-1", "-i", str(src)], f"[0:v]{base}[base]"
@@ -584,9 +591,11 @@ def _clip_source(src: Path, seg_len: float, crop: str) -> tuple[list[str], str]:
     slow = f",setpts={stretch:.4f}*PTS" if stretch > 1.001 else ""
     effective = clip * stretch
     if effective >= seg_len - 0.05:
-        return ["-i", str(src)], f"[0:v]{base}{slow}[base]"
+        return input_args, f"[0:v]{base}{slow}[base]"
 
     repeats = math.ceil((seg_len - XF) / max(0.2, effective - XF))
+    if span and repeats > 8:
+        return input_args, f"[0:v]{base},loop=loop=-1:size={max(1, round(clip * FPS))}:start=0{slow}[base]"
     if repeats > 8:
         # A two second clip under a minute of narration: dissolving eight times
         # would be sillier than simply running it round.
@@ -595,7 +604,7 @@ def _clip_source(src: Path, seg_len: float, crop: str) -> tuple[list[str], str]:
     inputs: list[str] = []
     parts: list[str] = []
     for i in range(repeats):
-        inputs += ["-i", str(src)]
+        inputs += input_args
         parts.append(f"[{i}:v]{base}{slow},format=yuv420p[c{i}]")
     last = "[c0]"
     for i in range(1, repeats):
@@ -762,7 +771,12 @@ def _segment_graph(
     essay = style.format == "essay" and not group[0][0].on_camera
     camera_captions = style.format == "essay" and group[0][0].on_camera
     slide = group[0][0]
-    src, kind, focal = _chosen(project, slide)
+    # Segment proxies use preview_size(); full output uses (WIDTH, HEIGHT).
+    src, kind, focal = _chosen(project, slide, preview=size != (WIDTH, HEIGHT))
+    source_slide = _picture_source(project, slide)
+    candidate = next((c for c in source_slide.candidates if c['id'] == source_slide.chosen_id), {})
+    span = ((candidate['in_s'], candidate['out_s'])
+            if src and candidate.get('provider') == 'footage' else None)
     dip_in = False
     if not slide.on_camera and style.format == "stage" and shots_mod.is_3d(slide):
         # The shot, drawn by the stage at exactly this segment's length and
@@ -796,7 +810,7 @@ def _segment_graph(
         # border, over a blurred fill of itself. One source feeds both layers.
         if kind == "video":
             crop, _ = _cover_crop(src, w, h, focal)
-            clip_inputs, clip_graph = _clip_source(src, seg_len, crop)
+            clip_inputs, clip_graph = _clip_source(src, seg_len, crop, span)
             inputs += clip_inputs
             pre_graph = (f"{clip_graph};"
                          + _essay_stage("[base]", style.accent, src, size=size,
@@ -809,7 +823,7 @@ def _segment_graph(
                                      fps=fps, hold=True)
     elif kind == "video":
         crop, _ = _cover_crop(src, w, h, focal)
-        clip_inputs, pre_graph = _clip_source(src, seg_len, crop)
+        clip_inputs, pre_graph = _clip_source(src, seg_len, crop, span)
         inputs += clip_inputs
     elif style.ken_burns:
         inputs += ["-loop", "1", "-i", str(src)]
@@ -2311,7 +2325,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
             camera = project.active_take(s) or {}
             slides[-1].append([_stat(root / camera[k]) if camera.get(k) else None
                                for k in ("video", "raw_path")])
-    pic = _chosen(project, lead)[0]
+    pic = _chosen(project, lead, preview=True)[0]
     from .camera import target
     if lead.on_camera:
         slides[0].append(target(project))

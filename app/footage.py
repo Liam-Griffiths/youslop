@@ -486,6 +486,14 @@ def edit_clips(shoot_id: str, clip_ids: list[str], changes: dict, *, bulk=False)
 
 
 def media_path(shoot_id: str, kind: str, filename: str) -> Path:
+    if kind == 'thumbs':
+        root = shoot_dir(shoot_id).resolve()
+        shoot = load(shoot_id)
+        path = (root / filename).resolve()
+        if (filename not in {t for c in shoot.clips for t in c.thumbs}
+                or not path.is_relative_to(root / 'thumbs') or not path.is_file()):
+            raise FileNotFoundError('Unknown clip thumbnail')
+        return path
     if kind not in {'proxies', 'sprites'}:
         raise FileNotFoundError('Only viewing media is available')
     root = shoot_dir(shoot_id).resolve()

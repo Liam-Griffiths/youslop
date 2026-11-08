@@ -4,12 +4,18 @@ function visualKind(s) {
   if (s.on_camera) return 'camera';
   if (isStage(state.project.style.format) && /^3D:/i.test(s.visual_note || '')) return '3D';
   if (isCut(state.project.style.format) || state.project.style.format === 'board') return 'drawn';
+  if (c?.provider === 'footage') return 'footage';
   if (c?.provider === 'library') return 'library';
   if (['diagram', 'custom', 'block', 'scene'].includes(c?.provider)) return 'scene';
   return c ? 'archive' : 'unpicked';
 }
 
 function visualSources(p) {
+  const tabs = visualFormatSources(p);
+  return state.visualHasFootage ? ['Footage', ...tabs.filter(t => t !== 'Footage')] : tabs;
+}
+
+function visualFormatSources(p) {
   if (p.delivery === 'on_camera' || p.slides.some(s => s.on_camera))
     return ['Layout', 'Footage', 'Screens', 'Library', 'Scenes', 'Archive', 'Upload'];
   if (isStage(p.style.format)) return ['3D', 'Archive', 'Footage', 'Library', 'Scenes', 'Upload'];
@@ -30,6 +36,7 @@ function selectVisualSource(source) {
 
 function paintMedia() {
   const p = state.project, slides = p.slides;
+  loadVisualFootage(p);
   const runs = p.picture_runs || slides.map(s => [s.id]);
   const byId = Object.fromEntries(slides.map((s, i) => [s.id, {s, i}]));
   const groups = runs.filter(r => byId[r[0]]).map(r => ({
@@ -73,6 +80,7 @@ function paintMedia() {
         }).join('') || '<p>Write the script to choose pictures.</p>'}
         <label class="field"><span>Picture every</span><select onchange="savePictureEvery(+this.value)">
           ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
+        ${state.visualHasFootage ? '<button type="button" class="btn sm" onclick="fillVisualFootage()">Fill the rest from footage</button>' : ''}
         <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
         ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
         ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
@@ -116,7 +124,19 @@ function visualPreview(g, byId) {
 
 function visualSourcePanel(s, source) {
   const p = state.project;
-  if (source === 'Footage') return `<p>Footage matching and in/out trim will be available with the footage picker (T11.6).</p><a class="btn sm ghost" href="#/footage">Open footage logger</a>`;
+  if (source === 'Footage') {
+    suggestVisualFootage(p, s);
+    const clips = s.candidates.filter(c => c.provider === 'footage');
+    return `<a class="btn sm ghost" href="#/footage">Open footage logger</a>
+      <label class="field"><span>Search footage</span><input type="search" id="visual-query" value="${esc(s.visual_note || s.narration || s.title || '')}" onkeydown="if(event.key==='Enter') searchVisual('${s.id}','Footage')"></label>
+      <button type="button" class="btn sm" onclick="searchVisual('${s.id}','Footage')">Search</button>
+      <div id="visual-search-status" role="status">${esc(state.visualFootageError || '')}</div>
+      <div class="visual-results">${clips.map(c => `<button type="button" class="btn ghost" aria-pressed="${c.id === s.chosen_id}" onclick="choose('${s.id}','${c.id}')">
+        <img src="${thumbUrl(c)}" loading="lazy" alt=""><span>${esc(c.title)}</span>
+        <small class="mono">${c.in_s.toFixed(3)}–${c.out_s.toFixed(3)} s</small>
+        <span>${(c.labels || []).map(l => `<span class="visual-chip visual-kind" data-kind="footage">${esc(l)}</span>`).join(' ')}</span>
+      </button>`).join('') || '<p>No footage suggestions yet. Search or import a shoot.</p>'}</div>`;
+  }
   if (source === '3D') return `<h3>Cast and shot options</h3>${(p.cast || []).map(c => `<p>${esc(c.subject)} · ${esc(c.mode)}</p>`).join('')}
     <a class="btn sm" href="#/p/${p.id}/visuals/cast">Edit cast and named parts</a>
     <a class="btn sm" href="#/p/${p.id}/visuals/stage">Shots and solver checks</a>
@@ -132,7 +152,7 @@ function visualSourcePanel(s, source) {
     ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
     ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
   if (source === 'Upload') return `<label class="field"><span>Upload a picture or clip</span><input type="file" accept="image/*,video/*" onchange="uploadMedia('${s.id}',this.files[0])"></label>`;
-  const candidates = s.candidates.filter(c => source === 'Library' ? c.provider === 'library' : c.provider !== 'library');
+  const candidates = s.candidates.filter(c => source === 'Library' ? c.provider === 'library' : !['library', 'footage'].includes(c.provider));
   return `<label class="field"><span>Search ${source.toLowerCase()}</span><input type="search" id="visual-query" value="${esc(s.queries?.[0] || s.visual_note || s.title || '')}" onkeydown="if(event.key==='Enter') searchVisual('${s.id}','${source}')"></label>
     <button type="button" class="btn sm" onclick="searchVisual('${s.id}','${source}')">Search</button>
     <button type="button" class="btn sm ghost" onclick="toggleKind('${s.id}')">Want ${s.prefer_kind === 'image' ? 'a clip' : 'a photo'}</button>
@@ -150,7 +170,9 @@ async function searchVisual(sid, source) {
   try {
     const r = await api(`/api/projects/${p.id}/slides/${sid}/search`, {method:'POST', body:JSON.stringify({query,
       kind:p.slides.find(s => s.id === sid).prefer_kind, source:source.toLowerCase()})});
-    Object.assign(p.slides.find(s => s.id === sid), r.slide);
+    const slide = p.slides.find(s => s.id === sid);
+    if (source === 'Footage') slide.candidates = r.slide.candidates;
+    else Object.assign(slide, r.slide);
     if (state.project === p && state.tab === 'media') paintMedia();
   } catch(e) { status.textContent = e.message; }
 }
@@ -158,4 +180,43 @@ async function searchVisual(sid, source) {
 function openVisualEdit(sid) {
   state.focusSlide = sid;
   location.hash = `#/p/${state.project.id}/edit`;
+}
+
+// Manifest reads and lexical suggestions only; opening Visuals never renders.
+async function loadVisualFootage(p) {
+  if (state.visualFootageProject === p) return;
+  state.visualFootageProject = p;
+  state.visualFootageSuggested = new Set();
+  state.visualFootageError = '';
+  try {
+    const shoots = await api('/api/footage/shoots');
+    if (state.project !== p) return;
+    state.visualHasFootage = shoots.length > 0;
+    if (state.tab === 'media') paintMedia();
+  } catch(e) { state.visualFootageError = e.message; }
+}
+
+async function suggestVisualFootage(p, s) {
+  const key = JSON.stringify([s.id, s.narration, s.visual_note]);
+  if (!state.visualHasFootage || state.visualFootageSuggested.has(key)) return;
+  state.visualFootageSuggested.add(key);
+  try {
+    const r = await api(`/api/projects/${p.id}/slides/${s.id}/search`, {method:'POST',
+      body:JSON.stringify({source:'footage', query:[s.narration, s.visual_note, s.title].filter(Boolean).join(' ') || 'footage'})});
+    // A suggestion request must never undo a choice made while it was running.
+    s.candidates = r.slide.candidates;
+    if (state.project === p && state.tab === 'media') paintMedia();
+  } catch(e) {
+    state.visualFootageError = e.message;
+    if (state.project === p && state.tab === 'media') paintMedia();
+  }
+}
+
+async function fillVisualFootage() {
+  const p = state.project;
+  try {
+    const r = await api(`/api/projects/${p.id}/footage/fill`, {method:'POST', body:'{}'});
+    p.slides = r.slides;
+    if (state.project === p && state.tab === 'media') paintMedia();
+  } catch(e) { toast(e.message); }
 }

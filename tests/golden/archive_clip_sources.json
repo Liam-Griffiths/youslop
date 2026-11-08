@@ -1,0 +1,7 @@
+[
+  [0, 3, [["-stream_loop", "-1", "-i", "archive.mp4"], "[0:v]null,fps=30[base]"]],
+  [8, 3, [["-i", "archive.mp4"], "[0:v]null,fps=30[base]"]],
+  [2, 2.5, [["-i", "archive.mp4"], "[0:v]null,fps=30,setpts=1.2500*PTS[base]"]],
+  [2, 8, [["-i", "archive.mp4", "-i", "archive.mp4", "-i", "archive.mp4", "-i", "archive.mp4"], "[0:v]null,fps=30,setpts=1.3500*PTS,format=yuv420p[c0];[1:v]null,fps=30,setpts=1.3500*PTS,format=yuv420p[c1];[2:v]null,fps=30,setpts=1.3500*PTS,format=yuv420p[c2];[3:v]null,fps=30,setpts=1.3500*PTS,format=yuv420p[c3];[c0][c1]xfade=transition=fade:duration=0.5:offset=2.200[x1];[x1][c2]xfade=transition=fade:duration=0.5:offset=4.400[x2];[x2][c3]xfade=transition=fade:duration=0.5:offset=6.600[base]"]],
+  [2, 80, [["-stream_loop", "-1", "-i", "archive.mp4"], "[0:v]null,fps=30,setpts=1.3500*PTS[base]"]]
+]

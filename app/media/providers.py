@@ -413,7 +413,20 @@ class Library:
         return library.search(query, kind, limit)
 
 
-ALL_PROVIDERS = [
+class Footage:
+    name = "footage"
+    kinds = ("video",)
+
+    def available(self):
+        from .. import footage
+        return footage.FOOTAGE_DIR.exists()
+
+    def search(self, query, kind, limit=20):
+        from .footage import suggestions
+        return suggestions(query, limit) if kind == "video" else []
+
+
+ALL_PROVIDERS = [Footage(),
     Wikimedia(), LibraryOfCongress(), MetMuseum(), NYPL(),
     Openverse(), Pexels(), Pixabay(), Storyblocks(), Library(),
 ]

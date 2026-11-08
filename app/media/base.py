@@ -222,6 +222,7 @@ def relax(query: str) -> list[str]:
 
 # -------------------------------------------------------------------- scoring
 PROVIDER_WEIGHT = {
+    "footage": 1.50,
     "wikimedia": 1.00,
     "met": 0.85,
     "loc": 0.95,

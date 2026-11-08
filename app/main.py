@@ -1515,6 +1515,16 @@ def gather_media(pid: str, payload: dict = Body(default={})) -> dict:
     return {"job": jobs.start("media", pid, work)}
 
 
+@app.post("/api/projects/{pid}/footage/fill")
+def fill_footage(pid: str, payload: dict = Body(default={})) -> dict:
+    from .media.footage import fill
+    with store.lock_for(pid):
+        p = _load(pid)
+        count = fill(p, overwrite=payload.get("overwrite") is True)
+        store.save(p)
+    return {"filled": count, "slides": [s.to_dict() for s in p.slides]}
+
+
 @app.post("/api/projects/{pid}/slides/{sid}/search")
 def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     """Run one ad-hoc query and merge the hits into this slide's options."""
@@ -1525,13 +1535,21 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     if kind == "reaction" and not reactions.available():
         raise HTTPException(400, "No Giphy key configured — add one in Settings "
                             "to search reaction GIFs.")
-    found = (library.search(query, kind) if payload.get("source") == "library" else
+    if payload.get("source") == "footage":
+        from .media.footage import suggestions
+        found = suggestions(query)
+    else:
+        found = (library.search(query, kind) if payload.get("source") == "library" else
              reactions.search(query) if kind == "reaction" else media.search([query], kind))
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)
         have = {c["id"] for c in s.candidates}
         fresh = [c.to_dict() for c in found if c.id not in have]
+        if payload.get("source") == "footage":
+            # Refresh logged labels/ranges, retaining the chosen edit's saved span.
+            updates = {c.id: c.to_dict() for c in found if c.id != s.chosen_id}
+            s.candidates = [updates.get(c['id'], c) for c in s.candidates]
         s.candidates = fresh + s.candidates
         s.candidates = s.candidates[:60]
         store.save(p)

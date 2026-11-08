@@ -34,6 +34,11 @@ class MediaCandidate:
     width: int = 0
     height: int = 0
     duration: float = 0.0         # video only
+    shoot_id: str = ""
+    clip_id: str = ""
+    in_s: float | None = None
+    out_s: float | None = None
+    labels: list[str] = field(default_factory=list)
     score: float = 0.0            # ranking score, higher is better
     query: str = ""               # the query that surfaced it
     local_path: str = ""          # set once downloaded, relative to project dir

@@ -61,6 +61,8 @@ _CACHE_LOCK = threading.Lock()
 def _cached_search(provider, query: str, kind: str) -> list[MediaCandidate]:
     """One provider+query lookup, memoised. Relaxed queries repeat constantly
     across slides, and every saved request is one we don't spend on a rate limit."""
+    if provider.name == "footage":  # Logger edits must be visible immediately.
+        return provider.search(query, kind, 10)
     key = (provider.name, query.lower(), kind)
     with _CACHE_LOCK:
         hit = _CACHE.get(key)
@@ -135,7 +137,7 @@ def _ladder(queries: list[str]) -> list[str]:
 # that actually have motion footage.
 LEAD_PROVIDERS = {
     "image": {"library", "wikimedia", "loc", "nypl", "met"},
-    "video": {"library", "pexels", "storyblocks"},
+    "video": {"footage", "library", "pexels", "storyblocks"},
 }
 
 
@@ -182,7 +184,7 @@ def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
         # The library provider already scored its own hits with tags folded
         # into the text-relevance term; redoing it here against the bare
         # title would throw that away.
-        if c.provider != "library":
+        if c.provider not in {"library", "footage"}:
             c.score = score(c, c.query, kind)
     found = dedupe(found)
     found.sort(key=lambda c: c.score, reverse=True)
@@ -458,6 +460,8 @@ def download_to(cand: dict, dest: Path, stem: str | None = None,
     host is a separate service from its API and will 429 an unthrottled batch,
     which used to leave most slides showing an empty slate.
     """
+    if cand.get("provider") == "footage":
+        return ""
     dest.mkdir(parents=True, exist_ok=True)
     stem = _SAFE.sub("_", stem or f"{cand['provider']}_{cand['id']}")[:60]
     for existing in dest.glob(stem + ".*"):
@@ -510,7 +514,7 @@ def download(project: Project, cand: dict, progress: Progress = lambda m: None,
              retries: int = 3) -> str:
     """Fetch one asset into the project's media dir. Returns a relative path."""
     name = download_to(cand, project_dir(project.id) / "media", retries=retries)
-    return f"media/{name}"
+    return f"media/{name}" if name else ""
 
 
 def download_chosen(project: Project, progress: Progress = lambda m: None,
@@ -534,6 +538,12 @@ def download_chosen(project: Project, progress: Progress = lambda m: None,
     todo = []
     for slide in slides:
         cand = next((c for c in slide.candidates if c["id"] == slide.chosen_id), None)
+        if cand and cand.get("provider") == "footage":
+            from .footage import resolve
+            cand["local_path"] = ""
+            if resolve(cand, progress=progress) is None:
+                progress(f"Warning: footage unavailable for {slide.id}; using slate")
+            continue
         if cand and not cand.get("local_path"):
             todo.append(slide)
     if not todo:

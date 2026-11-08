@@ -533,7 +533,7 @@ function thumbUrl(c) {
   if (c.local_path) return `/api/projects/${state.project.id}/file/${c.local_path}`;
   // A library hit already lives on this server — no hotlink wall to route
   // around, and /api/thumb only proxies http(s) URLs anyway.
-  if (c.provider === 'library') return c.thumb || c.url;
+  if (['library', 'footage'].includes(c.provider)) return c.thumb || c.url;
   return `/api/thumb?url=${encodeURIComponent(c.thumb || c.url)}`;
 }
 
@@ -542,7 +542,7 @@ function thumbUrl(c) {
 // and Pixabay both hand back a real .mp4 URL, not a page to scrape).
 function videoUrl(c) {
   if (c.local_path) return `/api/projects/${state.project.id}/file/${c.local_path}`;
-  return c.url;
+  return c.provider === 'footage' ? `${c.url}#t=${c.in_s},${c.out_s}` : c.url;
 }
 
 // ------------------------------------------------------------ playing video

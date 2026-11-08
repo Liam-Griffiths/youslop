@@ -24,7 +24,13 @@ def test_visual_picker_js(tmp_path):
             {id:'c'+i,provider:'library',title:'Map '+i,kind:'image',focal:[.2,.3]}],chosen_id:'c'+i}))}};
       const assert = (v,m) => {if(!v) throw Error(m);};
       let calls=[];
-      const api = async (url, opts) => {calls.push([url,JSON.parse(opts.body)]);return {slide:{chosen_id:'c0'}};};
+      const api = async (url, opts={}) => {
+        calls.push([url,JSON.parse(opts.body || '{}')]);
+        if (url === '/api/footage/shoots') return [];
+        if (url.endsWith('/footage/fill')) return {slides:state.project.slides};
+        return {slide:{candidates:[{id:'ft1',provider:'footage',kind:'video',title:'Boats',
+          in_s:2,out_s:10,labels:['harbour']}],chosen_id:'c0'}};
+      };
       const saveSlide = async (sid, fields) => {calls.push([sid,fields]);};
     '''
     checks = r'''
@@ -33,9 +39,10 @@ def test_visual_picker_js(tmp_path):
       let html = $('#tabbody').innerHTML;
       assert(html.includes('visual-grid') && html.includes('visual-sequence'), 'shared shell');
       assert((html.match(/class="btn ghost visual-group"/g)||[]).length === 40, 'all groups');
-      assert(html.includes('Footage matching') && !html.includes('cut/'), 'footage stub, no render URL');
+      assert(html.includes('Search footage') && !html.includes('cut/'), 'footage picker, no render URL');
       assert(html.includes('Picture &lt;0>'), 'escape narration');
-      assert(!calls.length, 'no API calls on paint');
+      await Promise.resolve();
+      assert(calls.length === 1 && calls[0][0] === '/api/footage/shoots', 'metadata only on paint');
       selectVisualSource('Library');
       html = $('#tabbody').innerHTML;
       assert((html.match(/<img /g)||[]).length === 42, 'only group thumbnails, selected preview and selected candidates');
@@ -44,6 +51,19 @@ def test_visual_picker_js(tmp_path):
       assert(calls.at(-1)[1].chosen_id === 'c0', 'shared choose/save path');
       await searchVisual('s0','Library');
       assert(calls.at(-1)[1].source === 'library', 'local source routing');
+      state.visualHasFootage = true;
+      await suggestVisualFootage(p, p.slides[0]);
+      assert(p.slides[0].chosen_id === 'c0', 'suggestions preserve selection');
+      selectVisualSource('Footage');
+      html = $('#tabbody').innerHTML;
+      assert(visualSources(p)[0] === 'Footage', 'footage first with a shoot');
+      assert(html.includes('2.000–10.000 s') && html.includes('harbour'), 'range and label chips');
+      assert(html.includes('Fill the rest from footage'), 'fill available');
+      await choose('s0','ft1');
+      assert(calls.at(-1)[1].chosen_id === 'ft1', 'choose footage via existing save');
+      await fillVisualFootage();
+      assert(calls.at(-1)[0].endsWith('/footage/fill'), 'explicit fill route');
+      state.visualHasFootage = false;
       selectVisual('s39');
       assert($('#tabbody').innerHTML.includes('Picture 40'), 'last group selectable');
       p.picture_runs = [['s0','s1'],...p.slides.slice(2).map(s=>[s.id])];
@@ -60,10 +80,6 @@ def test_visual_picker_js(tmp_path):
       for(const s of p.slides) s.take={};
       paintMedia(); assert($('#tabbody').innerHTML.includes('by group count (unvoiced)'), 'honest unvoiced mix');
       p.style.format='kenburns';p.delivery='voice_over';p.aspect='landscape';
-      const elapsed=[];
-      for(let i=0;i<100;i++){const start=GLib.get_monotonic_time();paintMedia();elapsed.push((GLib.get_monotonic_time()-start)/1000);}
-      elapsed.sort((a,b)=>a-b);
-      print(`40 paragraphs: HTML generation median ${elapsed[50].toFixed(2)}ms; p95 ${elapsed[95].toFixed(2)}ms (GJS; browser layout unmeasured)`);
       print('visual picker checks passed');
     '''
     script = tmp_path / 'visuals.mjs'
