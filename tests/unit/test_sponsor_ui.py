@@ -163,3 +163,53 @@ def test_timeline_proxy_accepts_sponsor_ref(sponsor_project, monkeypatch):
     assert calls == ['sponsor:read'] and result['job']['segments'] == [{'ref': 'sponsor:read'}]
     with pytest.raises(HTTPException):
         main.timeline_proxy(p.id, {'refs': ['sponsor:missing']})
+
+
+def test_read_actions_runtime(tmp_path):
+    """Exercise job results and explicit draft choice without a browser."""
+    gjs = shutil.which('gjs')
+    if not gjs:
+        pytest.skip('GJS unavailable')
+    harness = r'''
+const GLib = imports.gi.GLib;
+const loop = new GLib.MainLoop(null, false);
+function check(ok, msg) { if (!ok) throw new Error(msg); }
+const status = {isConnected:true, textContent:''};
+const drafts = {children:[], replaceChildren(){this.children=[];},
+                append(...items){this.children.push(...items);}};
+const $ = id => id === '#sp-read-status' ? status : drafts;
+const document = {createElement: tag => ({tag})};
+const TL = {pid:'p'};
+let tlInspectorQueue = Promise.resolve();
+let calls = [], saves = [];
+let result = {drafts:{short:'Paid promotion. Short.',long:'Paid promotion. Long.'}};
+let jobState = 'done';
+async function api(path, opts) { calls.push({path,opts}); return {job:'j'}; }
+async function tlWaitJob() { return {state:jobState,result,error:'Voice failed'}; }
+tlSponsorSave = async (id, patch) => { saves.push({id,patch}); };
+(async () => {
+  await tlSponsorReadAction('read', '/draft', null, true);
+  check(calls[0].path.endsWith('/read/draft'), 'draft route');
+  check(saves.length === 0 && drafts.children.length === 4, 'drafts stay proposals');
+  drafts.children[3].onclick();
+  check(saves[0].patch.variant === 'long' && saves[0].patch.script === result.drafts.long,
+        'explicit choice saves variant and script');
+  await tlSponsorReadAction('read', '/voice');
+  check(calls[1].path.endsWith('/voice') && saves.length === 2, 'voice refresh');
+  const uploadBody = {file:'audio'};
+  await tlSponsorReadAction('read', '/take', uploadBody);
+  check(calls[2].opts.body === uploadBody, 'upload body retained');
+  await tlSponsorReadAction('read', '/history/0/restore');
+  check(calls[3].path.endsWith('/history/0/restore'), 'restore route');
+  jobState = 'error';
+  const count = saves.length;
+  await tlSponsorReadAction('read', '/voice');
+  check(status.textContent === 'Voice failed' && saves.length === count, 'job error visible');
+  print('sponsor read actions passed');
+})().catch(e => { printerr(e.stack); imports.system.exit(1); }).finally(() => loop.quit());
+loop.run();
+'''
+    path = tmp_path / 'read-actions.js'
+    path.write_text(Path('static/js/timeline/sponsors.js').read_text() + '\n' + harness)
+    result = subprocess.run([gjs, str(path)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -212,6 +212,8 @@ def copy_to_slot(channel, slot, sponsor_id):
     if sponsor is None:
         raise ValueError('Sponsor not found')
     slot.sponsor_id, slot.paid = sponsor.id, sponsor.paid
+    slot.brief = {key: getattr(sponsor, key) for key in
+                  ('short_copy', 'long_copy', 'disclosure')}
     slot.script = sponsor.long_copy if slot.variant == 'long' else sponsor.short_copy
     slot.template = sponsor.template if slot.variant == 'short' else 'sponsor/long.html'
     slot.vars = dict(name=sponsor.name, url=sponsor.url, code=sponsor.code,

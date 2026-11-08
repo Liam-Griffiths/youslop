@@ -13,6 +13,7 @@ import re
 import shutil
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import quote
 
@@ -1325,6 +1326,92 @@ def patch_sponsor(pid: str, slot_id: str, payload: dict = Body(...)) -> dict:
         if slot is None:
             raise HTTPException(404, "Sponsor slot not found")
         _apply_sponsor(p, slot, payload)
+        store.save(p)
+    return p.to_dict()
+
+
+def _sponsor_slot(project, slot_id):
+    slot = next((s for s in project.sponsors if s.id == slot_id), None)
+    if slot is None:
+        raise HTTPException(404, "Sponsor slot not found")
+    return slot
+
+
+@app.post("/api/projects/{pid}/sponsors/{slot_id}/draft")
+def draft_sponsor(pid: str, slot_id: str, payload: dict = Body(default={})) -> dict:
+    p = _load(pid)
+    slot = _sponsor_slot(p, slot_id)
+    if payload.get('dry_run'):
+        prompt = script_gen.sponsor_prompt(p, slot)
+        return {'input_tokens': (len(prompt) + len(script_gen.NARRATOR_SYSTEM) + 3) // 4,
+                'output_tokens': 350}
+    # Proposals are job results only; choosing one uses the normal PATCH path.
+    return {'job': jobs.start('sponsor draft', pid,
+        lambda progress: {'drafts': script_gen.draft_sponsor(p, slot)})}
+
+
+@app.post("/api/projects/{pid}/sponsors/{slot_id}/voice")
+def voice_sponsor(pid: str, slot_id: str) -> dict:
+    p = _load(pid)
+    slot = _sponsor_slot(p, slot_id)
+    if not slot.script.strip():
+        raise HTTPException(400, 'That sponsor read has no words.')
+    _engine_ready(_engine(p))
+
+    def work(progress):
+        # Reuse paragraph TTS (lexicon, voice chain and word timings). A unique
+        # id keeps concurrent jobs from allocating the same take filename.
+        s = Slide(id='sponsor-' + uuid.uuid4().hex, narration=slot.script)
+        progress(f'Reading sponsor as {p.narrator.voice}')
+        take = _voice_one(p, s, project_dir(pid))
+        take['narration'] = slot.script
+        with store.lock_for(pid):
+            current = store.load(pid)
+            _sponsor_slot(current, slot_id).set_take(take)
+            store.save(current)
+        return {'take': take}
+    return {'job': jobs.start('sponsor voice', pid, work)}
+
+
+@app.post("/api/projects/{pid}/sponsors/{slot_id}/take")
+async def upload_sponsor_take(pid: str, slot_id: str, file: UploadFile) -> dict:
+    p = _load(pid)
+    slot = _sponsor_slot(p, slot_id)
+    body = await file.read()
+    if len(body) < 1024:
+        raise HTTPException(400, 'That recording is empty.')
+    root = project_dir(pid)
+    ident = 'sponsor-' + uuid.uuid4().hex
+    raw = next_raw_path(root, ident)
+    raw.write_bytes(body)
+    out = next_take_path(root, MIC_TRACK, ident)
+    try:
+        meta = audio_mod.process_take(raw, out, p.voice)
+    except Exception as exc:
+        raise HTTPException(400, f'Could not process that take: {exc}') from exc
+    try:
+        meta['words'] = words_mod.estimate(out, slot.script)
+    except Exception:
+        logging.getLogger(__name__).exception('Could not estimate sponsor mic word times')
+        meta['words'] = []
+    take = {'path': out.relative_to(root).as_posix(),
+            'raw_path': raw.relative_to(root).as_posix(), 'narration': slot.script, **meta}
+    with store.lock_for(pid):
+        current = store.load(pid)
+        _sponsor_slot(current, slot_id).set_take(take)
+        store.save(current)
+    return current.to_dict()
+
+
+@app.post("/api/projects/{pid}/sponsors/{slot_id}/history/{n}/restore")
+def restore_sponsor_take(pid: str, slot_id: str, n: int) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        slot = _sponsor_slot(p, slot_id)
+        if n < 0 or n >= len(slot.history):
+            raise HTTPException(404, 'No earlier take')
+        saved = slot.history.pop(n)
+        slot.set_take({k: v for k, v in saved.items() if k not in ('retired_at', 'reason')})
         store.save(p)
     return p.to_dict()
 

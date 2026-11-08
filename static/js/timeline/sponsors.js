@@ -25,12 +25,24 @@ function tlSponsorFields(slot) {
       ${state.project.slides.map((s, i) => `<option value="${esc(s.id)}" ${slot.after_slide_id === s.id ? 'selected' : ''}>${i + 1} · ${esc(s.narration.slice(0, 48))}</option>`).join('')}</select>
     <div class="tl-actions">${suggestions.map((s) => `<button class="btn sm" data-sp-suggest="${s.placement}">Suggested ${s.placement} · ¶${state.project.slides.findIndex((q) => q.id === s.after_slide_id) + 1}</button>`).join('')}</div>
     <label for="sp-script">Read copy</label><textarea id="sp-script" data-sp="script" maxlength="10000" rows="5">${esc(slot.script)}</textarea>
+    <p class="tl-note" id="sp-cost">Estimating draft tokens…</p>
+    <button class="btn sm" id="sp-draft" disabled>Draft short / long</button>
+    <div id="sp-drafts" aria-live="polite"></div>
     ${input('learn', 'On-screen copy', slot.vars.learn, 120)}
     ${input('url', 'URL shown in the read', slot.vars.url, 120)}
     ${input('code', 'Offer code', slot.vars.code, 32)}
     ${input('made', 'Lead-in line (the card already says "Sponsored by")', slot.vars.made, 64)}
     <label><input type="checkbox" data-sp="paid" ${slot.paid ? 'checked' : ''}> Paid promotion</label>
     <p class="tl-note">Take: ${slot.take ? esc(slot.take.path || 'Recorded') : 'Not recorded · estimated duration'}. Editing copy keeps every take.</p>
+    <button class="btn sm" id="sp-voice">Voice with ${esc(state.project.narrator?.voice || 'project voice')}</button>
+    <label for="sp-take">Record / upload audio</label>
+    <p class="tl-note">Record in your audio app, then choose the file here. Every take is kept.</p>
+    <input type="file" id="sp-take" accept="audio/*,.webm">
+    ${[slot.take, ...(slot.history || [])].map((take, i) => take ? `<div class="tl-note">
+      ${i === 0 ? 'In the cut' : 'Earlier take'}${take.narration && take.narration !== slot.script ? ' · different copy' : ''} · ${esc(take.narration || '')}
+      <audio controls preload="none" aria-label="Play sponsor take ${i + 1}" src="/api/projects/${encodeURIComponent(TL.pid)}/file/${take.path.split('/').map(encodeURIComponent).join('/')}"></audio>
+      ${i ? `<button class="btn sm" data-sp-restore="${i - 1}">Use this take</button>` : ''}</div>` : '').join('')}
+    <div id="sp-read-status" role="status"></div>
     <button class="btn sm" id="sp-preview">Preview read · quarter size</button>
     <button class="btn sm ghost" id="sp-toggle">${slot.enabled ? 'Turn off' : 'Turn on'}</button>
     <div id="sp-preview-result" role="status"></div>`;
@@ -70,6 +82,54 @@ function tlSponsorWire(slot) {
   });
   $('#sp-toggle').onclick = () => tlSponsorSave(slot.id, {enabled: !slot.enabled});
   $('#sp-preview').onclick = () => tlSponsorPreview(slot.id);
+  const base = `/api/projects/${pid}/sponsors/${encodeURIComponent(slot.id)}`;
+  const cost = $('#sp-cost'), draft = $('#sp-draft');
+  api(base + '/draft', {method: 'POST', body: JSON.stringify({dry_run: true})}).then((est) => {
+    if (!cost.isConnected) return;
+    cost.textContent = `Draft estimate: ~${est.input_tokens} input + ~${est.output_tokens} output tokens`;
+    draft.disabled = false;
+  }).catch((e) => { if (cost.isConnected) cost.textContent = e.message; });
+  draft.onclick = () => tlSponsorReadAction(slot.id, '/draft', null, true);
+  $('#sp-voice').onclick = () => tlSponsorReadAction(slot.id, '/voice');
+  $('#sp-take').onchange = (e) => {
+    if (!e.target.files.length) return;
+    const body = new FormData(); body.append('file', e.target.files[0]);
+    tlSponsorReadAction(slot.id, '/take', body);
+  };
+  document.querySelectorAll('[data-sp-restore]').forEach((el) => {
+    el.onclick = () => tlSponsorReadAction(slot.id, `/history/${el.dataset.spRestore}/restore`);
+  });
+}
+
+async function tlSponsorReadAction(id, path, body = null, drafts = false) {
+  const pid = TL.pid;
+  await tlInspectorQueue;
+  if (TL.pid !== pid) return;
+  const box = $('#sp-read-status');
+  if (!box) return;
+  box.textContent = drafts ? 'Drafting both reads…' : 'Preparing take…';
+  try {
+    const result = await api(`/api/projects/${pid}/sponsors/${encodeURIComponent(id)}${path}`,
+      {method: 'POST', ...(body ? {body} : {})});
+    const job = result.job ? await tlWaitJob(result.job) : null;
+    if (job && job.state !== 'done') throw new Error(job.error || 'Job did not finish');
+    if (!box.isConnected || TL.pid !== pid) return;
+    if (drafts) {
+      const target = $('#sp-drafts');
+      target.replaceChildren();
+      for (const [variant, script] of Object.entries(job.result.drafts)) {
+        const text = document.createElement('p'), pick = document.createElement('button');
+        text.textContent = script;
+        pick.className = 'btn sm'; pick.textContent = `Use ${variant} read`;
+        pick.onclick = () => tlSponsorSave(id, {variant, script});
+        target.append(text, pick);
+      }
+      box.textContent = 'Choose a draft to put it in the read.';
+    } else {
+      // Queue the refresh behind any copy edits made while audio was processing.
+      await tlSponsorSave(id, {});
+    }
+  } catch (e) { if (box.isConnected) box.textContent = e.message; }
 }
 
 function tlSponsorSave(id, patch) {

@@ -414,3 +414,137 @@ def test_sponsor_cli_guard_and_add(sponsor_channel, monkeypatch, capsys):
         marker.unlink()
     assert cli.main(['sponsor', 'add', sponsor_channel.id, 'CLI sponsor', '--short-copy', 'Read']) == 0
     assert json.loads(capsys.readouterr().out)['short_copy'] == 'Read'
+
+
+@pytest.fixture
+def sponsor_jobs(monkeypatch):
+    from app import main
+    pending = []
+    def start(kind, pid, work):
+        pending.append(work)
+        return 'mock-job'
+    monkeypatch.setattr(main.jobs, 'start', start)
+    return pending
+
+
+def test_read_drafts_are_proposals_with_brief_and_disclosure(cut, sponsor_channel,
+                                                            sponsor_jobs, monkeypatch):
+    from app import channels, llm, main, store
+    from app.schema import Sponsor
+    sponsor_channel.tone = 'Dry and specific'
+    sponsor_channel.sponsors = [Sponsor(id='example', name='Example', url='example.test',
+        code='SAVE', short_copy='Short facts', long_copy='Long facts', disclosure='Paid promotion')]
+    channels.save(sponsor_channel)
+    cut.channel_id = sponsor_channel.id
+    cut.sponsors = [slot()]
+    sponsors.copy_to_slot(sponsor_channel, cut.sponsors[0], 'example')
+    store.save(cut)
+    before = deepcopy(cut.sponsors[0].to_dict())
+    # A library change must not leak into the saved brief.
+    main.edit_channel_sponsor(sponsor_channel.id, 'example', {'long_copy': 'New library facts'})
+    def complete(prompt, **kwargs):
+        for text in ('Example', 'example.test', 'SAVE', 'Short facts', 'Long facts',
+                     'Paid promotion', 'Dry and specific', '5–10', '30–60'):
+            assert text in prompt
+        assert 'New library facts' not in prompt
+        assert not store.lock_for(cut.id)._is_owned()
+        assert kwargs['require']({'short': 'Text', 'long': 'More text'})
+        assert not kwargs['require']({'short': '', 'long': 3})
+        return {'short': 'Example read.', 'long': 'Paid promotion. Longer Example read.'}
+    monkeypatch.setattr(llm, 'complete_json', complete)
+    estimate = main.draft_sponsor(cut.id, 'read', {'dry_run': True})
+    assert estimate['input_tokens'] > 0 and not sponsor_jobs
+    main.draft_sponsor(cut.id, 'read', {})
+    drafts = sponsor_jobs.pop()(lambda _: None)['drafts']
+    assert all('Paid promotion' in text for text in drafts.values())
+    assert store.load(cut.id).sponsors[0].to_dict() == before
+    main.patch_sponsor(cut.id, 'read', {'variant': 'long', 'script': drafts['long']})
+    selected = store.load(cut.id).sponsors[0]
+    assert selected.script == drafts['long'] and selected.variant == 'long'
+    assert selected.take == before['take'] and selected.vars['made'] == 'Paid promotion'
+
+
+def test_voice_read_keeps_files_words_and_concurrent_edits(cut, sponsor_jobs, monkeypatch):
+    from app import main, store
+    cut.sponsors = [slot(paid=True)]
+    read = cut.sponsors[0]
+    read.script = 'Paid promotion. This video was made with Example. Learn more at the link.'
+    read.vars.update(name='Example', made='Paid promotion')
+    root = store.project_dir(cut.id)
+    old = root / read.take['path']
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_bytes(b'original recording')
+    store.save(cut)
+    monkeypatch.setattr(main, '_engine_ready', lambda _: None)
+    paths = []
+    def speak(text, out, *args, **kwargs):
+        assert not store.lock_for(cut.id)._is_owned()
+        assert not out.exists()
+        paths.append(out)
+        out.write_bytes(b'new voice')
+        # An inspector edit while synthesis runs must survive the reload.
+        main.patch_sponsor(cut.id, 'read', {'vars': {'code': 'EDITED'}})
+        return {'duration': 8, 'synthetic': True,
+                'words': [{'w': 'Example', 'start': 2.3, 'end': 2.7, 'src': 'tts'}]}
+    monkeypatch.setattr(main.tts_mod, 'speak_to_file', speak)
+    # Two jobs start before either has written a file.
+    main.voice_sponsor(cut.id, 'read')
+    main.voice_sponsor(cut.id, 'read')
+    for work in sponsor_jobs:
+        work(lambda _: None)
+    current = store.load(cut.id)
+    read = current.sponsors[0]
+    assert len(set(paths)) == 2 and all(path.is_file() for path in paths)
+    assert old.read_bytes() == b'original recording'
+    assert len(read.history) == 2 and read.take['words']
+    assert read.vars['code'] == 'EDITED' and 'Paid promotion' in read.take['narration']
+    _, ctx, _ = render._sponsor_preview(current, read)
+    assert ctx['beats']['brand'] == 2.3 and ctx['beat_sources']['brand'] == 'tts'
+    original_voice = read.take['path']
+    restored = main.restore_sponsor_take(cut.id, 'read', 0)['sponsors'][0]
+    assert restored['take']['path'] == old.relative_to(root).as_posix()
+    assert original_voice in {t['path'] for t in restored['history']}
+    assert all((root / t['path']).exists() for t in [restored['take'], *restored['history']])
+
+
+def test_read_mic_uploads_keep_raw_and_processed_files(cut, monkeypatch):
+    import asyncio
+    from tempfile import SpooledTemporaryFile
+    from fastapi import UploadFile, HTTPException
+    from app import main, store
+    cut.sponsors = [SponsorSlot(id='read', script='Paid promotion. Example.', paid=True,
+                               vars={'made': 'Paid promotion'})]
+    store.save(cut)
+    def process(raw, out, voice):
+        assert not store.lock_for(cut.id)._is_owned()
+        assert raw.read_bytes() == b'm' * 2048 and not out.exists()
+        out.write_bytes(b'processed')
+        return {'duration': 3, 'recorded_at': 123}
+    monkeypatch.setattr(main.audio_mod, 'process_take', process)
+    monkeypatch.setattr(main.words_mod, 'estimate', lambda path, text:
+                        [{'w': 'Example', 'start': 1, 'end': 2, 'src': 'est'}])
+    def upload(body):
+        with SpooledTemporaryFile() as file:
+            file.write(body)
+            file.seek(0)
+            return asyncio.run(main.upload_sponsor_take(cut.id, 'read',
+                UploadFile(filename='voice.wav', file=file)))
+    upload(b'm' * 2048)
+    result = upload(b'm' * 2048)['sponsors'][0]
+    assert result['take']['words'][0]['src'] == 'est'
+    assert len(result['history']) == 1
+    root = store.project_dir(cut.id)
+    assert len({t['raw_path'] for t in [result['take'], *result['history']]}) == 2
+    for take in [result['take'], *result['history']]:
+        assert (root / take['raw_path']).read_bytes() == b'm' * 2048
+        assert (root / take['path']).read_bytes() == b'processed'
+    with pytest.raises(HTTPException, match='empty'):
+        upload(b'')
+    assert store.load(cut.id).sponsors[0].take == result['take']
+    def fail(*args):
+        raise ValueError('processing failed')
+    monkeypatch.setattr(main.audio_mod, 'process_take', fail)
+    with pytest.raises(HTTPException, match='processing failed'):
+        upload(b'm' * 2048)
+    assert len(list((root / 'raw').iterdir())) == 3
+    assert store.load(cut.id).sponsors[0].take == result['take']
