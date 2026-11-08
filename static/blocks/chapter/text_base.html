@@ -48,5 +48,9 @@
  .kinetic { top:26%; bottom:26%; }
  .caption { font-size:76px; }
 }
+{% if overlay_position | default('') %}
+{% if overlay_position.endswith('right') %}.lower {left:30%;right:12%}@media(orientation:portrait){.lower{left:18%;right:12%}}{% endif %}
+{% if overlay_position.startswith('top') %}.lower {top:18%;bottom:auto}@media(orientation:portrait){.lower{top:18%;bottom:auto}}{% endif %}
+{% endif %}
 </style>
 {% endblock %}

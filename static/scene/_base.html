@@ -21,6 +21,7 @@
 </head>
 <body>
   {% block body %}{% endblock %}
+  {% if builder_alpha | default(false) %}<style>html,body {background:transparent!important}</style>{% endif %}
   {% block script %}{% endblock %}
 </body>
 </html>

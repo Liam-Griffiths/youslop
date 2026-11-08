@@ -129,3 +129,34 @@ may request frame captures, confined to its arrival window. The summed windows,
 rounded up individually, must fit the budget. Built-ins declare no frame windows.
 The sponsor block replaces its legacy rotations and board breathing with beat-timed
 panel/text presets; standalone sponsor templates retain their existing timelines.
+
+
+Optional `overlay: {"position": ["bottom_left", "bottom_right", "top_left",
+"top_right"], "max_dur": 30}` declares a graphic that can sit above a base
+picture. Kinetic captions declare `["center"]`. Use `prepare`/`render` with
+`overlay=True` and an optional declared `position`: body and page ground become
+transparent, optional picture variables are suppressed, and the builder outputs
+PNG RGBA in MOV. Full-frame `slide.cues['blocks']` continues to draw its ground.
+`block check` checks overlay-capable blocks on transparency in each aspect;
+text still needs its own opaque panel for predictable contrast over footage.
+Lower thirds support corners; caption blocks retain their authored center layout.
+Callout arrows and number slams remain full-frame pictures; a compact number
+badge would be a future block.
+
+Save paragraph graphics separately as `slide.overlays = [{"id": "speaker",
+"block_id": "lower_third_panel", "vars": {"title": "Eli Navarro"}, "at": 1,
+"dur": 3, "position": "bottom_left", "by": "hand"}]`. Up to eight graphics
+may overlap, painted in list order. Times are finite paragraph-relative seconds;
+spans clamp to the take, empty spans drop, and durations must not exceed the
+block's `max_dur`. An optional `on` word/phrase matches case-insensitively with
+punctuation stripped, after the previous matched anchor. Missing anchors fall
+back to `at`; estimated words retain `src: est` in the graphics timeline row.
+The file clock adds the half-transition and opening silence once per group.
+
+Storyboard exports `overlays`; `cli apply <project-id> <patch.json>` and
+`PATCH /api/projects/{pid}/slides/{sid}` accept an `overlays` replacement list
+(an empty list removes all). `edits.add_overlay`, `update_overlay` and
+`remove_overlay` use the same validator. Cached clips include block content,
+variables, aspect, duration, position, resolved channel context, size and fps.
+Segment and proxy keys include overlays and `block_library.signature` for each
+referenced block. Camera take overlays and drawn cuts keep their existing paths.

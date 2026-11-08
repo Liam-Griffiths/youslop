@@ -18,7 +18,7 @@ class EditError(ValueError):
 
 EDITABLE = {"narration", "title", "visual_note", "chapter", "queries",
             "on_camera", "locked_media", "prefer_kind", "board_template", "board_lead", "board_note",
-            "board_points", "diagram", "picture_mode", "cues", "chosen_id", "focal"} | TIMING_FIELDS
+            "board_points", "diagram", "picture_mode", "cues", "overlays", "chosen_id", "focal"} | TIMING_FIELDS
 
 
 def _focal(value) -> list[float]:
@@ -46,6 +46,12 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
             elif key == "title_at" and s.take:
                 value = min(take_duration(s.take), value)
         setattr(s, key, value)
+    if 'overlays' in payload:
+        from .block_overlays import validate
+        try:
+            s.overlays = validate(s.take, payload['overlays'])
+        except ValueError as exc:
+            raise EditError(str(exc)) from exc
     if "locked_media" in payload:
         if not isinstance(payload["locked_media"], bool):
             raise EditError("locked_media must be a boolean")
@@ -156,3 +162,20 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
         cand["focal"] = _focal(payload["focal"])
     return [key for key in before
             if before[key] != getattr(s, key if key != "focal" else "candidates")]
+
+
+def add_overlay(slide, item):
+    return patch_slide_fields(slide, {'overlays': [*slide.overlays, item]})
+
+
+def update_overlay(slide, ident, patch):
+    if not any(o['id'] == ident for o in slide.overlays):
+        raise EditError(f'No such overlay: {ident}', 404)
+    return patch_slide_fields(slide, {'overlays': [dict(o, **patch) if o['id'] == ident else o
+                                                 for o in slide.overlays]})
+
+
+def remove_overlay(slide, ident):
+    if not any(o['id'] == ident for o in slide.overlays):
+        raise EditError(f'No such overlay: {ident}', 404)
+    return patch_slide_fields(slide, {'overlays': [o for o in slide.overlays if o['id'] != ident]})

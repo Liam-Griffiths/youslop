@@ -251,7 +251,7 @@ class Loader(jinja2.BaseLoader):
         raise jinja2.TemplateNotFound(template)
 
 
-def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, _block=None):
+def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, _block=None, overlay=False, position=None):
     block = _block if _block is not None else discover().get(block_id)
     if block is None:
         raise ValueError(f'unknown block: {block_id}')
@@ -279,6 +279,15 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
     # scene context carries the channel's resolved colours and takes priority.
     if context is None:
         ctx['vars'].update(meta.get('default_colors', {}))
+    if overlay:
+        spec = meta.get('overlay')
+        if not spec or seconds > spec['max_dur']:
+            raise ValueError(f'{block_id}: not an overlay or exceeds max_dur')
+        position = position or spec['position'][0]
+        if position not in spec['position']:
+            raise ValueError(f'{block_id}: unsupported overlay position')
+        ctx.update(builder_alpha=True, overlay_position=position)
+        ctx['vars']['picture'] = ''  # A picture belongs to the base, never the graphic.
     ctx['safe_areas'] = meta['safe_areas']
     ctx['budget'] = meta.get('budget', 0.1)
     ctx.update(width={'16:9':1920, '9:16':1080, '1:1':1080}[aspect],
@@ -335,18 +344,18 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
 
 
 def render(block_id, vars=None, aspect='16:9', seconds=None, *, project=None, context=None,
-           size=None, max_seconds=None):
+           size=None, max_seconds=None, overlay=False, position=None):
     if hasattr(project, 'research'):
         context = {**(scenes.context_base(project) if context is None else context), 'research': project.research}
         project = paths.data_root() / 'projects' / project.id
-    template, ctx = prepare(block_id, vars, aspect, seconds, context=context)
+    template, ctx = prepare(block_id, vars, aspect, seconds, context=context, overlay=overlay, position=position)
     if max_seconds is not None:
         ctx['duration'] = min(ctx['duration'], max_seconds)
     owner = project if project is not None else paths.data_root() / '.cache/blocks'
     size, fps = size or (ctx['width'], ctx['height']), ctx.get('fps', 30)
     _, html, ctx = scenes._prepare(owner, template, ctx, ctx['duration'], size, fps,
                                   ('block-builder-v1', scene_builder.MOTIONS))
-    out = html.with_suffix('.mp4')
+    out = html.with_suffix('.mov' if overlay else '.mp4')
     if not out.exists():
         scene_builder.render(owner, template, ctx, out, seconds=ctx['duration'],
                              size=size, fps=fps, crf=18)

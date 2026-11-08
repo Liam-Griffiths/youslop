@@ -62,7 +62,7 @@ def lint(block_id):
     errors = []
     for aspect in meta['aspects']:
         try:
-            template, ctx = blocks.prepare(block_id, samples(meta), aspect)
+            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')))
             errors.extend(f'{aspect}: {e}' for e in scenes.lint(
                 scenes.render_html(template, ctx), asset_root=ctx['block_assets_root']))
         except ValueError as exc:
@@ -139,7 +139,7 @@ def check(block_id, *, static_only=False, report=lambda aspect, stats: None):
     meta = blocks.discover()[block_id]['meta']
     with tempfile.TemporaryDirectory(prefix='corkbored-check-') as directory:
         for aspect in meta['aspects']:
-            template, ctx = blocks.prepare(block_id, samples(meta), aspect)
+            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')))
             try:
                 stats = scene_builder.inspect(Path(directory), template, ctx, seconds=ctx['duration'],
                     size=(ctx['width']//4, ctx['height']//4), fps=ctx['fps'])
@@ -163,7 +163,7 @@ def check(block_id, *, static_only=False, report=lambda aspect, stats: None):
                     errors.append(f'{aspect}: seek is nondeterministic')
             stage._run_cdp(dict(scene_root=directory, assets_root=ctx['block_assets_root'],
                 items=[dict(url_path='/scene/{token}/block.html', W=ctx['width'], H=ctx['height'],
-                            t=ctx['duration']/2, size=(ctx['width']//4, ctx['height']//4))]),
+                            t=ctx['duration']/2, alpha=bool(meta.get('overlay')), size=(ctx['width']//4, ctx['height']//4))]),
                 lambda m: None, scene_probe=probe)
     return errors
 

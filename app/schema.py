@@ -136,6 +136,7 @@ class Slide:
     # "casefile", ...): a list of cues, each landing on the words in its `on`.
     # Keyed so switching a video between cuts keeps what was written for each.
     # A cut with nothing here draws from the narration. See app/cuts/.
+    overlays: list[dict] = field(default_factory=list)  # graphics above the base picture
     needs_cues: bool = False             # razor left this half without cues
     cues: dict = field(default_factory=dict)
     # A 3D explainer's shot for the picture this paragraph leads: the

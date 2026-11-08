@@ -12,13 +12,13 @@ from tests._fixtures import ROOT
     ("essay_full", "essay", (render.WIDTH, render.HEIGHT), render.FPS),
     ("doc_preview", "kenburns", render.preview_size(), render.PREVIEW_FPS),
 ])
-def test_segment_graph(project, request, name, fmt, size, fps):
+def test_segment_graph(project, request, name, fmt, size, fps, seg_len=3.0):
     project.style.format = fmt
     project.style.captions_engine = "pillow"  # Preserve the legacy graph reference.
     project.slides[0].chapter = "Opening"
     group = render._picture_groups(project, render._slide_durations(project, False))[0]
     inputs, graph, last = render._segment_graph(
-        project, group, 3.0, render.camera_plan(project, [group])[0], size=size, fps=fps,
+        project, group, seg_len, render.camera_plan(project, [group])[0], size=size, fps=fps,
         chapter=("Next chapter", "Test"))
 
     def norm(s):
@@ -47,3 +47,18 @@ def test_video_graph_unchanged(project, request, monkeypatch):
     candidate['kind'] = 'video'
     monkeypatch.setattr(render.ffutil, 'duration', lambda path: 8.0)
     test_segment_graph(project, request, 'video_full', 'kenburns', (render.WIDTH, render.HEIGHT), render.FPS)
+
+
+def test_footage_overlay(project, request, monkeypatch):
+    # New golden: lower-third alpha compositing above a moving footage base.
+    from app import block_overlays
+    from pathlib import Path
+    slide = project.slides[0]
+    slide.overlays = [dict(id='name', block_id='lower_third_panel', vars={}, at=1., dur=3.)]
+    slide.take['duration'] = 8
+    candidate = next(c for c in slide.candidates if c['id'] == slide.chosen_id)
+    candidate.update(kind='video', provider='footage', in_s=2., out_s=10.)
+    monkeypatch.setattr(render, '_chosen', lambda *a, **kw: (ROOT/'tests/fixtures/project_min/media/pic.jpg', 'video', []))
+    monkeypatch.setattr(render.ffutil, 'duration', lambda path: 12.)
+    monkeypatch.setattr(block_overlays, 'clip', lambda *a, **kw: Path('<OVERLAY>/lower_third.mov'))
+    test_segment_graph(project, request, 'footage_overlay', 'kenburns', (480, 270), 15, seg_len=9.)

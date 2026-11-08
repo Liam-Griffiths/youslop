@@ -862,6 +862,12 @@ def _segment_graph(
                                       prepare_only=prepare_only)
         n_inputs = inputs.count('-i')
 
+    if not slide.on_camera and any(s.overlays for s, _ in group):
+        from .block_overlays import compose
+        inputs, graph, last = compose(project, group, inputs, graph, last, size, fps,
+                                      channel, prepare_only=prepare_only)
+        n_inputs = inputs.count('-i')
+
     # The host, if this channel has one: a still, pinned in a corner for the
     # whole segment. Under the captions in the stack, so it can never cover a
     # word if the two ever meet.
@@ -1067,6 +1073,31 @@ def _render_segment(
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
                                crf=crf, preset=preset, last_line=last_line, hide=hide)
+    if (any(s.overlays for s, _ in group) and not cuts.is_cut(style.format)
+            and ((group[0][0].cues or {}).get('blocks') or scenes.handles(style.format)
+                 or style.format.startswith('custom:'))):
+        from copy import deepcopy
+        import tempfile
+        from .block_overlays import compose, run_graph
+        # These base renderers own their graphs. Reuse them, then composite graphics.
+        base_group = [(deepcopy(s), d) for s, d in group]
+        for member, _ in base_group:
+            member.overlays = []
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='overlay-base-') as work:
+            base = Path(work) / 'base.mp4'
+            _render_segment(project, base_group, seg_len, index, base, channel,
+                None, threads, size, fps, crf, preset, dip_out=dip_out, op=op,
+                camera_index=camera_index, last_line=last_line, hide=hide)
+            inputs, graph, last = compose(project, group, ['-i', str(base)],
+                '[0:v]null[base]', '[base]', size, fps, channel)
+            script = Path(work) / 'graph.ffgraph'
+            script.write_text(graph)
+            run_graph([*inputs, '-filter_complex_script', str(script), '-map', last,
+                '-t', f'{seg_len:.3f}', '-r', str(fps),
+                *ffutil.video_args(out, crf=crf, preset=preset),
+                '-pix_fmt', 'yuv420p', '-an', str(out)], threads=threads)
+        return _chapter_tail(project, out, chapter, seg_len, hold, size,
+                             fps, crf, threads, channel)
     if (group[0][0].cues or {}).get('blocks'):
         from . import blocks, scene_builder
         from copy import deepcopy
@@ -1119,12 +1150,21 @@ def _render_segment(
         project, group, seg_len, op, channel, None if scene_chapter else chapter, size, fps, dip_out,
         camera_index, last_line, hide)
 
-    ffutil.run([
-        *inputs, "-filter_complex", graph, "-map", last,
-        "-t", f"{seg_len:.3f}", "-r", str(fps),
-        *ffutil.video_args(out, crf=crf, preset=preset),
-        "-pix_fmt", "yuv420p", "-an", str(out),
-    ], threads=threads)
+    args = [*inputs, "-filter_complex", graph, "-map", last,
+            "-t", f"{seg_len:.3f}", "-r", str(fps),
+            *ffutil.video_args(out, crf=crf, preset=preset),
+            "-pix_fmt", "yuv420p", "-an", str(out)]
+    if any(s.overlays for s, _ in group):
+        import tempfile
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='overlay-graph-') as work:
+            script = Path(work) / 'graph.ffgraph'
+            script.write_text(graph)
+            i = args.index('-filter_complex')
+            args[i:i+2] = ['-filter_complex_script', str(script)]
+            from .block_overlays import run_graph
+            run_graph(args, threads=threads)
+    else:
+        ffutil.run(args, threads=threads)
     if scene_chapter:
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
@@ -1651,7 +1691,9 @@ SEGMENT_VERSION = 1
 def _block_versions(slide):
     from . import block_library
     cues = (slide.cues or {}).get('blocks', [])
-    return [block_library.signature(block_library.registry()[cue['block']]) for cue in cues]
+    refs = [cue['block'] for cue in cues] + [o['block_id'] for o in slide.overlays]
+    library = block_library.registry()
+    return [block_library.signature(library[ref]) for ref in refs]
 
 
 def _segment_key(project, group, settings) -> str:
@@ -1664,7 +1706,7 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
-        if (slide.cues or {}).get('blocks'):
+        if (slide.cues or {}).get('blocks') or slide.overlays:
             row['block_versions'] = _block_versions(slide)
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(slide) or {}).get('overlays', [])} if slide.on_camera else set()
         row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id or c['id'] in overlay_ids]
@@ -2243,6 +2285,7 @@ def _layers(project, segs):
     """Render-free spans in picture time; reuse the renderer's timing plan."""
     layers = {key: [] for key in PREVIEW_LAYERS}
     layers['sponsors'] = []
+    layers['graphics'] = []
     slides = {s.id: s for s in project.slides}
     total = sum(s['duration'] for s in segs)
 
@@ -2268,6 +2311,13 @@ def _layers(project, segs):
                 project, group, seg['duration'] + cuts.transition_for(project.style), lead)}
         for q in seg['paragraphs']:
             slide, timing = slides[q['id']], q['timing']
+            if slide.overlays and not slide.on_camera and not cuts.is_cut(project.style.format):
+                from . import block_overlays, blocks
+                library = blocks.discover()
+                for item in block_overlays.resolved(slide.take, slide.overlays, q.get('duration')):
+                    a = q['start'] + item['at']
+                    add('graphics', item['id'], slide.id, a, a + item['dur'],
+                        library[item['block_id']]['meta']['name'], 'overlay', item['src'])
             if (slide.title and timing['title_hold']['value'] > 0
                     and project.style.format != 'essay' and not cuts.is_cut(project.style.format)):
                 a = timing['title_at']['start']
@@ -2337,7 +2387,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
-        if (s.cues or {}).get('blocks'):
+        if (s.cues or {}).get('blocks') or s.overlays:
             row['block_versions'] = _block_versions(s)
         # Search results nobody picked cannot change the picture on screen.
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(s) or {}).get('overlays', [])} if s.on_camera else set()

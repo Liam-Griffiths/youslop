@@ -11,7 +11,7 @@ from dataclasses import asdict
 from . import cuts, edits, render
 from .take_edits import take_duration, take_words
 
-EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues"} | edits.TIMING_FIELDS
+EDITABLE = {"narration", "title", "chapter", "picture_mode", "cues", "overlays"} | edits.TIMING_FIELDS
 
 
 _UI_ONLY = {"spoken", "word_times", "effective_cues", "camera_edit"}
@@ -41,6 +41,7 @@ def build(project) -> dict:
                 "end": round(para["start"] + para["duration"], 3),
                 "narration": slide.narration, "title": slide.title,
                 "on_camera": slide.on_camera,
+                "overlays": deepcopy(slide.overlays),
                 "chapter": slide.chapter, "timing": deepcopy(para["timing"]),
                 "picture": {"provider": candidate.get("provider", ""),
                             "title": candidate.get("title", ""),
