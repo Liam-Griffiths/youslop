@@ -48,7 +48,7 @@ async function openGraphicPicker(sid, at = 0) {
   const slide = p.slides.find(s => s.id === sid);
   if (!slide || slide.on_camera || isCut(p.style.format)) return toast('Graphics are available on picture paragraphs.', true);
   tlPause();
-  await renderBlocks('', {mode:'pick', project:p.id, channel:p.channel_id, overlay:true, aspect:p.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
+  await renderBlocks('', {mode:'pick', project:p.id, slide:sid, channel:p.channel_id, overlay:true, aspect:p.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
     // Reload before appending so another edit during browsing is kept.
     const fresh = await api(`/api/projects/${p.id}`);
     const member = fresh.slides.find(s => s.id === sid);

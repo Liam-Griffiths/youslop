@@ -239,6 +239,18 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route == '#/blocks/number_slam':
+                _evaluate(cdp, session, "document.querySelector('#block-expand').focus(); document.querySelector('#block-expand').click(); true")
+                _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                player = out / 'blocks--number_slam--player.png'
+                player.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(player), 't':0, 'why':'Expanded block player'})
+                print(f'Expanded block player -> {player.name}')
+                cdp.send('Input.dispatchKeyEvent', {'type':'keyDown', 'key':'Escape', 'code':'Escape', 'windowsVirtualKeyCode':27}, session)
+                cdp.send('Input.dispatchKeyEvent', {'type':'keyUp', 'key':'Escape', 'code':'Escape', 'windowsVirtualKeyCode':27}, session)
+                _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(r))")
+                _evaluate(cdp, session, "(() => { if (document.querySelector('dialog[open]') || document.activeElement.id !== 'block-expand') throw Error('Block player Escape/focus failed'); return true; })()")
             pending_routes.pop(0)
         cdp.send('Runtime.evaluate', {'expression': 'true'}, session)  # drain earlier events
 

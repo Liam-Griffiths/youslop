@@ -205,7 +205,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.10a | Block overlays on any picture: data and render | M | T11.6, T12.5, T2.10 | done | 2026-11-08 Codex + review; slide.overlays, transparent block layers composited by ffmpeg, stored unclipped; ¼ preview checked |
 | T12.10b | Block overlays: planning and editing | M | T12.10a, T4.4, T12.8 | done | 2026-11-08 Codex + review; offline overlay planner, Timeline Graphics row (select/nudge/delete/hide/G), Visuals chips; checks split to T12.10c |
 | T12.10c | Block overlays: checks | S | T12.10b | done | 2026-11-08 Codex + review; contrast (panel-aware), overlap, safe area, estimated anchors; Fix opens the graphic |
-| T12.11 | Block preview player: plays in the app window, expands, scrubs | M | T12.8b | todo | motion previews are H.264 .mp4 (no decoder in the Linux app window); webm, full length, expanded player |
+| T12.11 | Block preview player: plays in the app window, expands, scrubs | M | T12.8b | done | 2026-11-08 Codex + review; VP9 webm previews (the app window has no H.264), full length, expanded player with scrub/loop/aspect/show-over; owner: confirm it plays in the desktop app |
 | T12.12a | Block themes: tokens per channel or standalone video | M | T12.9b | todo | colours, fonts, radius, weight, pace; channel → project resolution; cache keys |
 | T12.12b | Block themes: editor and live previews | M | T12.12a, T12.11 | todo | theme panel with live six-block sheet; Blocks "Preview as" |
 | T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | todo | A names/titles, B numbers, C places (needs vendored Natural Earth), D screens, E pictures; clean-room, inspired by HyperFrames registry |

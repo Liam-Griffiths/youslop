@@ -7,7 +7,7 @@ import tempfile
 import shutil
 import uuid
 
-from . import blocks, channels, jobs, packs, paths, scenes, stage
+from . import blocks, channels, jobs, packs, paths, scenes, stage, scene_builder, ffutil
 
 _LOCK = threading.RLock()
 _REGISTRY = (None, {})
@@ -203,7 +203,7 @@ _REQUESTS = {}
 _PREVIEW_RENDERS = 0
 
 
-def preview(ref, values, aspect, kind, session, sequence):
+def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background='checker', project=None, slide=None):
     """Explicit scratch preview. Superseded queued requests never capture."""
     global _PREVIEW_RENDERS
     import json
@@ -212,11 +212,16 @@ def preview(ref, values, aspect, kind, session, sequence):
         raise ValueError('Invalid preview request')
     if type(sequence) is not int or sequence < 0:
         raise ValueError('Invalid preview sequence')
+    if type(scale) is not int or scale not in (2, 4):
+        raise ValueError('Preview scale must be 2 or 4')
+    if background not in ('checker', 'sample', 'project'):
+        raise ValueError('Unknown preview background')
     item = registry().get(ref)
     if item is None:
         raise ValueError('Unknown block')
     values = blocks.validate_vars(item['meta'], values)
     template, ctx = blocks.prepare(ref, values, aspect, _block=item)
+    ground = preview_background(background, project, slide) if item['meta'].get('overlay') and kind == 'motion' else None
     if os.environ.get('CORKBORED_BLOCK_POSTERS') == 'off':
         return {'disabled': True}
     with _LOCK:
@@ -225,7 +230,7 @@ def preview(ref, values, aspect, kind, session, sequence):
         if len(_REQUESTS) >= 256 and session not in _REQUESTS:
             _REQUESTS.pop(next(iter(_REQUESTS)))
         _REQUESTS[session] = sequence
-    key = hashlib.sha256(json.dumps([signature(item), ctx.get('block_version'), values, aspect, kind], sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(json.dumps([signature(item), ctx.get('block_version'), values, aspect, kind, scale, str(ground), ground.stat().st_mtime_ns if ground else None, 'webm-v1'], sort_keys=True).encode()).hexdigest()
     out = preview_file(key, kind)
     with _RENDER_LOCK:
         if _REQUESTS.get(session) != sequence:
@@ -233,12 +238,11 @@ def preview(ref, values, aspect, kind, session, sequence):
         if not out.exists():
             _PREVIEW_RENDERS += 1
             out.parent.mkdir(parents=True, exist_ok=True)
-            size = (ctx['width']//4, ctx['height']//4)
+            size = (ctx['width']//scale, ctx['height']//scale)
             owner = paths.data_root() / '.cache/blocks'
             if kind == 'motion':
-                clip = blocks.render(ref, values, aspect, size=size, max_seconds=6,
-                                     context={**ctx, 'library_signature': signature(item)})
-                data = clip.read_bytes()
+                render_motion(ref, values, aspect, ctx, out, size, ground)
+                data = out.read_bytes()
             else:
                 ctx['library_signature'] = signature(item)
                 t = ctx['duration']/2 if item['meta']['kind'] == 'chapter' else max(0, ctx['duration']-.1)
@@ -251,11 +255,70 @@ def preview(ref, values, aspect, kind, session, sequence):
     return {'url': f'/api/block-previews/{key}/{kind}', 'values': values}
 
 
+def preview_background(background, project=None, slide=None):
+    """Only local, validated pictures; no arbitrary paths from preview clients."""
+    if background == 'sample':
+        return blocks.BUILTIN_DIR / 'split_comparison/sample.png'
+    if background == 'project':
+        import re
+        from . import store
+        if not isinstance(project, str) or not re.fullmatch(r'[\w-]+', project):
+            raise ValueError('Choose a project picture first')
+        p = store.load(project)
+        member = next((s for s in p.slides if s.id == slide), None)
+        # Held paragraphs use the lead picture of their run.
+        if member:
+            member = next((run[0] for run in p.picture_runs()
+                           if slide in run), slide)
+            member = next((s for s in p.slides if s.id == member), None)
+        candidate = next((c for c in member.candidates if c['id'] == member.chosen_id), {}) if member else {}
+        root = store.PROJECTS_DIR / project
+        path = (root / candidate.get('local_path', '')).resolve()
+        if not path.is_relative_to(root.resolve()) or not path.is_file() or candidate.get('kind', 'image') != 'image':
+            raise ValueError('This paragraph has no still picture to preview')
+        return path
+    return None
+
+
+def render_motion(ref, values, aspect, ctx, out, size, ground):
+    """Scratch-only VP9; overlay production renders and their MOV cache are untouched."""
+    from PIL import Image, ImageDraw, ImageOps
+    owner = paths.data_root() / '.cache/blocks'
+    item = registry()[ref]
+    overlay = bool(item['meta'].get('overlay'))
+    template, ctx = blocks.prepare(ref, values, aspect, context=ctx, overlay=overlay)
+    seconds = min(ctx['duration'], 15)
+    ctx.update(duration=seconds, library_signature=signature(item))
+    with tempfile.TemporaryDirectory(dir=out.parent) as work:
+        work = Path(work)
+        movie = work / ('overlay.mov' if overlay else 'motion.webm')
+        scene_builder.render(owner, template, ctx, movie, seconds=seconds, size=size, fps=30, crf=18)
+        if overlay:
+            if ground:
+                with Image.open(ground) as source:
+                    picture = ImageOps.fit(source.convert('RGB'), size)
+            else:
+                picture = Image.new('RGB', size, '#16181C')
+                draw = ImageDraw.Draw(picture)
+                for y in range(0, size[1], 20):
+                    for x in range(0, size[0], 20):
+                        if (x//20 + y//20) % 2:
+                            draw.rectangle((x,y,x+19,y+19), fill='#2E3239')
+            picture.save(work / 'ground.png')
+            flat = work / 'motion.webm'
+            ffutil.run(['-loop', '1', '-i', str(work / 'ground.png'), '-i', str(movie),
+                        '-filter_complex', '[0:v][1:v]overlay=shortest=1,format=yuv420p[out]',
+                        '-map', '[out]', '-t', str(seconds), '-r', '30',
+                        *ffutil.video_args(flat), '-an', str(flat)])
+            movie = flat
+        os.replace(movie, out)
+
+
 def preview_file(key, kind):
     import re
     if not re.fullmatch(r'[a-f0-9]{64}', key) or kind not in ('motion', 'trial'):
         raise ValueError('Invalid preview file')
-    return paths.data_root() / '.cache/blocks/previews' / (key + ('.mp4' if kind == 'motion' else '.png'))
+    return paths.data_root() / '.cache/blocks/previews' / (key + ('.webm' if kind == 'motion' else '.png'))
 
 
 _FORKABLE = {}

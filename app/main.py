@@ -114,7 +114,9 @@ def block_preview(ref: str, payload: dict = Body(...)) -> dict:
     from .block_library import preview
     try:
         return preview(ref, payload.get('values', {}), payload.get('aspect', '16:9'),
-                       payload.get('kind'), payload.get('session'), payload.get('sequence'))
+                       payload.get('kind'), payload.get('session'), payload.get('sequence'),
+                       scale=payload.get('scale', 4), background=payload.get('background', 'checker'),
+                       project=payload.get('project'), slide=payload.get('slide'))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -148,7 +150,7 @@ def block_preview_file(key: str, kind: str):
         raise HTTPException(400, str(exc)) from exc
     if not path.exists():
         raise HTTPException(404, 'Preview not found')
-    return FileResponse(path, media_type='video/mp4' if kind == 'motion' else 'image/png')
+    return FileResponse(path, media_type='video/webm' if kind == 'motion' else 'image/png')
 
 
 @app.post('/api/channels/{cid}/blocks')

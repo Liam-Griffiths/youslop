@@ -56,7 +56,7 @@ async function renderBlocks(path = '', options = {}) {
       if (blocksBrowser !== browser || !$('#blocks-grid')) return;
       browser.items = await api('/api/blocks' + (browser.options.overlay ? '?overlay=1' : ''));
       if (blocksBrowser !== browser || !$('#blocks-grid')) return;
-      paintBlocksGrid(); blockPosterArrived();
+      blockPosterArrived();
       const job = await api(`/api/jobs/${result.job}`);
       if (job.state === 'running') setTimeout(() => refresh().catch(e => toast(e.message, true)), 2000);
     };
@@ -98,10 +98,13 @@ function paintBlocksGrid() {
     let hover;
     card.onmouseenter = () => { if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
       hover = setTimeout(() => requestBlockPreview(bForCard(card), aForCard(card), 'motion', {}, card), 400); };
-    card.onmouseleave = () => { clearTimeout(hover); card.querySelector('video')?.remove(); };
+    card.onmouseleave = () => { clearTimeout(hover); stopBlockPreview(card); };
     card.onblur = card.onmouseleave;
     card.onkeydown = e => {
-      if (e.code === 'Space') { e.preventDefault(); requestBlockPreview(bForCard(card), aForCard(card), 'motion', {}, card); return; }
+      if (e.code === 'Space') { e.preventDefault(); clearTimeout(hover);
+        if (card.dataset.previewActive) stopBlockPreview(card);
+        else requestBlockPreview(bForCard(card), aForCard(card), 'motion', {}, card);
+        return; }
       if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) return;
       e.preventDefault();
       const columns = getComputedStyle($('#blocks-grid')).gridTemplateColumns.split(' ').length;
@@ -126,8 +129,8 @@ function paintBlockDetails(aspect) {
   const saved = blocksBrowser.presets.filter(p => p.block === b.ref && (p.scope === 'project' && p.owner === blocksBrowser.options.project || p.scope === 'channel' && p.owner === blocksBrowser.options.channel));
   const scratch = {...saved.find(p => p.scope === 'channel')?.values, ...saved.find(p => p.scope === 'project')?.values,
     ...(blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial.values : {})};
-  panel.innerHTML = `<div class="block-detail"><h2>${esc(b.name)}</h2><p>${esc(b.description)}</p><div id="block-trial-image">${blockPoster(b,aspect)}</div>
-    <div class="row"><button type="button" class="btn sm" id="block-play">Play · ¼ size</button>
+  panel.innerHTML = `<div class="block-detail"><h2>${esc(b.name)}</h2><p>${esc(b.description)}</p><button type="button" id="block-trial-image" aria-label="Expand ${esc(b.name)} preview">${blockPoster(b,aspect)}</button>
+    <div class="row"><button type="button" class="btn sm" id="block-play">Play · ¼ size</button><button type="button" class="btn sm" id="block-expand">Expand</button>
       ${b.aspects.map(a => `<button type="button" class="btn sm" aria-pressed="${a === aspect}" data-aspect="${esc(a)}">${esc(a)}</button>`).join('')}</div>
     <p id="block-trial-status" role="status" aria-live="polite"></p>
     <h3>Try it</h3><form id="block-trial">${Object.entries(b.variables).map(([key,spec],i) => blockTrialField(key,{...spec,default:scratch[key] ?? spec.default},i)).join('')}
@@ -159,11 +162,14 @@ function paintBlockDetails(aspect) {
     detail.querySelectorAll('[data-max]').forEach(input => {
       input.nextElementSibling.textContent = `${input.dataset.max - input.value.length} characters remaining`;
     });
-    timer = setTimeout(() => { if (detail.isConnected) refresh('trial'); },600);
+    timer = setTimeout(() => { if (detail.isConnected && !document.querySelector('dialog.block-player[open]')) refresh('trial'); },600);
   };
   $('#block-save-preset').onclick = () => blockPresetTarget(b, aspect, values).catch(e => toast(e.message,true));
   $('#block-reset').onclick = () => { blocksBrowser.trial = {ref:b.ref,values:Object.fromEntries(Object.entries(b.variables).map(([k,v]) => [k,v.default]))}; paintBlockDetails(aspect); const fresh = $('#inspector .block-detail'); requestBlockPreview(b,aspect,'trial',readBlockTrial(b,fresh),fresh); };
   $('#block-play').onclick = () => refresh('motion');
+  const expand = () => { try { openBlockPreview(b, aspect, values()); } catch (e) { blockTrialError(detail,e.message); } };
+  $('#block-expand').onclick = expand;
+  $('#block-trial-image').onclick = expand;
   const use = $('#block-use');
   if (use) use.onclick = async () => {
     try {
@@ -250,40 +256,130 @@ function readBlockTrial(b, detail) {
 // One preview request in flight across grid, details and successive browsers.
 let blockPreviewSequence = 0, blockPreviewBusy = false, blockPreviewPending = null;
 const blockPreviewSession = Math.random().toString(36).slice(2) + Date.now().toString(36);
-async function requestBlockPreview(b, aspect, kind, values, target) {
+function stopBlockPreview(target) {
+  if (target.dataset.previewActive) blockPreviewSequence++;
+  delete target.dataset.previewActive;
+  target.querySelector('video')?.pause();
+  target.querySelector('video')?.remove();
+  target.querySelector('.block-preview-status')?.remove();
+}
+
+function previewMessage(target, message, retry) {
+  let status = target.querySelector('[role="status"]');
+  if (!status) {
+    status = document.createElement('span');
+    status.className = 'block-preview-status'; status.setAttribute('role','status');
+    target.append(status);
+  }
+  status.textContent = message;
+  if (retry) {
+    // A card is already a button; its next Space/click retries without nesting buttons.
+    if (target.classList.contains('block-card')) status.append(' Press Space to retry.');
+    else {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'btn sm'; button.textContent = 'Retry';
+      button.onclick = retry; status.append(' ',button);
+    }
+  }
+}
+
+async function requestBlockPreview(b, aspect, kind, values, target, options = {}) {
   const sequence = ++blockPreviewSequence;
-  blockPreviewPending = {b,aspect,kind,values,target,sequence};
+  if (target.dataset) target.dataset.previewActive = 'true';
+  blockPreviewPending = {b,aspect,kind,values,target,sequence,options};
   if (blockPreviewBusy) return;
   blockPreviewBusy = true;
   while (blockPreviewPending) {
     const request = blockPreviewPending;
     blockPreviewPending = null;
-    const {b,aspect,kind,values,target,sequence} = request;
+    const {b,aspect,kind,values,target,sequence,options} = request;
     if (!target.isConnected || sequence !== blockPreviewSequence) continue;
     const status = target.querySelector('[role="status"]');
-    if (status) status.textContent = 'Refreshing preview…';
+    if (status) status.textContent = 'Rendering preview…';
+    else if (target.classList.contains('block-card')) previewMessage(target,'Rendering preview…');
     if (target.classList.contains('block-detail')) blockTrialError(target, 'Refreshing preview…');
     try {
       const result = await api(`/api/blocks/${b.ref}/preview`, {method:'POST',body:JSON.stringify({
-        values,aspect,kind,session:blockPreviewSession,sequence})});
+        values,aspect,kind,session:blockPreviewSession,sequence,...options})});
       if (sequence !== blockPreviewSequence || !target.isConnected || target.matches(':hover') === false && target.classList.contains('block-card') && document.activeElement !== target) continue;
       if (result.url) {
-        const host = target.querySelector('#block-trial-image') || target;
+        const host = target.querySelector('#block-trial-image') || target.querySelector('.block-player-screen') || target;
         host.querySelectorAll('video').forEach(v => v.remove());
         if (kind === 'trial') host.innerHTML = `<img src="${esc(result.url)}" alt="${esc(b.name)}, ${esc(aspect)} trial preview">`;
         else {
           const video = document.createElement('video');
-          video.src = result.url; video.muted = true; video.loop = true; video.controls = !target.classList.contains('block-card'); video.playsInline = true;
+          video.src = result.url; video.muted = true; video.loop = target.querySelector('#block-player-loop')?.checked ?? true; video.controls = target.classList.contains('block-detail'); video.playsInline = true;
           video.setAttribute('aria-label', `${b.name} motion preview`);
-          document.querySelectorAll('.block-card video,.block-detail video').forEach(v => v.remove());
-          if (host.id === 'block-trial-image') host.innerHTML = '';  // The loop replaces the still.
-          host.appendChild(video); video.play().catch(() => {});
+          document.querySelectorAll('.block-card video,.block-detail video,.block-player video').forEach(v => v.remove());
+          if (host.id === 'block-trial-image' || host.classList.contains('block-player-screen')) host.innerHTML = '';  // The loop replaces the still.
+          const retry = () => requestBlockPreview(b,aspect,kind,values,target,options);
+          // A decoder can fail once while it warms up (seen in Chromium at half
+          // size); reload the same file once before reporting it.
+          video.onerror = () => {
+            if (!video.dataset.reloaded) { video.dataset.reloaded = '1'; video.load(); video.play().catch(() => {}); return; }
+            previewMessage(target,'Cannot play this preview. The file is missing or its video format is unsupported.',retry);
+          };
+          host.appendChild(video);
+          if (target.classList.contains('block-player')) bindBlockPlayer(target,video);
+          video.play().catch(() => previewMessage(target,'Playback did not start. Press Play to try again.',retry));
         }
       }
       if (status) status.textContent = result.disabled ? 'Previews disabled for snapshots.' : 'Preview ready.';
-    } catch (e) { if (sequence === blockPreviewSequence && status) blockTrialError(target, e.message); }
+      if (result.url) target.querySelector('.block-preview-status')?.remove();
+    } catch (e) {
+      if (sequence === blockPreviewSequence && target.isConnected) {
+        if (target.dataset) delete target.dataset.previewActive;
+        if (target.classList.contains('block-detail')) blockTrialError(target,e.message);
+        previewMessage(target,e.message,() => requestBlockPreview(b,aspect,kind,values,target,options));
+      }
+    }
   }
   blockPreviewBusy = false;
+}
+
+function openBlockPreview(b, aspect, values) {
+  const options = blocksBrowser.options;
+  const dialog = studioDialog('block-player', `<div class="row"><h2 id="studio-dialog-title">${esc(b.name)}</h2>
+    <button type="button" class="btn sm" id="block-player-close">Close</button></div>
+    <div class="block-player-screen">${blockPoster(b,aspect)}</div><p role="status" aria-live="polite"></p>
+    <div class="row"><button type="button" class="btn sm" id="block-player-play">Pause</button>
+    <label for="block-player-scrub">Time</label><input id="block-player-scrub" type="range" min="0" max="15" step="0.01" value="0">
+    <output class="mono" id="block-player-time">0.00 / 0.00 s</output>
+    <label><input type="checkbox" id="block-player-loop" checked> Loop</label></div>
+    <div class="row"><label for="block-player-aspect">Aspect</label><select id="block-player-aspect">
+    ${b.aspects.map(a => `<option ${a === aspect ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+    ${b.overlay ? `<label for="block-player-background">Show over</label><select id="block-player-background">
+      <option value="checker">Neutral checker</option><option value="sample">Sample still</option>
+      ${options.project && options.slide ? '<option value="project">Paragraph picture</option>' : ''}</select>` : ''}</div>`,
+    () => { blockPreviewSequence++; dialog.querySelector('video')?.pause(); });
+  const refresh = () => {
+    dialog.querySelector('video')?.pause();
+    dialog.querySelector('.block-player-screen').style.aspectRatio = dialog.querySelector('#block-player-aspect').value.replace(':','/');
+    requestBlockPreview(b,dialog.querySelector('#block-player-aspect').value,'motion',values,dialog,
+      {scale:2,background:dialog.querySelector('#block-player-background')?.value || 'checker',project:options.project,slide:options.slide});
+  };
+  dialog.querySelector('#block-player-close').onclick = () => dialog.close();
+  dialog.querySelector('#block-player-aspect').onchange = refresh;
+  const ground = dialog.querySelector('#block-player-background');
+  if (ground) ground.onchange = refresh;
+  refresh();
+  return dialog;
+}
+
+function bindBlockPlayer(dialog, video) {
+  const play = dialog.querySelector('#block-player-play');
+  const scrub = dialog.querySelector('#block-player-scrub');
+  const update = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    scrub.max = duration || 15; scrub.value = video.currentTime;
+    dialog.querySelector('#block-player-time').textContent = `${video.currentTime.toFixed(2)} / ${duration.toFixed(2)} s`;
+    play.textContent = video.paused ? 'Play' : 'Pause';
+  };
+  play.onclick = () => video.paused ? video.play().catch(() => previewMessage(dialog,'Cannot start playback.')) : video.pause();
+  scrub.oninput = () => { video.currentTime = Number(scrub.value); update(); };
+  dialog.querySelector('#block-player-loop').onchange = e => { video.loop = e.target.checked; };
+  video.ontimeupdate = video.onloadedmetadata = video.onplay = video.onpause = update;
+  update();
 }
 
 async function applyBlockToSlide(pid, sid, selection) {
@@ -321,7 +417,7 @@ async function blockProjectTarget(selection) {
 async function openBlockPicker(pid, sid, selection = null) {
   const p = state.project;
   selection ||= p?.slides.find(s => s.id === sid)?.cues?.blocks?.[0];
-  await renderBlocks(selection?.block || '', {mode:'pick', project:pid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
+  await renderBlocks(selection?.block || '', {mode:'pick', project:pid, slide:sid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
     await applyBlockToSlide(pid,sid,selection);
     state.project = await api(`/api/projects/${pid}`);
     await render();
@@ -331,6 +427,11 @@ async function openBlockPicker(pid, sid, selection = null) {
 // The poster poll must not repaint the detail panel: that would drop a playing
 // loop, a pending trial and focus. Only a still-pending poster is swapped in.
 function blockPosterArrived() {
+  document.querySelectorAll('#blocks-grid .block-card').forEach(card => {
+    const b = bForCard(card), aspect = aForCard(card);
+    const pending = card.querySelector('.block-placeholder');
+    if (pending && b?.posters[aspect]) pending.outerHTML = blockPoster(b,aspect);
+  });
   const b = blocksBrowser?.items.find(item => item.ref === blocksBrowser.selected);
   const pending = $('#block-trial-image .block-placeholder');
   if (!b || !pending) return;

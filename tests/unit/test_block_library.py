@@ -119,14 +119,13 @@ def test_motion_serializes_with_trials_and_drops_stale(isolated, monkeypatch, tm
     from threading import Event
     monkeypatch.setattr(library, '_REQUESTS', {})
     entered, release, queued = Event(), Event(), Event()
-    clip = tmp_path / 'mock.mp4'
-    clip.write_bytes(b'mock movie')
-    def render(*args, **kw):
-        assert kw['size'] == (480,270) and kw['max_seconds'] == 6
+    def render(ref, values, aspect, ctx, out, size, ground):
+        assert size == (480,270)
+        assert ctx['duration'] == 6
+        out.write_bytes(b'mock movie')
         entered.set()
         assert release.wait(2)
-        return clip
-    monkeypatch.setattr(blocks, 'render', render)
+    monkeypatch.setattr(library, 'render_motion', render)
     capture = Mock(return_value=b'png')
     monkeypatch.setattr(library.scenes, 'capture', capture)
     # Signal when the newer request reaches the shared render gate.
@@ -320,3 +319,79 @@ def test_library_picker_reference_resolves_in_preview_and_segment(tmp_path, monk
     (root / 'block.html').write_text(native)
     template, ctx = blocks.prepare('user/picture', values)
     assert f'data-media="{image.resolve()}"' in scenes.render_html(template, ctx)
+
+
+def test_motion_webm_sizes_duration_and_background_cache(isolated, monkeypatch):
+    monkeypatch.setattr(library, '_REQUESTS', {})
+    calls = []
+    def render(ref, values, aspect, ctx, out, size, ground):
+        calls.append((ctx['duration'], size, ground))
+        out.write_bytes(b'webm fixture')
+    monkeypatch.setattr(library, 'render_motion', render)
+    first = library.preview('number_slam', {}, '16:9', 'motion', 'sizes', 1)
+    key = first['url'].split('/')[-2]
+    assert library.preview_file(key, 'motion').suffix == '.webm'
+    assert main.block_preview_file(key, 'motion').media_type == 'video/webm'
+    assert library.preview('number_slam', {}, '16:9', 'motion', 'sizes', 2)['url'] == first['url']
+    half = main.block_preview('number_slam', dict(kind='motion', session='sizes', sequence=3, scale=2))
+    assert half['url'] != first['url']
+    assert calls == [(6, (480,270), None), (6, (960,540), None)]
+    for scale in [True, 1, '2']:
+        with pytest.raises(ValueError):
+            library.preview('number_slam', {}, '16:9', 'motion', 'sizes', 4, scale=scale)
+
+
+def test_preview_overlay_flattens_scratch_only(tmp_path, monkeypatch):
+    from app import scene_builder
+    monkeypatch.setattr(paths, 'data_root', lambda: tmp_path)
+    def render(owner, template, ctx, out, **kw):
+        assert ctx['builder_alpha'] and kw['seconds'] == 5
+        assert out.suffix == '.mov' and out.parent != tmp_path
+        out.write_bytes(b'alpha fixture')
+    def flatten(args):
+        from PIL import Image
+        with Image.open(args[3]) as image:
+            assert image.getpixel((0,0)) != image.getpixel((20,0))
+        assert 'libvpx-vp9' in args
+        Path(args[-1]).write_bytes(b'flat webm')
+    from pathlib import Path
+    monkeypatch.setattr(scene_builder, 'render', render)
+    monkeypatch.setattr(library.ffutil, 'run', flatten)
+    _, ctx = blocks.prepare('lower_third_panel')
+    out = tmp_path / 'preview.webm'
+    library.render_motion('lower_third_panel', {}, '16:9', ctx, out, (480,270), None)
+    assert out.read_bytes() == b'flat webm'
+
+
+def test_preview_project_picture_is_local_and_uses_held_lead(tmp_path, monkeypatch):
+    from app import store
+    from app.schema import Project, Slide
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
+    lead = Slide(id='s1', chosen_id='pic', candidates=[dict(id='pic',local_path='media/pic.png')])
+    p = Project(id='ppreview', title='', idea='', slides=[lead, Slide(id='s2', picture_mode='hold')])
+    store.save(p)
+    picture = store.project_dir(p.id) / 'media/pic.png'
+    picture.write_bytes(b'picture')
+    assert library.preview_background('project',p.id,'s2') == picture
+    lead.candidates[0]['local_path'] = '../../outside.png'
+    store.save(p)
+    with pytest.raises(ValueError, match='no still picture'):
+        library.preview_background('project',p.id,'s1')
+    with pytest.raises(ValueError):
+        library.preview_background('project','../escape','s1')
+
+
+@pytest.mark.parametrize('duration,expected', [(5,5), (20,15)])
+def test_motion_duration_default_and_cap(tmp_path, monkeypatch, duration, expected):
+    from app import scene_builder
+    monkeypatch.setattr(paths, 'data_root', lambda: tmp_path)
+    template, ctx = blocks.prepare('title_card')
+    assert ctx['duration'] == 5
+    ctx['duration'] = duration
+    monkeypatch.setattr(blocks, 'prepare', lambda *a, **kw: (template, ctx))
+    def render(owner, template, ctx, out, **kw):
+        assert kw['seconds'] == expected and ctx['duration'] == expected
+        assert out.suffix == '.webm' and not ctx.get('builder_alpha')
+        out.write_bytes(b'webm')
+    monkeypatch.setattr(scene_builder, 'render', render)
+    library.render_motion('title_card', {}, '16:9', ctx, tmp_path/'preview.webm', (480,270), None)
