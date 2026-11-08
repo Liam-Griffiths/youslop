@@ -1,6 +1,6 @@
 {% extends '_blocks/number_slam/data_base.html' %}
 {% block content %}
-<p class="item label dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px">MILESTONES · EQUAL SPACING</p>
+{% if vars.label %}<p class="item label dim single" data-ground data-fit style="left:{{ data.x }}px;top:{{ data.top-70 }}px;width:{{ data.w }}px;height:62px" data-var-text="label">{{ vars.label }}</p>{% endif %}
 {% for row in data.rows %}{% set portrait=height > width %}{% set step=data.w/data.rows|length %}
 <div class="item milestone" {{ layer('date-'~loop.index,0.18*loop.index0,'reveal') }} style="left:{{ data.x if portrait else data.x+loop.index0*step }}px;top:{{ data.top+loop.index0*data.row_gap if portrait else data.top }}px;width:{{ data.w if portrait else step-20 }}px;height:{{ data.row_gap-16 if portrait else data.content_h }}px"><span class="mono single" data-fit>{{ row.date }}</span><p class="label" data-fit style="height:{{ data.row_gap-102 if portrait else data.content_h-114 }}px">{{ row.label }}</p></div>
 {% endfor %}
