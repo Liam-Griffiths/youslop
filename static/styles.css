@@ -1314,3 +1314,11 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 @media(max-width:700px) { .blocks-browser { grid-template-columns:minmax(0,1fr); } .blocks-filters { width:100%; } }
 .block-detail .block-meta { color: var(--dim); margin-top: 16px; line-height: 1.6; }
 .block-detail #block-trial label { display: block; margin-top: 8px; }
+
+/* Compact entry to the shared Blocks picker in Visuals. */
+.visual-block-strip { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.visual-block-strip .block-card { padding:8px; gap:4px; }
+.visual-block-strip .block-card img { height:72px; }
+.visual-block-strip .block-placeholder { min-height:72px; height:auto; }
+.visual-block-chosen > img { width:100%; max-height:160px; object-fit:contain; background:var(--bg); }
+.block-field-error { color:var(--bad); display:block; }

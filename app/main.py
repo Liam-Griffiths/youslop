@@ -79,6 +79,12 @@ def list_blocks(q: str = '', category: str = '', aspect: str = '', source: str =
     return browse(q, category, aspect, source, channel, data)
 
 
+@app.get('/api/blocks/third-party')
+def third_party_blocks() -> list[dict]:
+    from . import catalog
+    return catalog.installed() if catalog.ui_enabled() else []
+
+
 @app.post('/api/blocks/posters')
 def start_block_posters() -> dict:
     from .block_library import start_posters
@@ -1380,6 +1386,27 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             raise HTTPException(exc.status, str(exc)) from exc
         store.save(p)
     return s.to_dict()
+
+
+@app.get('/api/projects/{pid}/slides/{sid}/block-suggestions')
+def block_suggestions(pid: str, sid: str) -> list[dict]:
+    from .block_suggest import suggest
+    from .block_library import registry
+    p = _load(pid)
+    s = _slide(p, sid)
+    aspect = '9:16' if p.aspect == 'portrait' else '16:9'
+    found = registry()
+    from .blocks import validate_vars
+    out = []
+    for item in suggest(s.narration, s.visual_note, s.title):
+        if s.on_camera or item['block'] not in found or aspect not in found[item['block']]['meta']['aspects']:
+            continue
+        try:  # A suggestion must be usable as offered.
+            item['vars'] = validate_vars(found[item['block']]['meta'], item['vars'])
+        except ValueError:
+            continue
+        out.append(item)
+    return out
 
 
 @app.get("/api/projects/{pid}/slides/{sid}/camera-cuts")

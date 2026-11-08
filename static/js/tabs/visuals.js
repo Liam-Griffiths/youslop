@@ -1,4 +1,4 @@
-/* One selected picture at a time. Never generate thumbnails or previews on load. */
+/* One selected picture at a time; saved block stills use the quarter-size trial cache. */
 function visualKind(s) {
   const c = (s.candidates || []).find(c => c.id === s.chosen_id);
   if (s.on_camera) return 'camera';
@@ -96,6 +96,7 @@ function paintMedia() {
       <div>${groups.map(g => `<button type="button" class="btn sm visual-kind" data-kind="${visualKind(g.s)}" style="flex:${total ? Math.max(g.seconds,.01) : 1}"
         aria-label="Paragraph ${g.i+1}: ${visualKind(g.s)}" aria-pressed="${g === group}" onclick="selectVisual('${g.s.id}')">${g.i+1}</button>`).join('')}</div>
     </section></div>`;
+  if (group && (['Scenes','Blocks','Screens'].includes(source) || group.s.cues?.blocks?.length)) loadVisualBlocks(p, group.s);
 }
 
 function visualPreview(g, byId) {
@@ -104,7 +105,7 @@ function visualPreview(g, byId) {
   return `<div class="mono">Picture ${g.i+1} · ¶${g.ids.map(id => byId[id].i+1).join(', ')} · ${g.seconds ? fmtTime(g.seconds)+' from the takes' : 'unvoiced'}</div>
     <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>
     <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : ''}">
-      ${s.cues?.blocks?.length && !s.on_camera ? `<p>Block: ${esc(s.cues.blocks[0].block)} · preview on click</p>` : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
+      ${s.cues?.blocks?.length && !s.on_camera ? visualBlockStill(p, s) : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
         : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : visualKind(s) === '3D' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
     </div>
@@ -145,7 +146,7 @@ function visualSourcePanel(s, source) {
   if (source === 'Layout') return `<h3>Camera layouts and jump cuts</h3><p>Full face, split, cutaway over voice and picture in picture are edited on the camera lanes. Removed parts stay in the take.</p>
     <button type="button" class="btn sm" onclick="openVisualEdit('${s.id}')">Edit this take’s layout and cutaways</button>`;
   if (['Scenes','Blocks','Screens'].includes(source)) return `<h3>${source}</h3>
-    ${/\d/.test(s.narration) ? '<p class="mono">Number in narration: use a scene or block to draw it.</p>' : ''}
+    ${!s.on_camera ? visualBlockPanel(p, s) : ''}
     <button type="button" class="btn sm ghost" onclick="openDiagramEditor('${s.id}')">Draw a diagram</button>
     <button type="button" class="btn sm ghost" onclick="openCustomEditor('${s.id}')">Design a slide</button>
     <button type="button" class="btn sm ghost" onclick="openVisualEdit('${s.id}')">Open Edit · variables and timeline</button>
@@ -184,7 +185,7 @@ function openVisualEdit(sid) {
   location.hash = `#/p/${state.project.id}/edit`;
 }
 
-// Manifest reads and lexical suggestions only; opening Visuals never renders.
+// Footage suggestions only read manifests; they never render.
 async function loadVisualFootage(p) {
   if (state.visualFootageProject === p) return;
   state.visualFootageProject = p;
@@ -221,4 +222,95 @@ async function fillVisualFootage() {
     p.slides = r.slides;
     if (state.project === p && state.tab === 'media') paintMedia();
   } catch(e) { toast(e.message); }
+}
+
+const visualBlockCache = new WeakMap();
+let visualBlockSequence = 0;
+const visualBlockSession = 'visuals-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+function visualBlockData(p) {
+  if (!visualBlockCache.has(p)) visualBlockCache.set(p, {suggestions:new Map(), trials:new Map()});
+  return visualBlockCache.get(p);
+}
+function visualSuggestionKey(s) { return JSON.stringify([s.id,s.narration,s.visual_note]); }
+function visualTrialKey(p, s) { return JSON.stringify([p.aspect,s.cues?.blocks?.[0]]); }
+function visualBlockStill(p, s) {
+  const trial = visualBlockData(p).trials.get(visualTrialKey(p,s));
+  return trial?.url ? `<img src="${esc(trial.url)}" alt="${esc(s.cues.blocks[0].block)} trial still">`
+    : `<p role="status">${esc(trial?.error || (trial?.disabled ? 'Block preview disabled for snapshots.' : 'Loading block still…'))}</p>`;
+}
+function visualBlockPanel(p, s) {
+  const data = visualBlockData(p), aspect = p.aspect === 'portrait' ? '9:16' : '16:9';
+  const suggestions = data.suggestions.get(visualSuggestionKey(s)) || [];
+  const available = (data.items || []).filter(b => b.kind === 'segment' && b.aspects.includes(aspect));
+  const refs = [...new Set([...suggestions.map(b => b.block), ...available.map(b => b.ref)])].slice(0,4);
+  const selected = s.cues?.blocks?.[0];
+  return `${selected ? `<div class="visual-block-chosen"><h4>Chosen block · ${esc(selected.block)}</h4>${visualBlockStill(p,s)}
+      <button type="button" class="btn sm ghost" onclick="openBlockPicker('${p.id}','${s.id}')">Edit</button>
+      <button type="button" class="btn sm ghost" onclick="removeVisualBlock('${s.id}')">Remove</button></div>` : ''}
+    <h4>Suggested blocks</h4><div class="visual-block-strip">${refs.map(ref => {
+      const b = available.find(b => b.ref === ref);
+      const suggestion = suggestions.find(b => b.block === ref);
+      return b ? `<button type="button" class="block-card" data-visual-block="${esc(ref)}">${blockPoster(b,aspect)}
+        <strong>${esc(b.name)}</strong><small>${esc(suggestion?.reason || b.category)}</small></button>` : '';
+    }).join('')}</div>
+    <p role="status">${esc(data.error || '')}</p>
+    <button type="button" class="btn sm ghost" onclick="openBlockPicker('${p.id}','${s.id}')">More blocks…</button>
+    ${data.thirdParty?.length ? `<section aria-label="Third-party blocks"><h4>Third-party blocks · installed</h4>
+      ${data.thirdParty.map(b => `<p>${esc(b.name)} · third-party · ${esc(b.license || 'Licence not recorded')}</p>`).join('')}</section>` : ''}`;
+}
+async function loadVisualBlocks(p, s) {
+  if (s.on_camera) return;
+  const data = visualBlockData(p);
+  const repaint = () => {
+    if (state.project === p && state.tab === 'media' && $('#tabbody .visuals-workspace')) paintMedia();
+  };
+  if (!data.loading) {
+    data.loading = true;
+    Promise.all([api('/api/blocks'), api('/api/blocks/third-party')]).then(async ([items,thirdParty]) => {
+      data.items = items; data.thirdParty = thirdParty; repaint();
+      // Same one-off poster batch the Blocks screen starts; reload when it ends.
+      if (!items.some(b => Object.keys(b.posters || {}).length < b.aspects.length)) return;
+      const {job} = await api('/api/blocks/posters', {method:'POST'});
+      if (!job) return;
+      for (;;) {
+        await new Promise(r => setTimeout(r, 2000));
+        if (state.project !== p) return;
+        if ((await api(`/api/jobs/${job}`)).state !== 'running') break;
+      }
+      data.items = await api('/api/blocks'); repaint();
+    }).catch(e => { data.error = e.message; repaint(); });
+  }
+  const key = visualSuggestionKey(s);
+  if (!data.suggestions.has(key)) {
+    data.suggestions.set(key, []);
+    api(`/api/projects/${p.id}/slides/${s.id}/block-suggestions`).then(items => {
+      data.suggestions.set(key, items); repaint();
+    }).catch(e => { data.error = e.message; repaint(); });
+  }
+  const cue = s.cues?.blocks?.[0], trialKey = visualTrialKey(p,s);
+  if (cue && !data.trials.has(trialKey)) {
+    data.trials.set(trialKey, {});
+    api(`/api/blocks/${cue.block}/preview`, {method:'POST',body:JSON.stringify({values:cue.vars || {},
+      aspect:p.aspect === 'portrait' ? '9:16' : '16:9',kind:'trial',session:visualBlockSession,sequence:++visualBlockSequence})})
+      .then(trial => {
+        if (trial.stale) data.trials.delete(trialKey); else data.trials.set(trialKey,trial);
+        repaint();
+      })
+      .catch(e => { data.trials.set(trialKey,{error:e.message}); repaint(); });
+  }
+  document.querySelectorAll('[data-visual-block]').forEach(card => {
+    card.onclick = () => {
+      const suggestion = data.suggestions.get(key)?.find(b => b.block === card.dataset.visualBlock);
+      openBlockPicker(p.id,s.id,suggestion || {block:card.dataset.visualBlock,vars:{}});
+    };
+  });
+}
+async function removeVisualBlock(sid) {
+  const p = state.project;
+  try {
+    const slide = await api(`/api/projects/${p.id}/slides/${sid}`, {method:'PATCH',body:JSON.stringify({cues:{blocks:[]}})});
+    if (state.project !== p) return;
+    Object.assign(p.slides.find(s => s.id === sid),slide);
+    paintMedia();
+  } catch(e) { toast(e.message,true); }
 }

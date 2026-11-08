@@ -8,7 +8,7 @@ async function renderBlocks(path = '', options = {}) {
   const items = await api('/api/blocks');
   if (location.hash !== route) return;
   if (!options.mode && !location.hash.startsWith('#/blocks')) return;
-  blocksBrowser = {items, selected, options};
+  blocksBrowser = {items, selected, options, trial:options.selection ? {ref:options.selection.block, values:options.selection.vars} : null};
   view.innerHTML = `<h1>Blocks</h1><p>Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
     ${options.mode === 'pick' ? '<button type="button" class="btn ghost" id="block-picker-close">Back to project</button>' : ''}
     <div class="blocks-browser"><aside class="blocks-filters" aria-label="Block filters">
@@ -26,8 +26,9 @@ async function renderBlocks(path = '', options = {}) {
     if (el.type === 'checkbox') el.checked = false; else el.value = el.id === 'blocks-sort' ? 'recommended' : '';
   } paintBlocksGrid(); };
   if (options.mode === 'pick') $('#block-picker-close').onclick = () => render();
+  if (options.mode === 'pick' && options.aspect) $('#blocks-aspect').value = options.aspect;
   paintBlocksGrid();
-  paintBlockDetails();
+  paintBlockDetails(options.aspect);
   if (selected) $('#block-play')?.focus();
   const result = await api('/api/blocks/posters', {method:'POST'});
   if (result.job) {
@@ -90,7 +91,8 @@ function paintBlockDetails(aspect) {
   const panel = $('#inspector');
   if (!b) { panel.innerHTML = blocksBrowser.selected ? '<p>Block not found. Choose a block from the grid.</p>' : ''; return; }
   blockPreviewSequence++;
-  aspect ||= b.aspects[0];
+  aspect ||= blocksBrowser.options.aspect || b.aspects[0];
+  if (!b.aspects.includes(aspect)) aspect = b.aspects[0];
   const scratch = blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial.values : {};
   panel.innerHTML = `<div class="block-detail"><h2>${esc(b.name)}</h2><p>${esc(b.description)}</p><div id="block-trial-image">${blockPoster(b,aspect)}</div>
     <div class="row"><button type="button" class="btn sm" id="block-play">Play · ¼ size</button>
@@ -107,7 +109,7 @@ function paintBlockDetails(aspect) {
   const values = () => readBlockTrial(b, detail);
   const refresh = kind => {
     try { requestBlockPreview(b,aspect,kind,values(),detail); }
-    catch (e) { $('#block-trial-status').textContent = e.message; }
+    catch (e) { blockTrialError(detail, e.message); }
   };
   detail.querySelector('form').onsubmit = e => e.preventDefault();
   let timer;
@@ -128,7 +130,7 @@ function paintBlockDetails(aspect) {
       const selection = {block:b.ref, vars:values()};
       if (blocksBrowser.options.mode === 'pick') await blocksBrowser.options.onUse(selection);
       else await blockProjectTarget(selection);
-    } catch (e) { toast(e.message,true); }
+    } catch (e) { blockTrialError(detail, e.message); }
   };
   panel.querySelectorAll('[data-aspect]').forEach(button => { button.onclick = () => paintBlockDetails(button.dataset.aspect); });
 }
@@ -158,14 +160,28 @@ function blockTrialField(key, spec, i) {
   else field = `<input type="${spec.type === 'number' ? 'number' : 'text'}" ${attr} value="${esc(v)}" ${spec.type === 'number' ? 'step="any"' : ''}
     ${spec.max_length ? `data-max="${spec.max_length}" aria-describedby="${id}-count"` : ''}>
     ${spec.max_length ? `<small id="${id}-count">${spec.max_length - String(v).length} characters remaining</small>` : ''}`;
-  return `<label for="${id}">${esc(key)} · ${esc(spec.type)}</label>${field}`;
+  return `<label for="${id}">${esc(key)} · ${esc(spec.type)}</label>${field}<small id="${id}-error" role="status" class="block-field-error"></small>`;
+}
+
+function blockTrialError(detail, message) {
+  const status = detail.querySelector('#block-trial-status');
+  if (status) status.textContent = message;
+  detail.querySelectorAll('[data-key]').forEach(field => {
+    const error = detail.querySelector(`#${field.id}-error`);
+    const relevant = message.startsWith(field.dataset.key) || field.dataset.type === 'table' && message.startsWith('CSV');
+    if (error) error.textContent = relevant ? message : '';
+    field.setAttribute('aria-invalid', String(relevant));
+    if (relevant) field.setAttribute('aria-errormessage', error.id);
+  });
 }
 
 function readBlockTrial(b, detail) {
   return Object.fromEntries([...detail.querySelectorAll('[data-key]')].map(el => {
     let v = el.value;
     if (el.dataset.type === 'number') v = Number(v);
-    if (el.dataset.type === 'table' && v.trim().startsWith('[')) v = JSON.parse(v);
+    if (el.dataset.type === 'table' && v.trim().startsWith('[')) {
+      try { v = JSON.parse(v); } catch (e) { throw new Error(`${el.dataset.key}: ${e.message}`); }
+    }
     return [el.dataset.key,v];
   }));
 }
@@ -185,6 +201,7 @@ async function requestBlockPreview(b, aspect, kind, values, target) {
     if (!target.isConnected || sequence !== blockPreviewSequence) continue;
     const status = target.querySelector('[role="status"]');
     if (status) status.textContent = 'Refreshing preview…';
+    if (target.classList.contains('block-detail')) blockTrialError(target, 'Refreshing preview…');
     try {
       const result = await api(`/api/blocks/${b.ref}/preview`, {method:'POST',body:JSON.stringify({
         values,aspect,kind,session:blockPreviewSession,sequence})});
@@ -203,7 +220,7 @@ async function requestBlockPreview(b, aspect, kind, values, target) {
         }
       }
       if (status) status.textContent = result.disabled ? 'Previews disabled for snapshots.' : 'Preview ready.';
-    } catch (e) { if (sequence === blockPreviewSequence && status) status.textContent = e.message; }
+    } catch (e) { if (sequence === blockPreviewSequence && status) blockTrialError(target, e.message); }
   }
   blockPreviewBusy = false;
 }
@@ -235,8 +252,10 @@ async function blockProjectTarget(selection) {
   };
 }
 
-async function openBlockPicker(pid, sid) {
-  await renderBlocks('', {mode:'pick', onUse:async selection => {
+async function openBlockPicker(pid, sid, selection = null) {
+  const p = state.project;
+  selection ||= p?.slides.find(s => s.id === sid)?.cues?.blocks?.[0];
+  await renderBlocks(selection?.block || '', {mode:'pick', selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
     await applyBlockToSlide(pid,sid,selection);
     state.project = await api(`/api/projects/${pid}`);
     await render();

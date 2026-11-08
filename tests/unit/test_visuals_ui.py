@@ -18,6 +18,8 @@ def test_visual_picker_js(tmp_path):
       const esc = s => String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
       const isStage = f => f === 'stage', isCut = f => f === 'loudmouth';
       const fmtTime = s => s+'s', thumbUrl = c => '/thumb/'+c.id;
+      const document = {querySelectorAll: () => []};
+      const blockPoster = b => `<img src="/poster/${b.ref}" alt="${b.name}">`;
       const location = {}, state = {tab:'media', project:{id:'p1',aspect:'landscape',style:{format:'kenburns'},
         slides:Array.from({length:40},(_,i)=>({id:'s'+i,title:'Picture <'+i+'>',narration:'Paragraph '+i,
           visual_note:'A map',prefer_kind:'image',take:{duration: i+1},candidates:[
@@ -26,7 +28,11 @@ def test_visual_picker_js(tmp_path):
       let calls=[];
       const api = async (url, opts={}) => {
         calls.push([url,JSON.parse(opts.body || '{}')]);
-        if (url === '/api/footage/shoots') return [];
+        if (url === '/api/footage/shoots' || url === '/api/blocks/third-party') return [];
+        if (url === '/api/blocks') return ['number_slam','percentage_ring','quote_card'].map(ref =>
+          ({ref,name:ref,kind:'segment',aspects:['16:9','9:16'],category:'data'}));
+        if (url.endsWith('/block-suggestions')) return [{block:'number_slam',vars:{value:42},reason:'Number'}];
+        if (url.endsWith('/preview')) return {disabled:true};
         if (url.endsWith('/footage/fill')) return {slides:state.project.slides};
         return {slide:{candidates:[{id:'ft1',provider:'footage',kind:'video',title:'Boats',
           in_s:2,out_s:10,labels:['harbour']}],chosen_id:'c0'}};
@@ -80,6 +86,24 @@ def test_visual_picker_js(tmp_path):
       for(const s of p.slides) s.take={};
       paintMedia(); assert($('#tabbody').innerHTML.includes('by group count (unvoiced)'), 'honest unvoiced mix');
       p.style.format='kenburns';p.delivery='voice_over';p.aspect='landscape';
+      selectVisualSource('Scenes');
+      for (let i=0;i<6;i++) await Promise.resolve();
+      html = $('#tabbody').innerHTML;
+      assert(html.includes('More blocks…') && html.includes('/poster/number_slam'), 'compact local suggestion posters');
+      assert(calls.some(([url]) => url.endsWith('/block-suggestions')), 'offline suggestions endpoint');
+      assert(!calls.some(([url]) => url.endsWith('/preview')), 'suggestions do not render');
+      const selected = p.slides[0];
+      selected.cues = {blocks:[{block:'number_slam',vars:{value:42}}]};
+      selectVisual(selected.id);
+      for (let i=0;i<6;i++) await Promise.resolve();
+      html = $('#tabbody').innerHTML;
+      assert(html.includes('>Edit</button>') && html.includes('>Remove</button>'), 'saved block controls');
+      assert(html.includes('Block preview disabled for snapshots.'), 'honest disabled trial state');
+      const preview = calls.find(([url]) => url.endsWith('/preview'));
+      assert(preview[1].kind === 'trial' && preview[1].values.value === 42, 'saved vars trial');
+      visualBlockData(p).trials.set(visualTrialKey(p,selected), {url:'/trial-still.png'});
+      paintMedia();
+      assert($('#tabbody').innerHTML.includes('/trial-still.png'), 'trial replaces preview placeholder');
       print('visual picker checks passed');
     '''
     script = tmp_path / 'visuals.mjs'

@@ -44,6 +44,23 @@ assert(Object.keys(calls.at(-1)[1].cues).join() === 'blocks','other cue keys abs
 resolve({}); await apply;
 assert(blockTrialField('title',{type:'text',default:'sample',max_length:20},0).includes('type="text"'),'typed input');
 assert(blockTrialField('data',{type:'table',default:[]},0).includes('Paste CSV'),'table entry');
+const status = {}, inline = {}, attributes = {};
+const table = {id:'block-var-0', dataset:{key:'rows',type:'table'}, setAttribute:(k,v) => attributes[k]=v};
+const detail = {querySelector:key => key === '#block-trial-status' ? status : inline, querySelectorAll:() => [table]};
+blockTrialError(detail,'rows row 2 column value: expected number');
+assert(inline.textContent === status.textContent && inline.textContent.includes('row 2 column value'),'row/column error inline');
+assert(attributes['aria-invalid'] === 'true','field marked invalid');
+blockTrialError(detail,'CSV row 1: expected 2 columns');
+assert(inline.textContent.includes('CSV row 1'),'CSV parser errors inline');
+blockTrialError(detail,'Refreshing preview…');
+assert(inline.textContent === '' && attributes['aria-invalid'] === 'false','old error cleared');
+const state = {project:{aspect:'portrait',slides:[{id:'s1',cues:{blocks:[selection]}}]}};
+let opened;
+renderBlocks = async (path,options) => { opened = {path,options}; };
+await openBlockPicker('p1','s1');
+assert(opened.path === selection.block && opened.options.selection === selection,'edit opens saved scratch');
+assert(opened.options.aspect === '9:16' && calls.length === 3,'opening edit does not apply');
+
 ''')
     result = subprocess.run([runtime, '-m', str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
