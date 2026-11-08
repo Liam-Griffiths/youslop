@@ -214,7 +214,7 @@ meaning.
 |---|---|---|---|
 | Home / Projects | `#/` | Start panel, projects table, shoots list | T9.5 |
 | Footage | `#/footage`, `#/footage/<shoot>` | shoots, logger | T11.1–T11.8 |
-| Library | `#/library` | stock and linked folders (existing) | — |
+| Library | `#/library`, `#/library/blocks` | stock and linked folders; the app-wide block library | T12.8, T12.9 |
 | Channels | `#/channels/<id>` | look, voice, rules, sponsors, intro/outro | T10.2, T3.6 |
 | Packs | `#/packs` | content packs | T8.2 |
 | Settings | `#/settings` | everything in `.env`, first run again | T9.13 |
@@ -369,6 +369,12 @@ Rules:
   by T12.7. Our runtime stays compatible with that composition style.
 - The model chooses blocks by id and fills variables; it writes a new block
   only on request (T12.6), once, and the result is reused for free.
+- **Blocks are app-wide** (owner, 2026-11-08). Library > Blocks is the one
+  place to browse, preview (local posters and quarter-size loops) and try a
+  block with your own text; Visuals and the channel page open the same
+  browser (T12.8). Channels and projects customise with **presets** (saved
+  values and pins), never copies of block code; "Duplicate as mine" is the
+  only way to change code (T12.9).
 
 ## 10. Sponsors
 

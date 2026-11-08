@@ -16,6 +16,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 ~18:45 PST:** owner approved T9.1. T9.3–T9.10 done (shell, stages API, Home, Plan, Script, Voice, Visuals, Edit). Codex 5-hour 87% (paused for the reset), weekly 87%: T9.11 and maybe T9.12 before the weekly stop at ~90%; T9.13, T11.5/6, T12.5 wait for the weekly reset. UI harness flake noted in NOTES.md.
 > **2026-11-01 ~19:00 PST:** paused by the owner after T9.11. Next: T9.12 (not started), T9.13, then T11.5/T11.6/T12.5 and the owner-decision tickets. Codex weekly 88%. Owner plans user testing once the ticket list is complete.
 > **2026-11-08:** owner decisions: house read opt-in (T10.2/T10.4/T10.7 unblocked); packs permissive, MIT (T8.3 step 3 reopened); mastering two-pass linear loudnorm approved (T1.7 reopened, owner listens to one quarter-size preview); T6.4 closed (dropdown contrast fixed); T0.10 parked; T7.8 and T2.7b dropped. Queue: T9.12, T9.13, T11.5, T11.6, T12.5, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
+> **2026-11-08 (later):** owner asked for an app-wide block library: T12.8 (Library > Blocks, posters, motion preview, try-with-your-text, use/pin/duplicate) and T12.9 (channel and project presets). T12.5 now builds on T12.8. Queue: T9.12, T9.13, T11.5, T11.6, T12.8, T12.5, T12.9, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -189,6 +190,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.2 | Block authoring kit | S | T12.1 | done | 2026-10-31 Codex; block new/check (overflow, safe areas, contrast) in 3 aspects; prints user/ id |
 | T12.3 | Core block set v1 | L | T12.2, T2.10 | done | 2026-11-01 Codex (4 batches); 31 blocks pass browser checks in both aspects; contact sheet docs/blocks/core-v1.png |
 | T12.4 | Data blocks from tables | M | T12.3 | done | 2026-11-01 Codex; number-match P1 at spoken precision; CSV paste UI moved to T12.5 |
-| T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8 | todo | |
+| T12.5 | Blocks in the Visuals stage | M | T12.1, T9.8, T12.8 | todo | uses T12.8's browser in pick mode |
 | T12.6 | Make a block from a description | M | T12.2 | done | 2026-11-01 Codex; sandboxed generation, checked before saving; real model run and Library UI await the owner |
 | T12.7 | Retire the third-party catalog | S | T12.3, T12.5 | todo | owner: third-party blocks are temporary |
+| T12.8 | Block library: browse, preview and use blocks app-wide | L | T12.1, T12.3, T9.3 | todo | owner 2026-11-08: rich, accessible, app-wide library |
+| T12.9 | Channel and project block presets | M | T12.8, T12.5 | todo | presets, not copies of block code |
