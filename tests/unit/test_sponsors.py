@@ -49,9 +49,11 @@ def test_mid_timeline_storyboard_and_chapters(cut):
         assert new["paragraphs"][0]["timing"]["title_at"]["start"] == old["paragraphs"][0]["timing"]["title_at"]["start"] + 6
     board = storyboard.build(cut)
     assert board["segments"][1]["sponsor"] == "read"
-    after, exact = youtube.chapter_points(cut)
+    notes = []
+    after, exact = youtube.chapter_points(cut, notes.append)
     assert exact
-    assert next(p for p in after if p["title"] == "Sponsor")["t"] == tl["segments"][1]["start"]
+    assert not any(p["title"] == "Sponsor" for p in after)
+    assert any('Sponsor chapter' in note and '10 seconds' in note for note in notes)
     assert next(p for p in after if p["title"] == "Chapter 2")["t"] == before[2]["t"] + 6
     cut.sponsors[0].enabled = False
     assert render.timeline(cut) == original
@@ -548,3 +550,120 @@ def test_read_mic_uploads_keep_raw_and_processed_files(cut, monkeypatch):
         upload(b'm' * 2048)
     assert len(list((root / 'raw').iterdir())) == 3
     assert store.load(cut.id).sponsors[0].take == result['take']
+
+
+@pytest.mark.parametrize('kind', ['paid', 'house', 'none', 'disabled'])
+def test_publish_description_and_chapters(cut, sponsor_channel, monkeypatch, kind):
+    from app import brand, script_gen
+    from app.schema import Sponsor
+    read = slot()
+    sponsor_channel.sponsors = [Sponsor(id='paid', name='Snapshot brand',
+        url='https://example.test/offer', code='SAVE', disclosure='Paid promotion')]
+    sponsors.copy_to_slot(sponsor_channel, read, 'house' if kind == 'house' else 'paid')
+    read.take['duration'] = 15
+    read.enabled = kind != 'disabled'
+    cut.sponsors = [] if kind == 'none' else [read]
+    # Library mutations cannot affect the slot's copied publishing values.
+    sponsor_channel.sponsors[0].name = 'Changed library'
+    monkeypatch.setattr(script_gen, 'write_description', lambda *args: {
+        'hook': 'Hook', 'summary': 'Summary', 'chapter_titles': ['Writer title'] * 4,
+        'hashtags': [], 'tags': ['test']})
+    out = youtube.build_description(cut)
+    text = out['description']
+    points, exact = youtube.chapter_points(cut)
+    assert exact and points[0]['start'] == '0:00'
+    assert len(points) >= 3
+    stamps = [int(p['t']) for p in points]
+    assert all(b - a >= 10 for a, b in zip(stamps, stamps[1:]))
+    assert render.timeline(cut)['total'] - stamps[-1] >= 10
+    if kind in ('paid', 'house'):
+        start = next(s['start'] for s in render.timeline(cut)['segments'] if s['type'] == 'sponsor')
+        assert next(p['t'] for p in points if p.get('sponsor')) == start
+        assert f'{youtube._stamp(start)} Sponsor' in text
+        if kind == 'paid':
+            assert 'Snapshot brand: https://example.test/offer\nCode: SAVE\nPaid promotion' in text
+        else:
+            assert f'{brand.NAME}: {brand.SITE_URL}' in text
+            assert read.vars['made'] not in text and 'Code:' not in text
+    else:
+        assert 'Sponsor' not in text and 'Snapshot brand' not in text
+        assert not any(p.get('sponsor') for p in points)
+    assert 'Changed library' not in text
+
+
+def test_multiple_description_blocks(cut, monkeypatch):
+    from app import script_gen
+    cut.sponsors = [slot(paid=True, vars={'name': 'One', 'url': 'one.test', 'made': 'Paid promotion'}),
+                    slot(paid=True, vars={'name': 'Two', 'url': 'two.test', 'code': 'TWO'})]
+    monkeypatch.setattr(script_gen, 'write_description', lambda *args: {
+        'hook': '', 'summary': '', 'chapter_titles': [], 'hashtags': [], 'tags': []})
+    text = youtube.build_description(cut)['description']
+    assert 'One: one.test\nPaid promotion' in text
+    assert 'Two: two.test\nCode: TWO' in text
+
+
+def test_chapter_minimum_and_tail(cut, monkeypatch):
+    monkeypatch.setattr(render, 'timeline', lambda _: {'total': 34, 'segments': [
+        {'type': 'picture', 'paragraphs': [
+            {'id': 's0', 'start': 0.6, 'chapter': 'Opening', 'text': ''},
+            {'id': 's1', 'start': 10.1, 'chapter': 'Middle', 'text': ''},
+            {'id': 's2', 'start': 30, 'chapter': 'Tail', 'text': ''}]},
+        {'type': 'sponsor', 'start': 5, 'script': '', 'sponsor': 'read', 'estimated': False}]})
+    notes = []
+    points, _ = youtube.chapter_points(cut, notes.append)
+    assert [p['t'] for p in points] == [0, 10.1]
+    assert notes and len(points) < 3  # build_description omits the chapter list
+
+
+@pytest.mark.parametrize('kind', ['paid', 'house', 'none', 'disabled'])
+@pytest.mark.parametrize('response', ['confirmed', 'missing', 'false', 'rejected'])
+def test_paid_upload_and_fallback(cut, monkeypatch, tmp_path, kind, response):
+    import httpx
+    cut.render = {'output': 'video.mp4'}
+    (tmp_path / 'video.mp4').write_bytes(b'mocked video')
+    cut.sponsors = [] if kind == 'none' else [slot(paid=kind != 'house', enabled=kind != 'disabled')]
+    paid = kind == 'paid'
+    monkeypatch.setattr(youtube, 'project_dir', lambda _: tmp_path)
+    monkeypatch.setattr(youtube, '_access_token', lambda _: 'mock-token')
+    posts, updates = [], []
+    def result(code, **kwargs):
+        return httpx.Response(code, request=httpx.Request('POST', 'https://mock.test'), **kwargs)
+    def post(url, **kwargs):
+        posts.append(deepcopy(kwargs))
+        if paid and response == 'rejected' and len(posts) == 1:
+            return result(400, json={'error': {'message': 'Invalid part paidProductPlacementDetails'}})
+        return result(200, headers={'Location': 'https://mock.test/upload'})
+    def update(url, **kwargs):
+        assert url == f'{youtube.API}/videos'
+        updates.append(kwargs)
+        return result(200, json={'id': 'uploaded'})
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def put(self, url, **kwargs):
+            assert url == 'https://mock.test/upload'
+            body = {'id': 'uploaded'}
+            if response in ('confirmed', 'false'):
+                body['paidProductPlacementDetails'] = {'hasPaidProductPlacement': response == 'confirmed'}
+            return result(201, json=body)
+    monkeypatch.setattr(youtube.httpx, 'post', post)
+    monkeypatch.setattr(youtube.httpx, 'put', update)
+    monkeypatch.setattr(youtube.httpx, 'Client', Client)
+    out = youtube.upload_video(cut, 'channel', title='Title', description='Description',
+        tags=[], category_id='22', privacy='private')
+    assert out['video_id'] == 'uploaded'
+    part = 'paidProductPlacementDetails'
+    assert (part in posts[0]['json']) == paid
+    assert (part in posts[0]['params']['part']) == paid
+    assert posts[0]['json']['status'] == {'privacyStatus': 'private', 'selfDeclaredMadeForKids': False}
+    assert len(updates) == int(paid and response != 'confirmed')
+    if updates:
+        assert updates[0]['params'] == {'part': part}
+        assert updates[0]['json'] == {'id': 'uploaded', part: {'hasPaidProductPlacement': True}}
+    assert len(posts) == (2 if paid and response == 'rejected' else 1)
+    if len(posts) == 2:
+        assert part not in posts[1]['json'] and part not in posts[1]['params']['part']

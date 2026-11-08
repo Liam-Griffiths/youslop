@@ -169,7 +169,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T10.4 | Writing and voicing the read | S | T10.2 | done | 2026-11-08 Codex + review; drafts (mocked LLM), TTS and recorded takes with history and restore; all files kept |
 | T10.5 | Placement suggestions and checks | S | T10.1, T1.5 | done | 2026-10-31 Codex; suggest_slots (pre/mid/end) + 5 sponsor checks; paid flag for disclosure |
 | T10.6 | Sponsors in the editor | M | T10.1, T9.10 or T4.4 | done | inline sponsor copy until T10.2's library; review: input styling, lead-in label, block validation cache |
-| T10.7 | Description, chapters and YouTube flags | S | T10.1, T10.2 | todo |  |
+| T10.7 | Description, chapters and YouTube flags | S | T10.1, T10.2 | done | 2026-11-08 Codex + review; sponsor description block + chapter, paid flag (insert, fallback update; mocked); owner: first real paid upload confirms the path |
 
 ## Phase 11: footage (import, clip, label)
 

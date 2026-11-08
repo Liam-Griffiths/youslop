@@ -823,7 +823,7 @@ function publishLayout(p, finish, stages, settings, upload) {
     ${section('render', 'Render', `<div id="publish-progress" aria-live="polite"></div>${settings}
       ${!ready ? finishedVideo(p, finish) : ''}`)}
     <div class="publish-cards">${section('thumb', 'Thumbnail', '<div id="publish-thumb-tools"></div>')}
-    ${section('description', 'Description & chapters', descriptionPanel(p) + publishChapters(finish) + `<p class="sub">Paid promotion: ${(p.sponsors || []).some(s=>s.enabled && s.paid) ? 'yes' : 'off'} · Sponsor publishing block is not available yet.</p>`)}</div>
+    ${section('description', 'Description & chapters', descriptionPanel(p) + publishChapters(finish) + `<p class="sub">Paid promotion: ${(p.sponsors || []).some(s=>s.enabled && s.paid) ? 'yes' : 'off'} · Write the description to include enabled sponsor links and paid disclosures.</p>`)}</div>
     ${section('upload', 'Upload', `${!ready || !verified ? '<p class="sub">Upload waits for a current full render with no P0 verification findings.</p>' : ''}${upload}`)}
     </div></div>`;
 }

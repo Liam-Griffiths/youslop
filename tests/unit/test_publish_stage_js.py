@@ -28,7 +28,9 @@ const isCut=()=>false, chapterCount=()=>0, videoTag=()=>'<video id="render-outpu
 const ensureChannelsLoaded=async()=>{};
 const state={stage:'publish',project:{id:'p1',style:{format:'kenburns',vignette:0,ken_burns_amount:0,
  transition:0,music_db:-18},slides:[{}],recorded_count:1,channel_id:'c1',
- title:'Test',idea:'Test',thumb:{},youtube:{connected:true},description:'Description'},
+ title:'Test',idea:'Test',thumb:{},youtube:{connected:true},
+ sponsors:[{enabled:true,paid:true}],
+ description:'Hook\n\nExample: https://example.test\nCode: SAVE\nPaid promotion'},
  templates:[],endTemplates:[],youtubeCategories:[],thumbStyles:[],channels:[]};
 let posts=[], ready=false, saves=0, actionMode=false;
 const finish={check:{findings:[]},review:{},
@@ -58,6 +60,10 @@ async function run(){
  check(body.innerHTML.includes('Music bed') && body.innerHTML.includes('Pause between paragraphs'),'sound controls kept');
  check(thumb.innerHTML.includes('Headline') && thumb.innerHTML.includes('Draw thumbnail'),'thumbnail tools mounted');
  check(body.innerHTML.includes('Sponsor') && body.innerHTML.includes('Chapter'),'chapters include sponsors');
+ check(body.innerHTML.includes('Example: https://example.test\nCode: SAVE\nPaid promotion'),
+   'description preview shows saved sponsor block');
+ check(body.innerHTML.includes('Paid promotion: yes') && !body.innerHTML.includes('not available yet'),
+   'paid flag and publishing copy reflect sponsor support');
  check(upload.disabled,'upload blocked before render');
  const before=body.innerHTML;
  saveThumb({uppercase:true},true);

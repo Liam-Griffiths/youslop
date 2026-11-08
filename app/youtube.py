@@ -243,19 +243,35 @@ def upload_video(
             "selfDeclaredMadeForKids": False,
         },
     }
+    paid = any(slot.enabled and slot.paid for slot in project.sponsors)
+    placement_part = "paidProductPlacementDetails"
+    parts = "snippet,status"
+    if paid:
+        body[placement_part] = {"hasPaidProductPlacement": True}
+        parts += "," + placement_part
     progress("Starting the upload session")
-    init = httpx.post(
-        f"{UPLOAD_API}/videos", params={"uploadType": "resumable", "part": "snippet,status"},
-        headers={**headers, "Content-Type": "application/json; charset=UTF-8",
+    init_headers = {**headers, "Content-Type": "application/json; charset=UTF-8",
                 "X-Upload-Content-Type": "video/mp4",
-                "X-Upload-Content-Length": str(size)},
-        json=body, timeout=30.0,
-    )
+                "X-Upload-Content-Length": str(size)}
+    def initiate():
+        return httpx.post(
+            f"{UPLOAD_API}/videos", params={"uploadType": "resumable", "part": parts},
+            headers=init_headers, json=body, timeout=30.0)
+
+    init = initiate()
+    placement_rejected = (paid and init.status_code == 400
+                          and placement_part.lower() in init.text.lower())
+    if placement_rejected:
+        progress("Paid-promotion insert part rejected; setting it after upload")
+        parts = "snippet,status"
+        body.pop(placement_part)
+        init = initiate()
     init.raise_for_status()
     upload_url = init.headers["Location"]
 
     sent = 0
     video_id = ""
+    uploaded = {}
     with open(video_path, "rb") as fh, httpx.Client(timeout=120.0) as client:
         while True:
             chunk = fh.read(CHUNK)
@@ -270,7 +286,8 @@ def upload_video(
             )
             sent += len(chunk)
             if r.status_code in (200, 201):
-                video_id = (r.json() or {}).get("id", "")
+                uploaded = r.json() or {}
+                video_id = uploaded.get("id", "")
                 break
             if r.status_code != 308:      # 308 = keep going, anything else is real
                 r.raise_for_status()
@@ -280,6 +297,15 @@ def upload_video(
     if not video_id:
         raise RuntimeError("Upload finished but YouTube did not return a video id.")
     progress(f"Uploaded — https://youtu.be/{video_id}")
+
+    if paid and (placement_rejected or not (uploaded.get(placement_part) or {}).get(
+            "hasPaidProductPlacement")):
+        progress("Setting paid-promotion disclosure")
+        r = httpx.put(
+            f"{API}/videos", params={"part": placement_part}, headers=headers,
+            json={"id": video_id, placement_part: {"hasPaidProductPlacement": True}},
+            timeout=30.0)
+        r.raise_for_status()
 
     thumb = project_dir(project.id) / "thumb" / "thumb.jpg"
     if thumb.is_file():
@@ -313,7 +339,7 @@ def _stamp(seconds: float) -> str:
     return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
 
 
-def chapter_points(project: Project) -> tuple[list[dict], bool]:
+def chapter_points(project: Project, progress: Progress = lambda m: None) -> tuple[list[dict], bool]:
     """Where the video's chapters start, from the same timeline the render
     uses — so the timestamps land where the sections actually begin.
 
@@ -349,15 +375,24 @@ def chapter_points(project: Project) -> tuple[list[dict], bool]:
     points[0]["t"] = 0.0
     shaped: list[dict] = []
     for p in points:
-        if shaped and p["t"] - shaped[-1]["t"] < CHAPTER_MIN_GAP:
+        if shaped and int(p["t"]) - int(shaped[-1]["t"]) < CHAPTER_MIN_GAP:
             continue
         shaped.append(p)
-    # Keep sponsor markers even for short reads, without folding away the
-    # chapter that resumes immediately afterwards. Publishing checks own the
-    # platform's minimum chapter length (T10.7).
-    shaped.extend({"t": seg["start"], "title": "Sponsor", "text": seg["script"],
-                   "sponsor": seg["sponsor"]}
-                  for seg in tl["segments"] if seg["type"] == "sponsor")
+    # Check the published (whole-second) stamps, including the final chapter.
+    while len(shaped) > 1 and tl["total"] - int(shaped[-1]["t"]) < CHAPTER_MIN_GAP:
+        shaped.pop()
+    for seg in tl["segments"]:
+        if seg["type"] != "sponsor":
+            continue
+        t = int(seg["start"])
+        previous = max((int(p["t"]) for p in shaped if p["t"] <= seg["start"]), default=0)
+        following = min((int(p["t"]) for p in shaped if p["t"] > seg["start"]),
+                        default=tl["total"])
+        if t - previous < CHAPTER_MIN_GAP or following - t < CHAPTER_MIN_GAP:
+            progress(f"Sponsor chapter at {_stamp(t)} skipped: chapters must last at least 10 seconds")
+            continue
+        shaped.append({"t": seg["start"], "title": "Sponsor", "text": seg["script"],
+                       "sponsor": seg["sponsor"]})
     shaped.sort(key=lambda p: p["t"])
     for p in shaped:
         p["start"] = _stamp(p["t"])
@@ -369,17 +404,30 @@ def build_description(project: Project, progress: Callable[[str], None] = lambda
     """Write the whole description: Claude's hook and summary, chapters timed
     off the timeline, hashtags, and the picture credits."""
     from . import script_gen
-    points, exact = chapter_points(project)
+    points, exact = chapter_points(project, progress)
     progress(f"Writing the description ({len(points)} chapter point(s))")
     words = script_gen.write_description(project, points)
     titles = words["chapter_titles"]
     lines = [words["hook"], ""]
     if words["summary"]:
         lines += [words["summary"], ""]
+    for slot in project.sponsors:
+        if not slot.enabled:
+            continue
+        values = slot.vars
+        name, url = values.get("name", ""), values.get("url", "")
+        lines.append(f"{name}: {url}".strip(": "))
+        if slot.paid:
+            if values.get("code"):
+                lines.append(f"Code: {values['code']}")
+            if values.get("made"):
+                lines.append(values["made"])
+        lines.append("")
     if len(points) >= 3:
         lines.append("Chapters")
         for n, p in enumerate(points):
-            title = (titles[n] if n < len(titles) and titles[n] else p["title"]) or (
+            title = ("Sponsor" if "sponsor" in p else
+                     (titles[n] if n < len(titles) and titles[n] else p["title"])) or (
                 "Intro" if n == 0 else f"Part {n + 1}")
             lines.append(f"{p['start']} {title}")
         lines.append("")
