@@ -585,7 +585,7 @@ def _evaluate(cdp, session, expression):
 
 def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
              frames=1, seek_js="window.__seek({t})", deterministic=True,
-             session_action=None, scene_probe=None):
+             session_action=None, scene_probe=None, on_still=None):
     """Run scene capture, or a custom action with the same managed CDP session.
 
     session_action(cdp, session, run) owns navigation and capture when supplied.
@@ -643,6 +643,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             session_action(cdp, session, run)
             return run
         for item in job["items"]:
+            if item.get('assets_root'):
+                run.job['assets_root'] = item['assets_root']
             W, H = int(item["W"]), int(item["H"])
             output_size = item.get("size", size)
             if output_size[0] / W != output_size[1] / H:
@@ -683,6 +685,8 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
                     "format": "png", "fromSurface": True}, session)["data"])
                 if out_dir is None:
                     run.thumbs[clip] = png
+                    if on_still is not None:
+                        on_still(clip, png)
                 else:
                     c = run.clips[clip]
                     try:
@@ -779,7 +783,7 @@ def render_scene(items: list[dict], out_dir: Path,
 
 
 def capture_stills(items, scene_root=None, *, project_root=None, channel_root=None,
-                   scene_probe=None, assets_root=None, models=None):
+                   scene_probe=None, assets_root=None, models=None, on_still=None):
     """Capture local scenes, or 3D shot items at their requested t with models."""
     job = dict(items=items, scene_root=str(scene_root) if scene_root is not None else None,
                assets_root=assets_root, project_root=project_root, channel_root=channel_root)
@@ -790,7 +794,7 @@ def capture_stills(items, scene_root=None, *, project_root=None, channel_root=No
             size=i.get("size", (i["W"], i["H"])), t=i.get("t", 0), frames=1,
             url_path=f"{PAGE}?item={n}") for n, i in enumerate(items)]
     run = _run_cdp(job, lambda m: None,
-                   scene_probe=scene_probe)
+                   scene_probe=scene_probe, on_still=on_still)
     return run.thumbs
 
 

@@ -92,7 +92,7 @@ document.addEventListener('keydown', e => {
   }
 }, true);
 
-for (const [id, label] of [['', 'Home'], ['footage', 'Footage'], ['library', 'Library'],
+for (const [id, label] of [['', 'Home'], ['footage', 'Footage'], ['library', 'Library'], ['blocks', 'Blocks'],
   ['channels', 'Channels'], ['packs', 'Packs'], ['settings', 'Settings'], ['guide', 'How it works']]) {
   registerCommand({id: `route-${id || 'home'}`, label, group: 'Screens', run: () => go(`#/${id}`)});
 }
@@ -106,6 +106,9 @@ registerCommand({id: 'preview-section', label: 'Preview current section', group:
   run: () => tlPreviewBit()});
 registerCommand({id: 'jobs', label: 'Open jobs', group: 'Actions', run: () => openJobs()});
 registerCommand({id: 'setup', label: 'Run first-run setup again', group: 'Screens', run: () => go('#/setup')});
+registerCommand({id: 'find-block', label: 'Find a block…', group: 'Blocks',
+  when: () => typeof renderBlocks === 'function',
+  run: async () => { go('#/blocks'); await renderBlocks(); $('#blocks-search')?.focus(); }});
 
 for (const [id, label, run] of [
   ['search', 'Search clips', () => $('#footage-search').focus()],

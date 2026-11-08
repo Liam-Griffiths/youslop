@@ -27,6 +27,7 @@ PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
     result = ['#/', '#/setup', '#/library', '#/settings', '#/guide', '#/projects',
+              '#/blocks', '#/blocks/number_slam', '#/blocks/search/zzznomatch',
               '#/footage', '#/footage/ssnapshot', '#/packs', '#/channels', '#/channels/csnapshot',
               '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
@@ -65,6 +66,18 @@ def seed():
     from PIL import Image
     from app.schema import Channel, Project, SponsorSlot
     config.ensure_dirs()
+    from app import block_library
+    from PIL import ImageDraw
+    for ref in ('number_slam', 'map_highlight', 'title_card'):
+        for aspect, size in [('16:9', (480, 270)), ('9:16', (270, 480))]:
+            path = block_library.poster_path(ref, aspect)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image = Image.new('RGB', size, '#16181C')
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((24, 24, size[0]-24, 28), fill='#FF5A1F')
+            draw.text((24, 50), ref.replace('_', ' ').upper(), fill='#F2F2F2')
+            draw.text((24, 90), '42,000' if ref == 'number_slam' else 'ILLUSTRATIVE PREVIEW', fill='#A0A6AE')
+            image.save(path)
     # A tiny, directly seeded viewing fixture; no original or analysis pipeline.
     shoot = footage.Shoot('ssnapshot', path='/synthetic/Morning shoot',
         files=[footage.SourceFile('f1', duration=4, width=320, height=180)],
@@ -252,6 +265,7 @@ def main(argv=None):
     # Before any app import. Never use the caller's data root, even for seeding.
     with tempfile.TemporaryDirectory(prefix='corkbored-ui-') as data:
         os.environ.update(CORKBORED_DATA=data, YOUSLOP_DATA=data, CORKBORED_TOKEN='off',
+                          CORKBORED_BLOCK_POSTERS='off',
                           OPENAI_API_KEY='', ELEVENLABS_API_KEY='')
         try:
             from app import stage
@@ -261,6 +275,8 @@ def main(argv=None):
             args.out.mkdir(parents=True, exist_ok=True)
             with server() as base:
                 rows, errors = capture(base, args.out)
+            from app import jobs
+            assert not any(j['kind'] == 'block posters' for j in jobs.recent()), 'Snapshots started a poster batch'
             from app.review import sheet
             sheet(rows, args.out / 'sheet.png')
             (args.out / 'errors.json').write_text(json.dumps(errors, indent=2) + '\n')

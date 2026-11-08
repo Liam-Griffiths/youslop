@@ -73,10 +73,28 @@ app.add_api_route('/projects/{pid}/shot-list/build', shot_list_ui.build, methods
 app.add_api_route('/projects/{pid}/shot-list/pdf', shot_list_ui.pdf, methods=['GET'])
 
 @app.get('/api/blocks')
-def list_blocks() -> list[dict]:
-    from . import blocks
-    return [dict(id=key, name=item['meta']['name'], origin=item['meta'].get('origin'))
-            for key, item in blocks.discover().items()]
+def list_blocks(q: str = '', category: str = '', aspect: str = '', source: str = '',
+                channel: str = '', data: bool = False) -> list[dict]:
+    from .block_library import browse
+    return browse(q, category, aspect, source, channel, data)
+
+
+@app.post('/api/blocks/posters')
+def start_block_posters() -> dict:
+    from .block_library import start_posters
+    return start_posters()
+
+
+@app.get('/api/blocks/{ref:path}/poster')
+def block_poster(ref: str, aspect: str = '16:9'):
+    from .block_library import poster_path
+    try:
+        path = poster_path(ref, aspect)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not path.exists():
+        return Response(status_code=204)
+    return FileResponse(path, media_type='image/png')
 
 
 @app.post('/api/blocks/describe')

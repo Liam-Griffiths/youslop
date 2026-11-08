@@ -190,6 +190,9 @@ async function route() {
     state.project = null; state.channel = null;
     view.innerHTML = '<h1>Packs</h1><div id="packs-screen"></div>';
     await renderPacks();
+  } else if (hash === '#/blocks' || hash.startsWith('#/blocks/')) {
+    state.project = null; state.channel = null;
+    await renderBlocks(hash.slice(9));
   } else if (hash.startsWith('#/footage')) {
     state.project = null; state.channel = null;
     await renderFootage(hash.split('/')[2]);

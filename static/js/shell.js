@@ -24,7 +24,7 @@ function stageTab(stage, subtab) {
 function paintAppNav() {
   const hash = location.hash || '#/';
   $('#app-nav').innerHTML = [['', 'Projects'], ['footage', 'Footage'], ['library', 'Library'],
-    ['channels', 'Channels'], ['packs', 'Packs'], ['settings', 'Settings']].map(([id, name]) => {
+    ['blocks', 'Blocks'], ['channels', 'Channels'], ['packs', 'Packs'], ['settings', 'Settings']].map(([id, name]) => {
       const active = id ? hash.startsWith(`#/${id}`) : hash === '#/' || hash === '#/projects';
       return `<a href="#/${id}" ${active ? 'aria-current="page"' : ''}>${name}</a>`;
     }).join('');

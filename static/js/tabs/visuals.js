@@ -148,7 +148,7 @@ function visualSourcePanel(s, source) {
     <button type="button" class="btn sm ghost" onclick="openDiagramEditor('${s.id}')">Draw a diagram</button>
     <button type="button" class="btn sm ghost" onclick="openCustomEditor('${s.id}')">Design a slide</button>
     <button type="button" class="btn sm ghost" onclick="openVisualEdit('${s.id}')">Open Edit · variables and timeline</button>
-    <a class="btn sm ghost" href="#/library">Reusable blocks in Library</a>
+    <a class="btn sm ghost" href="#/blocks">Browse reusable blocks</a>
     ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
     ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
   if (source === 'Upload') return `<label class="field"><span>Upload a picture or clip</span><input type="file" accept="image/*,video/*" onchange="uploadMedia('${s.id}',this.files[0])"></label>`;
