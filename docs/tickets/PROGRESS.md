@@ -21,6 +21,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **Owner decision pending (T12.8c log):** "Duplicate as mine" cannot fork built-in blocks: none of the 39 pass the user-block sandbox. Choose (a) convert built-ins over time, (b) trust unedited forks of built-ins, or (c) presets only. The button is disabled with a reason until then.
 > **2026-11-08 (morning): queue complete; ready for user testing.** Done since the night note: T12.8 (+b, c), T12.5, T12.10a/b/c, T12.9 (+b), T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7 (implemented; owner listens). Owner items: (1) listen to the T1.7 before/after section and keep or revert the linear master; (2) decide "Duplicate as mine" for built-in blocks (T12.8c log); (3) first real paid-sponsor upload confirms the YouTube flag path (T10.7). Codex 5-hour ~40%, weekly ~19%.
 > **2026-11-08 (afternoon):** owner rethink of video styles around blocks. Decisions: mix kinds of picture within a video; "Design a style" becomes "Design a block"; block themes per channel or standalone video, with previews; more blocks (inspired by the HyperFrames registry, clean-room); fix the block preview (doesn't play in the app window: H.264 previews, no expand). Queue: T12.11, T12.12a, T12.12b, T13.1, T13.2, T13.3, T13.4, T12.13 batches A–E. T13.5 later.
+> **2026-11-08 (evening):** owner asked for clipping of long recordings (podcasts, streams) into short-form clips: Phase 14 (T14.1–T14.6), queued after T12.13. Owner decision before T14.1: speech-to-text engine.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -219,3 +220,14 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T13.3 | Styles as starting kits | M | T13.1, T12.12a, T12.9b | done | 2026-11-08 Codex + review; app/style_kits.py: 9 built-in kits, your kits (save/import/export), saved-format + slide-style adapters, apply with dry-run summary; review: kits no longer reset engines, cadence or knobs |
 | T13.4 | Style picker and placement; Design a block | M | T13.2, T13.3, T12.12b | done | 2026-11-08 Codex (high) + review; grouped kit picker with real sample posters/motion; Home compact control, Visuals header + dry-run Apply/Cancel, channel House style, Publish summary, Design a block; review: card sizing, header padding, summary wording |
 | T13.5 | Drawn-cut pieces as blocks (pilot: Group Chat) | M | T13.1, T12.13 D | parked | later; owner schedules |
+
+## Phase 14: clips from long recordings
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | todo | owner: choose engine (recommended faster-whisper, optional install, model on click); audio-only import; chunked, resumable |
+| T14.2 | Vertical and square output for the render pipeline | L | — | todo | WIDTH/HEIGHT fixed at 1920×1080 today; landscape goldens must stay identical |
+| T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | snap to pauses; offline suggestions; LLM ranking opt-in (text only) |
+| T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
+| T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
+| T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
