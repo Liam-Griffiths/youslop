@@ -108,8 +108,9 @@ function visualPreview(g, byId) {
       ${s.cues?.blocks?.length && !s.on_camera ? visualBlockStill(p, s) : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
         : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : visualKind(s) === '3D' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
+      <div class="visual-graphics">${g.ids.map(id => `<span class="visual-graphic-paragraph">${(byId[id].s.overlays || []).map(o => `<button type="button" class="btn sm visual-chip" data-graphic="${esc(o.id)}" onclick="openGraphicEdit('${id}',this.dataset.graphic)">¶${byId[id].i+1} · ${esc(o.vars.title || o.block_id)}</button>`).join('')}</span>`).join('')}</div>
     </div>
-    <div class="row"><button type="button" class="btn sm" onclick="previewBit('${s.id}')">Preview this bit · ¼ size</button>
+    <div class="row">${g.ids.filter(id => !byId[id].s.on_camera && !isCut(p.style.format)).map(id => `<button type="button" class="btn sm" onclick="openGraphicPicker('${id}')">Add graphic${g.ids.length > 1 ? ' · ¶'+(byId[id].i+1) : ''}</button>`).join('')}<button type="button" class="btn sm" onclick="previewBit('${s.id}')">Preview this bit · ¼ size</button>
       ${c ? `<button type="button" class="btn sm ghost" onclick="setSlideFocal('${s.id}','${c.id}')">${c.focal?.length === 2 ? 'Focus set · change' : 'Set focus point'}</button>
         ${c.kind === 'video' ? `<button type="button" class="btn sm ghost" onclick="playClipFor('${s.id}','${c.id}')">Play source clip</button>` : ''}` : ''}
       <label><input type="checkbox" ${s.locked_media ? 'checked' : ''} onchange="saveSlide('${s.id}',{locked_media:this.checked})"> Keep on re-plan</label></div>

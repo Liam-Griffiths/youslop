@@ -77,6 +77,8 @@ def fill(project, *, overwrite=False, rerank=False):
             slide.candidates = [chosen.to_dict()] + [c for c in slide.candidates if c['id'] != chosen.id]
             slide.chosen_id = chosen.id
             used.add(chosen.id)
+            from ..overlay_plan import apply
+            apply(project, slide)
             count += 1
     return count
 

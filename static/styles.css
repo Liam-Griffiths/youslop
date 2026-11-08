@@ -1339,3 +1339,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .block-create { margin-bottom: 16px; }
 .block-create > summary { cursor: pointer; font-weight: 600; }
 .block-create[open] > summary { margin-bottom: 12px; }
+
+/* Graphics chips sit above the selected base picture. */
+.visual-frame { position:relative; }
+.visual-graphics { position:absolute; inset:auto 10px 10px; display:flex; flex-wrap:wrap; gap:4px; }
+.visual-graphics .visual-chip { background:var(--panel); }

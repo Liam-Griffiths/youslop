@@ -5,10 +5,13 @@ async function renderBlocks(path = '', options = {}) {
   const route = location.hash;
   const query = path.startsWith('search/') ? decodeURIComponent(path.slice(7)) : '';
   const selected = query ? '' : decodeURIComponent(path);
-  const [items, channels] = await Promise.all([api('/api/blocks'), api('/api/channels')]);
+  const [items, channels] = await Promise.all([api('/api/blocks' + (options.overlay ? '?overlay=1' : '')), api('/api/channels')]);
   if (location.hash !== route) return;
   if (!options.mode && !location.hash.startsWith('#/blocks')) return;
   blocksBrowser = {items, selected, options, trial:options.selection ? {ref:options.selection.block, values:options.selection.vars} : null};
+  // The Edit stage moves #inspector inside the view; take it back before the
+  // view is replaced, or the detail panel has nowhere to paint (picker from G).
+  if (typeof restoreShellInspector === 'function' && view.contains($('#inspector'))) restoreShellInspector();
   view.innerHTML = `<h1>Blocks</h1><p class="sub">Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
     ${options.mode === 'pick' ? '<button type="button" class="btn ghost" id="block-picker-close">Back to project</button>' : ''}
     <div class="blocks-browser"><aside class="blocks-filters" aria-label="Block filters">
@@ -44,7 +47,7 @@ async function renderBlocks(path = '', options = {}) {
     const browser = blocksBrowser;
     const refresh = async () => {
       if (blocksBrowser !== browser || !$('#blocks-grid')) return;
-      browser.items = await api('/api/blocks');
+      browser.items = await api('/api/blocks' + (browser.options.overlay ? '?overlay=1' : ''));
       if (blocksBrowser !== browser || !$('#blocks-grid')) return;
       paintBlocksGrid(); blockPosterArrived();
       const job = await api(`/api/jobs/${result.job}`);

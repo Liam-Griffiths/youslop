@@ -54,7 +54,7 @@ def poster_path(ref, aspect, item=None):
     return paths.data_root() / '.cache/blocks/posters' / ref / f'{signature(item)}-{aspect.replace(":", "x")}.png'
 
 
-def browse(q='', category='', aspect='', source='', channel='', data=False):
+def browse(q='', category='', aspect='', source='', channel='', data=False, overlay=False):
     prefs = preferences()
     pinned = {}
     for row in channels.list_channels():
@@ -69,7 +69,7 @@ def browse(q='', category='', aspect='', source='', channel='', data=False):
         row = dict(id=ref, ref=ref, name=meta['name'], description=meta.get('description', ''),
                    kind=meta['kind'], category=meta.get('category', meta['kind']),
                    tags=meta.get('tags', []), aspects=list(meta['aspects']), duration=meta['duration'],
-                   source=origin, licence=meta['licence'], origin=meta.get('origin'),
+                   overlay=meta.get('overlay'), source=origin, licence=meta['licence'], origin=meta.get('origin'),
                    check_status='Metadata valid; browser check not recorded',
                    channels=pinned.get(ref, []), variables=meta['variables'],
                    favourite=ref in prefs['favourites'], recent=prefs['recent'].get(ref, 0),
@@ -80,7 +80,7 @@ def browse(q='', category='', aspect='', source='', channel='', data=False):
         haystack = ' '.join([row['name'], row['description'], *row['tags'], *row['variables']]).casefold()
         if (q.casefold() not in haystack or category and category != row['category'] or
                 aspect and aspect not in row['aspects'] or channel and channel not in row['channels'] or
-                data and not row['works_with_data'] or source and
+                data and not row['works_with_data'] or overlay and not row['overlay'] or source and
                 not (source == origin or source == 'packs' and ref.startswith('pack/'))):
             continue
         result.append(row)

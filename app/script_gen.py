@@ -535,6 +535,9 @@ def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lam
         return
     from .learning import resolve_choices
     resolve_choices(project)
+    from .overlay_plan import apply
+    for slide in slides:
+        apply(project, slide)
     outline = project.outline
     chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
     progress(f"Planning visuals for {len(slides)} slides")

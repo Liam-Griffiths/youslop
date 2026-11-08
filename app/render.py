@@ -862,7 +862,7 @@ def _segment_graph(
                                       prepare_only=prepare_only)
         n_inputs = inputs.count('-i')
 
-    if not slide.on_camera and any(s.overlays for s, _ in group):
+    if 'graphics' not in hide and not slide.on_camera and any(s.overlays for s, _ in group):
         from .block_overlays import compose
         inputs, graph, last = compose(project, group, inputs, graph, last, size, fps,
                                       channel, prepare_only=prepare_only)
@@ -1073,7 +1073,7 @@ def _render_segment(
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
                                crf=crf, preset=preset, last_line=last_line, hide=hide)
-    if (any(s.overlays for s, _ in group) and not cuts.is_cut(style.format)
+    if ('graphics' not in hide and any(s.overlays for s, _ in group) and not cuts.is_cut(style.format)
             and ((group[0][0].cues or {}).get('blocks') or scenes.handles(style.format)
                  or style.format.startswith('custom:'))):
         from copy import deepcopy
@@ -2273,7 +2273,7 @@ def preview_opening(project: Project, kind: str,
 PROXY_VERSION = 2
 
 
-PREVIEW_LAYERS = frozenset({'titles', 'cues', 'chapters', 'music', 'stings', 'notes'})
+PREVIEW_LAYERS = frozenset({'titles', 'cues', 'chapters', 'music', 'stings', 'notes', 'graphics'})
 
 
 def _hidden_suffix(hide):

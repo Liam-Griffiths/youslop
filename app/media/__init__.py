@@ -364,6 +364,9 @@ def gather(project: Project, progress: Progress = lambda m: None,
 
     _top_up(targets, subject_pool, progress)
     _autopick(project)
+    from ..overlay_plan import apply
+    for slide in targets:
+        apply(project, slide)
     project.status = "media" if project.status == "scripted" else project.status
 
 

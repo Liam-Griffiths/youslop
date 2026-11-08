@@ -52,13 +52,14 @@ function tlInspector() {
   const box = $('#tl-inspector');
   if (!box) return;
   const sel = TL.selection, p = state.project;
-  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor'];
+  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay'];
   box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
     <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask">Ask</button><div id="tl-fields"></div>`;
   $('#tl-ask').onclick = tlAsk;
   $('#tl-kind').onchange = (e) => e.target.value ? tlSelectKind(e.target.value) : tlSelect(null);
   const body = $('#tl-fields');
   if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
+  if (sel.kind === 'overlay') { tlGraphicInspector(sel, body); return; }
   if (sel.kind === 'sponsor') {
     const slot = p.sponsors.find((s) => s.id === sel.id);
     if (slot) { body.innerHTML = tlSponsorFields(slot); tlSponsorWire(slot); }

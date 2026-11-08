@@ -1,5 +1,5 @@
 // Layer times come from the server. All items use T4.3's selection model.
-const TL_LAYER_KINDS = {sponsors: 'sponsor', titles: 'title', cues: 'cue',
+const TL_LAYER_KINDS = {graphics: 'overlay', sponsors: 'sponsor', titles: 'title', cues: 'cue',
   chapters: 'chapter', music: 'music', stings: 'sting', notes: 'note'};
 const tlHideQuery = () => '?hide=' + Object.keys(TL.hidden).filter((k) => TL.hidden[k]).sort().join(',');
 

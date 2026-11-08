@@ -25,7 +25,9 @@ document.addEventListener('keydown', (e) => {
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
   if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
-  if (k === '?') tlShortcuts();
+  if (tlGraphicKey(e)) { e.preventDefault(); return; }
+  if (k === 'g' || k === 'G') tlGraphicAdd();
+  else if (k === '?') tlShortcuts();
   else if (k === '[' || k === ']') tlSelectNext(k === '[' ? -1 : 1);
   else if (k === 's' || k === 'S') tlSplitHere();
   else if (k === 'c' || k === 'C') tlChapterHere(e.shiftKey);

@@ -74,9 +74,9 @@ app.add_api_route('/projects/{pid}/shot-list/pdf', shot_list_ui.pdf, methods=['G
 
 @app.get('/api/blocks')
 def list_blocks(q: str = '', category: str = '', aspect: str = '', source: str = '',
-                channel: str = '', data: bool = False) -> list[dict]:
+                channel: str = '', data: bool = False, overlay: bool = False) -> list[dict]:
     from .block_library import browse
-    return browse(q, category, aspect, source, channel, data)
+    return browse(q, category, aspect, source, channel, data, overlay)
 
 
 @app.get('/api/blocks/third-party')

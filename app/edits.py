@@ -171,6 +171,8 @@ def add_overlay(slide, item):
 def update_overlay(slide, ident, patch):
     if not any(o['id'] == ident for o in slide.overlays):
         raise EditError(f'No such overlay: {ident}', 404)
+    # An edited proposal is the user's now: re-planning must not replace it.
+    patch = {'by': 'hand', **patch}
     return patch_slide_fields(slide, {'overlays': [dict(o, **patch) if o['id'] == ident else o
                                                  for o in slide.overlays]})
 

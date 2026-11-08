@@ -130,6 +130,10 @@ def seed():
                         ('The vote', 'A block before', 'main', 'The commission considers the tower.', 'archive'),
                         ('Back to the door', 'What now', 'conclusion', 'Return to the opening image.', 'ending')])]}
         project = Project.from_dict(raw)
+        if fmt in ('kenburns', 'essay'):
+            project.slides[0].overlays = [dict(id='snapshot-graphic', block_id='lower_third_panel',
+                vars={'title':'Hannah Chen', 'subtitle':'Ferry operator'}, at=0, dur=3,
+                position='bottom_left', by='hand')]
         if fmt == 'essay':
             project.sponsors = [SponsorSlot(id='snapshot-read', after_slide_id=project.slides[0].id,
                 script='Sponsored by Example. Tools for your next project.',
@@ -218,6 +222,8 @@ def capture(base, out):
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
             if route == '#/p/psnapessay/render':
                 _evaluate(cdp, session, "tlSelectKind('sponsor'); true")
+            if route == '#/p/psnapkenburns/edit':
+                _evaluate(cdp, session, "(async () => { tlGraphicBlocks = await api('/api/blocks?overlay=1'); tlSelectKind('overlay'); return true; })()")
             png = cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
             path = output_path(out, route)
             path.write_bytes(base64.b64decode(png['data']))

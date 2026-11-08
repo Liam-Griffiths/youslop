@@ -285,6 +285,7 @@ function tlShortcuts() {
       <dt>Alt + drag</dt><dd>Retiming without snapping</dd>
       <dt>Camera: I / O</dt><dd>Mark source range; Delete cuts it</dd>
       <dt>Overlay: 1 / 2 / 3</dt><dd>Cutaway / picture in picture / split</dd>
+      <dt>Graphics: G</dt><dd>Add at playhead; arrows move, Shift + arrows resize, Delete removes</dd>
       <dt>Overlay: P / Delete</dt><dd>Change corner / remove overlay</dd>
       <dt>?</dt><dd>Open this sheet</dd>
     </dl></section>`;

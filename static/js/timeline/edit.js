@@ -15,6 +15,7 @@ function tlSnap(t, words, fps, pxTol, zoom, alt) {
 
 function tlTimingKind(s) {
   if (s.kind === 'title' && s.id === s.sid) return 'title';
+  if (s.kind === 'overlay') return 'overlay';
   if (s.kind === 'cue') return 'cue';
   if (s.kind === 'chapter') return 'chapter';
   return '';
@@ -68,7 +69,7 @@ function tlWireTiming() {
     const kind = gap ? 'gap' : tlTimingKind(sel);
     if (!kind) return;
     el.classList.add('editable');
-    if (kind === 'title' || kind === 'chapter') {
+    if (kind === 'title' || kind === 'chapter' || kind === 'overlay') {
       const handle = document.createElement('span');
       handle.className = `tl-resize ${kind === 'chapter' ? 'left' : ''}`;
       handle.title = 'Resize hold';
@@ -97,7 +98,7 @@ function tlWireTiming() {
       const guide = document.createElement('div');
       guide.className = 'tl-snap-guide'; guide.hidden = true; track.append(guide);
       const holdKey = kind === 'chapter' ? 'chapter_hold' : 'title_hold';
-      const hold = q.timing[holdKey].value;
+      const hold = kind === 'overlay' ? sel.t1 - sel.t0 : q.timing[holdKey].value;
       const oldGap = q.timing.gap.value;
       const boundary = q.start + q.duration;
       const last = tlParas().at(-1)?.id === q.id;
@@ -117,7 +118,7 @@ function tlWireTiming() {
         moved = true; suppressClick = true;
         const base = kind === 'gap' ? boundary : mode === 'resize'
           ? (kind === 'chapter' ? sel.t0 : sel.t0 + hold) : sel.t0;
-        const snap = tlSnap(base + delta, q.word_times || [], tlFps(), 6, TL.zoom, event.altKey);
+        const snap = tlSnap(base + delta, kind === 'overlay' ? (q.word_times || []).filter(w => w.src && w.src !== 'est').map(w => ({...w, end:w.start})) : q.word_times || [], tlFps(), 6, TL.zoom, event.altKey);
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
         let target;
         if (kind === 'gap') {
@@ -133,6 +134,12 @@ function tlWireTiming() {
           }
           track.style.width = `${Math.ceil((TL.data.total + shift) * TL.zoom) + 24}px`;
           target = boundary + shift;
+        } else if (kind === 'overlay') {
+          value = mode === 'resize' ? clamp(snap.t - sel.t0, .05, Math.min(tlGraphicMax(sel), q.start + q.duration - sel.t0))
+            : clamp(snap.t - q.start, 0, Math.max(0, q.duration - hold));
+          target = mode === 'resize' ? sel.t0 + value : q.start + value;
+          if (mode === 'resize') el.style.width = `${Math.max(2, value * TL.zoom - 2)}px`;
+          else el.style.left = `${target * TL.zoom}px`;
         } else if (mode === 'resize') {
           value = clamp(hold + (kind === 'chapter' ? -1 : 1) * (snap.t - base), Math.min(minHold, maxHold), maxHold);
           if (kind === 'chapter') {
@@ -163,6 +170,7 @@ function tlWireTiming() {
           track.style.width = trackWidth;
           return;
         }
+        if (kind === 'overlay') { tlGraphicSave(sel, mode === 'resize' ? {dur:value} : {at:value, on:''}); return; }
         const patch = kind === 'cue' ? () => tlCuePatch(sel, value) : {
           [kind === 'gap' ? 'gap_override' : mode === 'resize' ? holdKey : 'title_at']: value};
         tlSaveTiming(sel, patch);
