@@ -35,7 +35,8 @@ def test_empty_project_and_contract():
     rows = stages(p, readiness_check(p))
     assert [r['id'] for r in rows] == ['plan', 'script', 'voice', 'visuals', 'edit', 'publish']
     assert all(r['status'] == 'todo' for r in rows)
-    assert all(set(r) == {'id', 'label', 'status', 'reason', 'next'} for r in rows)
+    fields = {'id', 'label', 'status', 'reason', 'next'}
+    assert all(set(r) == fields | ({'rules', 'rule'} if r['id'] == 'visuals' else set()) for r in rows)
     assert all(len(r['reason']) < 28 and r['next'] for r in rows)
     assert p == before
 

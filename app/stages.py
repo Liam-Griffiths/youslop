@@ -54,6 +54,25 @@ def _has_visual(project, run):
                for c in lead.candidates)
 
 
+def visual_rules(project):
+    """Mix-bar data, using the applied snapshot even if its library kit is gone."""
+    rules = dict(project.style_kit.get('rules') or {})
+    text = ('3D for how it works, archive for who and when, scenes for numbers.'
+            if project.style.format == 'stage' else
+            'Face for opinion, cutaway when you describe a place or a thing.'
+            if project.delivery == 'on_camera' else
+            'Draw numbers with blocks; keep text clear of the Shorts UI.'
+            if project.aspect == 'portrait' else
+            'Footage for what you shot, archive for context, scenes for numbers.'
+            if project.style.format == 'kenburns' else
+            'Use the format’s drawing; archive for context, scenes for numbers.')
+    if 'visual_change_s' in rules:
+        text += f" Change pictures every {rules['visual_change_s']:g} s."
+    if 'block_share_max' in rules:
+        text += f" Blocks at most {rules['block_share_max']:.0%} of the cut."
+    return dict(rules=rules, rule=text)
+
+
 def readiness_check(project: Project) -> dict:
     """Only P0 checks: no storyboard, media probes, browser or model loading.
 
@@ -118,6 +137,7 @@ def stages(project: Project, check_result: dict) -> list[dict]:
     if runs:
         result[-1]['kinds'] = {k: sum(kinds.kind_for(project, r[0]) == k for r in runs)
                                for k in sorted(kinds.kinds_in(project))}
+    result[-1].update(visual_rules(project))
     edit_ok = script_ok and voice_ok and visuals_ok and not p0
     result.append(row('edit', 'Edit', 'warn' if p0 else 'ready' if edit_ok
                       else 'in_progress' if total else 'todo',

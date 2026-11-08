@@ -216,6 +216,6 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T13.1 | Picture kind per paragraph: mixed kinds render | L | T12.10a | done | 2026-11-08 Codex (high) + review; Slide.kind + kinds.kind_for, per-boundary joins, per-kind planning/checks; goldens + 60 cache keys identical; mixed doc/loudmouth/board previews checked |
 | T13.2 | Visuals: choose each paragraph's kind | M | T13.1, T9.8 | done | 2026-11-08 Codex + review; kind chip + grouped menu (Visuals, Edit inspector), shift-click ranges, per-paragraph sources/editors, kind settings, inactive_blocks keeps block values; review: row layout, kind colours, menu states |
-| T13.3 | Styles as starting kits | M | T13.1, T12.12a, T12.9b | todo | built-in kits, apply with dry-run summary, your styles (absorbs saved formats) |
+| T13.3 | Styles as starting kits | M | T13.1, T12.12a, T12.9b | done | 2026-11-08 Codex + review; app/style_kits.py: 9 built-in kits, your kits (save/import/export), saved-format + slide-style adapters, apply with dry-run summary; review: kits no longer reset engines, cadence or knobs |
 | T13.4 | Style picker and placement; Design a block | M | T13.2, T13.3, T12.12b | todo | one grouped picker with real previews; Home, Visuals header, channel; Publish read-only |
 | T13.5 | Drawn-cut pieces as blocks (pilot: Group Chat) | M | T13.1, T12.13 D | parked | later; owner schedules |

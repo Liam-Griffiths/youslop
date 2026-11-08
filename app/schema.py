@@ -670,6 +670,7 @@ class Channel:
     """A series. Videos in one inherit its look and open on its slate."""
     id: str
     name: str                       # "Who were they?"
+    style_kit: dict = field(default_factory=dict)
     block_presets: list[dict] = field(default_factory=list)
     tagline: str = ""               # small line under the name on the slate
     concept: str = ""               # what the series covers; steers scripts and casting
@@ -696,6 +697,7 @@ class Channel:
     def to_dict(self) -> dict[str, Any]:
         return {
             "sponsors": [s.to_dict() for s in self.sponsors],
+            "style_kit": deepcopy(self.style_kit),
             "block_presets": deepcopy(self.block_presets),
             "id": self.id, "name": self.name, "tagline": self.tagline,
             "concept": self.concept, "default_minutes": self.default_minutes,
@@ -730,8 +732,9 @@ class Channel:
         avatar = AvatarSpec(**{k: v for k, v in (d.get("avatar") or {}).items()
                                if k in AvatarSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"sponsors", "block_presets", "frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
+                 - {"style_kit", "sponsors", "block_presets", "frame", "style", "intro", "voice", "outro", "narrator", "avatar", "formats"})
         return cls(**{k: v for k, v in d.items() if k in known},
+                   style_kit=deepcopy(d.get("style_kit") or {}),
                    sponsors=[Sponsor.from_dict(s) for s in (d.get("sponsors") or [])],
                    block_presets=deepcopy(d.get("block_presets") or []),
                    frame=FrameSpec.from_dict(d.get("frame") or {}),
@@ -801,7 +804,9 @@ class Project:
     idea: str
     title: str = ""
     subtitle: str = ""
+    blocks: list[str] = field(default_factory=list)
     format_look: dict = field(default_factory=dict)
+    style_kit: dict = field(default_factory=dict)
     block_presets: list[dict] = field(default_factory=list)
     channel_id: str = ""
     use_intro: bool = True
@@ -901,12 +906,14 @@ class Project:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "style_kit": deepcopy(self.style_kit),
             "block_presets": deepcopy(self.block_presets),
             "id": self.id,
             "idea": self.idea,
             "title": self.title,
             "subtitle": self.subtitle,
             "channel_id": self.channel_id, "format_look": self.format_look,
+            "blocks": list(self.blocks),
             "use_intro": self.use_intro,
             "use_outro": self.use_outro,
             "intro": self.intro.to_dict(),
@@ -1028,11 +1035,13 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"style_kit", "blocks", "block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
+            style_kit=deepcopy(d.get("style_kit") or {}),
+            blocks=deepcopy(d.get("blocks") or []),
             block_presets=deepcopy(d.get("block_presets") or []),
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
@@ -1113,6 +1122,7 @@ def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documenta
         p.channel_id = channel.id
         p.tone = channel.tone or tone
         p.style = Style(**channel.style.to_dict())
+        p.style_kit = deepcopy(channel.style_kit)
         p.style.block_theme = {}  # Inherit live channel tokens, not a snapshot.
         p.frame = FrameSpec.from_dict(channel.frame.to_dict())
         p.voice = Voice(**channel.voice.to_dict())
