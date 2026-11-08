@@ -6,10 +6,10 @@
 :root { --panel:color-mix(in srgb,var(--bg) 95%,var(--ink)); --line:color-mix(in srgb,var(--bg) 90%,var(--ink)); --dim:color-mix(in srgb,var(--bg) 35%,var(--ink)); }
 .copy { position:absolute; left:12%; right:12%; top:18%; bottom:18%; display:flex; flex-direction:column; justify-content:center; gap:28px; }
 .copy > * { flex-shrink:0; min-width:0; max-width:100%; overflow-wrap:anywhere; }
-.display,.speaker { font-family:InstrumentDisplay,sans-serif; font-weight:800; font-stretch:62%; letter-spacing:-.01em; line-height:1.06; text-transform:uppercase; }
+.display,.speaker { font-family:var(--font-display, InstrumentDisplay),sans-serif; font-weight:var(--weight-display, 800); font-stretch:62%; letter-spacing:-.01em; line-height:1.06; text-transform:uppercase; }
 .display { font-size:96px; }
-.support { font:500 32px/1.4 Inter,sans-serif; color:var(--dim); }
-.label { font:500 26px/1.4 Inter,sans-serif; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+.support { font:500 32px/1.4 var(--font-body, Inter),sans-serif; color:var(--dim); }
+.label { font:500 26px/1.4 var(--font-body, Inter),sans-serif; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
 .picture { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .panel,.caption-panel { background:var(--panel); padding:36px; border:2px solid var(--line); }
 .opening { border-top:6px solid var(--accent); }
@@ -23,7 +23,7 @@
 .rule { border-top:5px solid var(--accent); }
 .stack { padding:0 0 0 24px; border-left:6px solid var(--accent); background:transparent; gap:4px; }
 .stack > * { padding:16px 24px; background:var(--panel); }
-.quotation { margin:0; font:800 64px/1.15 InstrumentDisplay,sans-serif; font-stretch:62%; border-left:6px solid var(--accent); padding-left:32px; }
+.quotation { margin:0; font:var(--weight-display, 800) 64px/1.15 var(--font-display, InstrumentDisplay),sans-serif; font-stretch:62%; border-left:6px solid var(--accent); padding-left:32px; }
 .quote .support { padding-left:38px; }
 .pull { top:auto; bottom:16%; right:25%; }
 .pull .quotation { font-size:58px; }

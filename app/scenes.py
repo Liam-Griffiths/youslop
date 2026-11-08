@@ -51,9 +51,7 @@ def context_base(project=None, channel=None, *, include_packs=True) -> dict:
     for key in ("accent", "accent2", "ground", "ink"):
         pal[key] = "#" + "".join(f"{c:02x}" for c in pal[key][:3])
     frame_values = {**frame.to_dict(), **{k: v["value"] for k, v in resolved["frame"].items()}}
-    from . import packs
-    pack_fonts = {f'pack:{item["ref"]}': f'/fonts/packs/{item["ref"]}'
-                  for pack in packs.scan() for item in pack.fonts()} if include_packs else {}
+    from .block_theme import fonts
     return dict(frame=frame_values, palette=pal, copy=copy,
                 vars=dict(**{f"copy.{k}": v for k, v in copy.items()},
                           **{k: v["value"] for k, v in resolved["colors"].items()},
@@ -61,10 +59,12 @@ def context_base(project=None, channel=None, *, include_packs=True) -> dict:
                           tagline=copy["tagline"],
                           title=project.title if project else "Scene capture",
                           subtitle=project.subtitle if project else ""),
-                fonts={**pack_fonts, "Inter": "/fonts/Inter-Medium.ttf",
-                       "Archivo": "/fonts/ArchivoNarrow-Bold.ttf",
-                       "EB Garamond": "/fonts/EBGaramond-Regular.ttf",
-                       "JetBrains Mono": "/fonts/JetBrainsMono-Regular.ttf"},
+                block_theme_radius_set='radius' in style.block_theme or bool(channel and 'radius' in channel.style.block_theme),
+                block_theme_explicit=bool(style.block_theme or channel and channel.style.block_theme),
+                block_theme={k: v['value'] for k, v in resolved['block'].items()
+                             if k not in ('bg', 'ink', 'accent', 'accent2') or
+                             k in style.block_theme or channel and k in channel.style.block_theme},
+                fonts=fonts(include_packs),
                 assets_url="/scene/{token}/assets/",
                 assets_urls=dict(ASSETS_URLS),
                 asset_roots=dict(project_root=str(store.project_dir(project.id)) if project else None,
@@ -238,7 +238,8 @@ def _key(template, ctx, seconds, size, fps, key_extra=()):
     if errors:
         raise ValueError("Scene lint: " + "; ".join(errors))
     sources.update({str(p): p.read_text() for p in mounted})
-    spec = [SCENE_VERSION, _asset_hash(), template, sources, ctx,
+    key_ctx = ctx if ctx.get('is_block') else {k: v for k, v in ctx.items() if k not in ('block_theme', 'block_theme_explicit', 'block_theme_radius_set')}
+    spec = [SCENE_VERSION, _asset_hash(), template, sources, key_ctx,
             seconds, size, fps, *key_extra]
     return hashlib.sha1(json.dumps(spec, sort_keys=True).encode()).hexdigest(), html
 

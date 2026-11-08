@@ -1195,12 +1195,16 @@ def _slate_channel(project: Project):
     if project.channel_id:
         channel = channels.load_or_none(project.channel_id)
         if channel:
+            inherited_blocks = channel.style.block_theme
             channel.style = Style(**project.style.to_dict())
+            channel.style.block_theme = inherited_blocks
             channel.frame = FrameSpec.from_dict(project.frame.to_dict())
         if channel and project.format_look:
             channel.intro = IntroSpec(**project.format_look['intro'])
             channel.outro = OutroSpec(**project.format_look['outro'])
+            inherited_blocks = channel.style.block_theme
             channel.style = Style(**project.style.to_dict())
+            channel.style.block_theme = inherited_blocks
         if channel:
             from .learning import choose, effective_frame
             from . import themes
@@ -1763,6 +1767,7 @@ def _segment_key(project, group, settings) -> str:
     import dataclasses
     import hashlib
     import json
+    from .block_theme import cache_owner
 
     root = project_dir(project.id)
     rows = []
@@ -1770,6 +1775,8 @@ def _segment_key(project, group, settings) -> str:
         row = dataclasses.asdict(slide)
         if (slide.cues or {}).get('blocks') or slide.overlays:
             row['block_versions'] = _block_versions(slide)
+            from .block_theme import values
+            row['block_theme'] = values(project, settings.get('channel'))
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(slide) or {}).get('overlays', [])} if slide.on_camera else set()
         row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id or c['id'] in overlay_ids]
         if overlay_ids:
@@ -1801,8 +1808,8 @@ def _segment_key(project, group, settings) -> str:
     spec = [SEGMENT_VERSION, scenes.SCENE_VERSION, project.title, project.subtitle,
             rows, str(picture), _stat(picture),
             [c for c in source.candidates if c["id"] == source.chosen_id],
-            dataclasses.asdict(project.style), project.frame.to_dict(),
-            dataclasses.asdict(channel) if dataclasses.is_dataclass(channel) else None,
+            cache_owner(project.style), project.frame.to_dict(),
+            cache_owner(channel),
             {k: v for k, v in settings.items() if k != "channel"}, graph,
             ffutil.video_args("segment.mp4", crf=settings["crf"], preset=settings["preset"]),
             ffutil.h264("segment.mp4", crf=settings["crf"], preset=settings["preset"])]
@@ -2443,6 +2450,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     import dataclasses
     import hashlib
     import json
+    from .block_theme import cache_owner
 
     root = project_dir(project.id)
     group = groups[index]
@@ -2453,6 +2461,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         row = dataclasses.asdict(s)
         if (s.cues or {}).get('blocks') or s.overlays:
             row['block_versions'] = _block_versions(s)
+            from .block_theme import values
+            row['block_theme'] = values(project, channel)
         # Search results nobody picked cannot change the picture on screen.
         overlay_ids = {o.get('source', {}).get('candidate_id') for o in (project.active_take(s) or {}).get('overlays', [])} if s.on_camera else set()
         row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id or c['id'] in overlay_ids]
@@ -2476,9 +2486,9 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
          _segment_timing(project, groups, index), index == len(groups) - 1,
          chapter_card(project, nxt) if nxt else None,
          nxt.chapter_hold if nxt else None,
-         dataclasses.asdict(project.style), project.frame.to_dict(),
+         cache_owner(project.style), project.frame.to_dict(),
          camera_plan(project, groups)[index],
-         dataclasses.asdict(channel) if dataclasses.is_dataclass(channel) else None,
+         cache_owner(channel),
          _segments_before_slides(project), list(preview_size()), PREVIEW_FPS],
         default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]

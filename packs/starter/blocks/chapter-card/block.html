@@ -3,9 +3,9 @@
 <style>
 .band { position:absolute; left:0; top:0; bottom:0; width:34%; background:var(--brand); }
 .label { position:absolute; left:4%; width:26%; top:38%; height:24%; display:flex; align-items:center; }
-.label p { margin:0; width:100%; font:700 52px/1.15 Inter,sans-serif; color:var(--bg); text-transform:uppercase; letter-spacing:.04em; overflow-wrap:anywhere; }
+.label p { margin:0; width:100%; font:700 52px/1.15 var(--font-body, Inter),sans-serif; color:var(--bg); text-transform:uppercase; letter-spacing:.04em; overflow-wrap:anywhere; }
 .title { position:absolute; left:40%; right:10%; top:25%; height:50%; display:flex; align-items:center; }
-h1 { margin:0; width:100%; font:700 104px/1.05 Inter,sans-serif; overflow-wrap:anywhere; }
+h1 { margin:0; width:100%; font:var(--weight-display, 700) 104px/1.05 var(--font-display, Inter),sans-serif; overflow-wrap:anywhere; }
 </style>
 {% endblock %}
 {% block body %}

@@ -26,7 +26,7 @@ def registry():
         return _REGISTRY[1]
 
 
-def signature(item):
+def signature(item, theme=None):
     digest = hashlib.sha256(b'block-posters-v1')
     # Include runtime/templates/fonts as well as authored defaults and assets.
     roots = [item['root'], scenes.SCENE_DIR, paths.resource_root() / 'resources/fonts']
@@ -42,6 +42,9 @@ def signature(item):
                 cached = (stamp, content.digest())
                 _SIGNATURES[str(root)] = cached
             digest.update(cached[1])
+    if theme is not None:
+        import json
+        digest.update(json.dumps(theme, sort_keys=True).encode())
     return digest.hexdigest()[:24]
 
 
@@ -203,7 +206,7 @@ _REQUESTS = {}
 _PREVIEW_RENDERS = 0
 
 
-def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background='checker', project=None, slide=None):
+def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background='checker', project=None, slide=None, theme=None):
     """Explicit scratch preview. Superseded queued requests never capture."""
     global _PREVIEW_RENDERS
     import json
@@ -220,7 +223,7 @@ def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background
     if item is None:
         raise ValueError('Unknown block')
     values = blocks.validate_vars(item['meta'], values)
-    template, ctx = blocks.prepare(ref, values, aspect, _block=item)
+    template, ctx = blocks.prepare(ref, values, aspect, _block=item, theme=theme)
     ground = preview_background(background, project, slide) if item['meta'].get('overlay') and kind == 'motion' else None
     if os.environ.get('CORKBORED_BLOCK_POSTERS') == 'off':
         return {'disabled': True}
@@ -230,7 +233,7 @@ def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background
         if len(_REQUESTS) >= 256 and session not in _REQUESTS:
             _REQUESTS.pop(next(iter(_REQUESTS)))
         _REQUESTS[session] = sequence
-    key = hashlib.sha256(json.dumps([signature(item), ctx.get('block_version'), values, aspect, kind, scale, str(ground), ground.stat().st_mtime_ns if ground else None, 'webm-v1'], sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(json.dumps([signature(item, ctx['block_theme']), ctx.get('block_version'), values, aspect, kind, scale, str(ground), ground.stat().st_mtime_ns if ground else None, 'webm-v1'], sort_keys=True).encode()).hexdigest()
     out = preview_file(key, kind)
     with _RENDER_LOCK:
         if _REQUESTS.get(session) != sequence:

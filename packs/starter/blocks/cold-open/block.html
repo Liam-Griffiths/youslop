@@ -3,9 +3,9 @@
 <style>
 .rule { position:absolute; left:12%; top:69%; width:76%; height:6px; background:var(--brand); }
 .title { position:absolute; left:12%; right:12%; top:28%; height:36%; display:flex; align-items:flex-end; }
-h1 { margin:0; width:100%; font:700 120px/1.02 Inter,sans-serif; overflow-wrap:anywhere; }
+h1 { margin:0; width:100%; font:var(--weight-display, 700) 120px/1.02 var(--font-display, Inter),sans-serif; overflow-wrap:anywhere; }
 .caption { position:absolute; left:12%; right:12%; top:16%; height:10%; }
-p { margin:0; font:700 36px/1.2 Inter,sans-serif; color:var(--brand); text-transform:uppercase; letter-spacing:.1em; overflow-wrap:anywhere; }
+p { margin:0; font:700 36px/1.2 var(--font-body, Inter),sans-serif; color:var(--brand); text-transform:uppercase; letter-spacing:.1em; overflow-wrap:anywhere; }
 </style>
 {% endblock %}
 {% block body %}

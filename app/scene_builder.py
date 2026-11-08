@@ -80,7 +80,7 @@ _PROBE = r"""(() => {
    }
    return {id:e.dataset.layer, index:i, screen:e.closest('[data-screen]')?.dataset.screen || '',
      start:Number(e.dataset.start || 0), duration:Number(e.dataset.duration || root.dataset.duration),
-     motion:e.dataset.motion || e.dataset.anim || 'none', arrival:Number(e.dataset.motionDuration || 0.6),
+     motion:e.dataset.motion || e.dataset.anim || 'none', arrival:Number(e.dataset.motionDuration || 0.6) * (parseFloat(getComputedStyle(root).getPropertyValue('--block-pace')) || 1),
      ease:e.dataset.motionEase, y:e.dataset.motionY, feather:Number(e.dataset.motionFeather || 1),
      exit:Number(e.dataset.motionExit || 0), capture:e.dataset.capture,
      steps:JSON.parse(e.dataset.steps || '[]'),

@@ -2,6 +2,7 @@
 
 Styles and frames are snapshots, not sparse overrides. Sources are inferred by
 comparison; resetting restores the current channel/theme/default value.
+Block tokens use sparse overrides and explicit ownership instead.
 """
 from dataclasses import fields
 import math
@@ -51,6 +52,8 @@ def variables(project=None, channel=None):
             source = 'theme'
         unit = 's' if f.name.endswith('_s') else '%' if '_pct_' in f.name else 'dB' if f.name.endswith('_db') else 'LUFS' if f.name.endswith('_lufs') else ''
         result['frame'][f.name] = dict(value=value, source=source, unit=unit)
+    from .block_theme import resolve
+    result["block"] = resolve(project, channel)
     return result
 
 
@@ -59,7 +62,17 @@ def apply(project, channel, scope, key, value):
     if scope not in ('project', 'channel') or (scope == 'channel' and channel is None):
         raise ValueError('Choose an available project or channel scope')
     obj = channel if scope == 'channel' else project
-    if key in ('accent', 'accent2'):
+    if key.startswith('block.'):
+        from .block_theme import validate
+        token = key.removeprefix('block.')
+        if value is None:
+            from .block_theme import BLOCK_TOKENS
+            if token not in BLOCK_TOKENS:
+                raise ValueError('Unknown block token')
+            obj.style.block_theme.pop(token, None)
+        else:
+            obj.style.block_theme = {**obj.style.block_theme, token: validate(token, value)}
+    elif key in ('accent', 'accent2'):
         if value is None:
             value = getattr(channel.style, key) if scope == 'project' and channel else themes.theme(obj.style.theme)[key]
         if not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value):

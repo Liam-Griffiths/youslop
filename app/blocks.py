@@ -251,7 +251,7 @@ class Loader(jinja2.BaseLoader):
         raise jinja2.TemplateNotFound(template)
 
 
-def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, _block=None, overlay=False, position=None):
+def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, theme=None, _block=None, overlay=False, position=None):
     block = _block if _block is not None else discover().get(block_id)
     if block is None:
         raise ValueError(f'unknown block: {block_id}')
@@ -279,6 +279,18 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
     # scene context carries the channel's resolved colours and takes priority.
     if context is None:
         ctx['vars'].update(meta.get('default_colors', {}))
+    from .block_theme import BLOCK_TOKENS, COLORS, validate
+    tokens = {**BLOCK_TOKENS, **{k: v for k, v in ctx['vars'].items() if k in COLORS}}
+    inherited = theme if theme is not None else ctx.get('block_theme', {}) if context is not None else {}
+    tokens.update({k: validate(k, v, ctx['fonts']) for k, v in inherited.items()})
+    ctx['block_theme'] = tokens
+    ctx['is_block'] = True
+    ctx['block_theme_radius_set'] = theme is not None or bool(ctx.get('block_theme_radius_set'))
+    ctx['block_theme_explicit'] = theme is not None or bool(ctx.get('block_theme_explicit'))
+    ctx['vars'].update({k: v for k, v in tokens.items() if k in ('bg', 'ink', 'accent', 'accent2') or
+                        k in ('panel', 'line', 'dim') and v})
+    ctx['palette'] = {**ctx['palette'], 'ground': tokens['bg'], 'ink': tokens['ink'],
+                      'accent': tokens['accent'], 'accent2': tokens['accent2']}
     if overlay:
         spec = meta.get('overlay')
         if not spec or seconds > spec['max_dur']:

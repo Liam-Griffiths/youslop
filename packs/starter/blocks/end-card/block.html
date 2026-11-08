@@ -2,11 +2,11 @@
 {% block head %}
 <style>
 .title { position:absolute; left:10%; right:10%; top:14%; height:22%; display:flex; align-items:center; justify-content:center; text-align:center; }
-h1 { margin:0; width:100%; font:700 80px/1.1 Inter,sans-serif; overflow-wrap:anywhere; }
-.slot { position:absolute; top:44%; width:36%; height:36%; border:4px solid var(--brand); border-radius:12px; box-sizing:border-box; }
+h1 { margin:0; width:100%; font:var(--weight-display, 700) 80px/1.1 var(--font-display, Inter),sans-serif; overflow-wrap:anywhere; }
+.slot { position:absolute; top:44%; width:36%; height:36%; border:4px solid var(--brand); border-radius:var(--radius, 12px); box-sizing:border-box; }
 .slot.a { left:10%; } .slot.b { right:10%; }
 .caption { position:absolute; left:10%; right:10%; top:83%; height:8%; text-align:center; }
-p { margin:0; font:700 40px/1.2 Inter,sans-serif; color:var(--brand); text-transform:uppercase; letter-spacing:.08em; overflow-wrap:anywhere; }
+p { margin:0; font:700 40px/1.2 var(--font-body, Inter),sans-serif; color:var(--brand); text-transform:uppercase; letter-spacing:.08em; overflow-wrap:anywhere; }
 </style>
 {% endblock %}
 {% block body %}

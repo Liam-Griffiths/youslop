@@ -8,9 +8,9 @@
 :root { --panel:color-mix(in srgb,var(--bg) 95%,var(--ink)); --line:color-mix(in srgb,var(--bg) 90%,var(--ink)); }
 .box,.photo { position:absolute; }
 .box { overflow:hidden; overflow-wrap:anywhere; min-width:0; }
-.heading { font:800 {{ 86 if p else 96 }}px/1.08 ChannelDisplay,sans-serif; font-stretch:62%; }
-.copy { font:44px/62px Inter,sans-serif; }
-.mono { font:44px/62px ChannelMono,monospace; }
+.heading { font:var(--weight-display, 800) {{ 86 if p else 96 }}px/1.08 var(--font-display, ChannelDisplay),sans-serif; font-stretch:62%; }
+.copy { font:44px/62px var(--font-body, Inter),sans-serif; }
+.mono { font:44px/62px var(--font-body, ChannelMono),monospace; }
 .rule { border-top:5px solid var(--accent); padding-top:18px; }
 .strip { background:var(--bg); border-top:4px solid var(--accent); }
 .photo { overflow:hidden; }

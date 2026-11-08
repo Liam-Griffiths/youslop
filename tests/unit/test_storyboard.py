@@ -1,7 +1,6 @@
 """Stable storyboard contract, shared validation, and CLI write safety."""
 import json
 import os
-from dataclasses import asdict
 
 import pytest
 
@@ -16,7 +15,8 @@ def test_golden(project, request):
     if request.config.getoption('--update-goldens'):
         golden.write_text(actual + '\n')
     assert actual + '\n' == golden.read_text()
-    assert storyboard.build(project)['style'] == asdict(project.style)
+    # Empty block overrides stay absent from the serialized legacy contract.
+    assert storyboard.build(project)['style'] == project.style.to_dict()
 
 
 def test_apply(project):

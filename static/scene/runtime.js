@@ -114,7 +114,7 @@
     const spec = motions[kind];
     const css = getComputedStyle(el);
     const dur = Math.max(0, number(el.dataset.duration, builder ? window.__composition.duration : 0));
-    const arrive = Math.min(dur, Math.max(0.001, builder ? number(el.dataset.motionDuration, spec.duration) : number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), spec.duration))));
+    const arrive = Math.min(dur, Math.max(0.001, builder ? number(el.dataset.motionDuration, spec.duration) * number(css.getPropertyValue('--block-pace'), 1) : number(el.dataset.animDur, number(css.getPropertyValue('--arrive-s'), spec.duration))));
     const exit = builder ? Math.min(dur / 2, number(el.dataset.motionExit)) : Math.min(dur / 2, arrive * Math.max(0, number(el.dataset.animExit, number(css.getPropertyValue('--exit-ratio'), 0.5))));
     let targets = el;
     if (kind === 'words' && !builder) {

@@ -352,6 +352,7 @@ class Style:
     # The second colour. Flat-black-and-one-gold templates ignore it; the
     # colourful ones are built on the pair, and patterns alternate between them.
     accent2: str = "#7FA6B8"
+    block_theme: dict = field(default_factory=dict)  # sparse block-only overrides
     # Which theme these colours came from. It also decides the ground, the ink
     # and which icons the patterns are tiled from — see themes.palette().
     theme: str = "archive"
@@ -385,7 +386,10 @@ class Style:
     cut_look: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        if not self.block_theme:
+            data.pop("block_theme")
+        return data
 
 
 @dataclass
@@ -1107,6 +1111,7 @@ def new_project(idea: str, target_minutes: int = 12, tone: str = "warm documenta
         p.channel_id = channel.id
         p.tone = channel.tone or tone
         p.style = Style(**channel.style.to_dict())
+        p.style.block_theme = {}  # Inherit live channel tokens, not a snapshot.
         p.frame = FrameSpec.from_dict(channel.frame.to_dict())
         p.voice = Voice(**channel.voice.to_dict())
         p.narrator = Narrator(**channel.narrator.to_dict())

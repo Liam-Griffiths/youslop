@@ -7,10 +7,10 @@
 .header,.footer,.item,.photo,.annotation { position:absolute; }
 .header,.footer { left:{{ explain.x }}px; width:{{ explain.w }}px; }
 .header { top:{{ explain.header }}px; border-top:5px solid var(--accent); padding-top:24px; }
-h1 { font:800 {{ 86 if height > width else 96 }}px/1.08 ExplainDisplay,sans-serif; font-stretch:62%; height:{{ 186 if height > width else 104 }}px; }
-.footer { top:{{ explain.footer }}px; height:84px; color:var(--dim); font:30px/1.4 Inter,sans-serif; }
-.row,.caption { font:44px/62px Inter,sans-serif; }
-.mono { font:44px/62px ExplainMono,monospace; font-variant-numeric:tabular-nums; color:var(--accent); }
+h1 { font:var(--weight-display, 800) {{ 86 if height > width else 96 }}px/1.08 var(--font-display, ExplainDisplay),sans-serif; font-stretch:62%; height:{{ 186 if height > width else 104 }}px; }
+.footer { top:{{ explain.footer }}px; height:84px; color:var(--dim); font:30px/1.4 var(--font-body, Inter),sans-serif; }
+.row,.caption { font:44px/62px var(--font-body, Inter),sans-serif; }
+.mono { font:44px/62px var(--font-body, ExplainMono),monospace; font-variant-numeric:tabular-nums; color:var(--accent); }
 .row { display:grid; grid-template-columns:90px minmax(0,1fr); gap:20px; border-top:2px solid var(--line); padding:12px 0; }
 .caption { background:var(--bg); height:62px; }
 [data-fit] { overflow:hidden; overflow-wrap:anywhere; min-width:0; }

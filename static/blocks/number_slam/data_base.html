@@ -9,33 +9,33 @@ html,body { overflow:visible!important; } body { width:{{ width }}px; height:{{ 
 .header,.footer,.item,.atlas,.plot { position:absolute; }
 .header,.footer { left:{{ data.x }}px; width:{{ data.w }}px; }
 .header { top:{{ data.header }}px; border-top:5px solid var(--accent); padding-top:24px; }
-h1 { font:800 {{ 86 if height > width else 96 }}px/1.08 DataDisplay,sans-serif; font-stretch:62%; height:{{ 186 if height > width else 104 }}px; }
-.footer { top:{{ data.footer }}px; height:84px; font:30px/1.4 Inter,sans-serif; color:var(--dim); }
-.label { font:44px/1.2 Inter,sans-serif; }
-.mono { font-family:DataMono,monospace; font-variant-numeric:tabular-nums; }
+h1 { font:var(--weight-display, 800) {{ 86 if height > width else 96 }}px/1.08 var(--font-display, DataDisplay),sans-serif; font-stretch:62%; height:{{ 186 if height > width else 104 }}px; }
+.footer { top:{{ data.footer }}px; height:84px; font:30px/1.4 var(--font-body, Inter),sans-serif; color:var(--dim); }
+.label { font:44px/1.2 var(--font-body, Inter),sans-serif; }
+.mono { font-family:var(--font-body, DataMono),monospace; font-variant-numeric:tabular-nums; }
 .dim { color:var(--dim); } .accent { color:var(--accent); }
 [data-fit] { overflow:hidden; overflow-wrap:anywhere; min-width:0; }
 .single { white-space:nowrap; }
 .atlas { overflow:hidden; } .atlas-strip { width:100%; } .atlas-row { position:relative; width:100%; }
 /* Capture the complete strip in a world screen; preview clips to one row. */
 body:has([data-builder-active]) .atlas { overflow:visible; }
-.number { height:{{ data.hero*1.4 }}px; font:{{ data.hero }}px/1.4 DataMono,monospace; white-space:nowrap; }
+.number { height:{{ data.hero*1.4 }}px; font:{{ data.hero }}px/1.4 var(--font-body, DataMono),monospace; white-space:nowrap; }
 .number .atlas-row { height:{{ data.hero*1.4 }}px; }
 .bar { background:var(--accent); }
-.row-label { position:absolute; left:0; top:0; width:{{ data.label_w }}px; height:62px; font:44px/62px Inter,sans-serif; }
-.row-value { position:absolute; right:0; top:0; width:{{ data.value_w }}px; height:62px; text-align:right; font:44px/62px DataMono,monospace; }
+.row-label { position:absolute; left:0; top:0; width:{{ data.label_w }}px; height:62px; font:44px/62px var(--font-body, Inter),sans-serif; }
+.row-value { position:absolute; right:0; top:0; width:{{ data.value_w }}px; height:62px; text-align:right; font:44px/62px var(--font-body, DataMono),monospace; }
 .race { height:{{ data.race_gap|default(110)-12 }}px; } .race .atlas-row { height:{{ data.race_gap|default(110)-12 }}px; }
 .race .bar { position:absolute; left:{{ data.label_w+24 }}px; top:5px; height:44px; }
-.period { height:62px; font:44px/62px DataMono,monospace; } .period .atlas-row { height:62px; }
+.period { height:62px; font:44px/62px var(--font-body, DataMono),monospace; } .period .atlas-row { height:62px; }
 .ring { width:{{ data.ring }}px; height:{{ data.ring }}px; } .ring .atlas-row { height:{{ data.ring }}px; }
-.ring svg { display:block; } .percent { height:{{ data.hero*1.4 }}px; font:{{ data.hero }}px/1.4 DataMono,monospace; }
+.ring svg { display:block; } .percent { height:{{ data.hero*1.4 }}px; font:{{ data.hero }}px/1.4 var(--font-body, DataMono),monospace; }
 .grid { width:100%; border-collapse:collapse; table-layout:fixed; }
-.grid th,.grid td { width:50%; padding:0 16px; text-align:left; border-bottom:2px solid var(--line); font:44px/1.2 Inter,sans-serif; }
-.grid td:last-child { font-family:DataMono,monospace; text-align:right; }
+.grid th,.grid td { width:50%; padding:0 16px; text-align:left; border-bottom:2px solid var(--line); font:44px/1.2 var(--font-body, Inter),sans-serif; }
+.grid td:last-child { font-family:var(--font-body, DataMono),monospace; text-align:right; }
 .grid th { color:var(--dim); }
 .cell { display:block; height:62px; line-height:62px; }
 .milestone { border-left:4px solid var(--accent); padding:12px 22px; background:var(--panel); }
-.milestone .mono { display:block; margin-bottom:8px; height:62px; font:44px/62px DataMono,monospace; }
+.milestone .mono { display:block; margin-bottom:8px; height:62px; font:44px/62px var(--font-body, DataMono),monospace; }
 .endpoint { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:32px; }
 .endpoint-label { display:block; height:106px; }
 </style>

@@ -19,7 +19,7 @@ TEMPLATE = '''{% extends "_base.html" %}
 body { width: {{ width }}px; height: {{ height }}px; }
 .copy { position:absolute; left:15%; right:22%; top:20%; height:55%;
  display:flex; align-items:center; }
-h1 { font:700 64px/1.15 Inter,sans-serif; overflow-wrap:anywhere; width:100%; }
+h1 { font:var(--weight-display, 700) 64px/1.15 var(--font-display, Inter),sans-serif; overflow-wrap:anywhere; width:100%; }
 </style>
 {% endblock %}
 {% block body %}
@@ -54,15 +54,68 @@ def samples(meta):
             for key, spec in meta['variables'].items()}
 
 
-def lint(block_id):
+def token_lint(source):
+    """Check CSS declarations and SVG paint without mistaking copy for CSS."""
+    from html.parser import HTMLParser
+    from PIL.ImageColor import colormap
+    colours = r"#[\da-f]{3,8}\b|(?:rgb|hsl|hwb|lab|lch|oklab|oklch|color)a?\(|\b(?:" + "|".join(colormap) + r")\b"
+    errors = set()
+    def css(text):
+        text = re.sub(r'/\*.*?\*/|{{.*?}}|{%.*?%}', '', text, flags=re.S)
+        # Balanced var() calls may contain trusted fallback literals.
+        while re.search(r'var\([^()]*\)', text):
+            text = re.sub(r'var\([^()]*\)', 'TOKEN', text)
+        for prop, value in re.findall(r'([\w-]+)\s*:\s*([^;{}]+)', text):
+            prop, value = prop.lower(), value.strip()
+            if prop.startswith('--') or prop in ('font', 'font-family') or prop.endswith('radius') or any(
+                    k in prop for k in ('color', 'background', 'border', 'fill', 'stroke', 'shadow')):
+                if re.search(colours, value, re.I):
+                    errors.add('use theme tokens for colours')
+            if prop in ('font', 'font-family'):
+                family = value
+                if prop == 'font':
+                    sized = re.search(r'(?:px|rem|em|%)(?:/[^\s]+)?\s+(.+)$', value)
+                    family = sized[1] if sized else value
+                if any(part.strip() not in ('TOKEN', 'inherit', 'initial', 'sans-serif', 'serif',
+                                            'monospace', 'system-ui', 'cursive', 'fantasy')
+                       for part in family.split(',')):
+                    errors.add('use theme tokens for font families')
+            if prop.endswith('radius') and re.search(r'(?<![\w.])(?:[1-9]\d*(?:\.\d+)?|0\.\d*[1-9]\d*)(?:px|%|em|rem)?', value):
+                errors.add('use theme tokens for nonzero radii')
+    class CSS(HTMLParser):
+        in_style = False
+        def handle_starttag(self, tag, attrs):
+            self.in_style = tag == 'style' or self.in_style
+            for key, value in attrs:
+                if key == 'style':
+                    css(value or '')
+                elif key in ('fill', 'stroke'):
+                    css(key + ':' + (value or ''))
+        def handle_endtag(self, tag):
+            if tag == 'style':
+                self.in_style = False
+        def handle_data(self, value):
+            if self.in_style:
+                css(value)
+    CSS().feed(source)
+    return sorted(errors)
+
+
+def lint(block_id, *, theme=None):
     block = blocks.discover().get(block_id)
     if block is None:
         raise ValueError(f'unknown block: {block_id}')
     meta = block['meta']
     errors = []
+    # Inspect authored entry CSS (not inherited bases or token fallbacks).
+    for entry in set(meta['aspects'].values()):
+        source = (block['root'] / entry).read_text()
+        errors.extend(f'{entry}: {e}' for e in token_lint(source))
     for aspect in meta['aspects']:
         try:
-            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')))
+            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')), theme=theme)
+            from .block_theme import warnings
+            errors.extend(f'{aspect}: {e}' for e in warnings(ctx['block_theme']).values())
             errors.extend(f'{aspect}: {e}' for e in scenes.lint(
                 scenes.render_html(template, ctx), asset_root=ctx['block_assets_root']))
         except ValueError as exc:
@@ -132,14 +185,14 @@ def _pixels(encoded):
         return im.convert('RGBA').tobytes()
 
 
-def check(block_id, *, static_only=False, report=lambda aspect, stats: None):
-    errors = lint(block_id)
+def check(block_id, *, static_only=False, theme=None, report=lambda aspect, stats: None):
+    errors = lint(block_id, theme=theme)
     if errors or static_only:
         return errors
     meta = blocks.discover()[block_id]['meta']
     with tempfile.TemporaryDirectory(prefix='corkbored-check-') as directory:
         for aspect in meta['aspects']:
-            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')))
+            template, ctx = blocks.prepare(block_id, samples(meta), aspect, overlay=bool(meta.get('overlay')), theme=theme)
             try:
                 stats = scene_builder.inspect(Path(directory), template, ctx, seconds=ctx['duration'],
                     size=(ctx['width']//4, ctx['height']//4), fps=ctx['fps'])
