@@ -7,8 +7,8 @@ The flow:
 2. Choose how to work:
    - **Whole:** transcribe the whole recording locally, then find moments in the transcript or in suggestions.
    - **Manual:** scrub and mark clips by time, and transcribe only the clips you keep, if you want captions.
-4. Each clip becomes a short project: reframed to 9:16, 1:1 or 16:9, with burned-in captions and a hook title, plus a description linking to the full recording at that moment.
-5. Render the clips in a batch, then upload or export them.
+3. Each clip becomes a short project: reframed to 9:16, 1:1 or 16:9, with burned-in captions and a hook title, plus a description linking to the full recording at that moment.
+4. Render the clips in a batch, then upload or export them.
 
 | Ticket | What | Depends on |
 |---|---|---|
