@@ -222,6 +222,14 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/channels/csnapshot':
+                _evaluate(cdp, session, '''(() => {
+                  const host = document.querySelector('#channel-blocks');
+                  if (!host?.textContent.includes('Our chapter card') ||
+                      host.querySelector('[data-kind]')?.dataset.kind !== 'blocks' ||
+                      !host.querySelector('#channel-add-block')) throw Error('Channel Blocks section missing');
+                  return true;
+                })()''')
             if route == '#/p/psnapessay/render':
                 _evaluate(cdp, session, "tlSelectKind('sponsor'); true")
             if route == '#/p/psnapkenburns/edit':

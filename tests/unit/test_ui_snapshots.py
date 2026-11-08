@@ -69,6 +69,8 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     assert settings.load_file()['setup_complete'] == 'true'
     assert not settings.setup_needed()
     assert channels.load('csnapshot').name == 'Snapshot channel'
+    assert channels.load('csnapshot').blocks == ['title_card']
+    assert channels.load('csnapshot').block_presets[0]['name'] == 'Our chapter card'
     for fmt in FORMATS:
         p = store.load(f'psnap{fmt}')
         assert p.style.format == fmt

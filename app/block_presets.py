@@ -92,7 +92,69 @@ def change(owner, ident, preset_id, payload=None):
         raise HTTPException(400, str(exc)) from exc
 
 
+def reorder(cid, payload):
+    with channels.lock_for(cid):
+        obj = load('channels', cid)
+        for key, existing in [('blocks', obj.blocks), ('block_presets', [p['id'] for p in obj.block_presets])]:
+            order = payload.get(key, existing)
+            if not isinstance(order, list) or any(not isinstance(v, str) for v in order) or sorted(order) != sorted(existing):
+                raise HTTPException(400, 'Order must contain every existing pin or preset exactly once')
+        obj.blocks = payload.get('blocks', obj.blocks)
+        items = {p['id']: p for p in obj.block_presets}
+        obj.block_presets = [items[i] for i in payload.get('block_presets', items)]
+        channels.save(obj)
+        return obj.to_dict()
+
+
+def promote(pid, preset_id, payload):
+    # Promotion changes records/provenance only; copied slide values stay authoritative.
+    with store.lock_for(pid):
+        project = load('projects', pid)
+        if not project.channel_id:
+            raise HTTPException(400, 'Project needs a channel before promotion')
+        old = next((p for p in project.block_presets if p['id'] == preset_id), None)
+        if old is None:
+            raise HTTPException(404, 'Preset not found')
+        for key in ('move', 'point_slides'):
+            if key in payload and not isinstance(payload[key], bool):
+                raise HTTPException(400, f'{key} must be a boolean')
+        with channels.lock_for(project.channel_id):
+            channel = load('channels', project.channel_id)
+            item = deepcopy(old)
+            item['id'] = uuid.uuid4().hex
+            channel.block_presets.append(item)
+            channels.save(channel)
+        if payload.get('point_slides'):
+            reference = dict(id=preset_id, scope='project')
+            for slide in project.slides:
+                targets = (slide.cues or {}).get('blocks', []) + slide.overlays
+                for target in targets:
+                    if target.get('preset') == reference and target.get('block', target.get('block_id')) == old['block']:
+                        target['preset'] = dict(id=item['id'], scope='channel')
+        if payload.get('move'):
+            project.block_presets = [p for p in project.block_presets if p['id'] != preset_id]
+        if payload.get('move') or payload.get('point_slides'):
+            store.save(project)
+        return item
+
+
 def register(app):
+    @app.delete('/api/channels/{cid}/blocks/{ref:path}')
+    def unpin(cid: str, ref: str):
+        with channels.lock_for(cid):
+            obj = load('channels', cid)
+            obj.blocks = [b for b in obj.blocks if b != ref]
+            channels.save(obj)
+            return obj.to_dict()
+
+    @app.put('/api/channels/{cid}/block-order')
+    def order(cid: str, payload: dict = Body(...)):
+        return reorder(cid, payload)
+
+    @app.post('/api/projects/{pid}/block-presets/{preset_id}/promote')
+    def promotion(pid: str, preset_id: str, payload: dict = Body(...)):
+        return promote(pid, preset_id, payload)
+
     # Plain routes preserve the app.routes introspection contract.
     @app.get('/api/{owner}/{ident}/block-presets')
     def get(owner: Literal['channels', 'projects'], ident: str):

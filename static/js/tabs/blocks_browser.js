@@ -20,7 +20,7 @@ async function renderBlocks(path = '', options = {}) {
   // view is replaced, or the detail panel has nowhere to paint (picker from G).
   if (typeof restoreShellInspector === 'function' && view.contains($('#inspector'))) restoreShellInspector();
   view.innerHTML = `<h1>Blocks</h1><p class="sub">Local blocks for titles, numbers and stories. Built in, from packs, or yours.</p>
-    ${options.mode === 'pick' ? '<button type="button" class="btn ghost" id="block-picker-close">Back to project</button>' : ''}
+    ${options.mode ? '<button type="button" class="btn ghost" id="block-picker-close">Back</button>' : ''}
     <div class="blocks-browser"><aside class="blocks-filters" aria-label="Block filters">
     <label for="blocks-search">Find a block</label><input type="search" id="blocks-search" value="${esc(query)}" placeholder="Name, tag or variable">
     ${[['category','Category', [...new Set(items.map(b => b.category))].sort()],
@@ -41,11 +41,10 @@ async function renderBlocks(path = '', options = {}) {
       <p id="blocks-count" class="mono" role="status"></p><div id="blocks-grid" class="blocks-grid"></div></section></div>`;
   $('#block-description').oninput = e => { state.blockDescription = e.target.value; };
   for (const id of ['search','category','aspect','source','data','sort','favourites','channel','presets']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
-  if (options.mode === 'channel') $('#blocks-channel').value = options.channel;
   $('#blocks-clear').onclick = () => { for (const el of document.querySelectorAll('.blocks-filters input,.blocks-filters select')) {
     if (el.type === 'checkbox') el.checked = false; else el.value = el.id === 'blocks-sort' ? 'recommended' : '';
   } paintBlocksGrid(); };
-  if (options.mode === 'pick') $('#block-picker-close').onclick = () => render();
+  if (options.mode) $('#block-picker-close').onclick = () => { $('#inspector').innerHTML = ''; return options.mode === 'channel' ? refreshChannel() : render(); };
   if (options.mode === 'pick' && options.aspect) $('#blocks-aspect').value = options.aspect;
   paintBlocksGrid();
   paintBlockDetails(options.aspect);
@@ -72,7 +71,7 @@ function paintBlocksGrid() {
     && (!category || b.category === category) && (!aspect || b.aspects.includes(aspect))
     && (!source || b.source === source || source === 'packs' && b.ref.startsWith('pack/'))
     && (!$('#blocks-presets').checked || blocksBrowser.presets.some(p => p.block === b.ref))
-    && (!$('#blocks-channel').value || b.channels.includes($('#blocks-channel').value))
+    && (!$('#blocks-channel').value || b.channels.includes($('#blocks-channel').value) || blocksBrowser.presets.some(p => p.block === b.ref && p.owner === $('#blocks-channel').value))
     && (!$('#blocks-favourites').checked || b.favourite)
     && (!$('#blocks-data').checked || b.works_with_data));
   if ($('#blocks-sort').value === 'recommended') items.sort((a,b) => blockPriority(b, blocksBrowser.presets, blocksBrowser.options.channel) - blockPriority(a, blocksBrowser.presets, blocksBrowser.options.channel));
@@ -413,9 +412,11 @@ async function loadBlockPresets(options, channels = null) {
   return [...project,...channelRows.flat()];
 }
 function blockPriority(b, presets, channel) {
+  const index = presets.findIndex(p => p.block === b.ref);
   return (presets.some(p => p.block === b.ref && p.scope === 'project') ? 3 : 0)
     + (presets.some(p => p.block === b.ref && p.scope === 'channel') ? 2 : 0)
-    + (channel && b.channels?.includes(channel) ? 1 : 0);
+    + (channel && b.channels?.includes(channel) ? 1 + 1/(2+(b.channel_order?.[channel] || 0)) : 0)
+    + (index < 0 ? 0 : 1/(2+index));
 }
 function blockPresetCard(p) {
   const index = blocksBrowser.presets.indexOf(p);
@@ -441,10 +442,15 @@ async function blockPresetTarget(b, aspect, values) {
     ${browser.options.project && browser.options.channel ? '<option value="both">This project and channel</option>' : ''}</select>
     <button type="button" class="btn sm" id="preset-create">Save preset</button>
     ${current ? '<button type="button" class="btn sm" id="preset-update">Save changes to this preset</button><button type="button" class="btn sm ghost" id="preset-delete">Delete preset</button><button type="button" class="btn sm ghost" id="preset-count">Update slides using this preset…</button><div id="preset-affected"></div><small>Slides keep their copied values until you update them.</small>' : ''}
+    ${current?.scope === 'project' && browser.options.channel ? '<button type="button" class="btn sm" id="preset-promote">Promote to channel…</button><div id="preset-promotion"></div>' : ''}
     <p role="status" id="preset-status"></p>`;
   $('#preset-scope').value = browser.options.project ? `projects/${browser.options.project}` : browser.options.channel ? `channels/${browser.options.channel}` : choices[0]?.value;
   const save = async (update = false, remove = false) => {
     try {
+      if (remove) {
+        const count = await api(`/api/${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}/block-presets/${current.id}/slides`);
+        if (!confirm(`Delete ${current.name}? ${count.slides} slides use this preset. Slides keep their values.`)) return;
+      }
       const target = $('#preset-scope').value;
       const targets = update || remove ? [`${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}`]
         : target === 'both' ? [`projects/${browser.options.project}`,`channels/${browser.options.channel}`] : [target];
@@ -457,6 +463,23 @@ async function blockPresetTarget(b, aspect, values) {
     } catch (e) { $('#preset-status').textContent = e.message; }
   };
   $('#preset-create').onclick = () => save();
+  if ($('#preset-promote')) $('#preset-promote').onclick = async () => {
+    try {
+      const url = `/api/projects/${current.owner}/block-presets/${current.id}`;
+      const count = await api(url+'/slides');
+      $('#preset-promotion').innerHTML = `<p>Copy this preset to the project’s channel. ${count.slides} slides reference the project preset; their values stay unchanged.</p>
+        <label><input type="checkbox" id="preset-move"> Move: remove the project preset after copying</label>
+        <label><input type="checkbox" id="preset-repoint"> Point ${count.slides} slides at the channel preset</label>
+        <button type="button" class="btn sm" id="preset-promote-confirm">Promote preset</button>`;
+      $('#preset-promote-confirm').onclick = async () => {
+        try {
+          await api(url+'/promote',{method:'POST',body:JSON.stringify({move:$('#preset-move').checked,point_slides:$('#preset-repoint').checked})});
+          browser.presets = await loadBlockPresets(browser.options,browser.channels);
+          paintBlocksGrid(); $('#preset-promotion').textContent = 'Promoted. Slide values kept.';
+        } catch (e) { $('#preset-status').textContent = e.message; }
+      };
+    } catch (e) { $('#preset-status').textContent = e.message; }
+  };
   if (current) $('#preset-count').onclick = async () => {
     try {
       const url = `/api/${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}/block-presets/${current.id}/slides`;

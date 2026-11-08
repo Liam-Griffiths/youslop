@@ -56,9 +56,10 @@ def poster_path(ref, aspect, item=None):
 
 def browse(q='', category='', aspect='', source='', channel='', data=False, overlay=False):
     prefs = preferences()
-    pinned = {}
+    pinned, pin_order = {}, {}
     for row in channels.list_channels():
-        for ref in channels.load(row['id']).blocks:
+        for index, ref in enumerate(channels.load(row['id']).blocks):
+            pin_order.setdefault(ref, {})[row['id']] = index
             pinned.setdefault(ref, []).append(row['id'])
     result = []
     for ref, item in registry().items():
@@ -71,7 +72,7 @@ def browse(q='', category='', aspect='', source='', channel='', data=False, over
                    tags=meta.get('tags', []), aspects=list(meta['aspects']), duration=meta['duration'],
                    overlay=meta.get('overlay'), source=origin, licence=meta['licence'], origin=meta.get('origin'),
                    check_status='Metadata valid; browser check not recorded',
-                   channels=pinned.get(ref, []), variables=meta['variables'],
+                   channels=pinned.get(ref, []), channel_order=pin_order.get(ref, {}), variables=meta['variables'],
                    favourite=ref in prefs['favourites'], recent=prefs['recent'].get(ref, 0),
                    posters={a: f'/api/blocks/{ref}/poster?aspect={a}'
                             for a in meta['aspects'] if poster_path(ref, a, item).exists()},

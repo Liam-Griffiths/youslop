@@ -94,3 +94,47 @@ def test_map_and_step_note_are_explicit():
     result = suggest('A mountain road.', 'A map of the route')
     assert result[0]['block'] == 'map_highlight'
     assert result[0]['vars']['picture'] == ''  # Never pretend the sample map is this location.
+
+
+
+def test_channel_preferences_retain_alternatives_and_provenance():
+    from app.schema import Channel
+    from app import overlay_plan
+    channel = Channel(id='c1',name='Series',blocks=['number_slam'],block_presets=[
+        dict(id='percent',name='Our percent',block='percentage_ring',values={'value':12}),
+        dict(id='name',name='Our name',block='lower_third_rule',values={'title':'Series name'}),
+        dict(id='gone',name='Removed',block='removed',values={})])
+    original = suggest('About 68 percent use transit.')
+    ranked = suggest('About 68 percent use transit.',channel=channel)
+    # Every alternative is still offered (a pinned block is not listed twice).
+    assert {r['block'] for r in original} <= {r['block'] for r in ranked}
+    # The paragraph's number wins over the preset's saved 12.
+    assert ranked[0]['vars']['value'] == 68
+    assert ranked[0]['preset'] == {'id':'percent','scope':'channel'}
+    assert ranked == suggest('About 68 percent use transit.',channel=channel)
+    assert any(r['block'] == 'number_slam' and r['reason'] == 'Pinned to channel' for r in ranked)
+    original = overlay_plan.suggest('We met Hannah Chen at the dock.')
+    ranked = overlay_plan.suggest('We met Hannah Chen at the dock.',channel=channel)
+    assert {r['block_id'] for r in original} <= {r['block_id'] for r in ranked}
+    assert ranked[0]['block_id'] == 'lower_third_rule'
+    # The detected name labels the graphic, never the preset's saved text.
+    assert ranked[0]['vars']['title'] == 'Hannah Chen' and ranked[0]['on'] == 'Hannah Chen'
+    assert ranked[0]['preset'] == {'id':'name','scope':'channel'}
+
+
+
+def test_channel_overlay_plan_keeps_hand_and_avoids_duplicate_names(project, monkeypatch):
+    from app import channels, overlay_plan
+    from app.schema import Channel
+    channel = Channel(id='c1',name='Series',block_presets=[
+        dict(id='name',name='Our name',block='lower_third_rule',values={'title':'Series name'})])
+    monkeypatch.setattr(channels,'load_or_none',lambda cid:channel)
+    slide = project.slides[0]
+    slide.narration = 'We met Hannah Chen. Ridership rose 40 percent.'
+    slide.candidates, slide.chosen_id = [dict(id='f',provider='footage')], 'f'
+    overlay_plan.apply(project,slide)
+    assert [o['block_id'] for o in slide.overlays] == ['lower_third_rule','kinetic_caption_rise']
+    assert slide.overlays[0]['preset'] == {'id':'name','scope':'channel'}
+    before = slide.to_dict()
+    overlay_plan.apply(project,slide)
+    assert slide.to_dict() == before

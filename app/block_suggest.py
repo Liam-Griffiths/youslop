@@ -24,7 +24,7 @@ def _date_label(text: str, date: str) -> str:
     return label[:1].upper() + label[1:]
 
 
-def suggest(narration: str, visual_note: str = '', title: str = '') -> list[dict]:
+def suggest(narration: str, visual_note: str = '', title: str = '', *, channel=None) -> list[dict]:
     text = f'{narration} {visual_note}'.strip()
     heading = _clip(title or re.split(r'(?<=[.!?])\s', narration.strip())[0], 48)
     result = []
@@ -72,4 +72,55 @@ def suggest(narration: str, visual_note: str = '', title: str = '') -> list[dict
         add('step_list', {'rows': rows, 'source': ''}, 'Ordered steps')
     if re.search(r'\b(?:map|where|location)\b', visual_note, re.I):
         add('map_highlight', {'title': visual_note[:48], 'label': '', 'source': '', 'picture': ''}, 'Map requested in the picture note')
-    return result
+    return prefer_channel(result, channel)
+
+
+def prefer_channel(result, channel, key='block', aspect=None):
+    """Offer matching channel values first, retaining every original alternative."""
+    if not channel or not result:
+        return result
+    from copy import deepcopy
+    from . import blocks
+    library = blocks.discover()
+    def kind(meta):
+        return meta['kind'], meta.get('category', meta['kind'])
+
+    kinds = {kind(library[r[key]]['meta']) for r in result if r[key] in library}
+    preferred = []
+    choices = [(p['block'], p) for p in channel.block_presets]
+    choices += [(ref, None) for ref in channel.blocks]
+    for ref, preset in choices:
+        block = library.get(ref)
+        if not block:
+            continue
+        meta = block['meta']
+        if kind(meta) not in kinds or aspect and aspect not in meta['aspects']:
+            continue
+        base = next((r for r in result if r[key] == ref), None)
+        base = base or next((r for r in result
+            if r[key] in library and kind(library[r[key]]['meta']) == kind(meta)), None)
+        if base is None:
+            continue
+        # The paragraph's own content (a detected name, number, quote) wins; the
+        # preset fills everything else. A channel's "Mara Chen" lower third must
+        # not label a paragraph about someone else.
+        content = {k: v for k, v in base['vars'].items()
+                   if k in meta['variables'] and v not in ('', None, [], {})}
+        # Text, tables and numbers are content (a preset's subtitle "Host" is
+        # as person-specific as its title); presets supply the rest (choices,
+        # colours, pictures). The full preset is one click away in the picker.
+        style = {k: v for k, v in (preset['values'] if preset else {}).items()
+                 if meta['variables'].get(k, {}).get('type') not in ('text', 'table', 'number')}
+        values = {**style, **content}
+        try:
+            values = blocks.validate_vars(meta, values)
+        except ValueError:
+            continue
+        item = dict(deepcopy(base), **{key: ref, 'vars': values})
+        if preset:
+            item['preset'] = dict(id=preset['id'], scope='channel')
+        if key == 'block':
+            item['reason'] = 'Channel preset: ' + preset['name'] if preset else 'Pinned to channel'
+        preferred.append(item)
+    plain = {p[key] for p in preferred if 'preset' not in p}
+    return preferred + [r for r in result if r[key] not in plain]

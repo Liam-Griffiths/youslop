@@ -15,7 +15,7 @@ function setCastFocal(i) {
 // ----------------------------------------------------------------- channel
 async function refreshChannel() {
   state.channel = await api(`/api/channels/${state.channel.id}`);
-  paintChannel();
+  await paintChannel();
 }
 
 // A 140×78 sketch of the three ways a picture can sit on screen — "I need to
@@ -608,7 +608,7 @@ function paintChannel() {
   const c = state.channel;
   if (!c) return;
   if (state.channelTab === 'setup') paintChannelSetup();
-  else paintChannelOverview();
+  else return paintChannelOverview();
 }
 
 // The landing page for a channel — what it's hard to find today, buried
@@ -630,6 +630,7 @@ function paintChannelOverview() {
       <button class="btn ghost sm" onclick="go('#/')">all channels</button>
     </div>
     ${jobPanel()}
+    <section class="channel-blocks card" aria-label="Channel blocks" id="channel-blocks"></section>
 
     <div class="row" style="margin:20px 0 14px;align-items:baseline">
       <h2 style="margin:0">Videos in this channel</h2>
@@ -641,6 +642,7 @@ function paintChannelOverview() {
       : c.videos.map(projRow).join('')}
   `;
   paintJob();
+  return paintChannelBlocks(c);
 }
 
 function newVideoInChannel(chanId) {
@@ -1134,4 +1136,75 @@ async function saveProjectFormat() {
     state.channels = await api('/api/channels');
     toast('Format saved');
   } catch (e) { toast(e.message, true); }
+}
+
+
+async function paintChannelBlocks(c) {
+  const host = $('#channel-blocks');
+  if (!host) return;
+  host.innerHTML = '<h2>Blocks</h2><p>Loading channel blocks…</p>';
+  try {
+    const items = await api('/api/blocks');
+    if (!host.isConnected || state.channel.id !== c.id) return;
+    const rows = (values, kind) => values.map((value,i) => {
+      const preset = kind === 'block_presets', ref = preset ? value.block : value;
+      const block = items.find(b => b.ref === ref);
+      return `<div class="channel-block-row" data-kind="${kind}" data-index="${i}">
+        <div><strong>${esc(preset ? value.name : block?.name || ref)}</strong>
+        <small>${preset ? 'Preset · ' : 'Pinned · '}${esc(ref)}${block ? '' : ' · Block missing'}</small>
+        ${preset && !block ? `<pre>${esc(JSON.stringify(value.values,null,2))}</pre>` : ''}</div>
+        <div class="row">
+        <button type="button" class="btn sm" data-action="open" ${block ? '' : 'disabled'}>${preset ? 'Edit values…' : 'Open'}</button>
+        ${preset ? '<button type="button" class="btn sm" data-action="rename">Rename</button>' : ''}
+        <button type="button" class="btn sm" data-action="up" aria-label="Move ${esc(preset ? value.name : block?.name || ref)} up" ${i ? '' : 'disabled'}>Move up</button>
+        <button type="button" class="btn sm" data-action="down" aria-label="Move ${esc(preset ? value.name : block?.name || ref)} down" ${i < values.length-1 ? '' : 'disabled'}>Move down</button>
+        <button type="button" class="btn sm ghost" data-action="remove">${preset ? 'Delete preset' : 'Unpin'}</button></div></div>`;
+    }).join('');
+    host.innerHTML = `<h2>Blocks</h2><p>Channel pins and presets appear first in this channel’s projects.</p>
+      <button type="button" class="btn sm" id="channel-add-block">Add blocks</button>
+      ${rows(c.blocks || [],'blocks')}${rows(c.block_presets || [],'block_presets')}
+      ${c.blocks?.length || c.block_presets?.length ? '' : '<p>No blocks pinned or presets saved yet.</p>'}
+      <p class="mono">Presets keep your values on top of a block; the block itself stays shared. Built-in blocks can’t be copied as your own yet.</p>`;
+    host.querySelector('#channel-add-block').onclick = () => openChannelBlockBrowser(c.id);
+    host.querySelectorAll('[data-action]').forEach(button => { button.onclick = async () => {
+      const row = button.closest('[data-kind]'), kind = row.dataset.kind, index = Number(row.dataset.index);
+      const value = c[kind][index], preset = kind === 'block_presets';
+      const url = `/api/channels/${c.id}/block-presets/${value.id}`;
+      try {
+        if (button.dataset.action === 'open') {
+          await openChannelBlockBrowser(c.id, preset ? value.block : value);
+          if (preset) {
+            chooseBlockPreset(blocksBrowser.presets.find(p => p.id === value.id));
+            const block = blocksBrowser.items.find(b => b.ref === value.block);
+            await blockPresetTarget(block, value.aspect || block.aspects[0], () => readBlockTrial(block,$('#inspector .block-detail')));
+          }
+          return;
+        }
+        if (button.dataset.action === 'rename') {
+          const name = prompt('Preset name',value.name);
+          if (name === null) return;
+          await api(url,{method:'PATCH',body:JSON.stringify({name})});
+        } else if (button.dataset.action === 'remove') {
+          if (preset) {
+            const count = await api(url+'/slides');
+            if (!confirm(`Delete ${value.name}? ${count.slides} slides use this preset. Slides keep their values.`)) return;
+          }
+          await api(preset ? url : `/api/channels/${c.id}/blocks/${value}`,{method:'DELETE'});
+        } else {
+          const order = c[kind].map(v => preset ? v.id : v), other = index + (button.dataset.action === 'up' ? -1 : 1);
+          [order[index],order[other]] = [order[other],order[index]];
+          await api(`/api/channels/${c.id}/block-order`,{method:'PUT',body:JSON.stringify({[kind]:order})});
+        }
+        await refreshChannel();
+        if (['up','down'].includes(button.dataset.action)) {
+          const moved = index + (button.dataset.action === 'up' ? -1 : 1);
+          const target = document.querySelector(`#channel-blocks [data-kind="${kind}"][data-index="${moved}"] [data-action="${button.dataset.action}"]`);
+          // At the end of the list the same direction is disabled: stay on the
+          // row's other move button so keyboard moves can continue.
+          const other = target?.parentElement.querySelector(`[data-action="${button.dataset.action === 'up' ? 'down' : 'up'}"]`);
+          (target?.disabled ? other : target)?.focus();
+        }
+      } catch (e) { toast(e.message,true); }
+    }; });
+  } catch (e) { if (host.isConnected) host.textContent = e.message; }
 }

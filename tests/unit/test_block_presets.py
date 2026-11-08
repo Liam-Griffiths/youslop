@@ -10,6 +10,7 @@ from app.schema import Channel, Project, Slide
 
 @pytest.fixture
 def saved(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.block_library._REGISTRY', (None, {}))
     monkeypatch.setattr(channels, 'CHANNELS_DIR', tmp_path / 'channels')
     monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
     channels.save(Channel(id='c1', name='Series', blocks=['title_card']))
@@ -125,3 +126,57 @@ def test_http_crud_and_project_isolation(saved, monkeypatch):
             assert (await client.get(url)).json() == []
             assert (await client.get('/api/projects/absent/block-presets')).status_code == 404
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('move,repoint', [(False, False), (True, False), (False, True), (True, True)])
+def test_promote_copies_records_and_only_explicitly_repoints(saved, move, repoint):
+    item = presets.create('projects', 'p1', saved)
+    p = store.load('p1')
+    cue = dict(block='title_card', vars={'title':'Hand values'}, on='chapter', at=1,
+               preset=dict(id=item['id'], scope='project'))
+    p.slides[0].cues = {'blocks':[cue]}
+    store.save(p)
+    assert presets.affected('projects','p1',item['id']) == {'slides':1}
+    new = presets.promote('p1',item['id'],dict(move=move,point_slides=repoint))
+    assert new['id'] != item['id'] and new['values'] == item['values']
+    assert presets.listing('channels','c1')[0]['id'] == new['id']
+    after = store.load('p1')
+    assert bool(after.block_presets) is not move
+    expected = deepcopy(cue)
+    if repoint:
+        expected['preset'] = dict(id=new['id'],scope='channel')
+    assert after.slides[0].cues['blocks'][0] == expected
+    assert not store.load('p2').slides[0].cues
+    assert presets.affected('channels','c1',new['id']) == {'slides':int(repoint)}
+
+
+def test_channel_reorder_and_unpin_routes(saved):
+    a = presets.create('channels','c1',saved)
+    b = presets.create('channels','c1',dict(saved,name='Second'))
+    main.add_channel_block('c1',{'id':'number_slam'})
+    presets.reorder('c1',dict(blocks=['number_slam','title_card'],block_presets=[b['id'],a['id']]))
+    assert channels.load('c1').blocks == ['number_slam','title_card']
+    assert [p['id'] for p in channels.load('c1').block_presets] == [b['id'],a['id']]
+    with pytest.raises(HTTPException):
+        presets.reorder('c1',{'blocks':['title_card']})
+    with pytest.raises(HTTPException):
+        presets.reorder('c1',{'block_presets':[b['id'],b['id']]})
+    routes = {(r.path, method):r.endpoint for r in main.app.routes for method in (getattr(r,'methods',None) or [])}
+    routes[('/api/channels/{cid}/blocks/{ref:path}','DELETE')]('c1','number_slam')
+    assert channels.load('c1').blocks == ['title_card']
+    assert len(channels.load('c1').block_presets) == 2
+
+
+def test_promote_graphic_keeps_anchors_and_hand_values(saved):
+    item = presets.create('projects','p1',dict(name='Name',block='lower_third_rule',values={}))
+    p = store.load('p1')
+    graphic = dict(id='g1',block_id=item['block'],vars={'title':'My name'},on='name',
+                   at=2,dur=3,position='top_right',by='hand',preset=dict(id=item['id'],scope='project'))
+    p.slides[0].overlays = [graphic]
+    store.save(p)
+    new = presets.promote('p1',item['id'],{'point_slides':True})
+    expected = dict(graphic,preset=dict(id=new['id'],scope='channel'))
+    assert store.load('p1').slides[0].overlays == [expected]
+    presets.change('channels','c1',new['id'],{'values':{'title':'Channel name'}})
+    assert presets.affected('channels','c1',new['id'],True) == {'slides':1}
+    assert store.load('p1').slides[0].overlays == [dict(expected,vars=presets.listing('channels','c1')[0]['values'])]

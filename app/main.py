@@ -1424,7 +1424,7 @@ def block_suggestions(pid: str, sid: str) -> list[dict]:
     found = registry()
     from .blocks import validate_vars
     out = []
-    for item in suggest(s.narration, s.visual_note, s.title):
+    for item in suggest(s.narration, s.visual_note, s.title, channel=channels.load_or_none(p.channel_id)):
         if s.on_camera or item['block'] not in found or aspect not in found[item['block']]['meta']['aspects']:
             continue
         try:  # A suggestion must be usable as offered.

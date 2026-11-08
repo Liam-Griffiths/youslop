@@ -199,7 +199,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.8b | Block library: motion, trials and actions | L | T12.8 | done | 2026-11-08 Codex + review; motion (cold 1.0 s), trials, use in project, pick mode, block-as-picture render |
 | T12.8c | Block library: preferences, forks and remaining actions | M | T12.8b | done | 2026-11-08 Codex + review; favourites/recent, Library image picker, add to channel, Describe moved; owner: built-in forks fail the sandbox (see log) |
 | T12.9 | Channel and project block presets | M | T12.8, T12.5 | done | 2026-11-08 Codex + review; presets on channels/projects, preset-first picker, provenance + counted slide updates, missing blocks safe |
-| T12.9b | Block presets: channel page, promote, ranking | M | T12.9 | todo | channel Blocks section, promote project → channel, suggestions prefer pins/presets |
+| T12.9b | Block presets: channel page, promote, ranking | M | T12.9 | done | 2026-11-08 Codex + review; channel Blocks section, promote, pins/presets ranked first (paragraph content wins) |
 | T12.10a | Block overlays on any picture: data and render | M | T11.6, T12.5, T2.10 | done | 2026-11-08 Codex + review; slide.overlays, transparent block layers composited by ffmpeg, stored unclipped; ¼ preview checked |
 | T12.10b | Block overlays: planning and editing | M | T12.10a, T4.4, T12.8 | done | 2026-11-08 Codex + review; offline overlay planner, Timeline Graphics row (select/nudge/delete/hide/G), Visuals chips; checks split to T12.10c |
 | T12.10c | Block overlays: checks | S | T12.10b | done | 2026-11-08 Codex + review; contrast (panel-aware), overlap, safe area, estimated anchors; Fix opens the graphic |
