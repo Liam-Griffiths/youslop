@@ -225,9 +225,9 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | todo | owner: choose engine (recommended faster-whisper, optional install, model on click); audio-only import; chunked, resumable |
+| T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | todo | owner: choose engine (recommended faster-whisper); whole recording or a single range; coverage merges; audio-only import; chunked, resumable |
 | T14.2 | Vertical and square output for the render pipeline | L | — | todo | WIDTH/HEIGHT fixed at 1920×1080 today; landscape goldens must stay identical |
-| T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | snap to pauses; offline suggestions; LLM ranking opt-in (text only) |
+| T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | transcript mode (whole, with suggestions) or manual mode (scrub, I/O, transcribe just this clip); LLM ranking opt-in |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
 | T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |

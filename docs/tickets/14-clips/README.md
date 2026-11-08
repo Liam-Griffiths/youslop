@@ -4,8 +4,9 @@ Owner request, 2026-11-08: "a ticket for building clipping for longer videos. Pe
 
 The flow:
 1. Import the long recording (a podcast, stream VOD or interview).
-2. Transcribe it locally.
-3. Find moments in the transcript and mark them as clips.
+2. Choose how to work:
+   - **Whole:** transcribe the whole recording locally, then find moments in the transcript or in suggestions.
+   - **Manual:** scrub and mark clips by time, and transcribe only the clips you keep, if you want captions.
 4. Each clip becomes a short project: reframed to 9:16, 1:1 or 16:9, with burned-in captions and a hook title, plus a description linking to the full recording at that moment.
 5. Render the clips in a batch, then upload or export them.
 
