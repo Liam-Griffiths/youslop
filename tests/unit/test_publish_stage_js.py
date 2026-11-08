@@ -11,7 +11,7 @@ def test_publish_lifecycle(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(p).read_text() for p in (
-        'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
+        'static/js/palette.js', 'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
         'static/js/timeline/draw.js'))
     harness = r'''
 const loop = new imports.gi.GLib.MainLoop(null, false);
@@ -20,7 +20,7 @@ const body={innerHTML:''}, thumb={innerHTML:''}, progress={innerHTML:''}, upload
 const $=s=>s==='#tabbody'?body:s==='#publish-thumb-tools'?thumb:s==='#publish-progress'?progress:
   s.includes('doYoutubeUpload')?upload:null;
 function node(){return {style:{},children:[],append(...items){this.children.push(...items);},querySelector:()=>null};}
-const document={querySelectorAll:()=>[],createElement:node};
+const document={querySelectorAll:()=>[],createElement:node,addEventListener(){}};
 const esc=s=>String(s??'').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const fmtTime=t=>String(t);
 const formatPicker=()=>'<div>Video style</div>';
@@ -95,6 +95,7 @@ loop.run();
 if(failure) throw failure;
 '''
     path = tmp_path / 'publish.js'
-    path.write_text(source + '\n' + harness)
+    setup, checks = harness.split('async function run(){', 1)
+    path.write_text(setup + source + '\nasync function run(){' + checks)
     result = subprocess.run([gjs, str(path)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr

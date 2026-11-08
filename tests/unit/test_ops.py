@@ -160,7 +160,7 @@ def test_shared_render(project, monkeypatch, capsys):
     monkeypatch.setattr(ops.renderer, 'preview_segment', preview)
     assert cli.main(['render', project.id, '--section', sid]) == 0
     assert json.loads(capsys.readouterr().out) == {'path': 'cache/preview.webm'}
-    monkeypatch.setattr(main.jobs, 'start', lambda kind, pid, fn: fn(lambda m: None))
+    monkeypatch.setattr(main.jobs, 'start', lambda kind, pid, fn, *, cancellable=False: fn(lambda m: None))
     assert main.preview_segment(project.id, sid) == {'job': {'path': 'cache/preview.webm'}}
     assert calls == [(project.id, sid)] * 2
     with pytest.raises(main.HTTPException) as error:

@@ -10,7 +10,7 @@ def test_edit_lifecycle_and_shortcuts(tmp_path):
     gjs = shutil.which('gjs')
     if not gjs:
         pytest.skip('GJS unavailable')
-    scripts = ['static/js/shell.js', 'static/js/timeline/draw.js', 'static/js/timeline/layers.js']
+    scripts = ['static/js/palette.js', 'static/js/shell.js', 'static/js/timeline/draw.js', 'static/js/timeline/layers.js']
     source = '\n'.join(Path(p).read_text() for p in scripts)
     # Exercise the actual global keyboard dispatcher with all its suppression guards.
     boot = Path('static/js/boot.js').read_text().split('\n\nroute();')[0]

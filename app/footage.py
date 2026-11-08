@@ -263,7 +263,7 @@ def process_shoot(shoot_id: str, progress: Progress = lambda m: None) -> dict:
 def start_processing(shoot_id: str) -> str:
     """Background entry point for app callers; progress is available in jobs."""
     load(shoot_id)
-    return jobs.start('footage', shoot_id, lambda progress: process_and_detect(shoot_id, progress))
+    return jobs.start('footage', shoot_id, lambda progress: process_and_detect(shoot_id, progress), cancellable=True)
 
 
 def process_and_detect(shoot_id: str, progress: Progress = lambda m: None) -> dict:

@@ -113,8 +113,15 @@ async function loadStageStates(project) {
 
 function paintJobsStrip() {
   const j = state.job;
-  $('#jobs-status').textContent = j && !j.done
-    ? `${j.kind} · ${j.elapsed || 0}s${j.lines?.length ? ' · ' + j.lines.at(-1) : ''}` : 'Idle';
+  const rows = jobsSummary.filter(row => row.state === 'running' && row.id !== j?.id);
+  const items = rows.map(row => `${row.kind} · ${row.elapsed}s · ${row.last_log_line}`);
+  if (j && !j.done) items.unshift(`${j.kind} · ${j.elapsed || 0}s${j.lines?.length ? ' · ' + j.lines.at(-1) : ''}`);
+  $('#jobs-status').textContent = items.join(' · ') || 'Idle';
+}
+
+for (const [id, label] of STAGES) {
+  registerCommand({id: `stage-${id}`, label, group: 'Project stages',
+    when: () => !!state.project, run: () => go(`#/p/${state.project.id}/${id}`)});
 }
 
 function paintChannelsIndex() {

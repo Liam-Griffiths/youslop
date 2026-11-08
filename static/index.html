@@ -28,13 +28,14 @@
     </nav>
   </details>
   <div id="topbar-right" class="topbar-right"></div>
+  <button type="button" class="btn sm ghost" onclick="openPalette()" aria-label="Open command palette" aria-keyshortcuts="Control+K Meta+K">Ctrl K</button>
 </header>
 <nav id="stage-bar" class="stage-bar" aria-label="Project stages" hidden></nav>
 <div class="app-shell">
   <main id="view"></main>
   <aside id="inspector" class="shell-inspector" aria-label="Inspector"></aside>
 </div>
-<footer class="jobs-strip" aria-live="polite"><span>Jobs</span><span id="jobs-status">Idle</span></footer>
+<footer class="jobs-strip"><button type="button" class="jobs-strip-button" onclick="openJobs()" aria-haspopup="dialog"><span>Jobs</span><span id="jobs-status" aria-live="polite">Idle</span></button></footer>
 
 <div id="toast" class="toast"></div>
 
@@ -68,6 +69,8 @@
 <script src="/static/js/timeline/check.js"></script>
 <script src="/static/js/timeline/review.js"></script>
 <script src="/static/js/timeline/variables.js"></script>
+<script src="/static/js/palette.js"></script>
+<script src="/static/js/jobs.js"></script>
 <script src="/static/js/shell.js"></script>
 <script src="/static/js/boot.js"></script>
 </body>

@@ -2039,7 +2039,7 @@ def thumb_headlines(pid: str) -> dict:
             progress(f"  {pick['headline']}" + (f"  ({pick['kicker']})" if pick["kicker"] else ""))
         return {"options": picks}
 
-    return {"job": jobs.start("headlines", pid, work)}
+    return {"job": jobs.start("headlines", pid, work, cancellable=True)}
 
 
 @app.get("/api/thumb")
@@ -2852,7 +2852,7 @@ def preview_segment(pid: str, sid: str) -> dict:
     _slide(_load(pid), sid)
 
     return {"job": jobs.start("segment preview", pid,
-                             lambda pr: ops.render(pid, {"section": sid}, pr))}
+                             lambda pr: ops.render(pid, {"section": sid}, pr), cancellable=True)}
 
 
 # ---------------------------------------------------------------- timeline
@@ -2862,7 +2862,7 @@ _PROXY_LOCKS = ops.PROXY_LOCKS
 @app.post("/api/projects/{pid}/review/snapshots")
 def start_snapshots(pid: str) -> dict:
     _load(pid)
-    return {"job": jobs.start("snapshot", pid, lambda pr: ops.snapshot(pid, {}, pr))}
+    return {"job": jobs.start("snapshot", pid, lambda pr: ops.snapshot(pid, {}, pr), cancellable=True)}
 
 
 @app.get("/api/projects/{pid}/review/snapshots")
@@ -3015,7 +3015,7 @@ def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
                 done.append(render.proxy_ref(p, r, progress, download=False, hide=hidden))
         return {"segments": done}
 
-    return {"job": jobs.start("timeline proxy", pid, work)}
+    return {"job": jobs.start("timeline proxy", pid, work, cancellable=True)}
 
 
 @app.post("/api/projects/{pid}/timeline/mix")
@@ -3032,7 +3032,7 @@ def timeline_mix(pid: str, hide: str = "") -> dict:
         with lock:
             return render.build_mix(store.load(pid), progress, hide=hidden)
 
-    return {"job": jobs.start("timeline sound", pid, work)}
+    return {"job": jobs.start("timeline sound", pid, work, cancellable=True)}
 
 
 @app.post("/api/projects/{pid}/description")
@@ -3043,6 +3043,7 @@ def write_description(pid: str) -> dict:
     def work(progress):
         p = store.load(pid)
         out = youtube_mod.build_description(p, progress)
+        progress("Saving description")
         with store.lock_for(pid):
             fresh = store.load(pid)
             fresh.description = out["description"]
@@ -3052,7 +3053,7 @@ def write_description(pid: str) -> dict:
                  " — some paragraphs aren't recorded yet, so the chapter times are estimates"))
         return out
 
-    return {"job": jobs.start("description", pid, work)}
+    return {"job": jobs.start("description", pid, work, cancellable=True)}
 
 
 @app.get("/api/projects/{pid}/credits")
@@ -3437,7 +3438,7 @@ def scan_library_folder(folder_id: str) -> dict:
     def work(progress):
         return library.scan_folder(folder_id, progress)
 
-    return {"job": jobs.start("library-scan", "", work)}
+    return {"job": jobs.start("library-scan", "", work, cancellable=True)}
 
 
 @app.delete("/api/library/folders/{folder_id}")
@@ -3649,6 +3650,23 @@ def download_output(pid: str) -> Response:
 
 
 # ----------------------------------------------------------------------- jobs
+@app.get("/api/jobs")
+def list_jobs() -> list[dict]:
+    rows = jobs.recent()
+    titles = {p["id"]: p["title"] for p in store.list_projects()} if rows else {}
+    return [row | {"project_title": titles.get(row["project_id"], "")} for row in rows]
+
+
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid: str) -> dict:
+    try:
+        return jobs.cancel(jid)
+    except KeyError:
+        raise HTTPException(404, "No such job")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
 @app.get("/api/jobs/{jid}")
 def job_status(jid: str, since: int = 0) -> dict:
     job = jobs.get(jid)
@@ -3801,7 +3819,7 @@ def health() -> dict:
 @app.post("/api/projects/{pid}/research")
 def research_project(pid: str, payload: dict = Body(default={})) -> dict:
     _load(pid)
-    return {"job": jobs.start("research", pid, lambda pr: ops.research(pid, payload, pr))}
+    return {"job": jobs.start("research", pid, lambda pr: ops.research(pid, payload, pr), cancellable=True)}
 
 
 @app.post("/api/projects/{pid}/frame/rules")

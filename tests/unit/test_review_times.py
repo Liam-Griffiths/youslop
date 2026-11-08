@@ -92,7 +92,8 @@ def test_manifest_sheet_cli_api(project, tmp_path, monkeypatch, capsys):
         # The label strip sits under the frame, so the frame's lower third stays clean.
         assert image.getpixel((355, 200)) == (255, 255, 255)
         assert image.getpixel((355, 230)) == (24, 24, 24)
-    def start(kind, pid, fn):
+    def start(kind, pid, fn, *, cancellable=False):
+        assert cancellable is True
         assert kind == 'snapshot' and pid == project.id
         assert fn(lambda msg: None)['sheet'] == 'review/sheet.png'
         return 'job1'

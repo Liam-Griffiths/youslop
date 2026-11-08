@@ -129,6 +129,7 @@ def research(pid, payload, progress):
     from . import research as researcher
     project = store.load(pid)
     dossier = researcher.gather(project.idea, progress, mode=project.research_mode)
+    progress("Saving research")
     with store.lock_for(pid):
         fresh = store.load(pid)
         fresh.research = dossier

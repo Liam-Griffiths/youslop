@@ -123,7 +123,8 @@ def test_job_entrypoint_and_cli(sources, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)['ready'] == 1
     captured = {}
 
-    def start(kind, sid, fn):
+    def start(kind, sid, fn, *, cancellable=False):
+        assert cancellable is True
         messages = []
         captured.update(kind=kind, sid=sid, result=fn(messages.append), messages=messages)
         return 'job-test'
