@@ -8,8 +8,8 @@ from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 68
-    assert paths[:4] == ['#/', '#/library', '#/settings', '#/guide']
+    assert len(paths) == len(set(paths)) == 69
+    assert paths[:5] == ['#/', '#/setup', '#/library', '#/settings', '#/guide']
     assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
     for fmt in FORMATS:
         expected = set(PROJECT_STAGES) | {'media', 'record', 'thumb', 'render',
@@ -22,7 +22,7 @@ def test_routes_match_current_tabs_and_families():
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 68
+    assert len(set(paths)) == 69
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)
@@ -52,7 +52,8 @@ def test_console_error_parsing(event, expected):
 
 
 def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
-    from app import channels, config, library, store
+    from app import channels, config, library, settings, store
+    monkeypatch.setenv('CORKBORED_DATA', str(tmp_path))
     monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
     monkeypatch.setattr(channels, 'CHANNELS_DIR', tmp_path / 'channels')
     monkeypatch.setattr(config, 'WRITABLE_DIRS', (tmp_path / 'library',))
@@ -61,6 +62,8 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     monkeypatch.setattr(library, '_THUMBS', tmp_path / 'library')
     monkeypatch.setattr(library, 'LIBRARY_DIR', tmp_path / 'library')
     seed()
+    assert settings.load_file()['setup_complete'] == 'true'
+    assert not settings.setup_needed()
     assert channels.load('csnapshot').name == 'Snapshot channel'
     for fmt in FORMATS:
         p = store.load(f'psnap{fmt}')

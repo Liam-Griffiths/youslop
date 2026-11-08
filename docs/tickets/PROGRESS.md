@@ -155,7 +155,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T9.10 | Edit stage: the Timeline workspace | M | T9.3, T4.3 | done | 2026-11-01 Codex; full-width Timeline workspace, inspector slot, shortcuts sheet; review: inspector wiped by shell repaint, draw all restored |
 | T9.11 | Review & publish stage | M | T9.3, T3.3 | done | 2026-11-01 Codex; merged Render+Thumbnail into a six-step Finish screen; review: harness Chromium restart; deferred items in log |
 | T9.12 | Jobs centre and command palette | S | T9.3 | done | 2026-11-08 Codex + review; drawer, cancel (opt-in jobs), Ctrl K palette; checked headless |
-| T9.13 | First-run setup | S | T9.3 | todo |  |
+| T9.13 | First-run setup | S | T9.3 | done | 2026-11-08 Codex + review; #/setup wizard, existing data roots skip it; checked headless |
 
 ## Phase 10: sponsor segments
 

@@ -1250,3 +1250,20 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   .finish-list { position: static; flex-basis: auto; width: 100%; border-right: 0; padding-right: 0; }
   .publish-main { width: 100%; }
 }
+
+/* First run follows the same panels, controls and tokens as Settings. */
+.setup-screen { display:flex; gap:40px; max-width:1040px; margin:24px auto; }
+.setup-steps { flex:0 0 240px; display:flex; flex-direction:column; gap:4px; }
+.setup-step { display:flex; gap:12px; align-items:center; text-align:left; background:transparent; color:var(--ink); border:0; border-radius:4px; padding:10px 12px; font:inherit; cursor:pointer; }
+.setup-step[aria-current] { background:var(--raised); }
+.setup-number { border-radius:50%; background:var(--raised); min-width:24px; height:24px; display:grid; place-items:center; }
+.setup-step[aria-current] .setup-number { background:var(--accent); color:var(--bg); }
+.setup-step small { display:block; color:var(--dim); overflow-wrap:anywhere; margin-top:4px; }
+.setup-work { flex:1; min-width:0; }
+.setup-work h1 { margin-top:0; }
+.setup-checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.setup-checks .panel { padding:12px 14px; }
+.setup-checks p { margin-bottom:0; }
+.setup-path { overflow-wrap:anywhere; }
+.setup-actions { margin-top:24px; flex-wrap:wrap; }
+@media (max-width:900px) { .setup-screen { flex-direction:column; gap:20px; } .setup-steps { flex-basis:auto; } }

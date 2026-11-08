@@ -40,7 +40,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 
-route();
+// Decide once per boot. Leaving setup never triggers another redirect.
+(async () => {
+  const initialHash = location.hash;
+  try {
+    const data = await api('/api/settings');
+    if (data.setup_needed && location.hash === initialHash && initialHash !== '#/setup') {
+      location.replace('#/setup');
+      return;
+    }
+  } catch (e) { toast(`Setup check: ${e.message}`, true); }
+  route();
+})();
 
 
 // Only claim bundle drops; media and camera views keep their own drop handlers.

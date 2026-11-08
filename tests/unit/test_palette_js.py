@@ -35,6 +35,7 @@ state.stage='edit'; check(visible().some(c=>c.id==='preview-section'),'preview a
 commands.get('preview-section').run(); check(previews===1,'one existing section preview action');
 TL.host.isConnected=false; check(!visible().some(c=>c.id==='preview-section'),'preview hidden for detached Edit');
 commands.get('jobs').run(); check(jobs===1,'jobs action');
+commands.get('setup').run(); check(route==='#/setup','first-run setup action');
 commands.get('new-project').run(); check(starts===1 && focused===1,'new project focuses start');
 check(commandScore('Review & publish','rvpub')>=0,'subsequence matching');
 check(commandScore('Home','xyz')===-1,'unmatched command excluded');

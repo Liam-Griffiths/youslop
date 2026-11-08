@@ -26,7 +26,7 @@ PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 
 def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
-    result = ['#/', '#/library', '#/settings', '#/guide', '#/projects',
+    result = ['#/', '#/setup', '#/library', '#/settings', '#/guide', '#/projects',
               '#/footage', '#/packs', '#/channels', '#/channels/csnapshot',
               '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
@@ -61,9 +61,10 @@ def console_error(event):
 
 
 def seed():
-    from app import channels, config, library, store
+    from app import channels, config, library, settings, store
     from app.schema import Channel, Project, SponsorSlot
     config.ensure_dirs()
+    settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures'))
     source = REPO / 'tests/fixtures/project_min'
     for fmt in FORMATS:

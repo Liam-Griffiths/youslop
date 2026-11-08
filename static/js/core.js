@@ -178,7 +178,10 @@ async function route() {
   // loaded once here rather than awaited in three places.
   await ensureSlideStyles();
 
-  if (hash === '#/channels') {
+  if (hash === '#/setup') {
+    state.project = null; state.channel = null;
+    await renderSetup();
+  } else if (hash === '#/channels') {
     state.project = null; state.channel = null;
     await ensureChannelsLoaded();
     paintChannelsIndex();

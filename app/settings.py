@@ -55,6 +55,8 @@ class Field:
 # The whole of what Settings can configure — everything `.env.example` lists,
 # as a form instead of a file. Order here is UI order.
 FIELDS: list[Field] = [
+    Field("setup_complete", brand.ENV_PREFIX + "SETUP_COMPLETE", "Setup complete",
+          group="Internal"),
     Field("llm_backend", brand.ENV_PREFIX + "LLM_BACKEND", "How to reach Claude",
          "Auto prefers a signed-in Claude Code CLI — it costs nothing beyond "
          "your subscription — and falls back to the API key below.",
@@ -211,6 +213,16 @@ SETTINGS_PATH_NAME = "settings.json"
 
 def path() -> Path:
     return data_root() / SETTINGS_PATH_NAME
+
+
+def setup_needed() -> bool:
+    """Existing creator data counts as configured, including pre-wizard installs."""
+    if load_file().get("setup_complete", "").lower() in ("true", "1", "on"):
+        return False
+    root = data_root()
+    return not any(any((root / folder).glob(f"*/{filename}"))
+                   for folder, filename in (("projects", "project.json"),
+                                            ("channels", "channel.json")))
 
 
 def load_file() -> dict[str, str]:

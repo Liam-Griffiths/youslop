@@ -1371,12 +1371,19 @@ def generate_slide_diagram(pid: str, sid: str, payload: dict = Body(default={}))
 
 
 # ------------------------------------------------------------------- settings
+@app.get("/api/setup")
+def setup_checks() -> dict:
+    from .setup import checks
+    return checks()
+
+
 @app.get("/api/settings")
 def get_settings() -> dict:
     """Everything the Settings page needs: every field, its current value
     (redacted if secret), and whether a real environment variable has already
     locked it — see app/settings.py:status()."""
     return {"fields": settings_mod.status(), "data_dir": str(DATA),
+            "setup_needed": settings_mod.setup_needed(),
             "card_engine": "Chromium scenes" if stage_mod.browser() else "Pillow"}
 
 

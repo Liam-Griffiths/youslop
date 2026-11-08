@@ -49,6 +49,7 @@ async function renderSettings() {
 
   const groups = [];
   for (const f of data.fields) {
+    if (f.group === 'Internal') continue;
     let g = groups.find((x) => x.name === f.group);
     if (!g) { g = { name: f.group, fields: [] }; groups.push(g); }
     g.fields.push(f);
@@ -56,6 +57,7 @@ async function renderSettings() {
 
   view.innerHTML = `
     <h1>Settings</h1>
+    <p><a class="btn" href="#/setup">Run first-run setup again</a></p>
     <p class="sub">Set up writing, narration, research and rendering.
       Changes take effect the next time the app starts.</p>
     <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">

@@ -105,3 +105,4 @@ registerCommand({id: 'preview-section', label: 'Preview current section', group:
   when: () => !!state.project && state.stage === 'edit' && !!TL.data && !!TL.host?.isConnected,
   run: () => tlPreviewBit()});
 registerCommand({id: 'jobs', label: 'Open jobs', group: 'Actions', run: () => openJobs()});
+registerCommand({id: 'setup', label: 'Run first-run setup again', group: 'Screens', run: () => go('#/setup')});
