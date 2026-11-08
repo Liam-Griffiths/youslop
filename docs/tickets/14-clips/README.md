@@ -20,7 +20,7 @@ The flow:
 | T14.6 | Clip descriptions, links to the full recording, batch render and upload | T14.4, T10.7 |
 
 ## Owner decisions
-- **Speech-to-text engine (T14.1).** Recommended: `faster-whisper` (MIT, Python, runs on CPU with int8, word timestamps, optional GPU). The alternative is a `whisper.cpp` binary. Either way it is an **optional install**. The model (about 150 MB for "base" up to about 1.5 GB for "medium") downloads only when you click, never at startup.
+- **Speech-to-text engines (T14.1), settled 2026-11-08.** Support a range of engines and use whichever the user has installed and chooses: faster-whisper, whisper.cpp, openai-whisper and mlx-whisper to start. The default engine and model are set in Settings, with a per-run override. The app detects engines and never installs them.
 - **Suggested moments (T14.3).** The offline heuristic always works. The LLM ranking is opt-in and shows its cost first, like the T11.4 labels.
 
 ## Rules for this phase

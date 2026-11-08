@@ -21,7 +21,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **Owner decision pending (T12.8c log):** "Duplicate as mine" cannot fork built-in blocks: none of the 39 pass the user-block sandbox. Choose (a) convert built-ins over time, (b) trust unedited forks of built-ins, or (c) presets only. The button is disabled with a reason until then.
 > **2026-11-08 (morning): queue complete; ready for user testing.** Done since the night note: T12.8 (+b, c), T12.5, T12.10a/b/c, T12.9 (+b), T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7 (implemented; owner listens). Owner items: (1) listen to the T1.7 before/after section and keep or revert the linear master; (2) decide "Duplicate as mine" for built-in blocks (T12.8c log); (3) first real paid-sponsor upload confirms the YouTube flag path (T10.7). Codex 5-hour ~40%, weekly ~19%.
 > **2026-11-08 (afternoon):** owner rethink of video styles around blocks. Decisions: mix kinds of picture within a video; "Design a style" becomes "Design a block"; block themes per channel or standalone video, with previews; more blocks (inspired by the HyperFrames registry, clean-room); fix the block preview (doesn't play in the app window: H.264 previews, no expand). Queue: T12.11, T12.12a, T12.12b, T13.1, T13.2, T13.3, T13.4, T12.13 batches A–E. T13.5 later.
-> **2026-11-08 (evening):** owner asked for clipping of long recordings (podcasts, streams) into short-form clips: Phase 14 (T14.1–T14.6), queued after T12.13. Owner decision before T14.1: speech-to-text engine.
+> **2026-11-08 (evening):** owner asked for clipping of long recordings (podcasts, streams) into short-form clips: Phase 14 (T14.1–T14.6), queued after T12.13. Speech-to-text: support any installed engine (decided same evening).
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -225,7 +225,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | todo | owner: choose engine (recommended faster-whisper); whole recording or a single range; coverage merges; audio-only import; chunked, resumable |
+| T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | todo | engine adapters for whatever is installed (faster-whisper, whisper.cpp, openai-whisper, mlx-whisper), default + per-run choice; whole or single range; audio-only import; chunked, resumable |
 | T14.2 | Vertical and square output for the render pipeline | L | — | todo | WIDTH/HEIGHT fixed at 1920×1080 today; landscape goldens must stay identical |
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | transcript mode (whole, with suggestions) or manual mode (scrub, I/O, transcribe just this clip); LLM ranking opt-in |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
