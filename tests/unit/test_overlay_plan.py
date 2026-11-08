@@ -111,3 +111,16 @@ def test_hidden_graphics_on_block_base(project, monkeypatch, tmp_path):
                            size=(480,270), fps=15, hide=frozenset({'graphics'}))
     assert rendered == ['_blocks/number_slam/block.html']
     assert s.overlays[0]['id'] == 'g'
+
+
+def test_pinned_full_frame_block_never_replaces_a_graphic(monkeypatch):
+    """A channel pin of the same category (quote_card) must not become an overlay."""
+    from app import overlay_plan
+    from app.schema import Channel
+    channel = Channel(id='pins', name='Pins')
+    channel.blocks = ['quote_card', 'date_timeline', 'map_highlight']
+    result = overlay_plan.suggest('We met with Mara Chen at the depot.', channel=channel, aspect='16:9')
+    assert result and all(r['block_id'] not in channel.blocks for r in result)
+    from app import blocks
+    library = blocks.discover()
+    assert all(library[r['block_id']]['meta'].get('overlay') for r in result)

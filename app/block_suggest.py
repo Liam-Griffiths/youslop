@@ -75,8 +75,12 @@ def suggest(narration: str, visual_note: str = '', title: str = '', *, channel=N
     return prefer_channel(result, channel)
 
 
-def prefer_channel(result, channel, key='block', aspect=None):
-    """Offer matching channel values first, retaining every original alternative."""
+def prefer_channel(result, channel, key='block', aspect=None, overlay=False):
+    """Offer matching channel values first, retaining every original alternative.
+
+    With `overlay`, only blocks that can be drawn over a picture qualify: a
+    pinned full-frame block of the same category must not replace a graphic.
+    """
     if not channel or not result:
         return result
     from copy import deepcopy
@@ -95,6 +99,8 @@ def prefer_channel(result, channel, key='block', aspect=None):
             continue
         meta = block['meta']
         if kind(meta) not in kinds or aspect and aspect not in meta['aspects']:
+            continue
+        if overlay and not meta.get('overlay'):
             continue
         base = next((r for r in result if r[key] == ref), None)
         base = base or next((r for r in result

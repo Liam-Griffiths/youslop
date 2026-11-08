@@ -31,7 +31,7 @@ def suggest(narration, visual_note='', title='', *, footage=False, channel=None,
     if footage and numbers and len(numbers[0]) <= 48:
         result.append(dict(block_id='kinetic_caption_rise', vars={'title': numbers[0]}, on=numbers[0]))
     from .block_suggest import prefer_channel
-    return prefer_channel(result[:2], channel, key='block_id', aspect=aspect)
+    return prefer_channel(result[:2], channel, key='block_id', aspect=aspect, overlay=True)
 
 
 def apply(project, slide):
@@ -54,7 +54,8 @@ def apply(project, slide):
         if lower and proposal['block_id'].startswith('lower_third_'):
             continue
         ref = proposal['block_id']
-        if ref not in library:
+        # Only overlay-capable blocks can sit over a picture.
+        if ref not in library or not library[ref]['meta'].get('overlay'):
             continue
         ident = 'auto-' + hashlib.sha256((slide.id + ref + proposal['on']).encode()).hexdigest()[:16]
         if ident in used:
