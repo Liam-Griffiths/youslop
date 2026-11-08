@@ -231,3 +231,10 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
 | T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
+
+## Phase 15: the bundled example, and what building it found
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T15.1 | Bundled example channel and video | S | T9.13, example content | todo | "Under the Street" / "The Tube Mail" being built in an isolated data dir (Kokoro narration, PD/CC0 pictures only); ship as resources/examples/*.corkbored |
+| T15.2 | Picture search relevance: subject-aware queries and a relevance gate | M | — | todo | auto-gather picked a car race and business-school campuses for every paragraph; good PD material was one query away |
