@@ -84,7 +84,7 @@ def test_builtin_checks_and_builder_stats(ref, capture_mock):
     assert {a for a, _ in reports} == set(meta['aspects'])
     for aspect, stats in reports:
         # Split-flap titles intentionally capture one bounded arrival window.
-        expected_frames = 15 if ref == 'split_flap_title' else 0
+        expected_frames = 15 if ref == 'split_flap_title' else 18 if ref == 'counter' else 0
         assert stats['captured_frames'] == expected_frames
         assert expected_frames <= int(30 * 5 * meta.get('budget', .1))
         assert 1 <= stats['layers'] <= 48 and stats['passes'] == 1
@@ -271,3 +271,29 @@ def test_names_titles_max_copy_compile(ref, aspect, capture_mock, tmp_path):
         for row in data['layers']:
             row['arrival'] *= 1.4
         builder._plan(data, seconds, 30)
+
+
+@pytest.mark.parametrize('ref', blocks.number_blocks.IDS)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_numbers_dense_inputs_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    values = block_authoring.samples(meta)
+    if ref in ('spec_list', 'ranking_list'):
+        values['rows'] = [dict(label='W'*18,value=999999)]*5
+    elif ref == 'unit_chart':
+        values['rows'] = [dict(selected=60,total=60)]
+    elif ref == 'calendar_grid':
+        values.update(period=[dict(date='2024-02-01')],rows=[dict(date=f'2024-02-{d:02}') for d in range(1,30)])
+    elif ref == 'counter':
+        values['rows'] = [dict(value=-999999.00)]
+    template, ctx = blocks.prepare(ref, values, aspect, seconds=4)
+    parsed = Layers(scenes.render_html(template, ctx))
+    assert all(r['exit'] == .25 for r in parsed.rows)
+    stats = builder.inspect(tmp_path, template, ctx, seconds=4,
+        size=(ctx['width']//4,ctx['height']//4), fps=30)
+    assert stats['captured_frames'] == (18 if ref == 'counter' else 0)
+    assert stats['passes'] == 1 and stats['layers'] <= 5
+    assert stats['largest_graph_bytes'] < 65536
+    for row in parsed.rows:
+        row['arrival'] *= 1.4
+    builder._plan(dict(layers=parsed.rows,screens=[],budget=parsed.budget),4,30)

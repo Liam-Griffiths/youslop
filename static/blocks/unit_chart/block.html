@@ -1,0 +1,5 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+<div class="content hero" {{ layer('ratio',0,'pop') }} style="height:200px;font-size:{{ 100 if n.portrait else 140 }}px">{{ n.selected }} in {{ n.total }}</div>
+<div class="content units" {{ layer('people',0.2,'wipe',0.7) }} style="top:{{ n.top+230 }}px">{% for i in range(n.total) %}<div class="person {{ 'selected' if i < n.selected else '' }}"></div>{% endfor %}</div>
+{% endblock %}

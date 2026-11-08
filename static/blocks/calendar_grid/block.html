@@ -1,0 +1,8 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+<div class="content" {{ layer('calendar',0,'rise') }}>
+<p class="month">{{ n.month }}</p>
+<div class="calendar">{% for day in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<span class="day weekday">{{ day }}</span>{% endfor %}
+{% for cell in n.days %}<span class="day {{ 'marked' if cell.marked else '' }}">{{ cell.day }}</span>{% endfor %}</div>
+</div>
+{% endblock %}

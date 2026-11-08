@@ -32,7 +32,7 @@ def extract(text):
 
 def shown(meta, values, ref):
     numbers, dates, headline = [], [], []
-    unit = values.get('unit', values.get('column_value', ''))
+    unit = values.get('unit', values.get('suffix', values.get('column_value', '')))
 
     def number(value, suffix):
         suffix = suffix or ''
@@ -73,6 +73,8 @@ def shown(meta, values, ref):
                             n['percent'] |= item['percent']
     if ref in ('bar_chart', 'bar_race') and numbers:
         headline = [max(numbers, key=lambda n: n['value'])]
+    if ref == 'delta_card':
+        number(values['rows'][1]['value'] - values['rows'][0]['value'], unit)
     return numbers, dates, headline
 
 

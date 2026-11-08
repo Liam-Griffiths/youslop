@@ -1,0 +1,61 @@
+{% extends '_base.html' %}
+{% set n = numbers %}
+{% block head %}
+<style>
+body { width:{{ width }}px; height:{{ height }}px; }
+.heading,.foot,.content { position:absolute; left:{{ n.x }}px; width:{{ n.w }}px; }
+.heading { top:{{ n.header }}px; }
+h1 { font:var(--weight-display,800) {{ 72 if n.portrait else 80 }}px/1.15 var(--font-display,Inter),sans-serif; height:185px; overflow-wrap:anywhere; }
+.foot { top:{{ n.footer }}px; height:80px; color:var(--dim); font:30px/1.4 var(--font-body,Inter),sans-serif; }
+.content { top:{{ n.top }}px; }
+p,.row { font:40px/1.4 var(--font-body,Inter),sans-serif; }
+.hero { font:var(--weight-display,800) {{ 132 if n.portrait else 190 }}px/1.4 var(--font-display,Inter),sans-serif; font-variant-numeric:tabular-nums; color:var(--accent); }
+.value { font-variant-numeric:tabular-nums; }
+.accent { color:var(--accent); }
+.track { height:56px; background:var(--line); border-radius:var(--radius,0px); }
+.fill { height:56px; background:var(--accent); border-radius:var(--radius,0px); }
+.row { position:absolute; left:{{ n.x }}px; width:{{ n.w }}px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; padding:12px 24px; background:var(--panel); border-radius:var(--radius,0px); }
+.row .value { text-align:right; }
+.row.spec { border-left:8px solid var(--accent); }
+.row.rank { grid-template-columns:70px minmax(0,1fr) minmax(0,1fr); padding-bottom:24px; }
+.rankbar { position:absolute; bottom:0; left:0; height:8px; background:var(--accent); }
+.units { display:grid; grid-template-columns:repeat({{ n.cols|default(10) }},minmax(0,1fr)); gap:{{ 16 if n.portrait else 8 }}px; }
+.person { height:{{ 64 if n.portrait else 38 }}px; border:3px solid var(--dim); position:relative; border-radius:var(--radius,0px); }
+.person::before { content:''; position:absolute; left:35%; width:30%; top:{{ 8 if n.portrait else 3 }}px; height:{{ 16 if n.portrait else 10 }}px; border:2px solid var(--ink); border-radius:var(--pill-radius,999px); }
+.person::after { content:''; position:absolute; left:27%; width:46%; bottom:{{ 8 if n.portrait else 3 }}px; height:{{ 22 if n.portrait else 14 }}px; border:2px solid var(--ink); }
+.person.selected { background:var(--accent); border-color:var(--accent); }
+.person.selected::before,.person.selected::after { border-color:var(--bg); background:var(--bg); }
+.month { color:var(--accent); border-bottom:6px solid var(--accent); margin-bottom:20px; }
+.calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:{{ 8 if n.portrait else 12 }}px; }
+.day { box-sizing:border-box; height:{{ 72 if n.portrait else 48 }}px; display:grid; place-items:center; font:32px/1 var(--font-body,Inter),sans-serif; }
+.marked { border:3px solid var(--accent); border-bottom-width:8px; border-radius:var(--radius,0px); }
+.weekday { font-size:26px; color:var(--dim); }
+.measure { position:absolute; padding:20px 28px; background:var(--panel); border-radius:var(--radius,0px); border-top:6px solid var(--line); }
+.measure.after { border-color:var(--accent); }
+.measure .hero { color:var(--ink); font-size:{{ 74 if n.portrait else 100 }}px; }
+.delta { border-left:12px solid var(--accent); padding-left:28px; }
+.delta .hero { font-size:{{ 88 if n.portrait else 100 }}px; }
+.wave { fill:none; stroke:var(--accent); stroke-width:6px; stroke-linejoin:round; }
+.quote { border-left:8px solid var(--accent); padding-left:28px; font-size:{{ 48 if n.portrait else 52 }}px; }
+[data-fit] { overflow-wrap:anywhere; min-width:0; }
+</style>
+{% endblock %}
+{% macro layer(id, start=0, motion='rise', arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}" data-motion-exit="0.25"{% endmacro %}
+{% block body %}
+<header class="heading"><h1 data-fit data-var-text="title">{{ vars.title }}</h1></header>
+{% block content %}{% endblock %}
+<footer class="foot" data-fit data-var-text="source">{{ vars.source }}</footer>
+{% endblock %}
+{% block script %}
+<script>
+window.__ready = window.__ready.then(() => {
+  document.querySelectorAll('[data-fit]').forEach(el => {
+    const full = el.textContent.trim(); el.title = full;
+    let text = full;
+    while (text && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      text = text.slice(0,-1).trimEnd(); el.textContent = text + '…';
+    }
+  });
+});
+</script>
+{% endblock %}

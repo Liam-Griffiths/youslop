@@ -1,0 +1,4 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+{% for row in n.rows %}<div class="row rank" {{ layer('rank-'~loop.index,loop.index0*0.12,'rise') }} style="top:{{ n.top+loop.index0*n.gap }}px;height:{{ n.gap-8 }}px"><span class="accent">{{ loop.index }}</span><span data-fit>{{ row.label }}</span><span class="value" data-fit>{{ '%g'|format(row.value) }}{{ vars.unit }}</span><div class="rankbar" style="width:{{ row.ratio*100 }}%"></div></div>{% endfor %}
+{% endblock %}

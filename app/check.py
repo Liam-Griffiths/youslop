@@ -363,7 +363,7 @@ def sponsor_music(sb, frame, ctx):
 
 
 def number_match(sb, frame, ctx):
-    from . import blocks, core_data_blocks, data_numbers
+    from . import blocks, core_data_blocks, data_numbers, number_blocks
     out, library = [], None
     for p in sb['paragraphs']:
         cues = p.get('block_cues', []) + [c for c in p.get('cues', []) if c.get('block')]
@@ -374,7 +374,7 @@ def number_match(sb, frame, ctx):
         numbers, dates, headlines = [], [], []
         for cue in cues:
             ref = cue.get('block')
-            if ref not in core_data_blocks.IDS:
+            if ref not in core_data_blocks.IDS + number_blocks.DATA_IDS:
                 continue
             meta = library[ref]['meta']
             values = blocks.validate_vars(meta, cue.get('vars', {}))

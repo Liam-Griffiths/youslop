@@ -1,0 +1,6 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+<div class="content" {{ layer('waveform',0,'wipe',0.8) }} style="height:260px"><svg width="{{ n.w }}" height="250" viewBox="0 0 {{ n.w }} 250" aria-label="{{ n.wave_source }}"><path class="wave" d="M3 10V230 M{{ n.w-3 }} 10V230"/><polyline class="wave" points="{{ n.points }}"/></svg></div>
+<p class="content accent" style="top:{{ n.top+260 }}px;font-size:30px">{{ n.wave_source }}</p>
+<p class="content quote" {{ layer('quote',0.3,'rise') }} data-fit data-var-text="quote" style="top:{{ n.top+330 }}px;height:{{ 330 if n.portrait else 160 }}px">{{ vars.quote }}</p>
+{% endblock %}

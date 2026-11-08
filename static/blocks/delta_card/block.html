@@ -1,0 +1,5 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+{% for row in n.rows %}<div class="measure {{ 'after' if loop.index == 2 else '' }}" {{ layer('measure-'~loop.index,loop.index0*0.2,'fade') }} style="left:{{ n.x if n.portrait else n.x+loop.index0*(n.w+32)/2 }}px;top:{{ n.top+loop.index0*220 if n.portrait else n.top }}px;width:{{ n.w if n.portrait else (n.w-32)/2 }}px;height:{{ 210 if n.portrait else 240 }}px"><p data-fit style="height:56px">{{ row.label }}</p><p class="hero" data-fit style="height:{{ 110 if n.portrait else 140 }}px">{{ '%g'|format(row.value) }}{{ vars.unit }}</p></div>{% endfor %}
+<div class="content delta" {{ layer('change',0.6,'fly-right') }} style="top:{{ n.top+(460 if n.portrait else 260) }}px"><p class="hero" data-fit style="height:150px">{{ n.delta }}{{ vars.unit }}</p><p>{{ n.direction }}</p></div>
+{% endblock %}

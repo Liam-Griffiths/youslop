@@ -1,0 +1,17 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+<div class="content" {{ layer('total',0,'fade',0.6) }} data-capture="frames" style="height:{{ 400 if n.portrait else 460 }}px;border-bottom:8px solid var(--accent)"><p>{{ vars.prefix }}</p><p class="hero" id="count" style="font-size:{{ [132 if n.portrait else 190, n.w/(('%0.2f'|format(n.value))|length+2)*1.25]|min }}px;height:{{ 240 if n.portrait else 300 }}px">{{ '%g'|format(n.value) }}</p><p>{{ vars.suffix }}</p></div>
+{% endblock %}
+{% block script %}
+{{ super() }}
+<script>
+window.__ready = window.__ready.then(() => {
+  const pace = Number(getComputedStyle(document.documentElement).getPropertyValue('--block-pace')) || 1;
+  const state = {value:0}, target = {{ n.value|tojson }};
+  const paint = () => { document.getElementById('count').textContent = Number(state.value.toFixed(2)).toLocaleString('en-US', {maximumFractionDigits:2}); };
+  window.__timelines.counter = gsap.timeline({paused:true,data:{start:0}})
+    .fromTo(state, {value:0}, {value:target,duration:0.6*pace,ease:'power2.out',onUpdate:paint});
+  return window.__seek(0);
+});
+</script>
+{% endblock %}

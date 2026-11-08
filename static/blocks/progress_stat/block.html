@@ -1,0 +1,7 @@
+{% extends '_blocks/counter/numbers_base.html' %}
+{% block content %}
+<div class="content hero" {{ layer('percentage',0,'scale-in') }} style="height:{{ 210 if n.portrait else 280 }}px">{{ '%g'|format(n.value) }}%</div>
+<div class="content track" style="top:{{ n.top+300 }}px"></div>
+<div class="content" {{ layer('progress',0.15,'wipe',0.8) }} style="top:{{ n.top+300 }}px"><div class="fill" style="width:{{ n.value }}%"></div></div>
+<p class="content" style="top:{{ n.top+390 }}px">Complete</p>
+{% endblock %}
