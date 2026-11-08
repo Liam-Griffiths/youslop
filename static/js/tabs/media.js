@@ -533,7 +533,7 @@ function boardKnobs(st, saver) {
           >${esc(h.label)}${h.blurb ? ' — ' + esc(h.blurb.split('.')[0].toLowerCase()) : ''}</option>`).join('')}
       </select></label>
     <label class="field"><span>The board</span>
-      <input type="text" value="${esc(st.board_ground || '#3A4552')}"
+      <input type="color" value="${esc(st.board_ground || '#3A4552')}"
         onchange="${saver}({board_ground:this.value})"></label>
     <label class="field"><span>Surface tooth — <b>${(st.board_grain ?? 0.5).toFixed(2)}</b></span>
       <input type="range" min="0" max="1" step="0.05" value="${st.board_grain ?? 0.5}"
@@ -999,16 +999,12 @@ function openCustomEditor(sid) {
   });
 }
 
-// No project needed: this is how a style gets made from the home page, before
-// there is a video to design it against.
-function openStyleDesigner() {
-  openCustomDesigner({
-    styleMode: true,
-    projectId: '',
-    accent: (state.project && state.project.style.accent) || '#E8C36A',
-    hand: (state.project && state.project.style.board_hand) || 'marker',
-    spec: { background: '', reveal: 'sequence', elements: [] },
-  });
+// Existing slide styles remain editable; new reusable designs are blocks.
+async function openStyleDesigner(id) {
+  if (!id) return;
+  const bundle = await api(`/api/slide-styles/${id}/export`);
+  document.querySelector('dialog.style-dialog')?.close();
+  openCustomDesigner({styleMode:true, projectId:'', accent:'#E8C36A', hand:'marker', spec:bundle.spec});
 }
 
 function openCustomDesigner(opts) {

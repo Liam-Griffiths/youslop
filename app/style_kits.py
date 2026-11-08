@@ -206,7 +206,10 @@ def apply_kit(target, kit, *, dry_run=False):
                    kept=len(slides)-len(following), needs=kit['needs'], ready=ready, total=len(following),
                    changes={k: dict(before=before.get(k), after=v) for k, v in after.items()
                             if k in target.__dataclass_fields__ and before.get(k) != v})
-    summary['message'] = (f"{len(following)} paragraphs follow the default and will become {kit['name']}; "
+    def count(n, word):
+        return f"{n} {word}{'' if n == 1 else 's'}"
+    summary['message'] = (f"{count(len(following), 'paragraph')} {'follows' if len(following) == 1 else 'follow'} "
+                          f"the default and will become {kit['name']}; "
                           f"{summary['kept']} set by hand or supplied by camera/blocks stay as they are; "
                           f"{kit['name']} needs {kit['needs'] or 'pictures'}: {ready} of {len(following)} ready")
     if not dry_run:
@@ -258,6 +261,16 @@ def register(app):
     @app.get('/api/style-kits')
     def listing():
         return list_kits()
+
+    @app.get('/api/style-kits/{kit_id}/poster')
+    def poster(kit_id: str):
+        from .style_previews import preview
+        return preview(kit_id, 'poster')
+
+    @app.get('/api/style-kits/{kit_id}/motion')
+    def motion(kit_id: str):
+        from .style_previews import preview
+        return preview(kit_id, 'motion')
 
     @app.post('/api/style-kits/import')
     def importing(payload: dict = Body(...)):

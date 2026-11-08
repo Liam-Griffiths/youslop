@@ -25,65 +25,18 @@ async function paintRender() {
   }
 
   // Both endpoints are read only; never mount Edit or build its narration mix.
-  const [finish, stages] = await Promise.all([
+  const [finish, stages, blockTheme] = await Promise.all([
     api(`/api/projects/${p.id}/timeline`), api(`/api/projects/${p.id}/stages`),
+    api(`/api/blocks/theme?scope=project&id=${p.id}`),
   ]);
   if (state.project !== p || state.stage !== 'publish') return;
   const upload = await uploadPanel(p);
-  const settings = `<details><summary>Look, sound and opening</summary>
-    ${blockThemePanel()}
+  const settings = `${renderStyleSummary(p, blockTheme.theme)}<details id="project-sound"><summary>Sound and opening</summary>
     ${kept ? `<div class="panel row">
       <span>${esc(kept)}</span>
       <button class="btn" onclick="doRender(${state.job.kind === 'preview render'})">Resume</button>
     </div>` : ''}
     <div class="grid-2">
-      <div class="panel">
-        <h3>Look</h3>
-        <label class="field"><span>Video style</span></label>
-        ${formatPicker(st.format || 'kenburns', st.accent, 'pickProjectFormat')}
-        ${st.format === 'board' ? boardKnobs(st, 'saveStyle') : ''}
-        ${isCut(st.format) ? cutKnobs(st, 'saveStyle') : ''}
-        <label class="field"><span>Vignette — <b>${st.vignette.toFixed(2)}</b></span>
-          <input type="range" min="0" max="0.8" step="0.02" value="${st.vignette}"
-            onchange="saveStyle({vignette:+this.value})"></label>
-        ${st.format === 'board' ? `
-          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
-            The board cut draws every slide itself and ignores the drift, the
-            grade and the chapter titles below. Write the boards on the
-            pictures tab.</div>`
-        : isCut(st.format) ? `
-          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
-            This cut draws every frame itself, on hard cuts, and ignores the
-            drift, crossfade, grade and chapter titles below. Write its cues
-            on the pictures tab.</div>`
-        : st.format === 'essay' ? `
-          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
-            The essay cut sets the narration on screen in phrases and ignores the
-            drift and the chapter titles below.</div>`
-        : `<label class="field"><span>Ken Burns drift — <b>${st.ken_burns_amount.toFixed(2)}</b></span>
-          <input type="range" min="0" max="0.24" step="0.01" value="${st.ken_burns_amount}"
-            onchange="saveStyle({ken_burns:+this.value>0, ken_burns_amount:+this.value})"></label>`}
-        <label class="field"><span>Crossfade — <b>${st.transition.toFixed(2)}s</b></span>
-          <input type="range" min="0" max="1.6" step="0.05" value="${st.transition}"
-            onchange="saveStyle({transition:+this.value})"></label>
-        <label class="row" style="gap:8px;cursor:pointer;margin:-4px 0 14px">
-          <input type="checkbox" ${st.chapter_cards !== false ? 'checked' : ''} style="width:auto"
-            onchange="saveStyle({chapter_cards:this.checked})">
-          <span>chapter cards${chapterCount(p) ? ` — ${chapterCount(p)} marked on the script tab` : ''}</span>
-        </label>
-        ${st.format === 'board' || isCut(st.format) || (st.format || '').startsWith('custom:') ? `
-          <div class="mono" style="color:var(--ink-faint);margin:-8px 0 14px">
-            This cut draws its own frames, so a chapter still opens a fresh
-            slide and a longer pause, but no card is laid over it.</div>` : ''}
-        <label class="field"><span>Grade</span>
-          <select onchange="saveStyle({grade:this.value})">
-            ${['warm', 'neutral', 'cool', 'mono'].map((g) =>
-              `<option ${g === st.grade ? 'selected' : ''}>${g}</option>`).join('')}
-          </select></label>
-        <label class="field"><span>Title accent</span>
-          <input type="text" value="${esc(st.accent)}" onchange="saveStyle({accent:this.value})"></label>
-      </div>
-
       <div class="panel">
         <h3>Sound</h3>
         <label class="field"><span>Music bed</span>
@@ -143,7 +96,6 @@ async function paintRender() {
 
   `;
   $('#tabbody').innerHTML = publishLayout(p, finish, stages, settings, upload);
-  mountBlockTheme('project', p.id);
   for (const row of document.querySelectorAll('.publish-note[data-note]')) {
     const finding = row.dataset.finding === 'true';
     const notes = finding ? finish.check.findings : finish.review.notes;

@@ -173,7 +173,7 @@ def test_visual_picker_js(tmp_path):
     '''
     script = tmp_path / 'visuals.mjs'
     media = (ROOT / 'static/js/tabs/media.js').read_text()
-    script.write_text(bootstrap + media + (ROOT / 'static/js/tabs/visuals.js').read_text() + checks)
+    script.write_text(bootstrap + (ROOT / 'static/js/tabs/style_picker.js').read_text() + media + (ROOT / 'static/js/tabs/visuals.js').read_text() + checks)
     result = subprocess.run([runtime, '-m', str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
     print(result.stdout.strip())

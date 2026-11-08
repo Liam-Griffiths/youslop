@@ -50,6 +50,12 @@ def prepare_create(payload):
         project.style.format = payload["format"]
     if not payload.get("format_name") and payload.get("picture_every"):
         project.style.picture_every = max(1, min(8, int(payload["picture_every"])))
+    if payload.get('kit_id'):
+        from . import style_kits
+        try:
+            style_kits.apply_kit(project, payload['kit_id'])
+        except (ValueError, KeyError) as exc:
+            raise PayloadError(str(exc)) from exc
     if payload.get("research_mode") in ("quick", "deep"):
         project.research_mode = payload["research_mode"]
     if test:

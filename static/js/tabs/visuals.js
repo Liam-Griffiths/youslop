@@ -134,17 +134,21 @@ function paintMedia() {
   const total = groups.reduce((n,g) => n + g.seconds, 0);
   if (!total) groups.forEach(g => { const k = visualKind(g.s); kinds[k] = (kinds[k] || 0) + 1; });
   const denominator = total || groups.length || 1;
-  const rule = isStage(p.style.format) ? '3D for how it works, archive for who and when, scenes for numbers.'
+  const fallbackRule = isStage(p.style.format) ? '3D for how it works, archive for who and when, scenes for numbers.'
     : tabs[0] === 'Layout' ? 'Face for opinion, cutaway when you describe a place or a thing.'
     : p.aspect === 'portrait' ? 'Draw numbers with blocks; keep text clear of the Shorts UI.'
     : p.style.format === 'kenburns' ? 'Footage for what you shot, archive for context, scenes for numbers.'
     : 'Use the format’s drawing; archive for context, scenes for numbers.';
+  const rule = state.stageStates?.pid === p.id ? state.stageStates.items.find(s => s.id === 'visuals')?.rule || fallbackRule : fallbackRule;
   $('#tabbody').innerHTML = `<div class="visuals-workspace">
+    <div class="row style-heading"><strong>Style: ${esc(styleName(p.style.format,p))}</strong>
+      <button type="button" class="btn sm ghost" onclick="openStylePicker('project')">Change</button>
+      <button type="button" class="btn sm ghost" onclick="openProjectLook()">Look and block theme</button></div>
     <div class="visual-mix"><span class="micro-label">Visual mix</span>
       <div class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) =>
         `<span class="visual-kind" data-kind="${esc(k)}" style="flex:${n}"></span>`).join('')}</div>
       <span class="mono">${Object.entries(kinds).map(([k,n]) => `<span class="visual-chip visual-kind" data-kind="${esc(k)}">${esc(pictureKindLabel(k))} ${groups.filter(g => pictureKind(g.s) === k).length} · ${Math.round(100*n/denominator)}%</span>`).join(' · ')}${total ? ' · by voiced duration' : ' · by group count (unvoiced)'}</span>
-      <span class="visual-rule">Format rule: ${rule}</span>
+      <span class="visual-rule">Style rule: ${esc(rule)}</span>
     </div>
     <div class="visual-grid">
       <aside class="visual-groups" aria-label="Picture groups"><h2 class="micro-label">Picture groups · ${groups.length}</h2>
@@ -164,7 +168,6 @@ function paintMedia() {
         <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
         ${groups.some(g => pictureKind(g.s) === 'board') ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
         ${groups.some(g => isCut(pictureKind(g.s))) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
-        ${visualKindSettings(groups)}
       </aside>
       <section class="visual-preview" aria-label="Selected picture">${group ? visualPreview(group, byId) : ''}</section>
       <aside class="visual-sources" aria-label="Picture sources"><div class="visual-source-tabs" role="group" aria-label="Choose picture source">

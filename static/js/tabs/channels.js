@@ -397,7 +397,7 @@ function themePanel(c) {
         ${esc(thumb ? thumb.label : c.thumb_template)} thumbnail,
         ${c.outro.enabled ? esc(end ? end.label : c.outro.template) + ' end screen'
                           : 'no end screen'}.
-        Colours can be edited under House look afterwards; they are the channel's
+        Colours can be edited under House style afterwards; they are the channel's
         from the moment a theme is applied.
       </div>
       <label class="field"><span>Thumbnail style new videos start on</span>
@@ -700,29 +700,13 @@ function paintChannelSetup() {
       </div>
 
       <div><div class="panel">
-        <h3>House look</h3>
+        <h3>House style</h3>
         <p class="mono" style="color:var(--ink-faint);margin-top:-4px">
           New videos in this channel start from these.</p>
-        <label class="field"><span>Video style</span></label>
-        ${formatPicker(st.format || 'kenburns', st.accent, 'pickChannelFormat')}
-        ${st.format === 'board' ? boardKnobs(st, 'saveChannelStyle') : ''}
-        ${isCut(st.format) ? cutKnobs(st, 'saveChannelStyle') : ''}
-        <label class="field"><span>Accent — rules, separators, titles</span>
-          <input type="text" value="${esc(st.accent)}" onchange="saveChannelStyle({accent:this.value})"></label>
-        <label class="field"><span>Second colour — patterns, shadows, the loud half</span>
-          <input type="text" value="${esc(st.accent2 || '')}" placeholder="#7FA6B8"
-            onchange="saveChannelStyle({accent2:this.value})"></label>
-        <label class="field"><span>Grade</span>
-          <select onchange="saveChannelStyle({grade:this.value})">
-            ${['warm', 'neutral', 'cool', 'mono'].map((g) =>
-              `<option ${g === st.grade ? 'selected' : ''}>${g}</option>`).join('')}
-          </select></label>
-        <label class="field"><span>Vignette — <b>${st.vignette.toFixed(2)}</b></span>
-          <input type="range" min="0" max="0.8" step="0.02" value="${st.vignette}"
-            onchange="saveChannelStyle({vignette:+this.value})"></label>
-        <label class="field"><span>Crossfade — <b>${st.transition.toFixed(2)}s</b></span>
-          <input type="range" min="0" max="1.6" step="0.05" value="${st.transition}"
-            onchange="saveChannelStyle({transition:+this.value})"></label>
+        ${stylePicker({current:currentStyleKit(c),onPick:'pickHouseStyle',context:'channel'})}
+        ${lookControls(st, [st.format], 'saveChannelStyle')}
+      </div>
+      <div class="panel"><h3>Sound</h3>
         <label class="field"><span>Music under voice — <b>${st.music_db.toFixed(0)} dB</b></span>
           <input type="range" min="-40" max="-10" step="1" value="${st.music_db}"
             onchange="saveChannelStyle({music_db:+this.value})"></label>
@@ -879,6 +863,7 @@ function paintChannelSetup() {
   `;
   paintJob();
   mountBlockTheme('channel', c.id);
+  mountStylePreviews(view);
 }
 
 // A channel response carries no video list and no preview flags — those are

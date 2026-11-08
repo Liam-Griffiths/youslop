@@ -178,6 +178,7 @@ async function route() {
   // Every format picker (home, channel, project) paints from this, so it is
   // loaded once here rather than awaited in three places.
   await ensureSlideStyles();
+  await ensureStyleKits();
 
   if (hash === '#/setup') {
     state.project = null; state.channel = null;
@@ -240,8 +241,8 @@ async function route() {
     }
     if ([state.project.style.format,...state.project.slides.map(s => s.kind || '')].some(k => k.startsWith('custom:')))
       await ensureSlideStyles();
-    await render();
     await loadStageStates(state.project);
+    await render();
   } else if (chan) {
     state.project = null;
     state.channelTab = chan[2] === 'setup' ? 'setup' : 'videos';
@@ -382,64 +383,6 @@ async function ensureSlideStyles() {
   return state.slideStyles;
 }
 
-// `onPick(key)` is called with the chosen key; the caller decides whether
-// that means an immediate save-and-repaint (an existing project or channel)
-// or just remembering the choice for a form that hasn't been submitted yet
-// (the home page, before a project exists to save it to).
-function formatPicker(current, accent, onPickName) {
-  current = current || 'kenburns';
-  const saved = state.slideStyles || [];
-  return `<div class="tpl-strip" id="fmtpicker">
-    ${FORMAT_INFO.map((f) => `
-      <div class="tpl ${f.key === current ? 'sel' : ''}" data-fmt="${f.key}"
-           onclick="${onPickName}('${f.key}')">
-        ${formatArt(f.key, accent)}
-        <div class="tpl-name">${esc(f.label)}</div>
-        <div class="tpl-cast">${esc(f.blurb)}</div>
-      </div>`).join('')}
-    ${saved.map((s) => {
-      const key = `custom:${s.id}`;
-      return `<div class="tpl ${key === current ? 'sel' : ''}" data-fmt="${esc(key)}"
-           onclick="${onPickName}('${esc(key)}')">
-        <img class="tpl-art" src="/api/slide-styles/${s.id}/thumb.jpg"
-             style="object-fit:cover" loading="lazy">
-        <div class="tpl-name">${esc(s.name)}</div>
-        <div class="tpl-cast">your style · ${s.slots} slot${s.slots === 1 ? '' : 's'}
-          <button class="btn xs ghost" style="margin-left:6px" title="export this style as a file"
-            onclick="event.stopPropagation();exportSlideStyle('${s.id}','${esc(s.name).replace(/'/g, "\\'")}')">↓</button>
-          <button class="btn xs ghost danger" style="margin-left:4px"
-            onclick="event.stopPropagation();deleteSlideStyle('${s.id}')">×</button></div>
-      </div>`;
-    }).join('')}
-    <div class="tpl" id="newstyletile" onclick="openStyleDesigner()"
-         title="describe a look and have Claude design it">
-      <svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">
-        <rect width="140" height="78" fill="#13151c"/>
-        <rect x="8" y="8" width="124" height="62" fill="none" stroke="${esc(accent)}"
-              stroke-width="2" stroke-dasharray="6 5" opacity=".75"/>
-        <path d="M70 28v22M59 39h22" stroke="${esc(accent)}" stroke-width="3"
-              stroke-linecap="round"/>
-      </svg>
-      <div class="tpl-name">Design a style…</div>
-      <div class="tpl-cast">describe a look, Claude draws it</div>
-    </div>
-    <label class="tpl" id="importstyletile" style="cursor:pointer"
-           title="add a style someone exported">
-      <svg class="tpl-art" viewBox="0 0 140 78" preserveAspectRatio="none">
-        <rect width="140" height="78" fill="#13151c"/>
-        <rect x="8" y="8" width="124" height="62" fill="none" stroke="#565c6c"
-              stroke-width="2" stroke-dasharray="6 5" opacity=".75"/>
-        <path d="M70 24v20M62 34l8 10 8-10M58 56h24" fill="none" stroke="#9aa0b0"
-              stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div class="tpl-name">Import a style…</div>
-      <div class="tpl-cast">add a style file someone shared</div>
-      <input type="file" accept=".json,application/json" hidden
-             onchange="importSlideStyle(this.files[0]);this.value=''">
-    </label>
-  </div>`;
-}
-
 async function exportSlideStyle(id, name) {
   try {
     const res = await fetch(`/api/slide-styles/${id}/export`);
@@ -466,6 +409,7 @@ async function importSlideStyle(file) {
     state.slideStyles = null;
     await ensureSlideStyles();
     toast(`imported — “${r.name}” is now a video style`);
+    document.querySelector('dialog.style-dialog')?.close();
     route();
   } catch (e) { toast(e.message, true); }
 }
@@ -478,6 +422,7 @@ async function deleteSlideStyle(id) {
     state.slideStyles = null;
     await ensureSlideStyles();
     toast('style deleted');
+    document.querySelector('dialog.style-dialog')?.close();
     route();
   } catch (e) { toast(e.message, true); }
 }

@@ -1398,3 +1398,19 @@ img.themed-pending { opacity:.45; }
 .visual-finding { flex-basis:100%; color:var(--accent); padding:0 4px 8px; }
 .modal-box h3 { margin:16px 0 6px; }
 .modal-box [data-picture-kind][aria-pressed="true"] { border-color:var(--accent); color:var(--ink); background:var(--accent-tint); }
+
+/* Starting styles use sample paragraphs, grouped by the picture they draw. */
+.style-dialog { width:min(960px,94vw); }
+.style-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+.style-card { display:flex; flex-direction:column; align-items:stretch; text-align:left; width:100%; padding:8px; white-space:normal; gap:6px; height:100%; }
+.style-card[aria-pressed="true"] { outline:2px solid var(--accent); background-color:var(--raised); }
+.style-card img,.style-card video { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:2px; }
+.style-card span,.style-card small { font:13px/1.5 var(--font-ui,Inter,sans-serif); text-transform:none; color:var(--dim); }
+.style-current { display:flex; align-items:center; gap:10px; text-align:left; }
+.style-current img { width:72px; aspect-ratio:16/9; object-fit:cover; }
+.style-current small { display:block; color:var(--dim); }
+.style-actions,.style-heading { margin:14px 0; flex-wrap:wrap; gap:10px; }
+.visuals-workspace > .style-heading { margin:0; padding:14px 16px; border-bottom:1px solid var(--line); }
+.style-dialog h3 { margin:18px 0 8px; }
+.field .row:has(> input[type=color]) { gap:10px; align-items:center; }
+.field input[type=color] { width:42px; height:34px; padding:3px; border:1px solid var(--line); border-radius:4px; background-color:var(--bg); }

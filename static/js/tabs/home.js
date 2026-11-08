@@ -8,7 +8,6 @@ async function renderHome() {
   paintSidebar();
   let homeQuery = '';
   try { homeQuery = localStorage.getItem('corkbored.homeQuery') || ''; } catch (_) {}
-  const formats = [...FORMAT_INFO, ...(state.slideStyles || []).map(s => ({key: `custom:${s.id}`, label: s.name}))];
   view.innerHTML = `<div class="home">
     <section class="panel home-start" aria-labelledby="start-heading">
       <div class="row"><h1 id="start-heading">Idea in. Episode out.</h1><span class="micro">New video</span></div>
@@ -16,7 +15,7 @@ async function renderHome() {
         <button class="btn" data-start="idea" onclick="homeStart('idea')">An idea</button>
         <button class="btn" data-start="script" onclick="homeStart('script')">My own script</button>
         <button class="btn" disabled aria-describedby="footage-note">A footage shoot</button>
-        <button class="btn" data-start="format" onclick="homeStart('format')">A saved format</button>
+        <button class="btn" data-start="format" onclick="homeStart('format')">A saved style</button>
         <button class="btn ghost" onclick="$('#projfile').click()">Open a .corkbored file</button>
         <input type="file" id="projfile" accept=".corkbored,.youslop" hidden
           onchange="openProjectFile(this.files[0]);this.value=''">
@@ -37,8 +36,7 @@ async function renderHome() {
           <option value="">Standalone video</option>
           ${chans.map(c => `<option value="${esc(c.id)}" ${c.id === state.presetChannel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
           <option value="__new">New channel…</option></select></label>
-        <label class="field"><span>Format</span><select id="home-format" onchange="pickNewFormat(this.value)">
-          ${formats.map(f => `<option value="${esc(f.key)}">${esc(f.label)}</option>`).join('')}</select></label>
+        <div class="field"><span>Style</span><button type="button" class="btn style-current" id="home-style" onclick="openStylePicker('home')"></button></div>
         <div class="field"><span id="shape-label">Shape</span>
           <div class="row" role="group" aria-labelledby="shape-label">
             <button class="btn" data-shape="portrait" onclick="homeShape('portrait')">Short · 9:16</button>
@@ -55,16 +53,14 @@ async function renderHome() {
       <p id="script-length-note" class="sub" hidden>Length comes from your script, measured after import.</p>
       <form id="home-new-channel" hidden onsubmit="createHomeChannel(event)">
         <div class="row">
-          <label class="field"><span>Channel name</span><input id="home-channel-name" required></label>
-          <label class="field"><span>What does this channel cover?</span><input id="home-channel-concept"></label>
+          <label class="field"><span>Channel name</span><input type="text" id="home-channel-name" required></label>
+          <label class="field"><span>What does this channel cover?</span><input type="text" id="home-channel-concept"></label>
           <button class="btn" type="submit">Create channel</button>
           <button class="btn ghost" type="button" onclick="$('#home-new-channel').hidden=true">Cancel</button>
         </div>
       </form>
-      <div id="home-format-preview" class="home-format-preview" aria-live="polite"></div>
       <details id="home-more"><summary>More options</summary>
         <div class="grid-3">
-          <label class="field"><span>Saved format</span><select id="saved-format" onchange="homeSavedFormat()"><option value="">Channel defaults</option></select></label>
           <label class="field"><span>Delivery</span><select id="delivery" onchange="state.newDelivery=this.value">
             <option value="voice_over">Voice-over</option><option value="on_camera">On camera</option><option value="mixed">Mixed</option></select></label>
           <label class="field"><span>Tone</span><select id="tone">
@@ -73,8 +69,6 @@ async function renderHome() {
         </div>
         <label class="field"><span><input type="checkbox" id="testrun" ${state.newTest ? 'checked' : ''}
           onchange="newTestRun(this.checked)"> Test run — 1 minute, quick research</span></label>
-        <label class="field"><span>Video style</span></label>
-        ${formatPicker(state.newFormat || 'kenburns', 'var(--accent)', 'pickNewFormat')}
         <div id="newmodels">${newModelsPicker()}</div>
         <label class="field"><span id="everyLabel">${pictureEveryLabel(state.newPictureEvery || 1)}</span>
           <input type="range" id="every" min="1" max="6" value="${state.newPictureEvery || 1}"
@@ -133,11 +127,6 @@ async function renderHome() {
   homeShape(state.newAspect || 'landscape');
   if (state.presetChannel) { state.presetChannel = null; channelPicked(); }
   else pickNewFormat(state.newFormat || 'kenburns');
-  // The old card picker uses divs; make its home controls keyboard reachable.
-  $('#fmtpicker').querySelectorAll('.tpl[data-fmt], #newstyletile').forEach(el => {
-    el.tabIndex = 0; el.setAttribute('role', 'button');
-    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } };
-  });
   if (state.afterHome) { const run = state.afterHome; state.afterHome = null; run(); }
 }
 
@@ -148,11 +137,7 @@ function homeStart(mode) {
   $('#script-length-note').hidden = state.mode !== 'script';
   $('.home-start-modes').querySelectorAll('[data-start]').forEach(b => b.setAttribute('aria-pressed', b.dataset.start === mode));
   newTestRun(state.newTest);
-  if (mode === 'format') {
-    $('#home-more').open = true;
-    $('#saved-format').focus();
-    if (!$('#chan').value) toast('Choose a channel for its saved formats, or choose a saved video style below.');
-  }
+  if (mode === 'format') openStylePicker('home');
 }
 
 function homeShape(aspect) {
@@ -162,12 +147,6 @@ function homeShape(aspect) {
     : Array.from({length: 16}, (_, i) => i + 7).map(n => `<option value="${n}" ${n === 12 ? 'selected' : ''}>${n} min</option>`).join('');
   $('#shape-note').hidden = aspect !== 'portrait';
   newTestRun(state.newTest);
-}
-
-function homeSavedFormat() {
-  const c = (state.channels || []).find(c => c.id === $('#chan').value);
-  const f = c?.formats?.find(f => f.name === $('#saved-format').value);
-  pickNewFormat(f?.style?.format || c?.format || 'kenburns', false);
 }
 
 async function createHomeChannel(e) {
@@ -261,9 +240,7 @@ function channelPicked() {
     $('#home-channel-name').focus();
   }
   const c = (state.channels || []).find((x) => x.id === $('#chan').value);
-  const saved = $('#saved-format');
-  if (saved) saved.innerHTML = '<option value="">Channel defaults</option>' +
-    (c?.formats || []).map((f) => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('');
+  state.newKit = '';
   // Standalone again: back to this form's own defaults rather than whatever
   // the last-picked channel left behind.
   state.newFormat = c ? c.format : 'kenburns';
@@ -288,7 +265,7 @@ async function createProject(btn) {
                  format: state.newFormat || 'kenburns',
                  picture_every: state.newPictureEvery || 1 };
 
-  body.format_name = $('#saved-format')?.value || '';
+  if (state.newKit) body.kit_id = state.newKit;
   if (scripting) {
     const script = $('#script').value.trim();
     if (script.split(/\s+/).length < 120) {
@@ -365,29 +342,13 @@ function toggleNewModel(id) {
   $('#newmodels').innerHTML = newModelsPicker();
 }
 
-function pickNewFormat(key, clearSaved = true) {
-  if (clearSaved && $('#saved-format')) $('#saved-format').value = '';
-  const select = $('#home-format');
-  if (select) select.value = key;
-  const channel = (state.channels || []).find(c => c.id === $('#chan')?.value);
-  const preview = $('#home-format-preview');
-  if (preview) {
-    const saved = (state.slideStyles || []).find(s => `custom:${s.id}` === key);
-    const preset = channel?.formats?.find(f => f.name === $('#saved-format')?.value);
-    preview.innerHTML = saved
-      ? `<img src="/api/slide-styles/${saved.id}/thumb.jpg" alt="${esc(saved.name)} preview">`
-      : formatArt(key, preset?.style?.accent || channel?.accent || '#FF5A1F');
-    preview.innerHTML += `<span>${esc(FORMAT_INFO.find(f => f.key === key)?.blurb || saved?.name || key)}</span>`;
-  }
-
+function pickNewFormat(key) {
   state.newFormat = key;
+  const kit = (state.styleKits || []).find(k => k.id === state.newKit);
+  const card = $('#home-style');
+  if (card) card.innerHTML = `${stylePoster(kit?.id || key)}<span>${esc(kit?.name || styleName(key))}<small>Change style</small></span>`;
   const nm = $('#newmodels'); if (nm) nm.innerHTML = newModelsPicker();
-  const strip = $('#fmtpicker');
-  if (!strip) return;
-  strip.querySelectorAll('.tpl').forEach((el) =>
-    el.classList.toggle('sel', el.dataset.fmt === key));
 }
-
 
 // A test run: one minute, quick research — the whole pipeline, cheaply.
 function newTestRun(on) {

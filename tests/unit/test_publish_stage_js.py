@@ -11,7 +11,7 @@ def test_publish_lifecycle(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(p).read_text() for p in (
-        'static/js/tabs/block_theme.js', 'static/js/palette.js', 'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
+        'static/js/tabs/style_picker.js', 'static/js/tabs/block_theme.js', 'static/js/palette.js', 'static/js/shell.js', 'static/js/tabs/render.js', 'static/js/tabs/thumb.js',
         'static/js/timeline/draw.js'))
     harness = r'''
 const loop = new imports.gi.GLib.MainLoop(null, false);
@@ -23,7 +23,7 @@ function node(){return {style:{},children:[],append(...items){this.children.push
 const document={querySelectorAll:()=>[],createElement:node,addEventListener(){}};
 const esc=s=>String(s??'').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const fmtTime=t=>String(t);
-const formatPicker=()=>'<div>Video style</div>';
+const pictureKind=s=>s.kind || state.project.style.format, pictureKindLabel=k=>k;
 const isCut=()=>false, chapterCount=()=>0, videoTag=()=>'<video id="render-output"></video>';
 const ensureChannelsLoaded=async()=>{};
 const state={stage:'publish',project:{id:'p1',style:{format:'kenburns',vignette:0,ken_burns_amount:0,
@@ -58,6 +58,7 @@ async function run(){
  for(const label of ['Check','Review by Claude','Render','Thumbnail','Description & chapters','Upload'])
    check(body.innerHTML.includes(label),'missing finish step '+label);
  check(body.innerHTML.includes('Music bed') && body.innerHTML.includes('Pause between paragraphs'),'sound controls kept');
+ check(!body.innerHTML.includes('style-picker') && body.innerHTML.includes('Change in Visuals'),'read-only style summary');
  check(thumb.innerHTML.includes('Headline') && thumb.innerHTML.includes('Draw thumbnail'),'thumbnail tools mounted');
  check(body.innerHTML.includes('Sponsor') && body.innerHTML.includes('Chapter'),'chapters include sponsors');
  check(body.innerHTML.includes('Example: https://example.test\nCode: SAVE\nPaid promotion'),

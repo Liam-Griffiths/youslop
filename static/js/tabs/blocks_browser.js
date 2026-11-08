@@ -45,7 +45,7 @@ async function renderBlocks(path = '', options = {}) {
     <label for="blocks-channel">Pinned to channel</label><select id="blocks-channel"><option value="">All</option>${channels.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
     <label for="blocks-sort">Sort</label><select id="blocks-sort"><option value="recommended">Recommended</option><option value="recent">Recently used</option><option value="name">A–Z</option></select>
     <button type="button" class="btn ghost" id="blocks-clear">Clear filters</button></aside>
-    <section aria-label="Blocks"><details class="card block-create" ${state.blockDescription || state.blockResult ? 'open' : ''}><summary>Describe a new block…</summary>
+    <section aria-label="Blocks"><details class="card block-create" ${state.openBlockDescription || state.blockDescription || state.blockResult ? 'open' : ''}><summary>Describe a new block…</summary>
       <label for="block-description">What should it show?</label><textarea id="block-description" maxlength="4000" placeholder="A receipt that prints line by line with a total at the end">${esc(state.blockDescription || '')}</textarea>
       <p class="mono">One-off model call with up to two repairs. Reusing a saved block costs no tokens.</p>
       <button type="button" class="btn" onclick="describeBlock(this)" ${state.job?.kind === 'create block' && !state.job.done ? 'disabled' : ''}>Create block</button>
@@ -58,6 +58,7 @@ async function renderBlocks(path = '', options = {}) {
     themedPosterObserver?.disconnect(); themedPosterQueue = [];
     paintBlocksGrid(); paintBlockDetails();
   };
+  if (state.openBlockDescription) { $('#block-description').focus(); state.openBlockDescription = false; }
   $('#block-description').oninput = e => { state.blockDescription = e.target.value; };
   for (const id of ['search','category','aspect','source','data','sort','favourites','channel','presets']) $(`#blocks-${id}`).oninput = paintBlocksGrid;
   $('#blocks-clear').onclick = () => { for (const el of document.querySelectorAll('.blocks-filters input,.blocks-filters select')) {
@@ -162,7 +163,7 @@ function paintBlockDetails(aspect) {
     <p id="block-trial-status" role="status" aria-live="polite"></p>
     <h3>Try it</h3><form id="block-trial">${Object.entries(b.variables).map(([key,spec],i) => blockTrialField(key,{...spec,default:scratch[key] ?? spec.default},i)).join('')}
     <button type="button" class="btn sm ghost" id="block-reset">Reset to defaults</button></form>
-    ${blocksBrowser.options.mode !== 'channel' ? `<button type="button" class="btn" id="block-use">${blocksBrowser.options.mode === 'pick' ? 'Use here' : 'Use in a project…'}</button>` : ''}
+    ${blocksBrowser.options.mode !== 'channel' ? `<button type="button" class="btn" id="block-use">${blocksBrowser.options.mode === 'pick' ? 'Use here' : state.blocksProjectId ? 'Use in this video' : 'Use in a project…'}</button>` : ''}
     <div class="row"><button type="button" class="btn sm" id="block-pin">Add to channel…</button>
       <button type="button" class="btn sm" id="block-duplicate" ${b.forkable ? '' : 'disabled aria-describedby="block-fork-note"'}>Duplicate as mine</button>
       ${b.forkable ? '' : '<small id="block-fork-note">Built-in blocks use trusted template features that copies cannot keep. Save your values as a preset or describe a new block instead.</small>'}
@@ -442,6 +443,7 @@ async function blockProjectTarget(selection) {
       };
     } catch (error) { toast(error.message,true); }
   };
+  if (state.blocksProjectId) { $('#block-project').value = state.blocksProjectId; await $('#block-project').onchange({target:$('#block-project')}); }
 }
 
 async function openBlockPicker(pid, sid, selection = null, targets = null) {

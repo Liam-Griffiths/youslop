@@ -179,7 +179,7 @@ def server():
     def no_llm(*args, **kwargs):
         raise RuntimeError('LLM calls are forbidden in UI snapshots')
 
-    with patch('app.llm.complete', no_llm), patch('app.llm.complete_json', no_llm), socket.socket() as sock:
+    with patch('app.ops.initialize', lambda *args: None), patch('app.llm.complete', no_llm), patch('app.llm.complete_json', no_llm), socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         instance = uvicorn.Server(uvicorn.Config(app, log_level='warning', lifespan='off'))
         thread = threading.Thread(target=instance.run, kwargs={'sockets': [sock]}, daemon=True)
@@ -248,8 +248,21 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route.endswith('/publish'):
+                _evaluate(cdp, session, "if (document.querySelector('.style-picker') || !document.querySelector('#tabbody').textContent.includes('Change in Visuals')) throw Error('Publish style summary missing'); true")
+            if route == '#/p/psnapkenburns/visuals':
+                _evaluate(cdp, session, """(async () => {
+                  const before = JSON.stringify(await api('/api/projects/psnapkenburns'));
+                  await openStylePicker('project'); await chooseStyleKit('casefile');
+                  const dialog = document.querySelector('dialog.style-dialog');
+                  if (!dialog.textContent.includes('follow the default') || !dialog.querySelector('[data-apply]')) throw Error('Dry-run summary missing');
+                  dialog.querySelector('[data-close]').click();
+                  if (before !== JSON.stringify(await api('/api/projects/psnapkenburns'))) throw Error('Cancel mutated project');
+                  return true;
+                })()""")
             if route == '#/channels/csnapshot/setup':
                 _evaluate(cdp, session, """(() => {
+                  if (!document.querySelector('.style-picker') || !document.querySelector('#view').textContent.includes('House style')) throw Error('House style missing');
                   const panel = document.querySelector('#block-theme');
                   if (panel.querySelector('#block-token-accent').value.toUpperCase() !== '#3DFFDC' ||
                       panel.querySelector('[data-source=accent]').textContent !== 'channel') throw Error('Channel block theme missing');
@@ -304,6 +317,21 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route == '#/':
+                _evaluate(cdp, session, """(async () => {
+                  if (document.querySelector('#home-format,#saved-format')) throw Error('Duplicate Home picker');
+                  await openStylePicker('home'); await chooseStyleKit('casefile');
+                  if (state.newKit !== 'casefile' || state.newFormat !== 'casefile') throw Error('Home choice lost');
+                  const r = await api('/api/projects',{method:'POST',body:JSON.stringify({idea:'Synthetic city story',kit_id:state.newKit})});
+                  const kit = state.styleKits.find(k => k.id === 'casefile');
+                  if (r.project.style.format !== 'casefile' || r.project.style.accent !== kit.look.accent) throw Error('Home kit not applied');
+                  await openStylePicker('home'); return true;
+                })()""")
+                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                picker = out / 'home--styles.png'; picker.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(picker),'t':0,'why':'Grouped style picker'})
+                _evaluate(cdp, session, "designStyleBlock(); new Promise(r => setTimeout(() => r(true),500))")
+                _evaluate(cdp, session, "if (!document.querySelector('.block-create')?.open || document.activeElement.id !== 'block-description') throw Error('Describe flow not focused'); true")
             if route == '#/blocks/number_slam':
                 _evaluate(cdp, session, "document.querySelector('#block-expand').focus(); document.querySelector('#block-expand').click(); true")
                 _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
