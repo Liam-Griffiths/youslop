@@ -20,6 +20,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-08 (night):** T9.12, T9.13, T11.5, T11.6 done. Owner approved T12.10a/b (block overlays on any picture: blocks over footage, planned and edited). Queue: T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > **Owner decision pending (T12.8c log):** "Duplicate as mine" cannot fork built-in blocks: none of the 39 pass the user-block sandbox. Choose (a) convert built-ins over time, (b) trust unedited forks of built-ins, or (c) presets only. The button is disabled with a reason until then.
 > **2026-11-08 (morning): queue complete; ready for user testing.** Done since the night note: T12.8 (+b, c), T12.5, T12.10a/b/c, T12.9 (+b), T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7 (implemented; owner listens). Owner items: (1) listen to the T1.7 before/after section and keep or revert the linear master; (2) decide "Duplicate as mine" for built-in blocks (T12.8c log); (3) first real paid-sponsor upload confirms the YouTube flag path (T10.7). Codex 5-hour ~40%, weekly ~19%.
+> **2026-11-08 (afternoon):** owner rethink of video styles around blocks. Decisions: mix kinds of picture within a video; "Design a style" becomes "Design a block"; block themes per channel or standalone video, with previews; more blocks (inspired by the HyperFrames registry, clean-room); fix the block preview (doesn't play in the app window: H.264 previews, no expand). Queue: T12.11, T12.12a, T12.12b, T13.1, T13.2, T13.3, T13.4, T12.13 batches A–E. T13.5 later.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -204,3 +205,17 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.10a | Block overlays on any picture: data and render | M | T11.6, T12.5, T2.10 | done | 2026-11-08 Codex + review; slide.overlays, transparent block layers composited by ffmpeg, stored unclipped; ¼ preview checked |
 | T12.10b | Block overlays: planning and editing | M | T12.10a, T4.4, T12.8 | done | 2026-11-08 Codex + review; offline overlay planner, Timeline Graphics row (select/nudge/delete/hide/G), Visuals chips; checks split to T12.10c |
 | T12.10c | Block overlays: checks | S | T12.10b | done | 2026-11-08 Codex + review; contrast (panel-aware), overlap, safe area, estimated anchors; Fix opens the graphic |
+| T12.11 | Block preview player: plays in the app window, expands, scrubs | M | T12.8b | todo | motion previews are H.264 .mp4 (no decoder in the Linux app window); webm, full length, expanded player |
+| T12.12a | Block themes: tokens per channel or standalone video | M | T12.9b | todo | colours, fonts, radius, weight, pace; channel → project resolution; cache keys |
+| T12.12b | Block themes: editor and live previews | M | T12.12a, T12.11 | todo | theme panel with live six-block sheet; Blocks "Preview as" |
+| T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | todo | A names/titles, B numbers, C places (needs vendored Natural Earth), D screens, E pictures; clean-room, inspired by HyperFrames registry |
+
+## Phase 13: styles as starting kits
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T13.1 | Picture kind per paragraph: mixed kinds render | L | T12.10a | todo | `Slide.kind`, `kinds.kind_for`, audit of `style.format`, joins by kind |
+| T13.2 | Visuals: choose each paragraph's kind | M | T13.1, T9.8 | todo | kind chip/menu per group, per-paragraph source panel, mix bar by kind |
+| T13.3 | Styles as starting kits | M | T13.1, T12.12a, T12.9b | todo | built-in kits, apply with dry-run summary, your styles (absorbs saved formats) |
+| T13.4 | Style picker and placement; Design a block | M | T13.2, T13.3, T12.12b | todo | one grouped picker with real previews; Home, Visuals header, channel; Publish read-only |
+| T13.5 | Drawn-cut pieces as blocks (pilot: Group Chat) | M | T13.1, T12.13 D | parked | later; owner schedules |
