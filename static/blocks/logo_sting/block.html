@@ -1,0 +1,8 @@
+{% extends "_blocks/lower_third_kicker/names_base.html" %}
+{% block body %}
+<section class="title-zone">
+{% if vars.logo %}<img class="brand-logo" src="{{ vars.logo }}" data-var-src="logo" alt="" {{ layer('logo','scale-in') }}>{% endif %}
+<div {{ layer('wordmark','rise',0.2) }}><h1 class="wordmark" data-var-text="title">{{ vars.title }}</h1>
+<p class="role" data-var-text="tagline">{{ vars.tagline }}</p></div>
+</section>
+{% endblock %}

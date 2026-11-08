@@ -1,0 +1,10 @@
+{% extends "_blocks/lower_third_kicker/names_base.html" %}
+{% block body %}
+<section class="nameplate" style="padding:0;background:none">
+<div style="padding:32px 32px 48px;background:var(--panel);border-radius:var(--radius,0px)" {{ layer('identity','fade') }}>
+<h1 data-var-text="title">{{ vars.title }}</h1>
+<p class="role" data-var-text="role">{{ vars.role }}</p>
+</div>
+<div class="underline" {{ layer('underline','wipe',0.15,0.55) }}></div>
+</section>
+{% endblock %}

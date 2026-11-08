@@ -208,7 +208,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.11 | Block preview player: plays in the app window, expands, scrubs | M | T12.8b | done | 2026-11-08 Codex + review; VP9 webm previews (the app window has no H.264), full length, expanded player with scrub/loop/aspect/show-over; owner: confirm it plays in the desktop app |
 | T12.12a | Block themes: tokens per channel or standalone video | M | T12.9b | done | 2026-11-08 Codex + review; Style.block_theme sparse overrides, default→theme→channel→project, CSS tokens incl. fonts/radius/weight/pace, token lint; defaults pixel-identical (69 captures); 6 pre-existing block-check failures noted |
 | T12.12b | Block themes: editor and live previews | M | T12.12a, T12.11 | done | 2026-11-08 Codex + review; theme panel on channel + project Look, live six-poster sheet (cold 1.36 s), Preview as on Blocks; review: pending posters, readable token labels |
-| T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | todo | A names/titles, B numbers, C places (needs vendored Natural Earth), D screens, E pictures; clean-room, inspired by HyperFrames registry |
+| T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | doing | 2026-11-08 batch A done (8 name/title blocks, sheet v2-a.png; review: accent signatures, default colours); B–E next |
 
 ## Phase 13: styles as starting kits
 

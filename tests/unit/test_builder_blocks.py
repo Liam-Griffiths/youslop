@@ -83,14 +83,17 @@ def test_builtin_checks_and_builder_stats(ref, capture_mock):
     assert block_authoring.check(ref, report=lambda a, s: reports.append((a, s))) == []
     assert {a for a, _ in reports} == set(meta['aspects'])
     for aspect, stats in reports:
-        assert stats['captured_frames'] == 0
+        # Split-flap titles intentionally capture one bounded arrival window.
+        expected_frames = 15 if ref == 'split_flap_title' else 0
+        assert stats['captured_frames'] == expected_frames
+        assert expected_frames <= int(30 * 5 * meta.get('budget', .1))
         assert 1 <= stats['layers'] <= 48 and stats['passes'] == 1
         # Native media is not screenshotted; warm manifests also count its files.
         if (ref in blocks.core_explainer_blocks.IDS and ref != 'step_list' or
                 ref in blocks.core_channel_blocks.IDS):
             assert 1 <= stats['captures'] + stats['cache_hits'] <= stats['layers'] + 1
         else:
-            assert stats['captures'] + stats['cache_hits'] == stats['layers'] + 1
+            assert stats['captures'] + stats['cache_hits'] == stats['layers'] + 1 + expected_frames
         assert stats['largest_graph_bytes'] < 65536
     # This is a mocked geometry/contrast check; real layout needs Chromium review.
 
@@ -230,3 +233,41 @@ def test_channel_maximum_inputs_compile(ref, aspect, capture_mock, tmp_path):
         assert x >= ctx['width']*.1 and x+w <= ctx['width']*(.85 if aspect == '9:16' else .9)
         assert y >= ctx['height']*(.15 if aspect == '9:16' else .1)
         assert y+h <= ctx['height']*(.8 if aspect == '9:16' else .9)
+
+
+BATCH_A = ('lower_third_kicker', 'lower_third_underline', 'lower_third_pill',
+           'lower_third_reveal', 'lower_third_portrait', 'part_title',
+           'split_flap_title', 'logo_sting')
+
+
+@pytest.mark.parametrize('ref', BATCH_A)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_names_titles_max_copy_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    seconds = meta['duration']['min']
+    values = block_authoring.samples(meta)
+    # Exercise transparency and corner placement with maximum copy.
+    positions = meta.get('overlay', {}).get('position', [None])
+    for position in positions:
+        template, ctx = blocks.prepare(ref, values, aspect, seconds=seconds,
+            overlay=position is not None, position=position)
+        html = scenes.render_html(template, ctx)
+        parsed = Layers(html)
+        assert len({r['id'] for r in parsed.rows}) == len(parsed.rows)
+        assert ctx.get('builder_alpha', False) == (position is not None)
+        assert all(r['exit'] == .25 for r in parsed.rows)
+        # Maximum copy remains complete; no fit script silently truncates it.
+        for key, spec in meta['variables'].items():
+            if spec['type'] == 'text':
+                assert values[key] in html
+        stats = builder.inspect(tmp_path, template, ctx, seconds=seconds,
+            size=(ctx['width']//4, ctx['height']//4), fps=30)
+        assert stats['passes'] == 1 and stats['largest_graph_bytes'] < 65536
+        assert stats['captured_frames'] == (15 if ref == 'split_flap_title' else 0)
+    # At the slowest supported pace and minimum duration, the sole frame
+    # window must still pass the builder's real budget validation.
+    if ref == 'split_flap_title':
+        data = dict(layers=parsed.rows, screens=[], budget=parsed.budget)
+        for row in data['layers']:
+            row['arrival'] *= 1.4
+        builder._plan(data, seconds, 30)

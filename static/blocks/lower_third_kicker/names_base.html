@@ -1,0 +1,44 @@
+{% extends '_base.html' %}
+{% block head %}
+<style>
+@font-face { font-family:NamesDisplay; src:url('/fonts/Archivo-Variable.ttf'); font-weight:100 900; font-stretch:62% 125%; }
+body { width:{{ width }}px; height:{{ height }}px; }
+.nameplate,.title-zone { position:absolute; left:12%; right:28%; }
+.nameplate { bottom:16%; padding:32px; background:var(--panel); border-radius:var(--radius,0px); }
+h1 { font:var(--weight-display,800) 64px/1.15 var(--font-display,NamesDisplay),sans-serif; font-stretch:62%; overflow-wrap:anywhere; }
+p { font:44px/1.4 var(--font-body,Inter),sans-serif; overflow-wrap:anywhere; }
+.role { margin-top:12px; }
+.kicker { color:var(--accent); margin-bottom:14px; font-size:30px; font-weight:600; text-transform:uppercase; letter-spacing:.14em; }
+.underline { position:absolute; left:32px; right:32px; bottom:18px; height:8px; background:var(--accent); }
+/* A pill keeps its round ends whatever the theme's corner radius. */
+.capsule { border:3px solid var(--accent); border-radius:var(--pill-radius,999px); padding:36px 64px; }
+.reveal { border-left:12px solid var(--accent); }
+.portrait { border-top:6px solid var(--accent); display:grid; grid-template-columns:144px minmax(0,1fr); gap:28px; align-items:center; }
+.avatar { width:144px; height:144px; object-fit:cover; clip-path:circle(50%); }
+.title-zone { right:12%; top:22%; }
+.part { font:var(--weight-display,800) 240px/1.15 var(--font-display,NamesDisplay),sans-serif; color:var(--accent); overflow-wrap:anywhere; }
+.hairline { height:2px; background:var(--accent); margin:24px 0; }
+.part-heading { font-size:108px; }
+.flap { padding:40px; background:var(--panel); border:2px solid var(--line); perspective:1200px; }
+.flap-face { position:relative; padding:24px 0; transform-origin:center; }
+.flap-face h1 { font-size:88px; }
+.flap-face::after { content:''; position:absolute; top:50%; left:0; right:0; border-top:2px solid var(--line); }
+.brand-logo { width:180px; height:180px; object-fit:contain; margin-bottom:32px; }
+.wordmark { font-size:112px; }
+@media(orientation:portrait) {
+ .nameplate { right:24%; bottom:24%; }
+ .title-zone { right:18%; top:22%; }
+ .portrait { grid-template-columns:112px minmax(0,1fr); gap:20px; }
+ .avatar { width:112px; height:112px; }
+ .portrait h1 { font-size:56px; }
+ .part { font-size:200px; }
+ .part-heading,.wordmark { font-size:88px; }
+ .flap-face h1 { font-size:80px; }
+}
+{% if overlay_position | default('') %}
+{% if overlay_position.endswith('right') %}.nameplate {left:28%;right:12%}@media(orientation:portrait){.nameplate{left:18%;right:18%}}{% endif %}
+{% if overlay_position.startswith('top') %}.nameplate {top:18%;bottom:auto}{% endif %}
+{% endif %}
+</style>
+{% endblock %}
+{% macro layer(id, motion='rise', start=0, arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}" data-motion-exit="0.25"{% endmacro %}

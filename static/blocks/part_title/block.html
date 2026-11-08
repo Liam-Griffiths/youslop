@@ -1,0 +1,8 @@
+{% extends "_blocks/lower_third_kicker/names_base.html" %}
+{% block body %}
+<section class="title-zone">
+<p class="part" data-var-text="part" {{ layer('part','fade') }}>{{ vars.part }}</p>
+<div class="hairline" {{ layer('rule','wipe',0.1) }}></div>
+<h1 class="part-heading" data-var-text="title" {{ layer('title','rise',0.2) }}>{{ vars.title }}</h1>
+</section>
+{% endblock %}

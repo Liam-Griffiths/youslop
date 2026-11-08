@@ -1,0 +1,17 @@
+{% extends "_blocks/lower_third_kicker/names_base.html" %}
+{% block body %}
+<section class="title-zone flap" {{ layer('board','fade',0,0.5) }} data-capture="frames">
+<p class="kicker" data-var-text="kicker">{{ vars.kicker }}</p>
+<div class="flap-face"><h1 data-var-text="title">{{ vars.title }}</h1></div>
+</section>
+{% endblock %}
+{% block script %}
+<script>
+window.__ready = window.__ready.then(() => {
+  const pace = Number(getComputedStyle(document.documentElement).getPropertyValue('--block-pace')) || 1;
+  window.__timelines.flap = gsap.timeline({paused:true, data:{start:0}})
+    .fromTo('.flap-face', {rotationX:-90}, {rotationX:0, duration:0.5*pace, ease:'power2.out'});
+  return window.__seek(0);
+});
+</script>
+{% endblock %}
