@@ -16,6 +16,7 @@ def test_visual_picker_js(tmp_path):
       import GLib from 'gi://GLib';
       const nodes = {}, $ = key => nodes[key] ||= {innerHTML:'', value:'map', textContent:''};
       const esc = s => String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+      const cutInfo = () => null;
       const isStage = f => f === 'stage', isCut = f => f === 'loudmouth';
       const fmtTime = s => s+'s', thumbUrl = c => '/thumb/'+c.id;
       const document = {querySelectorAll: () => []};
@@ -31,6 +32,7 @@ def test_visual_picker_js(tmp_path):
       let calls=[];
       const api = async (url, opts={}) => {
         calls.push([url,JSON.parse(opts.body || '{}')]);
+        if (url === '/api/projects/p1') return JSON.parse(JSON.stringify(state.project));
         if (url === '/api/footage/shoots') return [];
         if (url === '/api/blocks') return ['number_slam','percentage_ring','quote_card'].map(ref =>
           ({ref,name:ref,kind:'segment',aspects:['16:9','9:16'],category:'data'}));
@@ -40,7 +42,14 @@ def test_visual_picker_js(tmp_path):
         return {slide:{candidates:[{id:'ft1',provider:'footage',kind:'video',title:'Boats',
           in_s:2,out_s:10,labels:['harbour']}],chosen_id:'c0'}};
       };
-      const saveSlide = async (sid, fields) => {calls.push([sid,fields]);};
+      const saveSlide = async (sid, fields) => {
+        calls.push([sid,fields]);
+        const s = state.project.slides.find(s => s.id === sid);
+        const cues = {...s.cues,...fields.cues};
+        Object.assign(s,fields);
+        if (fields.cues) s.cues = cues;
+        return s;
+      };
     '''
     checks = r'''
       const p = state.project;
@@ -114,6 +123,52 @@ def test_visual_picker_js(tmp_path):
       visualBlockData(p).trials.set(visualTrialKey(p,selected), {url:'/trial-still.png'});
       paintMedia();
       assert($('#tabbody').innerHTML.includes('/trial-still.png'), 'trial replaces preview placeholder');
+      selected.cues = {};
+      const board = p.slides[1];
+      board.kind = 'board'; board.board_lead = 'Keep this board';
+      delete state.visualSource;
+      selectVisual(board.id);
+      html = $('#tabbody').innerHTML;
+      assert(html.includes('Edit the board') && html.includes('Write the boards'), 'board controls in photo project');
+      assert(html.includes('Board 1 ·') && html.includes('Documentary photo 39 ·'), 'resolved counts');
+      assert(visualFormatSources(p, selected)[0] === 'Footage', 'photo sources stay available');
+      assert(visualFormatSources(p, board)[0] === 'Board', 'board sources');
+      board.kind = 'loudmouth';
+      paintMedia();
+      assert($('#tabbody').innerHTML.includes('Edit the cues') && $('#tabbody').innerHTML.includes('P1 · No cues'), 'cut editor and finding');
+      selectVisual('s3',{shiftKey:true});
+      assert(state.visualRange.ids.join(',') === 's1,s2,s3', 'range selection');
+      p.picture_runs = [['s0','s1'],['s2'],['s3']];
+      selected.kind = 'essay';
+      assert(pictureKind(board) === 'essay', 'group lead resolves kind');
+      delete p.picture_runs;
+      state.visualRange = null;
+      const ensureSlideStyles = async () => [];
+      const render = async () => paintMedia();
+      let dialog;
+      document.body = {appendChild: el => {dialog=el;}};
+      document.createElement = () => ({
+        setAttribute(){}, remove(){this.removed=true;},
+        querySelector(){return {focus(){},textContent:''};},
+        querySelectorAll(){return this.buttons ||= [...this.innerHTML.matchAll(/data-picture-kind="([^"]*)"/g)]
+          .map(m => ({dataset:{pictureKind:m[1]}}));}
+      });
+      const chooseKind = async kind => {
+        await openPictureKind('s1');
+        await dialog.buttons.find(b => b.dataset.pictureKind === kind).onclick();
+        assert(dialog.removed, 'kind menu completed');
+      };
+      await chooseKind('board');
+      assert(state.project.slides[1].kind === 'board', 'menu persists board');
+      await chooseKind('');
+      assert(state.project.slides[1].kind === '' && state.project.slides[1].board_lead === 'Keep this board', 'default retains board text');
+      state.project.slides[1].cues = {blocks:[{block:'title_card',vars:{title:'Keep'}}]};
+      await chooseKind('essay');
+      assert(pictureKind(state.project.slides[1]) === 'essay', 'switch leaves active block');
+      assert(state.project.slides[1].cues.inactive_blocks[0].vars.title === 'Keep', 'switch retains block variables');
+      state.visualRange = {pid:'p1',ids:['s1','s2']};
+      await chooseKind('board');
+      assert(state.project.slides[1].kind === 'board' && state.project.slides[2].kind === 'board', 'range menu applies both');
       print('visual picker checks passed');
     '''
     script = tmp_path / 'visuals.mjs'
@@ -150,3 +205,30 @@ def test_visual_lock_toggle_preserves_takes(project):
     assert slide.to_dict() == original
     with pytest.raises(EditError, match='must be a boolean'):
         patch_slide_fields(slide, {'locked_media': 'false'})
+
+
+def test_kind_switch_retains_content_through_api(project):
+    from app import main, store
+    from app.kinds import kind_for
+    project.id = 'pkindroundtrip'
+    store.save(project)
+    slide = project.slides[1]
+    main.patch_slide(project.id, slide.id, {'kind':'board', 'board_lead':'Keep this board',
+        'board_points':['A stored line']})
+    main.patch_slide(project.id, slide.id, {'kind':''})
+    restored = store.load(project.id)
+    assert restored.slides[1].kind == ''
+    assert restored.slides[1].board_lead == 'Keep this board'
+    assert restored.slides[1].board_points == ['A stored line']
+    block = {'block':'title_card','vars':{'title':'Keep this block'}}
+    main.patch_slide(project.id, slide.id, {'cues':{'blocks':[block]}})
+    active = store.load(project.id).slides[1].cues['blocks']
+    main.patch_slide(project.id, slide.id, {'kind':'board',
+        'cues':{'blocks':[], 'inactive_blocks':active}})
+    restored = store.load(project.id)
+    assert kind_for(restored,restored.slides[1]) == 'board'
+    assert restored.slides[1].cues['inactive_blocks'] == active
+    main.patch_slide(project.id,slide.id, {'cues':{'blocks':active}})
+    restored = store.load(project.id)
+    assert kind_for(restored,restored.slides[1]) == 'block'
+    assert restored.slides[1].board_lead == 'Keep this board'

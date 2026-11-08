@@ -1,31 +1,111 @@
-/* One selected picture at a time; saved block stills use the quarter-size trial cache. */
-function visualKind(s) {
-  const c = (s.candidates || []).find(c => c.id === s.chosen_id);
-  if (s.on_camera) return 'camera';
-  if (s.cues?.blocks?.length) return 'scene';
-  if (isStage(state.project.style.format) && /^3D:/i.test(s.visual_note || '')) return '3D';
-  if (isCut(state.project.style.format) || state.project.style.format === 'board') return 'drawn';
-  if (c?.provider === 'footage') return 'footage';
-  if (c?.provider === 'library') return 'library';
-  if (['diagram', 'custom', 'block', 'scene'].includes(c?.provider)) return 'scene';
-  return c ? 'archive' : 'unpicked';
+/* Resolve through the same picture-group lead and precedence as app/kinds.py. */
+function pictureKind(s, p = state.project) {
+  const lead = (p.picture_runs || []).find(r => r.includes(s.id))?.[0];
+  s = p.slides.find(q => q.id === lead) || s;
+  return s.on_camera ? 'camera' : s.cues?.blocks?.length ? 'block' : s.kind || p.style.format;
+}
+function pictureKindLabel(kind, s = null) {
+  const names = {kenburns:'Documentary photo', essay:'Essay slide', board:'Board', stage:'3D',
+    flameboat:'Flameboat', casefile:'Casefile', loudmouth:'Loudmouth', groupchat:'Group Chat', ticker:'Ticker', camera:'Camera'};
+  if (kind === 'block' && !s) return 'Block';
+  if (kind === 'block') return 'Block: ' + (s?.cues?.blocks?.[0]?.block || '').replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
+  return names[kind] || (state.slideStyles || []).find(x => 'custom:'+x.id === kind)?.name || kind;
+}
+function visualKind(s) { return pictureKind(s); }
+function kindControl(s) {
+  return `<button type="button" class="btn sm ghost visual-chip visual-kind" data-kind="${esc(pictureKind(s))}"
+    aria-label="Kind for ${esc(s.title || s.id)}" onclick="openPictureKind('${s.id}')">${esc(pictureKindLabel(pictureKind(s),s))}</button>`;
+}
+async function openPictureKind(sid) {
+  await ensureSlideStyles();
+  const p = state.project;
+  sid = (p.picture_runs || []).find(r => r.includes(sid))?.[0] || sid;
+  const s = p.slides.find(q => q.id === sid);
+  if (!s) return;
+  if (state.tab === 'media') {
+    state.visualSelection = {pid:p.id,sid};
+    delete state.visualSource;
+    paintMedia();
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.setAttribute('role','dialog');
+  wrap.setAttribute('aria-modal','true');
+  wrap.setAttribute('aria-label','Kind of picture');
+  const groups = [['Pictures',['kenburns','essay']], ['Drawn',['board','flameboat','casefile','loudmouth','groupchat','ticker']],
+    ['3D',['stage']], ['Your styles',(state.slideStyles || []).map(x => 'custom:'+x.id)]];
+  const choice = (k, label) => `<button type="button" class="btn sm" data-picture-kind="${esc(k)}" ${s.on_camera ? 'disabled' : ''} aria-pressed="${pictureKind(s) === 'block' ? k === 'block' : (s.kind || '') === k}">${esc(label)}</button>`;
+  wrap.innerHTML = `<div class="modal-box"><h2>Kind of picture</h2><p>Shift-click picture groups to select a range.</p>
+    ${s.on_camera ? '<p>The camera take supplies this picture. Change its layout in Edit.</p>' : ''}
+    ${choice('', 'Style default ('+pictureKindLabel(p.style.format)+')')}
+    ${groups.filter(([, keys]) => keys.length).map(([name, keys]) => `<h3>${name}</h3><div class="row">${keys.map(k => choice(k,pictureKindLabel(k))).join('')}</div>`).join('')}
+    <h3>Blocks</h3><div class="row">${choice('block','Block…')}</div><p role="status"></p><button type="button" class="btn ghost" data-close>Close</button></div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('[data-close]').onclick = () => wrap.remove();
+  wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
+  wrap.onkeydown = e => { if (e.key === 'Escape') wrap.remove(); };
+  wrap.querySelectorAll('[data-picture-kind]').forEach(b => b.onclick = async () => {
+    try {
+      const range = state.stage !== 'edit' && state.visualRange?.pid === p.id && state.visualRange.ids.includes(sid) ? state.visualRange.ids : [sid];
+      const ids = [...new Set(range.flatMap(id => (p.picture_runs || []).find(r => r.includes(id)) || [id]))];
+      if (b.dataset.pictureKind === 'block') {
+        wrap.remove();
+        return openBlockPicker(p.id,sid,s.cues?.blocks?.[0] || s.cues?.inactive_blocks?.[0],ids);
+      }
+      for (const id of ids) {
+        const q = p.slides.find(x => x.id === id), patch = {kind:b.dataset.pictureKind};
+        if (q.on_camera) continue;
+        if (q.cues?.blocks?.length) patch.cues = {blocks:[],inactive_blocks:q.cues.blocks};
+        if (!await saveSlide(id,patch)) throw Error('Could not save the kind.');
+      }
+      wrap.remove();
+      state.project = await api(`/api/projects/${p.id}`);
+      delete state.visualSource;
+      if (state.stage === 'edit') await tlRefreshProject();
+      else await render();
+    } catch(e) { wrap.querySelector('[role=status]').textContent = e.message; }
+  });
+  wrap.querySelector('button').focus();
+}
+function visualFinding(s) {
+  const k = pictureKind(s);
+  if (isCut(k) && !s.cues?.[k]?.length) return 'P1 · No cues yet. Plan cues or edit this paragraph’s cues.';
+  if (k === 'board' && !s.board_lead && !s.board_points?.length) return 'P1 · No board text yet. Plan boards or edit this board.';
+  if (['kenburns','essay'].includes(k) && !s.candidates?.some(c => c.id === s.chosen_id && c.local_path)) return 'P1 · Choose a picture.';
+  return '';
+}
+function visualKindSettings(groups) {
+  const present = [...new Set(groups.map(g => pictureKind(g.s)))];
+  return `<details><summary>Kind settings</summary>${present.map(k => `<h3>${esc(pictureKindLabel(k))}</h3>${k === 'board'
+    ? boardKnobs(state.project.style,'saveStyle') : isCut(k) ? cutKnobs({...state.project.style,format:k},'saveStyle')
+    : '<p>Controls are edited on each picture.</p>'}`).join('')}</details>`;
 }
 
-function visualSources(p) {
-  const tabs = visualFormatSources(p);
-  return state.visualHasFootage ? ['Footage', ...tabs.filter(t => t !== 'Footage')] : tabs;
+function visualSources(p, s = null) {
+  const tabs = visualFormatSources(p, s);
+  return state.visualHasFootage && !(s && pictureKind(s,p) === 'block') && !['Board','Cues','3D','Layout','Your style'].includes(tabs[0]) ? ['Footage', ...tabs.filter(t => t !== 'Footage')] : tabs;
 }
 
-function visualFormatSources(p) {
-  if (p.delivery === 'on_camera' || p.slides.some(s => s.on_camera))
+function visualFormatSources(p, s = null) {
+  const kind = s ? pictureKind(s,p) : p.style.format;
+  if (kind.startsWith('custom:')) return ['Your style','Archive','Footage','Library','Scenes','Upload'];
+  if (kind === 'block') return ['Scenes','Archive','Footage','Library','Upload'];
+  if (kind === 'board') return ['Board','Archive','Library','Scenes','Upload'];
+  if (isCut(kind) && s) return ['Cues',...(p.aspect === 'portrait' ? ['Blocks'] : []),'Archive','Library','Scenes','Upload'];
+  if (s ? s.on_camera || p.delivery === 'on_camera' && !s.kind : p.delivery === 'on_camera' || p.slides.some(s => s.on_camera))
     return ['Layout', 'Footage', 'Screens', 'Library', 'Scenes', 'Archive', 'Upload'];
-  if (isStage(p.style.format)) return ['3D', 'Archive', 'Footage', 'Library', 'Scenes', 'Upload'];
+  if (isStage(kind)) return ['3D', 'Archive', 'Footage', 'Library', 'Scenes', 'Upload'];
   if (p.aspect === 'portrait') return ['Blocks', 'Archive', 'Library', 'Scenes', 'Upload'];
-  if (p.style.format === 'kenburns') return ['Footage', 'Archive', 'Library', 'Scenes', 'Upload'];
+  if (['kenburns','essay'].includes(kind)) return ['Footage', 'Archive', 'Library', 'Scenes', 'Upload'];
   return ['Archive', 'Library', 'Scenes', 'Upload'];
 }
 
-function selectVisual(sid) {
+function selectVisual(sid, event = null) {
+  const p = state.project, ids = (p.picture_runs || p.slides.map(s => [s.id])).map(r => r[0]);
+  const anchor = state.visualSelection?.pid === p.id ? state.visualSelection.sid : sid;
+  const a = ids.indexOf(anchor), b = ids.indexOf(sid);
+  state.visualRange = {pid:p.id, ids:event?.shiftKey && a >= 0 && b >= 0 ? ids.slice(Math.min(a,b),Math.max(a,b)+1) : [sid]};
+  if (state.visualSelection?.sid !== sid) delete state.visualSource;
   state.visualSelection = {pid: state.project.id, sid};
   paintMedia();
 }
@@ -45,7 +125,7 @@ function paintMedia() {
   }));
   const requested = state.focusSlide || (state.visualSelection?.pid === p.id && state.visualSelection.sid);
   const group = groups.find(g => g.ids.includes(requested)) || groups[0];
-  const tabs = visualSources(p);
+  const tabs = visualSources(p, group?.s);
   const source = state.visualSource?.pid === p.id && tabs.includes(state.visualSource.source)
     ? state.visualSource.source : tabs[0];
   const kinds = {};
@@ -62,29 +142,29 @@ function paintMedia() {
   $('#tabbody').innerHTML = `<div class="visuals-workspace">
     <div class="visual-mix"><span class="micro-label">Visual mix</span>
       <div class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) =>
-        `<span class="visual-kind" data-kind="${k}" style="flex:${n}"></span>`).join('')}</div>
-      <span class="mono">${Object.entries(kinds).map(([k,n]) => `${k} ${Math.round(100*n/denominator)}%`).join(' · ')}${total ? ' · by voiced duration' : ' · by group count (unvoiced)'}</span>
+        `<span class="visual-kind" data-kind="${esc(k)}" style="flex:${n}"></span>`).join('')}</div>
+      <span class="mono">${Object.entries(kinds).map(([k,n]) => `<span class="visual-chip visual-kind" data-kind="${esc(k)}">${esc(pictureKindLabel(k))} ${groups.filter(g => pictureKind(g.s) === k).length} · ${Math.round(100*n/denominator)}%</span>`).join(' · ')}${total ? ' · by voiced duration' : ' · by group count (unvoiced)'}</span>
       <span class="visual-rule">Format rule: ${rule}</span>
     </div>
     <div class="visual-grid">
       <aside class="visual-groups" aria-label="Picture groups"><h2 class="micro-label">Picture groups · ${groups.length}</h2>
         ${groups.map(g => {
           const c = g.s.candidates.find(c => c.id === g.s.chosen_id);
-          return `<button type="button" class="btn ghost visual-group" data-sid="${g.s.id}"
-            aria-pressed="${g === group}" onclick="selectVisual('${g.s.id}')">
+          return `<div class="visual-group-row"><button type="button" class="btn ghost visual-group" data-sid="${g.s.id}"
+            aria-pressed="${g === group || state.visualRange?.pid === p.id && state.visualRange.ids.includes(g.s.id)}" onclick="selectVisual('${g.s.id}',event)">
             <span class="mono">${String(g.i + 1).padStart(2,'0')}</span>
             ${c ? `<img src="${thumbUrl(c)}" loading="lazy" alt="">` : '<span class="visual-thumb-empty"></span>'}
             <span class="visual-group-text">${esc(g.s.title || g.s.narration || 'Untitled')}
               <small class="mono">¶${g.i+1}${g.ids.length > 1 ? '–'+(byId[g.ids.at(-1)].i+1) : ''} · ${g.seconds ? fmtTime(g.seconds) : 'unvoiced'}</small></span>
-            <span class="visual-chip visual-kind" data-kind="${visualKind(g.s)}">${visualKind(g.s)}</span>
-          </button>`;
+          </button>${kindControl(g.s)}${visualFinding(g.s) ? `<small class="visual-finding">${esc(visualFinding(g.s))}</small>` : ''}</div>`;
         }).join('') || '<p>Write the script to choose pictures.</p>'}
         <label class="field"><span>Picture every</span><select onchange="savePictureEvery(+this.value)">
           ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
         ${state.visualHasFootage ? '<button type="button" class="btn sm" onclick="fillVisualFootage()">Fill the rest from footage</button>' : ''}
         <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
-        ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
-        ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
+        ${groups.some(g => pictureKind(g.s) === 'board') ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
+        ${groups.some(g => isCut(pictureKind(g.s))) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
+        ${visualKindSettings(groups)}
       </aside>
       <section class="visual-preview" aria-label="Selected picture">${group ? visualPreview(group, byId) : ''}</section>
       <aside class="visual-sources" aria-label="Picture sources"><div class="visual-source-tabs" role="group" aria-label="Choose picture source">
@@ -93,24 +173,25 @@ function paintMedia() {
       </aside>
     </div>
     <section class="visual-sequence" aria-label="Sequence"><span class="micro-label">The video as it will play${total ? '' : ' · durations available after voice'}</span>
-      <div>${groups.map(g => `<button type="button" class="btn sm visual-kind" data-kind="${visualKind(g.s)}" style="flex:${total ? Math.max(g.seconds,.01) : 1}"
-        aria-label="Paragraph ${g.i+1}: ${visualKind(g.s)}" aria-pressed="${g === group}" onclick="selectVisual('${g.s.id}')">${g.i+1}</button>`).join('')}</div>
+      <div>${groups.map(g => `<button type="button" class="btn sm visual-kind" data-kind="${esc(visualKind(g.s))}" style="flex:${total ? Math.max(g.seconds,.01) : 1}"
+        aria-label="Paragraph ${g.i+1}: ${esc(pictureKindLabel(visualKind(g.s),g.s))}" aria-pressed="${g === group || state.visualRange?.pid === p.id && state.visualRange.ids.includes(g.s.id)}" onclick="selectVisual('${g.s.id}',event)">${g.i+1}</button>`).join('')}</div>
     </section></div>`;
   if (group && (['Scenes','Blocks','Screens'].includes(source) || group.s.cues?.blocks?.length)) loadVisualBlocks(p, group.s);
 }
 
 function visualPreview(g, byId) {
   const p = state.project, s = g.s, c = s.candidates.find(c => c.id === s.chosen_id);
-  const drawn = isCut(p.style.format) || p.style.format === 'board';
+  const kind = pictureKind(s), drawn = isCut(kind) || kind === 'board';
   return `<div class="mono">Picture ${g.i+1} · ¶${g.ids.map(id => byId[id].i+1).join(', ')} · ${g.seconds ? fmtTime(g.seconds)+' from the takes' : 'unvoiced'}</div>
-    <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>
+    <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>${kindControl(s)}
+    <p role="status">${esc(visualFinding(s))}</p>
     <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : ''}">
       ${s.cues?.blocks?.length && !s.on_camera ? visualBlockStill(p, s) : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
-        : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : visualKind(s) === '3D' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
+        : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : pictureKind(s) === 'stage' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
       <div class="visual-graphics">${g.ids.map(id => `<span class="visual-graphic-paragraph">${(byId[id].s.overlays || []).map(o => `<button type="button" class="btn sm visual-chip" data-graphic="${esc(o.id)}" onclick="openGraphicEdit('${id}',this.dataset.graphic)">¶${byId[id].i+1} · ${esc(o.vars.title || o.block_id)}</button>`).join('')}</span>`).join('')}</div>
     </div>
-    <div class="row">${g.ids.filter(id => !byId[id].s.on_camera && !isCut(p.style.format)).map(id => `<button type="button" class="btn sm" onclick="openGraphicPicker('${id}')">Add graphic${g.ids.length > 1 ? ' · ¶'+(byId[id].i+1) : ''}</button>`).join('')}<button type="button" class="btn sm" onclick="previewBit('${s.id}')">Preview this bit · ¼ size</button>
+    <div class="row">${g.ids.filter(id => !byId[id].s.on_camera && !isCut(pictureKind(byId[id].s))).map(id => `<button type="button" class="btn sm" onclick="openGraphicPicker('${id}')">Add graphic${g.ids.length > 1 ? ' · ¶'+(byId[id].i+1) : ''}</button>`).join('')}<button type="button" class="btn sm" onclick="previewBit('${s.id}')">Preview this bit · ¼ size</button>
       ${c ? `<button type="button" class="btn sm ghost" onclick="setSlideFocal('${s.id}','${c.id}')">${c.focal?.length === 2 ? 'Focus set · change' : 'Set focus point'}</button>
         ${c.kind === 'video' ? `<button type="button" class="btn sm ghost" onclick="playClipFor('${s.id}','${c.id}')">Play source clip</button>` : ''}` : ''}
       <label><input type="checkbox" ${s.locked_media ? 'checked' : ''} onchange="saveSlide('${s.id}',{locked_media:this.checked})"> Keep on re-plan</label></div>
@@ -121,12 +202,15 @@ function visualPreview(g, byId) {
     ${g.i > 0 ? `<button type="button" class="btn sm ghost" onclick="setPictureMode('${s.id}','${s.picture_mode === 'new' ? 'auto' : 'hold'}')">${s.picture_mode === 'new' ? 'Always its own · use automatic grouping' : 'Hold the last picture'}</button>` : ''}
     ${g.ids.slice(1).map(id => `<div class="row"><span class="mono">¶${byId[id].i+1} holds this picture</span>
       <button type="button" class="btn sm ghost" onclick="setPictureMode('${id}','new')">Give this one its own picture</button>
-      ${p.style.format === 'board' ? `<button type="button" class="btn sm ghost" onclick="openBoardEditor('${id}')">Edit its board</button>` : ''}
-      ${isCut(p.style.format) ? `<button type="button" class="btn sm ghost" onclick="openCueEditor('${id}')">Edit its cues</button>` : ''}</div>`).join('')}`;
+      ${pictureKind(s) === 'board' ? `<button type="button" class="btn sm ghost" onclick="openBoardEditor('${id}')">Edit its board</button>` : ''}
+      ${isCut(pictureKind(s)) ? `<button type="button" class="btn sm ghost" onclick="openCueEditor('${id}')">Edit its cues</button>` : ''}</div>`).join('')}`;
 }
 
 function visualSourcePanel(s, source) {
   const p = state.project;
+  if (source === 'Your style') return `<h3>${esc(pictureKindLabel(pictureKind(s)))}</h3><button type="button" class="btn sm" onclick="openCustomEditor('${s.id}')">Edit this slide</button>`;
+  if (source === 'Board') return `<h3>Board</h3><button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>`;
+  if (source === 'Cues') return `<h3>${esc(pictureKindLabel(pictureKind(s)))}</h3><button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>`;
   if (source === 'Footage') {
     suggestVisualFootage(p, s);
     const clips = s.candidates.filter(c => c.provider === 'footage');
@@ -153,8 +237,8 @@ function visualSourcePanel(s, source) {
     <button type="button" class="btn sm ghost" onclick="openVisualEdit('${s.id}')">Open Edit · variables and timeline</button>
     <a class="btn sm ghost" href="#/blocks">Browse reusable blocks</a>
     ${!s.on_camera ? `<button type="button" class="btn sm" onclick="openBlockPicker('${p.id}','${s.id}')">Choose a block for this paragraph</button>` : ''}
-    ${p.style.format === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
-    ${isCut(p.style.format) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
+    ${pictureKind(s) === 'board' ? `<button type="button" class="btn sm" onclick="openBoardEditor('${s.id}')">Edit the board</button>` : ''}
+    ${isCut(pictureKind(s)) ? `<button type="button" class="btn sm" onclick="openCueEditor('${s.id}')">Edit the cues</button>` : ''}`;
   if (source === 'Upload') return `<label class="field"><span>Upload a picture or clip</span><input type="file" accept="image/*,video/*" onchange="uploadMedia('${s.id}',this.files[0])"></label>`;
   const candidates = s.candidates.filter(c => source === 'Library' ? c.provider === 'library' : !['library', 'footage'].includes(c.provider));
   return `<label class="field"><span>Search ${source.toLowerCase()}</span><input type="search" id="visual-query" value="${esc(s.queries?.[0] || s.visual_note || s.title || '')}" onkeydown="if(event.key==='Enter') searchVisual('${s.id}','${source}')"></label>

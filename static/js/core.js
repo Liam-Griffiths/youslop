@@ -238,6 +238,8 @@ async function route() {
       const live = (state.project.jobs || [])[0];
       if (live) watchJob(live.id, live.kind);
     }
+    if ([state.project.style.format,...state.project.slides.map(s => s.kind || '')].some(k => k.startsWith('custom:')))
+      await ensureSlideStyles();
     await render();
     await loadStageStates(state.project);
   } else if (chan) {
@@ -487,7 +489,7 @@ async function render() {
   state.stage = state.stage || 'plan';
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = state.stage === 'visuals'
-    ? [['media', 'Picture picker'], ...(isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
+    ? [['media', 'Picture picker'], ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
     : [];
   if (tabs.length && !tabs.some(([id]) => id === state.tab)) state.tab = tabs[0][0];
   // Stage contents are replaced below; give back any slot the last stage borrowed.

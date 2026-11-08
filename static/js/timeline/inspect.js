@@ -77,6 +77,7 @@ function tlInspector() {
   };
   const timing = (key, label, effective) => field(key, `${label} (blank = auto: ${effective.toFixed(2)} s)`, slide[key], 's');
   let html = `<div class="mono tl-note">${tlClock(sel.t0)} → ${tlClock(sel.t1)}</div>`;
+  if (slide && ['paragraph','picture'].includes(sel.kind)) html += kindControl(slide);
   if (sel.kind === 'paragraph' && slide) html += `<div class="tl-text">${esc(slide.narration)}</div>
     <button class="btn sm" id="tl-edit-text">Edit the words</button>
     <button class="btn sm" id="tl-split-here">Split here (S)</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
@@ -94,10 +95,10 @@ function tlInspector() {
     if (candidate?.focal?.length === 2) html += field('focal_x', 'Focal X', candidate.focal[0], '0–1') + field('focal_y', 'Focal Y', candidate.focal[1], '0–1');
   }
   if (sel.kind === 'cue' && slide) {
-    const cues = (slide.cues || {})[p.style.format]?.length ? slide.cues[p.style.format] : para.effective_cues;
+    const cues = (slide.cues || {})[pictureKind(slide)]?.length ? slide.cues[pictureKind(slide)] : para.effective_cues;
     const cue = cues[sel.cue];
     if (cue) {
-      const vocabulary = (cutInfo(p.style.format)?.kinds || '').split(' · ').map((k) => k.split(' ')[0]).filter(Boolean);
+      const vocabulary = (cutInfo(pictureKind(slide))?.kinds || '').split(' · ').map((k) => k.split(' ')[0]).filter(Boolean);
       html += field('text', 'Text', cue.text ?? cue.caption ?? cue.headline ?? cue.title ?? '') + field('at', 'Arrival (blank = auto)', cue.at, 's')
         + field('kind', 'Kind', cue.kind, [...new Set([cue.kind, ...vocabulary])].map((k) => [k, k]))
         + '<button class="btn sm" data-remove>Delete cue</button><button class="btn sm" id="tl-cue-editor">Edit all cue fields</button>';
@@ -158,7 +159,7 @@ function tlInspectorSave(sel, key, raw, el) {
       let patch = {[key]: value};
       if (sel.kind === 'cue') {
         const slide = state.project.slides.find((s) => s.id === sel.sid);
-        const fmt = state.project.style.format;
+        const fmt = pictureKind(slide);
         const para = tlParas().find((q) => q.id === sel.sid);
         const cues = structuredClone(slide.cues?.[fmt]?.length ? slide.cues[fmt] : para.effective_cues);
         if (key === 'remove') cues.splice(sel.cue, 1);

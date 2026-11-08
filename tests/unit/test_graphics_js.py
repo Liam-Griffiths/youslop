@@ -12,6 +12,7 @@ def test_graphics_runtime(tmp_path):
         pytest.skip('GJS required')
     source = '\n'.join(Path(p).read_text() for p in [
         'static/js/timeline/edit.js', 'static/js/timeline/graphics.js'])
+    source = Path('static/js/tabs/visuals.js').read_text().split('function pictureKindLabel')[0] + source
     harness = r'''
 const assert = (v,m) => {if (!v) throw Error(m);};
 const near = (a,b) => Math.abs(a-b) < .00001;

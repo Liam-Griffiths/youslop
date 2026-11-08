@@ -46,7 +46,7 @@ async function tlGraphicInspector(sel, body) {
 async function openGraphicPicker(sid, at = 0) {
   const p = state.project;
   const slide = p.slides.find(s => s.id === sid);
-  if (!slide || slide.on_camera || isCut(p.style.format)) return toast('Graphics are available on picture paragraphs.', true);
+  if (!slide || slide.on_camera || isCut(pictureKind(slide))) return toast('Graphics are available on picture paragraphs.', true);
   tlPause();
   await renderBlocks('', {mode:'pick', project:p.id, slide:sid, channel:p.channel_id, overlay:true, aspect:p.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
     // Reload before appending so another edit during browsing is kept.

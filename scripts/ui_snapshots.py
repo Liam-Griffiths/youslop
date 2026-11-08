@@ -35,6 +35,7 @@ def routes():
             ('cast', 'stage', 'visuals/cast', 'visuals/stage') if fmt == 'stage' else ())
         tabs += ('visuals/media', 'publish/render', 'publish/thumb')
         result.extend(f'#/p/psnap{fmt}/{tab}' for tab in tabs)
+    result.extend(['#/p/psnapmixed/visuals', '#/p/psnapmixed/edit'])
     return result
 
 
@@ -156,6 +157,17 @@ def seed():
                 vars={'name': 'Example', 'learn': 'Tools for your next project.',
                       'made': 'Sponsored by', 'url': 'example.test', 'code': ''})]
         store.save(project)
+    from app.schema import Slide
+    mixed = store.load('psnapkenburns')
+    mixed.id, mixed.title = 'psnapmixed', 'Snapshot · mixed pictures'
+    mixed.slides[1].kind = 'board'
+    mixed.slides[1].board_lead = 'A stored board'
+    mixed.slides[1].board_points = ['Keep this text when changing kind.']
+    mixed.slides[2].kind = 'casefile'
+    mixed.slides.append(Slide(id='s4', narration='A block closes this example.',
+        cues={'blocks':[{'block':'title_card','vars':{'title':'The next chapter'}}]}))
+    shutil.copytree(source, store.project_dir(mixed.id), dirs_exist_ok=True)
+    store.save(mixed)
     library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
 
 
@@ -259,6 +271,30 @@ def capture(base, out):
                       !host.querySelector('#channel-add-block')) throw Error('Channel Blocks section missing');
                   return true;
                 })()''')
+            if route == '#/p/psnapmixed/visuals':
+                _evaluate(cdp, session, """(async () => {
+                  const choose = async kind => {
+                    await openPictureKind('s2');
+                    await document.querySelector(`[data-picture-kind="${kind}"]`).onclick();
+                  };
+                  await choose('');
+                  let saved = await api('/api/projects/psnapmixed');
+                  if (saved.slides[1].kind || saved.slides[1].board_lead !== 'A stored board')
+                    throw Error('Default kind lost board text');
+                  await choose('board');
+                  state.project = await api('/api/projects/psnapmixed');
+                  if (state.project.slides[1].kind !== 'board') throw Error('Kind did not persist');
+                  selectVisual('s1');
+                  if (!document.querySelector('.visual-source-body').textContent.includes('Search footage'))
+                    throw Error('Photo picker missing');
+                  selectVisual('s2');
+                  if (!document.querySelector('.visual-source-body').textContent.includes('Edit the board') ||
+                      !document.querySelector('.visual-mix').textContent.includes('Board 1'))
+                    throw Error('Board editor or mix count missing');
+                  return true;
+                })()""")
+            if route == '#/p/psnapmixed/edit':
+                _evaluate(cdp, session, "tlSelect(tlItems('paragraph').find(s => s.sid === 's2')); if (!document.querySelector('#tl-inspector [data-kind=board]')) throw Error('Inspector kind missing'); true")
             if route == '#/p/psnapessay/render':
                 _evaluate(cdp, session, "tlSelectKind('sponsor'); true")
             if route == '#/p/psnapkenburns/edit':

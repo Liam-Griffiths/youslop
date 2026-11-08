@@ -11,6 +11,7 @@ def test_drag_runtime(tmp_path):
     if not gjs:
         pytest.skip('GJS is unavailable')
     source = Path('static/js/timeline/edit.js').read_text()
+    source = Path('static/js/tabs/visuals.js').read_text().split('function pictureKindLabel')[0] + source
     harness = r'''
 const structuredClone = (v) => JSON.parse(JSON.stringify(v)); // GJS lacks this browser global
 function check(ok, msg) { if (!ok) throw new Error(msg); }
@@ -74,6 +75,9 @@ async function run() {
  await tlInspectorQueue;
  check(saves.length===3 && saves.at(-1).gap_override===3,'gap drop');
  check(tlCuePatch({sid:'a',cue:0},.4).cues.flameboat[0].at===.4,'derived cue');
+ state.project.slides[0].kind='casefile';
+ check(tlCuePatch({sid:'a',cue:0},.4).cues.casefile[0].at===.4,'resolved cue kind');
+ delete state.project.slides[0].kind;
  tlResetTiming(title); await tlInspectorQueue;
  check(saves.at(-1).title_at===null && saves.at(-1).title_hold===null,'reset');
  paras = [q]; // final title uses the frame spec minimum

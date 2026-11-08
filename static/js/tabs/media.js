@@ -574,7 +574,7 @@ async function planCues(redo) {
 function openCueEditor(sid) {
   const p = state.project;
   const s = p.slides.find((x) => x.id === sid);
-  const fmt = p.style.format;
+  const fmt = pictureKind(s);
   const info = cutInfo(fmt);
   if (!s || !info) return;
   const written = (s.cues || {})[fmt] || [];

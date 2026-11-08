@@ -45,8 +45,8 @@ function tlSaveTiming(sel, patch) {
 
 function tlCuePatch(sel, at) {
   const q = tlParas().find((q) => q.id === sel.sid);
-  const fmt = state.project.style.format;
   const slide = state.project.slides.find((s) => s.id === sel.sid);
+  const fmt = pictureKind(slide);
   const cues = structuredClone(slide.cues?.[fmt]?.length ? slide.cues[fmt] : q.effective_cues);
   if (at === null) delete cues[sel.cue].at;
   else cues[sel.cue].at = at;

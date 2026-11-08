@@ -113,7 +113,8 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
         # empty one clears them back to drawing from the narration.
         cues = dict(s.cues or {})
         for key, value in payload["cues"].items():
-            if key == 'blocks':
+            # Retain a block's values when another picture kind is selected.
+            if key in {'blocks', 'inactive_blocks'}:
                 from . import blocks
                 if not isinstance(value, list) or any(not isinstance(c, dict) for c in value):
                     raise EditError('Block cues are a list of objects.')

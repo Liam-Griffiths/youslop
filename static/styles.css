@@ -1380,3 +1380,21 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .block-theme-sheet button { display:flex; flex-direction:column; padding:6px; gap:6px; }
 .block-theme-sheet img { width:100%; max-height:200px; object-fit:contain; }
 img.themed-pending { opacity:.45; }
+
+/* One colour family per kind group, from existing tokens: photos dim, drawn cool,
+   blocks good, 3D accent, your styles warn. */
+.visual-kind[data-kind="kenburns"], .visual-kind[data-kind="essay"] { --kind:var(--ink-2); }
+.visual-kind[data-kind="stage"] { --kind:var(--accent); }
+.visual-kind[data-kind="block"] { --kind:var(--good); }
+.visual-kind[data-kind^="custom:"] { --kind:var(--warn); }
+.visual-kind[data-kind="board"], .visual-kind[data-kind="flameboat"], .visual-kind[data-kind="casefile"],
+.visual-kind[data-kind="loudmouth"], .visual-kind[data-kind="groupchat"],
+.visual-kind[data-kind="ticker"] { --kind:var(--cool); }
+
+/* The group button keeps the full width; the kind chip and any finding sit under it. */
+.visual-group-row { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-bottom:6px; }
+.visual-group-row .visual-group { flex:1 1 100%; width:100%; }
+.visual-group-row > .visual-chip { margin-left:34px; white-space:nowrap; }
+.visual-finding { flex-basis:100%; color:var(--accent); padding:0 4px 8px; }
+.modal-box h3 { margin:16px 0 6px; }
+.modal-box [data-picture-kind][aria-pressed="true"] { border-color:var(--accent); color:var(--ink); background:var(--accent-tint); }

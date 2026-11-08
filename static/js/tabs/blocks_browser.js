@@ -444,11 +444,11 @@ async function blockProjectTarget(selection) {
   };
 }
 
-async function openBlockPicker(pid, sid, selection = null) {
+async function openBlockPicker(pid, sid, selection = null, targets = null) {
   const p = state.project;
   selection ||= p?.slides.find(s => s.id === sid)?.cues?.blocks?.[0];
   await renderBlocks(selection?.block || '', {mode:'pick', project:pid, slide:sid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
-    await applyBlockToSlide(pid,sid,selection);
+    for (const id of targets || [sid]) await applyBlockToSlide(pid,id,selection);
     state.project = await api(`/api/projects/${pid}`);
     await render();
   }});
