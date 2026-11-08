@@ -185,6 +185,16 @@ input[type=url], input[type=search], textarea, select {
   border-radius: var(--radius); padding: 9px 12px; outline: none; resize: vertical;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--cool); }
+/* Native dropdown lists follow the dark theme (owner: options were light on light). */
+/* WebKitGTK (the desktop window) paints closed native selects with the light
+   system theme while keeping our light text, so draw them ourselves. */
+select {
+  color-scheme: dark; -webkit-appearance: none; appearance: none;
+  background-color: #0f1116; padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A0A6AE' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center;
+}
+select option, select optgroup { background: var(--raised); color: var(--ink); }
 input[type=range] { width: 100%; accent-color: var(--cool); }
 label.field { display: block; margin-bottom: 14px; }
 label.field > span, div.field > span { display: block; font-size: 11px; color: var(--dim); margin-bottom: 5px; }
@@ -842,7 +852,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 /* Timeline selection inspector: Instrument fields and measured values. */
 .tl-inspector label { display:block; margin:12px 0 4px; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
 .tl-input { display:flex; align-items:center; gap:6px; }
-.tl-input input, .tl-input select, #tl-kind { width:100%; min-height:34px; background:var(--bg); border:1px solid var(--line); border-radius:4px; }
+.tl-input input, .tl-input select, #tl-kind { width:100%; min-height:34px; background-color:var(--bg); border:1px solid var(--line); border-radius:4px; }
 .tl-input input[type=number], .tl-input span { font-family:var(--mono); font-variant-numeric:tabular-nums; }
 .tl-input span { color:var(--dim); white-space:nowrap; }
 .tl-inspector :focus-visible { outline:2px solid var(--cool); outline-offset:2px; }

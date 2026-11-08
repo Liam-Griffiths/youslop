@@ -1,6 +1,6 @@
 # Progress
 
-Status values: `todo`, `doing`, `done`, `blocked`. Update the row when you
+Status values: `todo`, `doing`, `done`, `blocked`, `parked`, `dropped`. Update the row when you
 start and when you finish. Keep the newest note in the Notes column; the
 full log lives in the ticket file.
 
@@ -15,6 +15,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-01 ~14:50 PST:** since the 13:25 reset: T7.4, T8.3, T7.5, T7.7, T10.6 done. Remaining tickets wait on the owner (T9.1 sign-off, house-read opt-in for T10.2/T10.4/T10.7, T8.3 step 3, T6.4) or are optional (T7.8 stretch, T2.7b temporary). Codex 5-hour 40%, weekly 79%.
 > **2026-11-01 ~18:45 PST:** owner approved T9.1. T9.3–T9.10 done (shell, stages API, Home, Plan, Script, Voice, Visuals, Edit). Codex 5-hour 87% (paused for the reset), weekly 87%: T9.11 and maybe T9.12 before the weekly stop at ~90%; T9.13, T11.5/6, T12.5 wait for the weekly reset. UI harness flake noted in NOTES.md.
 > **2026-11-01 ~19:00 PST:** paused by the owner after T9.11. Next: T9.12 (not started), T9.13, then T11.5/T11.6/T12.5 and the owner-decision tickets. Codex weekly 88%. Owner plans user testing once the ticket list is complete.
+> **2026-11-08:** owner decisions: house read opt-in (T10.2/T10.4/T10.7 unblocked); packs permissive, MIT (T8.3 step 3 reopened); mastering two-pass linear loudnorm approved (T1.7 reopened, owner listens to one quarter-size preview); T6.4 closed (dropdown contrast fixed); T0.10 parked; T7.8 and T2.7b dropped. Queue: T9.12, T9.13, T11.5, T11.6, T12.5, T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7; then user testing.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -30,7 +31,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T0.7 | Storyboard contract and CLI skeleton | M | T0.5 | done | 2026-10-31 Codex; 104 tests; gap: run.sh skips server marker (see log) |
 | T0.8 | Re-measure the render memory cap | S | — | done | 2026-10-31 measured essay 2058 MB, kenburns 1406 MB; cap 2500/1500 |
 | T0.9 | CLAUDE.md and repo hygiene | S | T0.7 | done | 2026-10-31 Codex; CLAUDE.md added (T0.10 marked blocked: owner A/B) |
-| T0.10 | Kokoro model with word timings | S | T0.6 | blocked | owner listens to an A/B first |
+| T0.10 | Kokoro model with word timings | S | T0.6 | parked | owner 2026-11-08: parked; revisit after user testing |
 
 ## Phase 1: doctrine and check
 
@@ -42,7 +43,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T1.4 | ffmpeg camera vocabulary and title timing | M | T1.1, T0.5 | done | 2026-10-31 Codex; 163 tests; preview checked by Claude, owner: watch a join |
 | T1.5 | check.py findings | L | T1.1, T0.6, T0.7 | done | 2026-10-31 Codex; 14 rules, 189 tests; real project: P0 0 / P1 12 / P2 13 |
 | T1.6 | Check in the UI, CLI and render gate | S | T1.5 | done | 2026-10-31 Codex; panel checked headless; owner: click through render gate |
-| T1.7 | Audio doctrine defaults | S | T1.1 | done | 2026-10-31 Codex; ACCEPTANCE OPEN: gap 9.9 dB not 16-19, dynamic loudnorm lifts gaps; owner decides on linear 2-pass |
+| T1.7 | Audio doctrine defaults | S | T1.1 | todo | owner 2026-11-08: approved two-pass linear loudnorm; implement, measure gap, owner listens to one quarter-size preview |
 
 ## Phase 2: scene engine
 
@@ -55,7 +56,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T2.5 | Migration: outro and chapter cards | M | T2.4 | done | 2026-10-31 Codex; outro compared by Claude; owner: chapter card in Timeline |
 | T2.6 | Migration: intro slates | M | T2.5 | done | 2026-10-31 Codex; 4 intro scenes checked; owner: Dossier lost its stamp, Folio kicker contrast |
 | T2.7 | Catalog fetcher | S | T2.3 | done | 2026-10-31 Codex; real catalog search works |
-| T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | todo | compatibility only (catalog is temporary, see T12.7) |
+| T2.7b | Make fetched Hyperframes blocks render offline | S | T2.7 | dropped | owner 2026-11-08: dropped (catalog retired by T12.7) |
 | T2.8 | Scene builder: layers, motion as data, one compositor | L | T2.4, T5.1, T5.2a, T5.2c | done | 2026-11-01 Codex + review; 60s/40 layers in 7.3s (vs ~2min every-frame), 22KB graph |
 | T2.9 | Move captions, boards, diagrams, custom slides onto the builder | M | T2.8 | done | 2026-11-01 Codex + review; board 7.2s, essay 10.9s cold / 6.7s warm; four compositors deleted |
 | T2.10 | Blocks, cards and HTML slides through the builder | M | T2.8 | done | Blocks/cards/HTML on builder; lower third 1.55 s at 1080p; zoompan skipped without camera |
@@ -114,7 +115,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T6.1 | Instrument design tokens and fonts | S | T0.4 | done | 2026-10-31 Codex; Instrument tokens, Archivo/Space Grotesk switch; owner: pick a face from compare/ shots, check desktop window |
 | T6.2 | Mark, favicon and app icon | S | T0.4 | done | 2026-10-31 Codex; cork/post-it mark in header, favicon, icons regenerated; owner: check launcher icon |
 | T6.3 | Copy, README and mockup | S | T6.1, T6.2 | done | 2026-11-01 Codex; README, copy pass, scene card defaults for new channels; mockup side-by-side moved to T6.4 |
-| T6.4 | Review studio against the mockup | S | T6.3 | todo | owner visual review of Home, Script, Render, Settings |
+| T6.4 | Review studio against the mockup | S | T6.3 | done | owner 2026-11-08: closed, superseded by Phase 9; dropdown contrast fixed (light text on light options) |
 
 ## Phase 7: camera (piece to camera)
 
@@ -127,7 +128,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T7.5 | Cutaways and layouts over camera | M | T7.4, T2.4 | done | includes the Auto-edit button; review: PIP mask drawn once; owner: Auto-edit on real paragraphs |
 | T7.6 | Camera look and checks | S | T7.3, T1.5 | done | 2026-11-01 Codex; bounded look matching, deterministic checks; owner: two differently lit real takes |
 | T7.7 | Talking-head videos end to end | S | T7.2, T7.3, T7.4 | done | owner: record three paragraphs on camera from a faithful import |
-| T7.8 | Long-take import (stretch goal) | L | T7.1, T7.2, T7.4 | todo | stretch; opt-in speech recognition |
+| T7.8 | Long-take import (stretch goal) | L | T7.1, T7.2, T7.4 | dropped | owner 2026-11-08: dropped |
 
 ## Phase 8: content packs
 
@@ -135,7 +136,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T8.1 | Pack format and loader | M | T0.2, T2.3 | done | 2026-11-01 Codex; pack blocks sandboxed and browser-checked; bad items listed, not offered |
 | T8.2 | Packs screen and install from a file | S | T8.1, T6.1 | done | 2026-11-01 Codex; staged, validated install; Packs screen checked in Chromium; drag and drop untested |
-| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | done | review: Starter cards redrawn distinct; owner: step 3 licence, refine Starter, CC0 music |
+| T8.3 | Pack tooling, format spec and first free pack | S | T8.1, T8.2, T0.7 | todo | owner 2026-11-08: step 3 decided, packs permissive (MIT); relicense pack templates + docs/packs.md + Starter manifest |
 
 ## Phase 9: studio flow overhaul
 
@@ -160,7 +161,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T10.1 | Sponsor segments in the data model and the cut | M | T0.7, T4.2, T2.4 | done | 2026-10-31 Codex; SponsorSlot model, pre/mid/end at paragraph boundaries, music ducks, chapter marker; 425 tests |
-| T10.2 | Sponsor library on channels | S | T10.1 | todo | open: house read opt-in or opt-out |
+| T10.2 | Sponsor library on channels | S | T10.1 | todo | owner 2026-11-08: house read opt-in (off by default) |
 | T10.3 | Sponsor scene templates: short and long | M | T10.1, T2.3 | done | 2026-10-31 Codex (2 rounds); short/long + vertical templates, dark card ink, copy fits; frames in compare/ |
 | T10.4 | Writing and voicing the read | S | T10.2 | todo |  |
 | T10.5 | Placement suggestions and checks | S | T10.1, T1.5 | done | 2026-10-31 Codex; suggest_slots (pre/mid/end) + 5 sponsor checks; paid flag for disclosure |
