@@ -106,3 +106,12 @@ registerCommand({id: 'preview-section', label: 'Preview current section', group:
   run: () => tlPreviewBit()});
 registerCommand({id: 'jobs', label: 'Open jobs', group: 'Actions', run: () => openJobs()});
 registerCommand({id: 'setup', label: 'Run first-run setup again', group: 'Screens', run: () => go('#/setup')});
+
+for (const [id, label, run] of [
+  ['search', 'Search clips', () => $('#footage-search').focus()],
+  ['select', 'Select visible clips', () => footageSelectVisible()],
+  ['estimate', 'Estimate Claude labels', () => footageEstimate()]]) {
+  registerCommand({id: `footage-${id}`, label, group: 'Footage',
+    when: () => typeof footageView !== 'undefined' && !!footageView && !!$('#footage-grid')
+      && (id !== 'estimate' || !footageView.processing), run});
+}

@@ -776,6 +776,91 @@ def list_footage_shoots() -> list[dict]:
             for s in footage.list_shoots()]
 
 
+# Footage routes keep validation and manifest edits in the footage module.
+def _footage_call(fn, *args, **kwargs):
+    from . import footage
+    try:
+        return fn(*args, **kwargs)
+    except footage.ProcessingError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(404, 'Footage unavailable') from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get('/api/footage/shoots/{sid}')
+def footage_detail(sid: str):
+    from . import footage
+    return _footage_call(lambda: {**footage.load(sid).to_dict(),
+                                 'status': footage.status(sid), 'processing': bool(jobs.active_for(sid))})
+
+
+@app.patch('/api/footage/shoots/{sid}/clips/{cid}')
+def footage_patch(sid: str, cid: str, payload: dict = Body(...)):
+    from . import footage
+    return _footage_call(footage.edit_clips, sid, [cid], payload)[0]
+
+
+@app.post('/api/footage/shoots/{sid}/relabel')
+def footage_relabel(sid: str, payload: dict = Body(...)):
+    from . import footage
+    return _footage_call(footage.edit_clips, sid, payload.get('clip_ids'),
+                         {k: v for k, v in payload.items() if k != 'clip_ids'}, bulk=True)
+
+
+@app.post('/api/footage/import')
+def footage_import(payload: dict = Body(...)):
+    from . import footage
+    def run():
+        if not isinstance(payload.get('path'), str) or type(payload.get('copy', False)) is not bool:
+            raise ValueError('Require path text and copy boolean')
+        shoot = footage.import_shoot(payload['path'], copy=payload.get('copy', False))
+        return {'id': shoot.id, 'job': footage.start_processing(shoot.id)}
+    return _footage_call(run)
+
+
+@app.get('/api/footage/shoots/{sid}/media/{kind}/{filename:path}')
+def footage_media(sid: str, kind: str, filename: str):
+    from . import footage
+    return FileResponse(_footage_call(footage.media_path, sid, kind, filename))
+
+
+@app.get('/api/footage/shoots/{sid}/labels/estimate')
+def footage_estimate(sid: str):
+    from . import footage_labels
+    return _footage_call(footage_labels.estimate, sid)
+
+
+@app.post('/api/footage/shoots/{sid}/{action}')
+def footage_action(sid: str, action: str, payload: dict = Body(...)):
+    from . import footage, footage_labels, footage_export
+    def run():
+        with footage.lock_for(sid):
+            footage.editable(sid)
+            footage.load(sid)
+            if action == 'vocabulary':
+                footage_labels.set_vocabulary(sid, footage._strings(payload.get('labels')))
+                return {'ok': True}
+            if action == 'labels':
+                budget = footage_labels.estimate(sid)
+                if payload.get('confirm') is not True or payload.get('estimate') != budget:
+                    raise ValueError('Review the current token estimate and confirm')
+                worker = lambda pr: footage_labels.run(sid, confirm=lambda b: b == budget, progress=pr)
+            elif action == 'export':
+                ids, output = payload.get('clip_ids'), payload.get('output')
+                if not isinstance(ids, list) or not ids or any(c not in {x.id for x in footage.load(sid).clips} for c in ids):
+                    raise ValueError('Select clips')
+                if not isinstance(output, str) or not output.strip():
+                    raise ValueError('Choose an output folder')
+                worker = lambda pr: footage_export.export_clips(sid, ids, output,
+                    pattern=payload.get('pattern', '{label}-{id}'), mode=payload.get('mode', 'encode'))
+            else:
+                raise HTTPException(404, 'Unknown footage action')
+            return {'job': jobs.start('footage ' + action, sid, worker)}
+    return _footage_call(run)
+
+
 # ------------------------------------------------------------------- projects
 @app.get("/api/projects")
 def list_projects() -> list[dict]:

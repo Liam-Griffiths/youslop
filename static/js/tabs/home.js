@@ -95,11 +95,11 @@ async function renderHome() {
         </tr></thead><tbody id="home-videos" aria-live="polite"></tbody></table></div>
       </section>
       <aside aria-labelledby="shoots-heading"><h2 id="shoots-heading">Footage shoots</h2>
-        ${shoots.map(s => `<a class="home-shoot" href="/footage/export?shoot=${encodeURIComponent(s.id)}">
+        ${shoots.map(s => `<a class="home-shoot" href="#/footage/${encodeURIComponent(s.id)}">
           <b>${esc(s.name)}</b><span class="mono">${fmtTime(s.seconds)} · ${s.files} files · ${s.clips} clips</span>
-          <span>${s.labelled} of ${s.clips} clips labelled</span></a>`).join('') || '<p class="empty-note">No shoots yet. Import footage using the footage CLI.</p>'}
-        <button class="btn ghost" disabled aria-describedby="import-shoot-note">Import a shoot: folder or camera card</button>
-        <p class="sub" id="import-shoot-note">The import UI is coming with the footage logger.</p>
+          <span>${s.labelled} of ${s.clips} clips labelled</span></a>`).join('') || '<p class="empty-note">No shoots yet. Import a folder or camera card.</p>'}
+        <button class="btn ghost" onclick="go('#/footage')" aria-describedby="import-shoot-note">Import a shoot: folder or camera card</button>
+        <p class="sub" id="import-shoot-note">Link originals or keep a copy; proxies process in the background.</p>
       </aside>
     </div>
   </div>`;

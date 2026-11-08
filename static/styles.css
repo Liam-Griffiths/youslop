@@ -1267,3 +1267,27 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .setup-path { overflow-wrap:anywhere; }
 .setup-actions { margin-top:24px; flex-wrap:wrap; }
 @media (max-width:900px) { .setup-screen { flex-direction:column; gap:20px; } .setup-steps { flex-basis:auto; } }
+
+/* Footage logger: palette, proxy player and inspector above grouped clips. */
+.footage-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:20px; }
+.footage-layout aside .btn { display:block; width:100%; margin:6px 0; text-align:left; }
+.footage-layout input:not([type=checkbox]), .footage-layout textarea, .footage-layout select { width:100%; box-sizing:border-box; margin:4px 0 8px; }
+.footage-layout select { appearance:none; }
+.footage-work { display:grid; grid-template-columns:minmax(0,2fr) minmax(240px,1fr); gap:16px; }
+#footage-player { width:100%; aspect-ratio:16/9; background:var(--bg); }
+.footage-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
+.footage-grid article { min-width:0; font-size:11px; }
+.footage-tile { width:100%; aspect-ratio:16/9; padding:0; border:1px solid var(--line); border-radius:4px; background-color:var(--panel); cursor:pointer; }
+.footage-tile.active { outline:2px solid var(--accent); outline-offset:-2px; }
+.footage-layout fieldset { border:1px solid var(--line); margin:10px 0; min-width:0; }
+@media(max-width:1100px) { .footage-layout { grid-template-columns:1fr; } .footage-work { grid-template-columns:1fr; } }
+.footage-trim { background:var(--panel); border:1px solid var(--line); margin:6px 0; overflow:hidden; }
+.footage-trim span { display:block; box-sizing:border-box; border-inline:2px solid var(--accent); background:var(--raised); font-size:11px; white-space:nowrap; }
+#footage-inspector label, .footage-layout aside label:not(:has(input[type=checkbox])) { display:block; margin-top:8px; }
+.footage-layout .panel > h2:first-child, .footage-import > h2:first-child { margin-top:0; }
+#footage-inspector fieldset .btn { margin:0 6px 6px 0; }
+.footage-import .btn.primary { display:flex; margin-top:12px; }
+.footage-inout { display:grid; grid-template-columns:1fr 1fr; column-gap:10px; }
+.footage-inout .row { gap:6px; flex-wrap:nowrap; }
+.footage-inout .row input { margin:4px 0; }
+#footage-inspector h2 { margin:0 0 8px; }

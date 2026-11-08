@@ -167,6 +167,7 @@ async function route() {
   const hash = canonicalHash(location.hash || '#/');
   if (hash !== (location.hash || '#/')) { location.replace(hash); return; }
   resetShell();
+  if (typeof footageStop === 'function') footageStop();
   const proj = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(\w+))?/);
   const chan = hash.match(/^#\/channels\/([^/]+)(?:\/(\w+))?/);
   const lib = hash === '#/library';
@@ -191,7 +192,7 @@ async function route() {
     await renderPacks();
   } else if (hash.startsWith('#/footage')) {
     state.project = null; state.channel = null;
-    view.innerHTML = '<h1>Footage</h1><p class="sub">Footage logging is coming in Phase 11.</p><a class="btn" href="/footage/export">Export logged clips</a>';
+    await renderFootage(hash.split('/')[2]);
   } else if (guidePage) {
     state.project = null;
     state.channel = null;

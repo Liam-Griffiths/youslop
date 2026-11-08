@@ -177,7 +177,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T11.2 | Shot detection into clips | M | T11.1 | done | 2026-10-31 Codex; scene+motion+silence shots on proxies, wired into import; owner: time a 20-min shoot |
 | T11.3 | Quality signals and duplicates | S | T11.2 | done | 2026-10-31 Codex + review fixes (shoot-relative blur, mean-luma exposure); owner: sanity-check flags on a real shoot |
 | T11.4 | Auto labels for clips | M | T11.2, T3.2 | done | 2026-10-31 Codex; batched thumbnail labels, fixed vocabulary, cached, token estimate + confirm before any call; owner: try on a real shoot |
-| T11.5 | Footage logger UI | M | T11.2, T9.3 | todo |  |
+| T11.5 | Footage logger UI | M | T11.2, T9.3 | done | 2026-11-08 Codex + review; keyboard logger, proxy-only media, edits 409 while processing; checked headless incl. a real processed shoot |
 | T11.6 | Clips into the edit | M | T11.4, T9.8 | todo |  |
 | T11.7 | Shot list from the script | S | T11.4 | done | 2026-11-01 Codex; page + PDF checked on project copy; coverage untested on a real shoot |
 | T11.8 | Export clips | S | T11.2 | done | 2026-10-31 Codex + review fixes; export clips (re-encode exact, copy .mkv) + JSON/CSV sidecars; stopgap page until T11.5 |

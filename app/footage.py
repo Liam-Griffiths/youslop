@@ -58,6 +58,9 @@ class Clip:
     best_take: str = ''
     labels: list[str] = field(default_factory=list)
     auto_labels: dict = field(default_factory=dict)  # Vision suggestions, never source edits.
+    starred: bool = False
+    rejected: bool = False
+    note: str = ''
 
     @classmethod
     def from_dict(cls, raw: dict) -> Clip:
@@ -262,8 +265,10 @@ def process_shoot(shoot_id: str, progress: Progress = lambda m: None) -> dict:
 
 def start_processing(shoot_id: str) -> str:
     """Background entry point for app callers; progress is available in jobs."""
-    load(shoot_id)
-    return jobs.start('footage', shoot_id, lambda progress: process_and_detect(shoot_id, progress), cancellable=True)
+    with lock_for(shoot_id):
+        editable(shoot_id)
+        load(shoot_id)
+        return jobs.start('footage', shoot_id, lambda progress: process_and_detect(shoot_id, progress), cancellable=True)
 
 
 def process_and_detect(shoot_id: str, progress: Progress = lambda m: None) -> dict:
@@ -412,3 +417,83 @@ def detect_shots(shoot_id: str, *, min_s: float = MIN_CLIP_S, max_s: float = MAX
             _save(shoot)
         progress(f'Done: {len(shoot.clips)} clips')
         return shoot.clips
+
+
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+class ProcessingError(ValueError):
+    pass
+
+
+def lock_for(shoot_id: str):
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(_key(shoot_id), threading.RLock())
+
+
+def editable(shoot_id: str):
+    if jobs.active_for(shoot_id):
+        raise ProcessingError('Shoot is processing; edits are read-only until done')
+
+
+def _strings(value):
+    if not isinstance(value, list) or any(not isinstance(v, str) or not v.strip() for v in value):
+        raise ValueError('Labels must be a list of nonempty strings')
+    return list(dict.fromkeys(v.strip() for v in value))
+
+
+def edit_clips(shoot_id: str, clip_ids: list[str], changes: dict, *, bulk=False):
+    with lock_for(shoot_id):
+        editable(shoot_id)
+        shoot = load(shoot_id)
+        if not isinstance(clip_ids, list) or not clip_ids or any(not isinstance(c, str) for c in clip_ids):
+            raise ValueError('Select clips')
+        selected = [c for c in shoot.clips if c.id in clip_ids]
+        if len(selected) != len(set(clip_ids)):
+            raise ValueError('Unknown clip')
+        allowed = {'add', 'remove'} if bulk else {'labels', 'in_s', 'out_s', 'starred', 'rejected', 'note'}
+        if changes.keys() - allowed:
+            raise ValueError('Unknown clip field')
+        values = dict(changes)
+        for name in ('labels', 'add', 'remove'):
+            if name in values:
+                values[name] = _strings(values[name])
+        for name in ('starred', 'rejected'):
+            if name in values and type(values[name]) is not bool:
+                raise ValueError(f'{name} must be boolean')
+        if 'note' in values and not isinstance(values['note'], str):
+            raise ValueError('Note must be text')
+        sources = {f.id: f for f in shoot.files}
+        for clip in selected:
+            if bulk:
+                clip.labels = list(dict.fromkeys([l for l in clip.labels if l not in values.get('remove', [])]
+                                                + values.get('add', [])))
+                continue
+            duration = sources[clip.file].duration
+            for name in ('in_s', 'out_s'):
+                if name in values:
+                    v = values[name]
+                    if type(v) not in (int, float) or not math.isfinite(v):
+                        raise ValueError('Times must be finite numbers')
+                    values[name] = max(0, min(duration, v))
+            if not 0 <= values.get('in_s', clip.in_s) < values.get('out_s', clip.out_s) <= duration:
+                raise ValueError('Require in < out within file duration')
+            for name, value in values.items():
+                setattr(clip, name, value)
+        _save(shoot)
+        return [asdict(c) for c in selected]
+
+
+def media_path(shoot_id: str, kind: str, filename: str) -> Path:
+    if kind not in {'proxies', 'sprites'}:
+        raise FileNotFoundError('Only viewing media is available')
+    root = shoot_dir(shoot_id).resolve()
+    shoot = load(shoot_id)
+    suffix = '.mp4' if kind == 'proxies' else '.jpg'
+    if filename not in {f.id + suffix for f in shoot.files}:
+        raise FileNotFoundError('Unknown viewing media')
+    path = (root / kind / filename).resolve()
+    if not path.is_relative_to(root / kind) or not path.is_file():
+        raise FileNotFoundError('Viewing media unavailable')
+    return path

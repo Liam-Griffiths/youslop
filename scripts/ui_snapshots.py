@@ -27,7 +27,7 @@ PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
     result = ['#/', '#/setup', '#/library', '#/settings', '#/guide', '#/projects',
-              '#/footage', '#/packs', '#/channels', '#/channels/csnapshot',
+              '#/footage', '#/footage/ssnapshot', '#/packs', '#/channels', '#/channels/csnapshot',
               '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
         tabs = tuple(dict.fromkeys(PROJECT_STAGES + PROJECT_TABS)) + (
@@ -61,9 +61,28 @@ def console_error(event):
 
 
 def seed():
-    from app import channels, config, library, settings, store
+    from app import channels, config, library, settings, store, footage, ffutil
+    from PIL import Image
     from app.schema import Channel, Project, SponsorSlot
     config.ensure_dirs()
+    # A tiny, directly seeded viewing fixture; no original or analysis pipeline.
+    shoot = footage.Shoot('ssnapshot', path='/synthetic/Morning shoot',
+        files=[footage.SourceFile('f1', duration=4, width=320, height=180)],
+        vocabulary=['Entrance', 'Street'], clips=[
+            footage.Clip('c1', 'f1', 0, 2, labels=['Entrance'], note='Morning door',
+                         duplicate_group='c1', best_take='c1'),
+            footage.Clip('c2', 'f1', 2, 4, quality={'usable': False, 'reasons': ['blur']},
+                         duplicate_group='c1', best_take='c1')])
+    root = footage.shoot_dir(shoot.id)
+    (root / 'proxies').mkdir(parents=True)
+    (root / 'sprites').mkdir()
+    ffutil.run(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=5:duration=4',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+                str(root / 'proxies/f1.mp4')], threads=1)
+    Image.new('RGB', (1600, 90), (60, 60, 60)).save(root / 'sprites/f1.jpg')
+    for clip in shoot.clips:
+        clip.thumbs = ['sprites/f1.jpg'] * 3
+    footage._save(shoot)
     settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures'))
     source = REPO / 'tests/fixtures/project_min'
