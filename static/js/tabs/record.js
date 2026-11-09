@@ -1494,7 +1494,8 @@ function voiceTakesPanel(p, s) {
     ${Object.entries(s.takes || {}).map(([track, t]) => `<div class="voice-take">
       <strong>${esc(trackLabel(track))}${t.synthetic ? ' · draft' : ''}</strong>
       <span class="voice-meta">${fmtTime(t.duration || 0)} · ${track === used ? 'in the cut' : 'available'}</span>
-      ${media(t)}${track !== used && track !== 'camera' ? `<button type="button" class="btn sm" ${locked} onclick="useVoiceTrack('${esc(track)}')">Use this voice for the video</button>` : ''}
+      ${media(t)}${!t.synthetic && ['mic','camera'].includes(track) ? `<button type="button" class="btn sm" ${locked}
+        data-track="${esc(track)}" data-path="${esc(t.path)}" onclick="retimeRecordedTake(this)">Retime words</button>` : ''}${track !== used && track !== 'camera' ? `<button type="button" class="btn sm" ${locked} onclick="useVoiceTrack('${esc(track)}')">Use this voice for the video</button>` : ''}
     </div>`).join('')}
     <h2>Earlier takes · ${(s.history || []).length}</h2>
     ${(s.history || []).map((t, n) => `<div class="voice-take"><strong>${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · history</strong>
@@ -1507,4 +1508,30 @@ function voiceTakesPanel(p, s) {
 function voicePresenterOptions(p) {
   return typeof presenterPanel === 'function'
     ? `<details class="voice-options"><summary>On camera / presenter</summary>${presenterPanel(p)}</details>` : '';
+}
+
+
+async function retimeRecordedTake(button) {
+  const pid = state.project.id, sid = state.project.slides[state.rec.index].id;
+  button.disabled = true;
+  try {
+    const {job} = await api(`/api/projects/${pid}/slides/${sid}/retime`, {method:'POST',
+      body:JSON.stringify({track:button.dataset.track, path:button.dataset.path})});
+    toast('Retiming words · progress and cancellation in Jobs');
+    while (button.isConnected) {
+      const status = await api(`/api/jobs/${job}`);
+      if (status.state === 'error') throw Error(status.error);
+      if (status.state === 'cancelled') { toast('Retiming cancelled'); break; }
+      if (status.state === 'done') {
+        toast(`${status.result.words} words retimed`);
+        if (state.project.id === pid) {
+          state.project = await api(`/api/projects/${pid}`);
+          if (state.tab === 'record') paintRecord();
+        }
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  } catch (e) { toast(e.message + ' · Set the speech-to-text engine and local model in Settings.', true); }
+  finally { button.disabled = false; }
 }

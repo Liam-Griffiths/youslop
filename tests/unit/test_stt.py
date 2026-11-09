@@ -123,9 +123,11 @@ def test_segment_fallback_and_cache_recovery(source, monkeypatch):
     def run(*args, **kwargs):
         yield dict(start=10, end=12, text='two words', words=[])
     monkeypatch.setattr(stt, 'transcribe', run)
+    from app.stt import timing
+    monkeypatch.setattr(timing, 'voiced', lambda path, a, b: [(10.2, 11.8)])
     result = transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=10, end=12)
     assert [w['src'] for w in result['words']] == ['stt-seg', 'stt-seg']
-    assert result['words'][0]['start'] == 10 and result['words'][-1]['end'] == 12
+    assert result['words'][0]['start'] == 10.2 and result['words'][-1]['end'] == 11.8
     transcripts._path('shoot', 'file').unlink()  # Simulate crash before transcript merge, retain chunk.
     monkeypatch.setattr(stt, 'transcribe', lambda *a, **k: pytest.fail('must reuse completed chunk'))
     assert transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=10, end=12)['words'] == result['words']
@@ -226,3 +228,36 @@ def test_gap_run_does_not_discard_pending_replacement(source, monkeypatch):
     calls.clear()
     run(retranscribe=True)
     assert calls == [('fake', 600, 1200), ('fake', 1200, 1500)]
+
+
+def test_bounded_voiced_fallback_silence_and_turns(tmp_path):
+    from app.stt.timing import mark_turns, segment_words, voiced
+    path = tmp_path / 'speech.wav'
+    with wave.open(str(path), 'wb') as wav:
+        wav.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(b'\0\0' * 16000 + b'\x00\x20' * 16000 + b'\0\0' * 16000 + b'\x00\x20' * 16000)
+    assert voiced(path, 0, 1) == []
+    assert voiced(path, 1.2, 1.8)[0] == pytest.approx((1.2, 1.8))
+    silence = dict(start=0, end=1, text='hallucinated', words=[])
+    assert segment_words(silence, path) == []
+    items = segment_words(dict(start=0, end=4, text='red blue', words=[]), path)
+    assert [(w['start'], w['end'], w['src']) for w in items] == [(1, 2, 'stt-seg'), (3, 4, 'stt-seg')]
+    mark_turns(items, path)
+    assert items[1]['turn'] is True
+    doc = dict(words=items, overrides=[])
+    transcripts._rebuild(doc)
+    assert doc['segments'][1]['turn'] is True
+    # A timestamp gap with continuous energy is not a turn.
+    loud_gap = [dict(w='a', start=1, end=1.05), dict(w='b', start=1.9, end=2)]
+    mark_turns(loud_gap, path)
+    assert 'turn' not in loud_gap[1]
+
+
+def test_fallback_cache_version_invalidates_old_chunks(source, monkeypatch):
+    monkeypatch.setattr(stt, 'transcribe', fake_engine([]))
+    transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=0, end=2)
+    calls = []
+    monkeypatch.setattr(stt, 'transcribe', fake_engine(calls))
+    monkeypatch.setattr(transcripts, 'CACHE_VERSION', transcripts.CACHE_VERSION + 1)
+    transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=0, end=2)
+    assert len(calls) == 1

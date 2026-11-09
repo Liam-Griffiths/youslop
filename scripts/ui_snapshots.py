@@ -269,6 +269,31 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/p/psnapkenburns/voice':
+                _evaluate(cdp, session, """(async () => {
+                  const p = structuredClone(state.project), s = p.slides[state.rec.index];
+                  s.takes = {mic:{path:'takes/synthetic.wav', duration:2, words:[]}};
+                  p.voice_track = 'mic';
+                  const panel = document.querySelector('.voice-takes');
+                  panel.outerHTML = voiceTakesPanel(p, s);
+                  const button = document.querySelector('[data-track=mic][data-path]');
+                  if (!button || !button.textContent.includes('Retime words')) throw Error('Retime action missing');
+                  const real = api, requests = [];
+                  try {
+                    api = async (url, options) => {
+                      requests.push({url, options});
+                      if (url.endsWith('/retime')) return {job:'synthetic-retime'};
+                      if (url === '/api/jobs/synthetic-retime') return {state:'cancelled'};
+                      throw Error('Unexpected retime request');
+                    };
+                    await retimeRecordedTake(button);
+                    const body = JSON.parse(requests[0].options.body);
+                    if (body.track !== 'mic' || body.path !== 'takes/synthetic.wav' || button.disabled)
+                      throw Error('Retime selection or cancellation lost');
+                    if (!document.querySelector('.voice-takes audio[controls]')) throw Error('Playback control removed');
+                  } finally { api = real; }
+                  return true;
+                })()""")
             if route == '#/footage/saudio':
                 _evaluate(cdp, session, """(async () => {
                   const host = document.querySelector('#footage-transcript');

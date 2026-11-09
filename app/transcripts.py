@@ -7,8 +7,10 @@ import time
 import uuid
 from pathlib import Path
 
-from . import ffutil, footage, jobs, stt, words
+from . import ffutil, footage, jobs, stt
+from .stt.timing import mark_turns, segment_words
 
+CACHE_VERSION = 2  # Voiced fallback and energy turns replace segment-span estimates.
 _WORKERS = {}
 _WORKERS_LOCK = threading.Lock()
 
@@ -58,8 +60,8 @@ def _rebuild(doc):
                 w['w'] = edit['w']
     segments = []
     for w in doc['words']:
-        if not segments or segments[-1]['text'].rstrip().endswith(('.', '?', '!')) or w['start'] - segments[-1]['end'] > 1:
-            segments.append(dict(start=w['start'], end=w['end'], text=w['w']))
+        if not segments or segments[-1]['text'].rstrip().endswith(('.', '?', '!')) or w.get('turn') or w['start'] - segments[-1]['end'] > 1:
+            segments.append(dict(start=w['start'], end=w['end'], text=w['w'], turn=w.get('turn', False)))
         else:
             segments[-1]['end'] = w['end']
             segments[-1]['text'] += ' ' + w['w']
@@ -138,7 +140,7 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
         elapsed, decoded = 0, 0
         for n, (x, y) in enumerate(chunks, 1):
             progress(f'chunk {n} of {len(chunks)}, about {round(elapsed / decoded * sum(v-u for u,v in chunks[n-1:]) / 60, 1) if decoded else "unknown"} min left')
-            key = hashlib.sha256(json.dumps([signature[:6], plan['generation'], x, y]).encode()).hexdigest()[:20]
+            key = hashlib.sha256(json.dumps([CACHE_VERSION, signature[:6], plan['generation'], x, y]).encode()).hexdigest()[:20]
             cache = root / f'{footage._key(source_id)}.chunks' / f'{key}.json'
             began = time.monotonic()
             cached = cache.exists()
@@ -148,17 +150,22 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
                 items = []
                 for segment in stt.transcribe(engine, wav, model=model, language=language, start=x, end=y,
                                                progress=progress, cancel=lambda: progress('Transcribing speech'), **adapter_options):
-                    raw = segment.get('words') or words.spread(segment['text'].split(), [(segment['start'], segment['end'])])
+                    raw = segment_words(segment, wav)
                     for w in raw:
                         mid = (w['start'] + w['end']) / 2
                         if x <= mid < y and w['end'] > w['start']:
                             items.append({**w, 'start': max(x, w['start']), 'end': min(y, w['end']),
-                                          'src': 'stt' if segment.get('words') else 'stt-seg',
+                                          'src': w['src'],
                                           'p': w.get('p'), 'engine': engine, 'model': model})
+                items.sort(key=lambda w: w['start'])
+                mark_turns(items, wav)
                 _write(cache, items)
             # Persist before the next cancellation checkpoint; crash after cache is recoverable.
             with footage.lock_for(shoot_id):
                 doc = load(shoot_id, source_id)
+                previous = [w for w in doc['words'] if w['end'] <= x]
+                if items and previous:
+                    mark_turns(items[:1], wav, previous[-1])
                 doc['words'] = sorted([w for w in doc['words'] if not x <= (w['start'] + w['end']) / 2 < y] + items,
                                       key=lambda w: w['start'])
                 doc['coverage'] = _ranges(doc['coverage'] + [[x, y]])
@@ -217,7 +224,7 @@ def prepare(shoot_id, source_id, options):
     if (options.get('retranscribe') and not plan.get('complete') and len(full_signature) == 9
             and full_signature[1:6] == signature and full_signature[6:] == [a, b, True]):
         ranges = [span for span in plan['chunks'] if not (root / f'{footage._key(source_id)}.chunks' /
-                  (hashlib.sha256(json.dumps([full_signature[:6], plan['generation'], *span]).encode()).hexdigest()[:20] + '.json')).exists()]
+                  (hashlib.sha256(json.dumps([CACHE_VERSION, full_signature[:6], plan['generation'], *span]).encode()).hexdigest()[:20] + '.json')).exists()]
     seconds = sum(y - x for x, y in ranges)
     measurement = load(shoot_id, source_id).get('measurement', {})
     runtime = (seconds * measurement['wall_seconds'] / measurement['audio_seconds']

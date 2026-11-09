@@ -3093,6 +3093,21 @@ def voice_over_one(pid: str, sid: str) -> dict:
     return {"slide": s.to_dict(), "recorded_seconds": p.recorded_seconds()}
 
 
+@app.post('/api/projects/{pid}/slides/{sid}/retime')
+def retime_take(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    from . import stt, take_timing
+    if set(payload) - {'track', 'path', 'engine', 'model', 'language'}:
+        raise HTTPException(400, 'Unknown retiming option')
+    try:
+        options = stt.resolve({k: v for k, v in payload.items() if k in ('engine', 'model', 'language')})
+        _slide(_load(pid), sid)
+        return {'job': take_timing.start_job(pid, sid, payload.get('track'), payload.get('path'), options)}
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+
+
 @app.post("/api/projects/{pid}/takes/reprocess")
 def reprocess_takes(pid: str) -> dict:
     """Clean every take again from the raw recording it came from.

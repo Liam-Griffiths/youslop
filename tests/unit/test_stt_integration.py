@@ -166,3 +166,30 @@ def test_measured_estimate_and_replacement_resume(audio, api_request, tmp_path, 
     model.write_bytes(b'changed')
     changed = api_request('POST', base + '/estimate', options).json()
     assert changed['seconds'] == 2 and changed['runtime_seconds'] is None
+
+
+def test_retime_api_explicit_defaults_and_stale_click(api_request, tmp_path, monkeypatch):
+    from app import store, take_timing
+    from app.schema import Project, Slide
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path / 'projects')
+    p = Project(id='retime', idea='Synthetic', slides=[Slide(id='s')])
+    path = store.project_dir(p.id) / 'takes' / 'kept.wav'
+    path.write_bytes(b'kept recording')
+    p.set_take(p.slides[0], 'mic', dict(path='takes/kept.wav', words=[]))
+    store.save(p)
+    model = tmp_path / 'model'
+    model.write_bytes(b'fake')
+    monkeypatch.setattr(stt, 'configured', lambda **kw: {'openai-whisper': {'installed': True}})
+    monkeypatch.setenv('CORKBORED_STT_ENGINE', 'openai-whisper')
+    monkeypatch.setenv('CORKBORED_STT_MODEL', str(model))
+    calls = []
+    monkeypatch.setattr(jobs, 'start', lambda *a, **kw: calls.append((a, kw)) or 'fake-retime')
+    base = '/api/projects/retime/slides/s/retime'
+    assert not calls  # Viewing takes cannot start inference.
+    assert api_request('POST', base, dict(track='mic', path='takes/old.wav')).status_code == 400
+    assert api_request('POST', base, dict(track='kokoro', path='takes/kept.wav')).status_code == 400
+    assert api_request('POST', base, dict(track='mic', path='takes/kept.wav', start=0)).status_code == 400
+    assert not calls
+    assert api_request('POST', base, dict(track='mic', path='takes/kept.wav')).json()['job'] == 'fake-retime'
+    assert calls[0][0][:2] == ('retime', 'retime') and calls[0][1]['cancellable'] is True
+    assert path.read_bytes() == b'kept recording'
