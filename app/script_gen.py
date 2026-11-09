@@ -1008,6 +1008,78 @@ Return JSON: a list of objects, one per paragraph that has a problem:
     return all_flags + hook_flags
 
 
+def consistency_check(project: Project, progress: Progress = lambda m: None) -> list[dict]:
+    """Flag internal contradictions and impossible pictures without rewriting."""
+    slides = project.slides
+    if not slides:
+        return []
+    chunks = [slides[i:i + 12] for i in range(0, len(slides), 12)]
+    progress(f"Checking consistency of {len(slides)} paragraph(s)")
+
+    def run(args: tuple[int, list[Slide]]) -> list[dict]:
+        ci, chunk = args
+        start = ci * 12
+        listing = "\n".join(
+            f"{n}. Narration: {s.narration}\nVisual: {s.visual_note}"
+            for n, s in enumerate(chunk, start + 1))
+        context = "\n".join(f"{n}. {s.narration}" for n, s in enumerate(slides, 1)
+                            if not start < n <= start + len(chunk))
+        prompt = f"""Check only script consistency and whether its pictures can exist.
+ERA: {project.outline.get('era') or 'Not specified; use dates in the script.'}
+
+PARAGRAPHS TO CHECK:
+{listing}
+
+OTHER PARAGRAPHS (context only; do not flag these):
+{context or '(none)'}
+
+Report only:
+- contradiction: two statements that cannot both be true, within a paragraph
+  or across the script. Quote BOTH statements in claim.
+- impossible_visual: a picture that cannot exist as described in this era:
+  photography before photography, footage before film, or a photograph of an
+  event nobody witnessed with a camera. Quote the visual in claim. In issue,
+  suggest an artist's impression, map, or later photograph of the site.
+Do not flag style, pacing, tone, unsupported facts, or mere uncertainty.
+Report only problems involving a PARAGRAPH TO CHECK; n must be its number.
+Return [] if there are no problems. Otherwise return a JSON list:
+{{"n": <paragraph number>, "kind": "contradiction" or "impossible_visual",
+  "claim": "quoted text (both statements for a contradiction)",
+  "issue": "one sentence explaining the problem or suggesting a substitute"}}"""
+        out = complete_json(prompt, model=MODEL_UTILITY, timeout=400,
+                            require=lambda v: isinstance(v, list))
+        flags = []
+        for item in out if isinstance(out, list) else []:
+            if not isinstance(item, dict):
+                continue
+            kind = item.get('kind')
+            n = item.get('n')
+            if isinstance(n, str) and n.strip().isdigit():
+                n = int(n)                    # small models often send "3"
+            if type(n) is not int:
+                continue
+            if not start < n <= start + len(chunk):
+                continue
+            if kind not in ('contradiction', 'impossible_visual'):
+                continue
+            claim, issue = item.get('claim'), item.get('issue')
+            if not isinstance(claim, str) or not claim.strip():
+                continue
+            if not isinstance(issue, str) or not issue.strip():
+                continue
+            flags.append(dict(slide_id=slides[n - 1].id, kind=kind,
+                              claim=claim.strip()[:600], issue=issue.strip()[:300],
+                              severity='high' if kind == 'contradiction' else 'low'))
+        return flags
+
+    all_flags = []
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        for flags in _context_map(pool, run, enumerate(chunks)):
+            all_flags.extend(flags)
+    progress(f"Consistency check: {len(all_flags)} problem(s) flagged")
+    return all_flags
+
+
 # ------------------------------------------------------------------ full build
 def brief(project: Project, progress: Progress = lambda m: None,
           checkpoint: Callable[[], None] = lambda: None, fresh: bool = False) -> dict:
@@ -1074,6 +1146,11 @@ def generate(project: Project, progress: Progress = lambda m: None,
 
     if project.research.get("facts"):
         project.research["flags"] = verify_script(project, progress)
+    # Needs no research, and is advisory: a failure never costs the script.
+    try:
+        project.research.setdefault("flags", []).extend(consistency_check(project, progress))
+    except LLMError as exc:
+        progress(f"Consistency check skipped ({str(exc)[:100]})")
 
     words = sum(s.word_count for s in slides)
     progress(f"Script done: {len(slides)} paragraphs, {words} words, "

@@ -1522,7 +1522,10 @@ def factcheck(pid: str) -> dict:
     def work(progress):
         with store.lock_for(pid):
             fresh = store.load(pid)
-            flags = script_gen.verify_script(fresh, progress)
+        flags = script_gen.verify_script(fresh, progress)
+        flags.extend(script_gen.consistency_check(fresh, progress))
+        with store.lock_for(pid):
+            fresh = store.load(pid)
             fresh.research["flags"] = flags
             store.save(fresh)
         return {"flags": len(flags)}
