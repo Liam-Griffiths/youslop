@@ -30,6 +30,10 @@ def signature(item, theme=None):
     digest = hashlib.sha256(b'block-posters-v1')
     # Include runtime/templates/fonts as well as authored defaults and assets.
     roots = [item['root'], scenes.SCENE_DIR, paths.resource_root() / 'resources/fonts']
+    from . import place_blocks
+    if item['meta']['id'] in place_blocks.IDS and item['root'].is_relative_to(blocks.BUILTIN_DIR):
+        roots += [blocks.BUILTIN_DIR / 'route_map', blocks.BUILTIN_DIR / '_geo']
+        digest.update(Path(place_blocks.__file__).read_bytes())
     with _LOCK:
         for root in roots:
             files = [p for p in sorted(root.rglob('*')) if p.is_file()]

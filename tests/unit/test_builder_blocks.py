@@ -297,3 +297,25 @@ def test_numbers_dense_inputs_compile(ref, aspect, capture_mock, tmp_path):
     for row in parsed.rows:
         row['arrival'] *= 1.4
     builder._plan(dict(layers=parsed.rows,screens=[],budget=parsed.budget),4,30)
+
+
+@pytest.mark.parametrize('ref', blocks.place_blocks.IDS)
+@pytest.mark.parametrize('aspect', ['16:9','9:16'])
+def test_places_dense_inputs_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    values = block_authoring.samples(meta)
+    if ref in ('route_map','bubble_map','place_pin'):
+        values['rows'] = [dict(row,label='W'*32) for row in values['rows']]
+    if ref == 'bubble_map':
+        values['rows'] = [dict(label='W'*32,lat=49+i*.01,lon=-123+i*.01,value=999999) for i in range(10)]
+    if ref == 'region_map':
+        values['rows'] = [dict(country=c,value=999999) for c in ('CAN','USA','MEX','BRA','ARG','CHL')]
+    if ref == 'timezone_strip':
+        values['rows'] = [dict(row,city='W'*32) for row in values['rows']]
+    for position in meta.get('overlay',{}).get('position',[None]):
+        template, ctx = blocks.prepare(ref,values,aspect,seconds=4,overlay=bool(position),position=position)
+        parsed = Layers(scenes.render_html(template,ctx))
+        assert all(r['exit'] == .25 for r in parsed.rows)
+        stats = builder.inspect(tmp_path,template,ctx,seconds=4,size=(ctx['width']//4,ctx['height']//4),fps=30)
+        assert stats['captured_frames'] == 0 and stats['passes'] == 1
+        assert stats['layers'] <= 6 and stats['largest_graph_bytes'] < 65536

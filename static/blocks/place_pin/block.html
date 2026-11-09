@@ -1,0 +1,7 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content locator" {{ layer('locator',0,'rise') }}>
+<div style="position:relative">{{ map(240,240) }}<svg style="position:absolute;inset:0" width="240" height="240" viewBox="0 0 1000 500">{% set row = p.rows[0] %}<path class="pin" transform="translate({{ row.x }},{{ row.y }})" d="M0 0 C-10 -18 -28 -28 -28 -45 A28 28 0 1 1 28 -45 C28 -28 10 -18 0 0Z"/></svg></div>
+<div><p class="label" data-fit>{{ p.rows[0].label }}</p><p class="mono" data-fit>{{ '%.2f'|format(p.rows[0].lat) }}°<br>{{ '%.2f'|format(p.rows[0].lon) }}°</p></div>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content">{{ map(p.map_w,p.map_h) }}</div>
+<div class="content" {{ layer('bubbles',0.15,'scale-in') }}><svg width="{{ p.map_w }}" height="{{ p.map_h }}" viewBox="0 0 1000 500">{% for row in p.rows %}<circle class="bubble" cx="{{ row.x }}" cy="{{ row.y }}" r="{{ row.radius }}"/>{% endfor %}{% for row in p.rows %}<path d="M{{ row.x }} {{ row.y }}L{{ row.label_x }} {{ row.label_y }}" stroke="var(--dim)" fill="none"/><text x="{{ row.label_x }}" y="{{ row.label_y }}" fill="var(--ink)" style="font:24px var(--font-body,monospace);text-anchor:middle">{{ loop.index }}</text>{% endfor %}</svg></div>
+<div class="content"><div class="key" {{ layer('key',0.3,'rise') }}>{% for row in p.rows %}<div class="keyrow"><span class="mono accent">{{ loop.index }}</span><span class="label" data-fit>{{ row.label }}</span><span class="mono value" data-fit>{{ ('%.2f'|format(row.value)).rstrip('0').rstrip('.') }}</span></div>{% endfor %}<p class="mono dim" data-fit style="height:48px;grid-column:1/-1">Area · {{ vars.unit }}</p></div></div>
+{% endblock %}

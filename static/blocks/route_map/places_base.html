@@ -1,0 +1,66 @@
+{% extends '_base.html' %}
+{% set p = places %}
+{% block head %}
+<style>
+* { box-sizing:border-box; }
+body { width:{{ width }}px; height:{{ height }}px; }
+.heading,.foot,.content { position:absolute; left:{{ p.x }}px; width:{{ p.w }}px; }
+.heading { top:{{ p.header }}px; }
+h1 { font:var(--weight-display,800) {{ 72 if p.portrait else 80 }}px/1.15 var(--font-display,Inter),sans-serif; height:190px; }
+.foot { top:{{ p.footer }}px; height:84px; color:var(--dim); font:28px/1.4 var(--font-body,Inter),sans-serif; }
+.content { top:{{ p.top }}px; }
+[data-fit] { overflow-wrap:anywhere; min-width:0; }
+.label { font:36px/1.3 var(--font-body,Inter),sans-serif; }
+.mono { font:32px/1.4 var(--font-body,JetBrainsMono),monospace; font-variant-numeric:tabular-nums; }
+.accent { color:var(--accent); } .dim { color:var(--dim); }
+.map { display:block; overflow:hidden; border:2px solid var(--line); background:var(--panel); border-radius:var(--radius,0px); }
+.land { fill:var(--line); stroke:var(--dim); stroke-width:.7; fill-rule:evenodd; }
+.arc { fill:none; stroke:var(--accent); stroke-width:7; stroke-linecap:round; }
+.bubble { fill:var(--accent); fill-opacity:.6; stroke:var(--accent); stroke-width:2; }
+.pin { fill:var(--accent); stroke:var(--bg); stroke-width:2; }
+.key { position:absolute; left:{{ p.key_x|default(0) }}px; top:{{ p.key_y|default(0) }}px; width:{{ p.w if p.portrait else 480 }}px; display:grid; grid-template-columns:repeat({{ 2 if p.portrait else 1 }},minmax(0,1fr)); gap:6px 20px; }
+.keyrow { display:grid; grid-template-columns:36px minmax(0,1fr) 148px; gap:8px; height:40px; align-items:center; }
+.keyrow .label,.keyrow .mono { font-size:26px; line-height:36px; height:36px; }
+.keyrow .value { text-align:right; }
+.endpoint { border-left:6px solid var(--accent); padding:16px 20px; background:var(--panel); border-radius:var(--radius,0px); }
+.endpoint .label { height:94px; } .endpoint .mono { height:48px; }
+.itinerary { position:absolute; left:{{ p.key_x|default(0) }}px; top:{{ p.key_y|default(0) }}px; width:{{ p.w if p.portrait else 480 }}px; display:grid; gap:24px; grid-template-columns:repeat({{ 2 if p.portrait else 1 }},minmax(0,1fr)); }
+.locator { padding:28px; background:var(--panel); border-left:10px solid var(--accent); border-radius:var(--radius,0px); height:300px; display:grid; grid-template-columns:240px minmax(0,1fr); gap:24px; }
+.locator .label { height:144px; } .locator .mono { font-size:26px; height:80px; }
+.distance { border-top:8px solid var(--accent); padding-top:32px; }
+.ends { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:32px; }
+.ends .label { height:110px; }
+.figure { color:var(--accent); font:var(--weight-display,800) {{ 96 if p.portrait else 160 }}px/1.3 var(--font-display,Inter),sans-serif; font-variant-numeric:tabular-nums; height:{{ 150 if p.portrait else 210 }}px; }
+.travel { border-left:6px solid var(--accent); padding-left:24px; height:100px; }
+.clocks { display:grid; grid-template-columns:repeat({{ 2 if p.portrait else 3 }},minmax(0,1fr)); gap:24px; }
+.clock { height:{{ 220 if p.portrait else 212 }}px; padding:12px 20px; border-top:6px solid var(--accent); background:var(--panel); border-radius:var(--radius,0px); }
+.clock .label { font-size:30px; height:42px; }
+.clock .time { color:var(--accent); font-size:54px; height:78px; }
+.clock .zone { font-size:20px; height:28px; }
+.clock .day { font-size:22px; height:31px; }
+.instant { height:50px; margin-bottom:20px; }
+</style>
+{% endblock %}
+{% macro layer(id, start=0, motion='fade', arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}" data-motion-exit="0.25"{% endmacro %}
+{% macro map(w,h, regions=false) %}
+<svg class="map" width="{{ w }}" height="{{ h }}" viewBox="0 0 1000 500" aria-label="Equirectangular country outlines">
+{% for c in p.countries %}<path class="land" d="{{ c.path }}"/>{% if regions and c.has_value %}<path d="{{ c.path }}" fill="var(--accent)" fill-opacity="{{ 0.15+0.85*c.ratio }}" fill-rule="evenodd"/>{% endif %}{% endfor %}
+{% if not regions %}{% for row in p.rows %}<circle class="pin" cx="{{ row.x }}" cy="{{ row.y }}" r="5"/>{% endfor %}{% endif %}
+</svg>
+{% endmacro %}
+{% block body %}
+{% if not overlay_position|default('') %}<header class="heading"><h1 data-fit data-var-text="title">{{ vars.title }}</h1></header>{% endif %}
+{% block content %}{% endblock %}
+{% if not overlay_position|default('') %}<footer class="foot" data-fit data-var-text="source">{{ vars.source }}</footer>{% endif %}
+{% endblock %}
+{% block script %}<script>
+window.__ready = window.__ready.then(() => {
+  document.querySelectorAll('[data-fit]').forEach(el => {
+    const full = el.textContent.trim(); el.title = full;
+    let text = full;
+    while (text && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      text = text.slice(0,-1).trimEnd(); el.textContent = text + '…';
+    }
+  });
+});
+</script>{% endblock %}

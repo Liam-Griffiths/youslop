@@ -1,0 +1,5 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content" {{ layer('regions',0,'fade') }}>{{ map(p.map_w,p.map_h,true) }}</div>
+<div class="content"><div class="key" {{ layer('legend',0.2,'rise') }}>{% for row in p.rows %}<div class="keyrow" style="grid-template-columns:minmax(0,1fr) 148px"><span class="label" data-fit>{{ row.label }}</span><span class="mono value" data-fit>{{ ('%.2f'|format(row.value)).rstrip('0').rstrip('.') }}</span></div>{% endfor %}<div style="grid-column:1/-1"><svg width="100%" height="24" viewBox="0 0 400 24" preserveAspectRatio="none">{% for i in range(20) %}<rect x="{{ i*20 }}" width="20" height="24" fill="var(--accent)" fill-opacity="{{ 0.15+i*0.85/19 }}"/>{% endfor %}</svg><p class="mono" data-fit style="height:48px">0 — {{ ('%.2f'|format(p.maximum)).rstrip('0').rstrip('.') }} {{ vars.unit }}</p><p class="mono dim" style="height:48px">Unshaded: no data</p></div></div></div>
+{% endblock %}

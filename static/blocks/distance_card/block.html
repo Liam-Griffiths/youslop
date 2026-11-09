@@ -1,0 +1,4 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content distance" {{ layer('journey',0,'rise') }}><div class="ends"><p class="label" data-fit>{{ vars.origin }}</p><p class="label" data-fit>{{ vars.destination }}</p></div><p class="figure" data-fit>{{ p.distance }} km</p><p class="mono travel" data-fit>Travel time<br>{{ p.travel }}</p></div>
+{% endblock %}

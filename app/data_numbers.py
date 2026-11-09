@@ -58,6 +58,10 @@ def shown(meta, values, ref):
                 for col in spec.get('columns', []):
                     cell = row[col['key']]
                     if col['type'] == 'number':
+                        if ref == 'bubble_map' and col['key'] in ('lat','lon'):
+                            continue  # Placement coordinates are not shown figures.
+                        if ref in ('route_map','place_pin') and col['key'] in ('lat','lon'):
+                            cell = round(cell,2)
                         number(cell, col.get('unit', unit))
                     elif col['type'] == 'date':
                         dates.extend(extract(str(cell)[:4]))
@@ -71,6 +75,12 @@ def shown(meta, values, ref):
                             suffix = '' if any(k in item['text'].lower() for k in SCALES) else unit
                             n = number(item['value'], suffix)
                             n['percent'] |= item['percent']
+    if ref == 'timezone_strip':
+        from .place_blocks import clocks
+        rows, instant = clocks(values)
+        numbers.extend(n for row in rows for n in extract(row['time']))
+        numbers.extend(n for n in extract(instant) if not n['year'])
+        dates.extend(n for n in extract(instant) if n['year'])
     if ref in ('bar_chart', 'bar_race') and numbers:
         headline = [max(numbers, key=lambda n: n['value'])]
     if ref == 'delta_card':

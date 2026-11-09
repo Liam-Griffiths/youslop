@@ -1,0 +1,6 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content">{{ map(p.map_w,p.map_h) }}</div>
+<div class="content" {{ layer('route',0.15,'wipe',0.7) }}><svg width="{{ p.map_w }}" height="{{ p.map_h }}" viewBox="0 0 1000 500"><path class="arc" d="{{ p.arc }}"/>{% for row in p.rows %}<circle cx="{{ row.x }}" cy="{{ row.y }}" r="10" fill="var(--bg)" stroke="var(--accent)" stroke-width="4"/>{% endfor %}</svg></div>
+<div class="content"><div class="itinerary" {{ layer('itinerary',0.3,'rise') }}>{% for row in p.rows %}<div class="endpoint"><p class="mono accent">{{ 'A' if loop.first else 'B' }}</p><p class="label" data-fit>{{ row.label }}</p><p class="mono" data-fit>{{ '%.2f'|format(row.lat) }}°, {{ '%.2f'|format(row.lon) }}°</p></div>{% endfor %}</div></div>
+{% endblock %}

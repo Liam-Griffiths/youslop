@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlsplit
 
 import jinja2
 
-from . import core_channel_blocks, core_data_blocks, core_explainer_blocks, number_blocks, paths, scene_builder, scenes
+from . import core_channel_blocks, core_data_blocks, core_explainer_blocks, number_blocks, place_blocks, paths, scene_builder, scenes
 from .config import STATIC_DIR
 
 BUILTIN_DIR = STATIC_DIR / 'blocks'
@@ -257,7 +257,7 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
         raise ValueError(f'unknown block: {block_id}')
     meta, root = block['meta'], block['root']
     values = validate_vars(meta, values or {})
-    if block_id in core_data_blocks.IDS + number_blocks.DATA_IDS and not values.get('source') and context:
+    if block_id in core_data_blocks.IDS + number_blocks.DATA_IDS + place_blocks.IDS and not values.get('source') and context:
         values['source'] = source_line(context.get('research', {}), context.get('narration', ''))
         limit = meta['variables']['source']['max_length']
         if len(values['source']) > limit:
@@ -311,6 +311,8 @@ def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None,
         ctx['palette'] = {**ctx['palette'], 'ground': ctx['vars']['bg']}
     if block_id in number_blocks.IDS:
         ctx['numbers'] = number_blocks.layout(block_id, values, ctx)
+    if block_id in place_blocks.IDS:
+        ctx['places'] = place_blocks.layout(block_id, values, ctx)
     if block_id in core_explainer_blocks.IDS:
         ctx['explain'] = core_explainer_blocks.layout(block_id, values, ctx)
     if meta['kind'] in ('intro', 'outro'):

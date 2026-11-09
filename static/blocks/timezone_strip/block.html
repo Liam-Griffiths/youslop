@@ -1,0 +1,4 @@
+{% extends '_blocks/route_map/places_base.html' %}
+{% block content %}
+<div class="content"><p class="mono instant dim" data-fit>{{ p.instant }}</p><div class="clocks">{% for row in p.rows %}<div class="clock" {{ layer('clock-'~loop.index,loop.index0*0.08,'rise') }}><p class="label" data-fit>{{ row.city }}</p><p class="mono time">{{ row.time }}</p><p class="mono zone dim" data-fit>{{ row.zone }}</p><p class="mono day">{{ row.day }}</p></div>{% endfor %}</div></div>
+{% endblock %}
