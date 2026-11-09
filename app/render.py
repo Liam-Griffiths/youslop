@@ -1954,6 +1954,8 @@ def render(project: Project, progress: Progress = lambda m: None,
 
 def _render(project: Project, progress: Progress, preview: bool) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
+    if project.kind == 'clip':
+        raise ValueError('Clip full rendering is not available yet; preview a section')
     from .learning import resolve_choices
     resolve_choices(project)
     _memory_check(progress)
@@ -2783,6 +2785,9 @@ def preview_segment(project: Project, slide_id: str,
     Paragraphs with nothing recorded yet get their estimated length, exactly
     as a preview cut gives them. Always re-rendered: this is the button.
     """
+    if project.kind == 'clip':
+        from .clip_projects import preview_section
+        return preview_section(project, slide_id, progress)
     from .learning import resolve_choices
     resolve_choices(project)
     groups = _groups_for_preview(project)
@@ -3164,6 +3169,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
     recording use their estimated length and say so; a slate or end card not
     yet drawn uses the length it was asked for.
     """
+    if project.kind == 'clip':
+        raise ValueError('The clip timeline is not available yet; preview a section')
     from . import channels as channels_mod
     lay = _layout(project)
     groups, T = lay["groups"], lay["T"]

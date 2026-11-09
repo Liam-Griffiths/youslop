@@ -1044,6 +1044,22 @@ def transcript_read(sid: str, source_id: str):
     return _footage_call(read)
 
 
+@app.post('/api/footage/shoots/{sid}/clips/{cid}/project')
+def clip_project_create(sid: str, cid: str, payload: dict = Body(...)):
+    from . import clip_projects
+    return _footage_call(clip_projects.create, sid, cid, payload).to_dict()
+
+
+@app.patch('/api/projects/{pid}/clip')
+def clip_project_edit(pid: str, payload: dict = Body(...)):
+    from . import clip_projects
+    with store.lock_for(pid):
+        project = _footage_call(store.load, pid)
+        updated = _footage_call(clip_projects.update, project, payload)
+        store.save(updated)
+        return updated.to_dict()
+
+
 @app.patch('/api/footage/shoots/{sid}/transcripts/{source_id}')
 def transcript_override(sid: str, source_id: str, payload: dict = Body(...)):
     from . import footage, transcripts

@@ -885,6 +885,8 @@ class Project:
     render: dict = field(default_factory=dict)   # last render result
     review: dict = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
+    kind: str = "video"             # video | clip (read-only source ranges)
+    clip: dict = field(default_factory=dict)
 
     # -------------------------------------------------------------- helpers
     def slide(self, sid: str) -> Slide | None:
@@ -896,6 +898,9 @@ class Project:
                 for run in group_slides(self.slides, self.style.picture_every)]
 
     def est_seconds(self) -> float:
+        if self.kind == 'clip':
+            from .clip_projects import duration
+            return duration(self)
         from .config import PARAGRAPH_GAP, WORDS_PER_MINUTE
         words = sum(s.word_count for s in self.slides)
         return words / WORDS_PER_MINUTE * 60 + PARAGRAPH_GAP * len(self.slides)
@@ -906,6 +911,8 @@ class Project:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "kind": self.kind,
+            "clip": deepcopy(self.clip),
             "style_kit": deepcopy(self.style_kit),
             "block_presets": deepcopy(self.block_presets),
             "id": self.id,
@@ -1035,11 +1042,12 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"style_kit", "blocks", "block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"clip", "style_kit", "blocks", "block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         p = cls(
             **base,
+            clip=deepcopy(d.get("clip") or {}),
             style_kit=deepcopy(d.get("style_kit") or {}),
             blocks=deepcopy(d.get("blocks") or []),
             block_presets=deepcopy(d.get("block_presets") or []),
