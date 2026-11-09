@@ -1,0 +1,6 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+{% for row in s.rows %}
+<div class="item panel chat {{ 'reply' if loop.index is even else '' }}" {{ layer('message-'~loop.index,loop.index0*0.35) }} style="top:{{ s.y+loop.index0*s.gap }}px;width:{{ s.w-50 }}px;height:{{ s.gap-16 }}px"><p class="small sender" style="height:34px;font-size:24px" data-fit>{{ row.sender }}</p><p class="copy" data-fit style="height:{{ s.gap-80 }}px;font-size:30px;line-height:1.4">{{ row.text }}</p></div>
+{% endfor %}
+{% endblock %}

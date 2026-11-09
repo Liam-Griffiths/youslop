@@ -1,0 +1,4 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+<div class="area panel comment" {{ layer('comment',0,'fly-right') }} style="height:{{ s.h }}px"><p class="small sender" data-fit data-var-text="sender">{{ vars.sender }}</p><p class="copy" data-fit style="height:260px" data-var-text="text">{{ vars.text }}</p></div>
+{% endblock %}

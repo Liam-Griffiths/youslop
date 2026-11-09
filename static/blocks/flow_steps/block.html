@@ -1,0 +1,8 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+{% for row in s.rows %}
+{% set cw = s.w if s.portrait else (s.w-40*(s.rows|length-1))/s.rows|length %}
+<div class="item panel flow" {{ layer('step-'~loop.index,loop.index0*0.3) }} style="left:{{ s.x if s.portrait else s.x+loop.index0*(cw+40) }}px;width:{{ cw }}px;top:{{ s.y+loop.index0*s.gap if s.portrait else s.y+100 }}px;height:{{ s.gap-40 if s.portrait else 280 }}px"><span class="small flow-index">{{ loop.index }}</span><p class="copy" data-fit style="height:{{ s.gap-90 if s.portrait else 220 }}px;font-size:32px;line-height:1.4">{{ row.label }}</p></div>
+{% if not loop.last %}<div class="item flow-gap" {{ layer('arrow-'~loop.index,loop.index0*0.3+0.15,'fade') }} style="{% if s.portrait %}left:{{ s.x }}px;width:{{ s.w }}px;top:{{ s.y+loop.index0*s.gap+s.gap-40 }}px;height:40px{% else %}left:{{ s.x+loop.index0*(cw+40)+cw }}px;width:40px;top:{{ s.y+100 }}px;height:280px{% endif %}"><span class="arrow">{{ '↓' if s.portrait else '→' }}</span></div>{% endif %}
+{% endfor %}
+{% endblock %}

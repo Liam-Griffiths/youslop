@@ -1,0 +1,5 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+<div class="area panel command" {{ layer('command',0,'wipe') }}><p class="small accent">Command</p><p class="mono" data-fit style="height:100px" data-var-text="command">{{ vars.command }}</p></div>
+{% for row in s.rows %}<div class="item" {{ layer('output-'~loop.index,0.65+loop.index0*0.2,'fade') }} style="top:{{ s.y+220+loop.index0*(s.h-220)/s.rows|length }}px"><p class="mono" data-fit style="height:{{ (s.h-220)/s.rows|length-8 }}px">{{ row.text }}</p></div>{% endfor %}
+{% endblock %}

@@ -1,0 +1,4 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+<div class="area panel code-panel" {{ layer('code',0,'fade',0.8) }} data-capture="frames"><p class="small accent" style="height:54px">Example</p><pre class="code" data-typing style="margin:0;height:{{ 380 if s.portrait else 300 }}px">{% for token in s.tokens %}<span class="{{ token.kind }}" data-token>{{ token.text }}</span>{% endfor %}</pre></div>
+{% endblock %}

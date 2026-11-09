@@ -1,0 +1,4 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+<div class="area panel post" {{ layer('post',0,'scale-in') }}><p class="small accent" data-fit style="height:44px" data-var-text="handle">{{ vars.handle }}</p><p class="copy post-copy" data-fit data-var-text="text">{{ vars.text }}</p>{% if vars.picture %}<img class="post-picture" src="{{ vars.picture }}" alt="Illustrative river crossing">{% endif %}<div class="counts">{% for row in s.rows %}<div class="count"><p class="mono" data-fit>{{ row.display }}</p><p class="small dim" data-fit>{{ row.label }}</p></div>{% endfor %}</div><p class="small dim" data-fit style="height:44px;margin-top:12px" data-var-text="source">{{ vars.source }}</p></div>
+{% endblock %}

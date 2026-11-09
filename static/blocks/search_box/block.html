@@ -1,0 +1,5 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+<div class="area panel search" {{ layer('query',0,'fade',0.8) }} data-capture="frames"><p class="small accent">Search</p><p class="copy query" data-fit data-typing data-var-text="query">{{ vars.query }}</p></div>
+{% for row in s.rows %}<div class="item panel result" {{ layer('result-'~loop.index,1.25+loop.index0*0.2) }} style="padding:10px 20px;top:{{ s.y+260+loop.index0*(s.h-260)/s.rows|length }}px;height:{{ (s.h-260)/s.rows|length-8 }}px"><p class="small sender" style="height:28px;font-size:20px" data-fit>{{ row.label }}</p><p class="copy" data-fit style="height:{{ (s.h-260)/s.rows|length-60 }}px;font-size:26px;line-height:1.4">{{ row.text }}</p></div>{% endfor %}
+{% endblock %}

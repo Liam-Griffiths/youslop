@@ -1,0 +1,4 @@
+{% extends '_blocks/chat_thread/screens_base.html' %}
+{% block content %}
+{% for key,sign,label in [('before','−','Removed'),('after','+','Added')] %}<div class="item panel diff {{ 'add' if loop.last else '' }}" {{ layer(key,loop.index0*0.65,'wipe') }} style="top:{{ s.y+loop.index0*s.h/2 }}px;height:{{ s.h/2-24 }}px"><p class="small {{ 'accent' if loop.last else 'dim' }}" style="height:44px">{{ sign }} {{ label }}</p><pre class="code" data-fit style="margin:0;height:{{ s.h/2-128 }}px" data-var-text="{{ key }}">{{ vars[key] }}</pre></div>{% endfor %}
+{% endblock %}
