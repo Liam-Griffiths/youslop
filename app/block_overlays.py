@@ -81,7 +81,8 @@ def clip(project, item, size, fps, channel=None, *, prepare_only=False):
     ctx = scenes.context_base(project, channel)
     ctx['fps'] = fps
     template, ctx = blocks.prepare(item['block_id'], item['vars'],
-        '9:16' if project.aspect == 'portrait' else '16:9', item['dur'], context=ctx,
+        ('16:9' if size[0] * 9 == size[1] * 16 else
+         '9:16' if size[1] > size[0] else '1:1'), item['dur'], context=ctx,
         _block=block, overlay=True, position=item['position'])
     _, html, ctx = scenes._prepare(project, template, ctx, item['dur'], size, fps,
                                   ('block-overlay-v1', scene_builder.MOTIONS))

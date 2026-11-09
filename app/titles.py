@@ -396,9 +396,74 @@ def _fit_caption(text: str, max_w: int) -> tuple[ImageFont.FreeTypeFont, list[st
     return font, _wrap(probe, words, font, max_w)[:CAPTION_LINES]
 
 
+def safe_area(canvas):
+    """Conservative text bounds, clear of Shorts controls and bottom metadata."""
+    w, h = canvas
+    return round(w * .08), round(h * .10), round(w * .80), round(h * .72)
+
+
+def _native_card(text, kicker, accent, out_path, canvas, kind):
+    # Measure every glyph, including an unbroken URL; never truncate a line.
+    w, h = canvas
+    left, top, right, bottom = safe_area(canvas)
+    card = Image.new('RGBA', canvas, (0, 0, 0, 0))
+    if kind == 'chapter':
+        card.paste((9, 10, 14, 232), (0, 0, w, h))
+    d = ImageDraw.Draw(card)
+    max_w, max_h = right - left - 72, bottom - top - 100
+    if kind == 'caption':
+        max_h = min(max_h, bottom - h * .56 - 40)
+
+    def fit(value, cap, height):
+        for px in range(cap, 0, -1):
+            font = _load(DISPLAY_STACK, px)
+            lines, line = [], ''
+            for char in ' '.join(value.split()):
+                if line and d.textlength(line + char, font=font) > max_w:
+                    split = line.rfind(' ')
+                    if split > 0:
+                        lines.append(line[:split])
+                        line = line[split + 1:] + char
+                    else:
+                        lines.append(line)
+                        line = char
+                else:
+                    line += char
+            lines.append(line.strip())
+            leading = max(round(px * 1.12), sum(font.getmetrics()))
+            if (kind != 'caption' or len(lines) <= 2) and leading * len(lines) <= height and all(
+                    d.textlength(l, font=font) <= max_w for l in lines):
+                return font, lines, leading
+        raise ValueError('Text cannot fit the safe area')
+
+    kfont, klines, klead = fit(kicker.upper(), 24, max_h * .25) if kicker else (None, [], 0)
+    kh = len(klines) * klead + (24 if kicker else 0)
+    font, lines, leading = fit(text, 62 if kind == 'caption' else 80, max_h - kh)
+    block_h = len(lines) * leading + kh
+    y = bottom - block_h - 24 if kind != 'chapter' else (top + bottom - block_h) / 2
+    plate_top = y - 20
+    plate_bottom = y + block_h + 20
+    if kind != 'chapter':
+        d.rounded_rectangle((left, plate_top, right, plate_bottom), radius=16, fill=(9, 10, 14, 232))
+    for value, face, step in [(klines, kfont, klead), (lines, font, leading)]:
+        for line in value:
+            width = d.textlength(line, font=face)
+            d.text(((left + right - width) / 2, y), line, font=face, fill='white')
+            y += step
+        if value is klines and kicker:
+            y += 24
+    d.rectangle((left, plate_bottom - 5, right, plate_bottom), fill=_hex(accent))
+    out_path = out_path or Path(kind + '.png')
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    card.save(out_path, 'PNG')
+    return out_path
+
+
 def render_caption(text: str, accent: str = "#E8C36A",
-                   out_path: Path | None = None) -> Path:
-    """One narration caption as a transparent 1920x1080 PNG."""
+                   out_path: Path | None = None, *, canvas=(WIDTH, HEIGHT)) -> Path:
+    """One narration caption as a transparent PNG."""
+    if canvas != (WIDTH, HEIGHT):
+        return _native_card(text, "", accent, out_path, canvas, "caption")
     card = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     d = ImageDraw.Draw(card)
 
@@ -430,12 +495,14 @@ def render_caption(text: str, accent: str = "#E8C36A",
 
 
 def render_chapter(title: str, kicker: str = "", accent: str = "#E8C36A",
-                   out_path: Path | None = None) -> Path:
+                   out_path: Path | None = None, *, canvas=(WIDTH, HEIGHT)) -> Path:
     """The chapter card the essay format holds on between sections.
 
     Full frame rather than a corner card: it lands in a silence, so there is
     nothing else on screen competing with it and no reason to tuck it away.
     """
+    if canvas != (WIDTH, HEIGHT):
+        return _native_card(title, kicker, accent, out_path, canvas, "chapter")
     card = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     # A near-opaque wash over the outgoing picture: the section break should
     # read as a break, not as a caption over the last shot of the last one.
@@ -485,8 +552,11 @@ def render_title(
     accent: str = "#E8C36A",
     out_path: Path | None = None,
     size: int | None = None,
+    *, canvas=(WIDTH, HEIGHT),
 ) -> Path:
-    """Render one lower-left title card as a transparent 1920x1080 PNG."""
+    """Render one title card as a transparent PNG."""
+    if canvas != (WIDTH, HEIGHT):
+        return _native_card(title, kicker, accent, out_path, canvas, "title")
     card = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
     # Scrim first, tinted near-black, so the type sits on its own ground.

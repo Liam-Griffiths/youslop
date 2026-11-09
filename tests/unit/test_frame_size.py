@@ -85,7 +85,7 @@ def test_graph_resolves_original_or_preview(project, monkeypatch, aspect):
 
 
 @pytest.mark.parametrize('aspect', ['portrait', 'square'])
-def test_essay_fallback_preserves_layout(project, monkeypatch, aspect):
+def test_essay_native_layout(project, monkeypatch, aspect):
     project.aspect = aspect
     project.style.format = 'essay'
     project.style.captions_engine = 'pillow'
@@ -93,9 +93,10 @@ def test_essay_fallback_preserves_layout(project, monkeypatch, aspect):
     monkeypatch.setattr(render.titles, 'render_caption', lambda *a, **kw: None)
     inputs, graph, last = render._segment_graph(project, [(project.slides[0], 3)], 3, 'set')
     w, h = render.frame_size(project)
-    assert any('s=1920x1080:' in arg for arg in inputs)
-    assert f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black' in graph
-    assert last == '[aspect]'
+    assert any(f's={w}x{h}:' in arg for arg in inputs)
+    assert '[aspect]' not in graph
+    assert f'_{w}x{h}.png' in ' '.join(inputs)
+    assert last.startswith('[v')
 
 
 def test_landscape_cache_signatures(project, monkeypatch):

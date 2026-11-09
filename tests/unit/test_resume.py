@@ -290,3 +290,36 @@ def test_drawn_fallback_not_cached_under_gpu_key(setup_render, monkeypatch):
     assert not target.exists()
     assert paths[0].name.endswith('.uncached.mp4')
     assert paths[0].read_bytes() == b'cpu fallback'
+
+
+@pytest.mark.parametrize('aspect', ['portrait', 'square'])
+@pytest.mark.parametrize('sponsor_template', ['sponsor/house_short.html', 'sponsor/short_vertical.html'])
+def test_full_render_aspect_and_return_to_landscape(setup_render, monkeypatch, aspect, sponsor_template):
+    project, root = setup_render
+    sizes, sponsor_sizes, fits = [], [], []
+    from app.schema import SponsorSlot
+    project.sponsors = [SponsorSlot(id='read', after_slide_id=project.slides[0].id,
+                                   template=sponsor_template, script='A sponsor read',
+                                   take={'path': 'sponsor.wav', 'duration': 3})]
+    def sponsor(p, template, ctx, **kw):
+        sponsor_sizes.append(kw['size'])
+        return root / 'sponsor.mp4'
+    monkeypatch.setattr(render.scenes, 'ensure_clip', sponsor)
+    monkeypatch.setattr(render, '_fit_clip', lambda src, out, size, *a: fits.append(size) or out)
+    monkeypatch.setattr(render.cf, 'ThreadPoolExecutor', InlinePool)
+    def segment(p, group, length, index, out, **kw):
+        sizes.append(kw['size'])
+        out.write_bytes(b'segment')
+    monkeypatch.setattr(render, '_render_segment', segment)
+    monkeypatch.setattr(ffutil, 'run', lambda args, **kw: Path(args[-1]).write_bytes(b'mux'))
+    project.aspect = aspect
+    render.render(project)
+    assert sizes == [render.frame_size(project)] * 5
+    assert sponsor_sizes == ([(1080, 1920)] if sponsor_template.endswith('_vertical.html') else [(1920, 1080)])
+    assert fits == [render.frame_size(project)]
+    native_keys = {p.name for p in (root / 'segments').glob('*.mp4')}
+    sizes.clear()
+    project.aspect = 'landscape'
+    render.render(project)
+    assert sizes == [(1920, 1080)] * 5
+    assert not native_keys.intersection(p.name for p in (root / 'segments').glob('*.mp4'))

@@ -620,6 +620,17 @@ def run(project, measure=False) -> dict:
         if cuts.is_cut(fmt) and not cuts.normalise(cuts.BY_KEY[fmt], slide.cues.get(fmt)):
             findings.append(_finding('no_cues', 'P1', para['start'], slide.id,
                                      'This paragraph has no planned cues for ' + fmt + '.', 'cues'))
+    if project.aspect in {'portrait', 'square'}:
+        for para in sb['paragraphs']:
+            slide = next(s for s in project.slides if s.id == para['id'])
+            fallback = render.layout_fallback(project, slide)
+            if fallback:
+                findings.append(_finding('aspect_letterbox', 'P2', para['start'], slide.id,
+                    f'{fallback} has no {project.aspect} layout; its complete composition is letterboxed.'))
+        for seg in sb['segments']:
+            if seg['type'] in {'intro', 'outro', 'sponsor'}:
+                findings.append(_finding('aspect_letterbox', 'P2', seg['start'], '',
+                    f'{seg["type"].capitalize()} retains its original layout and is fitted proportionally.'))
     from . import overlay_checks
     if any(s.overlays for s in project.slides):
         sb['layers'] = render._layers(project, sb['segments'])

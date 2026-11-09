@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import time
+import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -511,7 +512,40 @@ def _reframe(size: tuple[int, int], fps: int) -> tuple[str, ...]:
     """
     if size == (WIDTH, HEIGHT) and fps == FPS:
         return ()
-    return ("-vf", f"scale={size[0]}:{size[1]}", "-r", str(fps))
+    return ("-vf", _fit_filter(size), "-r", str(fps))
+
+
+def _fit_filter(size):
+    w, h = size
+    if w * HEIGHT == h * WIDTH:
+        return f"scale={w}:{h}"
+    return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
+
+
+def _fit_clip(src, out, size, fps=FPS, crf=18):
+    ffutil.run(['-i', str(src), '-vf', _fit_filter(size), '-r', str(fps),
+                *ffutil.video_args(out, crf=crf), '-pix_fmt', 'yuv420p', '-an', str(out)])
+    return out
+
+
+def layout_fallback(project, slide):
+    """One policy shared by rendering and check findings for legacy layouts."""
+    from . import blocks
+    aspect = {'portrait': '9:16', 'square': '1:1'}.get(project.aspect, '16:9')
+    if slide.overlays:
+        library = blocks.discover()
+        if any(aspect not in library.get(o['block_id'], {}).get('meta', {}).get('aspects', {})
+               for o in slide.overlays):
+            return 'Overlay block'
+    if slide.on_camera:
+        return None
+    selected = (slide.cues or {}).get('blocks')
+    if selected:
+        block = blocks.discover().get(selected[0]['block'])
+        return None if block and aspect in block['meta']['aspects'] else 'Block'
+    fmt = kinds.kind_for(project, slide)
+    return fmt if fmt not in {'kenburns', 'essay', 'stage'} else None
 
 
 # A type card, a host portrait, an essay picture: one still image held over a
@@ -715,7 +749,7 @@ def _tail_pad(project, groups):
     return max(TAIL_PAD, needed - dur)
 
 
-def _essay_card(src: Path | None, k: float = 1.0) -> tuple[int, int, int, int]:
+def _essay_card(src: Path | None, k: float = 1.0, canvas=(WIDTH, HEIGHT)) -> tuple[int, int, int, int]:
     """Card size and position for one picture: its own shape, centred.
 
     `k` scales the layout off its 1080p figures, for a frame rendered smaller
@@ -727,12 +761,16 @@ def _essay_card(src: Path | None, k: float = 1.0) -> tuple[int, int, int, int]:
         sw, sh = 0, 0
     if sw <= 0 or sh <= 0:
         sw, sh = 16, 9
-    scale = min(ESSAY_MAX_W * k / sw, ESSAY_MAX_H * k / sh)
+    cw, ch = canvas
+    max_w, max_h, top, band_h = ESSAY_MAX_W, ESSAY_MAX_H, ESSAY_TOP, ESSAY_BAND_H
+    if canvas != (WIDTH, HEIGHT):
+        max_w, max_h, top, band_h = cw * .82, ch * .44, ch * .10, ch * .44
+    scale = min(max_w * k / sw, max_h * k / sh)
     # Even dimensions: odd ones make the scaler and the encoder both unhappy.
     bw = max(2, int(round(sw * scale)) // 2 * 2)
     bh = max(2, int(round(sh * scale)) // 2 * 2)
-    return (bw, bh, (round(WIDTH * k) - bw) // 2,
-            round(ESSAY_TOP * k) + (round(ESSAY_BAND_H * k) - bh) // 2)
+    return (bw, bh, (round(cw * k) - bw) // 2,
+            round(top * k) + (round(band_h * k) - bh) // 2)
 
 
 def _essay_stage(source: str, accent: str, src: Path | None,
@@ -746,8 +784,9 @@ def _essay_stage(source: str, accent: str, src: Path | None,
     without it the source is a clip and every frame is staged as it arrives.
     """
     w, h = size
-    k = w / WIDTH
-    bw, bh, box_x, box_y = _essay_card(src, k)
+    canvas = (WIDTH, HEIGHT) if w * HEIGHT == h * WIDTH else ((1080, 1920) if h > w else (1080, 1080))
+    k = w / canvas[0]
+    bw, bh, box_x, box_y = _essay_card(src, k, canvas)
     border = max(1, round(ESSAY_BORDER * k))
     inner_w, inner_h = bw - 2 * border, bh - 2 * border
     return (
@@ -788,15 +827,6 @@ def _segment_graph(
     w, h = size
     essay = fmt == "essay" and not group[0][0].on_camera
     camera_captions = (group[0][0].kind or style.format) == "essay" and group[0][0].on_camera
-    if (essay or camera_captions) and w * HEIGHT != h * WIDTH:
-        # Essay pictures and captions share landscape coordinates. Keep that
-        # composition intact until T14.2b supplies native aspect layouts.
-        inputs, graph, last = _segment_graph(
-            project, group, seg_len, op, channel, chapter, (WIDTH, HEIGHT), fps,
-            dip_out, camera_index, last_line, hide, prepare_only=prepare_only)
-        graph += (f";{last}scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[aspect]")
-        return inputs, graph, "[aspect]"
     slide = group[0][0]
     # A full portrait/square graph must still read the original footage.
     src, kind, focal = _chosen(
@@ -818,11 +848,12 @@ def _segment_graph(
     # The type cards are drawn once at 1080p and cached for the real render;
     # a smaller frame scales them on the way in rather than drawing a second set.
     card_fit = "" if (w, h) == (WIDTH, HEIGHT) else f",scale={w}:{h}"
-    if w * HEIGHT != h * WIDTH:
-        # Until the native type layouts land in T14.2b, preserve every edge
-        # of landscape title/chapter plates instead of stretching their text.
-        card_fit = (f",scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                    f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black@0")
+    canvas = frame_size(project) if w * HEIGHT != h * WIDTH else (WIDTH, HEIGHT)
+    native = canvas != (WIDTH, HEIGHT)
+    card_args = {'canvas': canvas} if native else {}
+    suffix = f"_{canvas[0]}x{canvas[1]}" if native else ""
+    if native:
+        card_fit = "" if size == canvas else f",scale={w}:{h}"
 
     inputs: list[str] = []
     chain: list[str] = []
@@ -843,7 +874,7 @@ def _segment_graph(
         # border, over a blurred fill of itself. One source feeds both layers.
         if kind == "video":
             crop, _ = _cover_crop(src, w, h, focal)
-            clip_inputs, clip_graph = _clip_source(src, seg_len, crop, span)
+            clip_inputs, clip_graph = _clip_source(src, seg_len, crop if not native else "setsar=1", span)
             inputs += clip_inputs
             pre_graph = (f"{clip_graph};"
                          + _essay_stage("[base]", style.accent, src, size=size,
@@ -922,7 +953,7 @@ def _segment_graph(
 
     # Type over the picture. The documentary cut announces a chapter once per
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
-    if (essay or camera_captions) and style.captions_engine != 'pillow' and 'titles' not in hide:
+    if (essay or camera_captions) and not native and style.captions_engine != 'pillow' and 'titles' not in hide:
         plan, offset = [], 0.0
         lead = _lead_overlap(project, group[0][0]) / 2 + cuts.head_pad_for(project, group[0][0])
         for n, (member, dur) in enumerate(group):
@@ -945,11 +976,15 @@ def _segment_graph(
 
     offset = 0.0
     for n, (member, dur) in enumerate(group):
-        if "titles" in hide or ((essay or camera_captions) and style.captions_engine != "pillow"):
+        if "titles" in hide or ((essay or camera_captions) and not native and style.captions_engine != "pillow"):
             offset += dur
             continue
-        if essay:
-            chunks = titles.essay_chunks(member.narration)
+        if essay or (camera_captions and native):
+            phrase_plan = (_essay_phrases(project, member, dur, lead_in=_lead_overlap(project, group[0][0]) / 2
+                            + cuts.head_pad_for(project, group[0][0]),
+                            last_line=last_line and n == len(group) - 1)
+                           if native and style.captions_engine != 'pillow' else None)
+            chunks = [p['text'] for p in phrase_plan] if phrase_plan is not None else titles.essay_chunks(member.narration)
             # Across the spoken part only. `dur` carries the pause that follows
             # the paragraph, and a caption still on screen through a chapter
             # break reads as one that has been left up by mistake.
@@ -960,10 +995,10 @@ def _segment_graph(
             cap_offset = 0.0
             for c, text in enumerate(chunks):
                 card = (project_dir(project.id) / "titles"
-                        / f"{member.id}_cap{c:02d}.png")
-                titles.render_caption(text, accent=style.accent, out_path=card)
-                start = offset + cap_offset
-                end = min(seg_len - 0.05, start + shares[c])
+                        / f"{member.id}_cap{c:02d}{suffix}.png")
+                titles.render_caption(text, accent=style.accent, out_path=card, **card_args)
+                start = offset + (phrase_plan[c]['t0'] if phrase_plan is not None else cap_offset)
+                end = min(seg_len - 0.05, offset + phrase_plan[c]['t1'] if phrase_plan is not None else start + shares[c])
                 cap_offset += shares[c]
                 if end <= start + 0.25:
                     continue
@@ -983,9 +1018,9 @@ def _segment_graph(
         elif member.title:
             title_size = round(HEIGHT * (frame.title_height_pct_min
                                           + frame.title_height_pct_max) / 200 / 0.72)
-            card = project_dir(project.id) / "titles" / f"{member.id}_{title_size}.png"
+            card = project_dir(project.id) / "titles" / f"{member.id}_{title_size}{suffix}.png"
             titles.render_title(member.title, kicker=member.beat or "",
-                                accent=style.accent, out_path=card, size=title_size)
+                                accent=style.accent, out_path=card, size=title_size, **card_args)
             idx = n_inputs
             inputs += _still_input(card, fps)
             n_inputs += 1
@@ -1011,9 +1046,9 @@ def _segment_graph(
     if chapter and "chapters" not in hide:
         title, kicker = chapter
         card = (project_dir(project.id) / "titles"
-                / f"chapter_{_SAFE_NAME.sub('_', title)[:40]}.png")
+                / f"chapter_{_SAFE_NAME.sub('_', title)[:40]}{suffix}.png")
         titles.render_chapter(title, kicker=kicker, accent=style.accent,
-                              out_path=card)
+                              out_path=card, **card_args)
         # Timed off the actual silence rather than a share of the segment, so
         # the card comes up as the voice stops instead of over its last words.
         gap = audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP)
@@ -1052,6 +1087,17 @@ def _overlay_tail(out: Path, card: Path, start: float, *, crf=18, threads=0):
 
 def _chapter_tail(project, out, chapter, seg_len, hold, size, fps, crf, threads, channel):
     if chapter and seg_len > hold + 0.2:
+        if size[0] * HEIGHT != size[1] * WIDTH:
+            with tempfile.TemporaryDirectory(dir=out.parent, prefix='native-chapter-') as work:
+                png = Path(work) / 'chapter.png'
+                clip = Path(work) / 'chapter.mp4'
+                titles.render_chapter(chapter[0], chapter[1], project.style.accent,
+                                      png, canvas=frame_size(project))
+                ffutil.run(['-loop', '1', '-i', str(png), '-vf', f'scale={size[0]}:{size[1]}',
+                            '-t', str(hold), '-r', str(fps), *ffutil.video_args(clip, crf=crf),
+                            '-pix_fmt', 'yuv420p', '-an', str(clip)], threads=threads)
+                _overlay_tail(out, clip, seg_len - hold, crf=crf, threads=threads)
+            return out
         ctx = scenes.context_base(project, channel)
         ctx['vars'].update(title=chapter[0], kicker=chapter[1])
         from . import scene_builder
@@ -1094,6 +1140,13 @@ def _render_segment(
     """
     size = size if size is not None else frame_size(project)
     fmt = kinds.kind_for(project, group[0][0])
+    if size[0] * HEIGHT != size[1] * WIDTH and layout_fallback(project, group[0][0]):
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='aspect-base-') as work:
+            base = Path(work) / 'base.mp4'
+            _render_segment(project, group, seg_len, index, base, channel, chapter,
+                threads, (WIDTH, HEIGHT), fps, crf, preset, dip_out=dip_out,
+                op=op, camera_index=camera_index, last_line=last_line, hide=hide, frames=frames)
+            return _fit_clip(base, out, size, fps, crf)
     if "chapters" in hide:
         chapter = None
     style = project.style
@@ -1112,7 +1165,6 @@ def _render_segment(
             and ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt)
                  or fmt.startswith('custom:'))):
         from copy import deepcopy
-        import tempfile
         from .block_overlays import compose, run_graph
         # These base renderers own their graphs. Reuse them, then composite graphics.
         base_group = [(deepcopy(s), d) for s, d in group]
@@ -1145,7 +1197,8 @@ def _render_segment(
         ctx = scenes.context_base(project, channel)
         ctx.update(narration=slide.narration, take=slide.take, research=project.research)
         template, ctx = blocks.prepare(cue['block'], cue['vars'],
-            '9:16' if project.aspect == 'portrait' else '16:9', seg_len, context=ctx, _block=block)
+            ('16:9' if size[0] * HEIGHT == size[1] * WIDTH else
+             '9:16' if size[1] > size[0] else '1:1'), seg_len, context=ctx, _block=block)
         scene_builder.render(project_dir(project.id), template, ctx, out,
                              seconds=seg_len, size=size, fps=fps, crf=crf, frames=frames)
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
@@ -1182,7 +1235,7 @@ def _render_segment(
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
     from . import stage
-    scene_chapter = bool(chapter and style.chapter_engine == "scene" and stage.browser())
+    scene_chapter = bool(chapter and style.chapter_engine == "scene" and size[0] * HEIGHT == size[1] * WIDTH and stage.browser())
     inputs, graph, last = _segment_graph(
         project, group, seg_len, op, channel, None if scene_chapter else chapter, size, fps, dip_out,
         camera_index, last_line, hide)
@@ -1192,7 +1245,6 @@ def _render_segment(
             *ffutil.video_args(out, crf=crf, preset=preset),
             "-pix_fmt", "yuv420p", "-an", str(out)]
     if any(s.overlays for s, _ in group):
-        import tempfile
         with tempfile.TemporaryDirectory(dir=out.parent, prefix='overlay-graph-') as work:
             script = Path(work) / 'graph.ffgraph'
             script.write_text(graph)
@@ -1305,7 +1357,13 @@ def _build_intro(project: Project, progress: Progress,
         # A standalone slate already carries the video's title as its name;
         # passing it again would set the same words twice on one card.
         title = "" if solo else (project.title or "")
-        length = intro_mod.render_intro(channel, title, out, progress)
+        if frame_size(project) == (WIDTH, HEIGHT):
+            length = intro_mod.render_intro(channel, title, out, progress)
+        else:
+            with tempfile.TemporaryDirectory(dir=out.parent, prefix='aspect-slate-') as work:
+                base = Path(work) / 'intro.mp4'
+                length = intro_mod.render_intro(channel, title, base, progress)
+                _fit_clip(base, out, frame_size(project))
     except Exception as exc:
         # A broken slate must not cost the creator a whole render.
         progress(f"Intro slate failed ({str(exc)[:100]}); rendering without it")
@@ -1439,7 +1497,6 @@ def _camera_segment(project, group, seg_len, out, size, fps, *, channel=None,
     # only draws static cards once; the moving picture stays entirely in ffmpeg.
     inputs, graph, last = _segment_graph(project, group, seg_len, "set", channel,
                                         chapter, size, fps, last_line=last_line, hide=hide)
-    import tempfile
     with tempfile.TemporaryDirectory(prefix='camera-graph-', dir=out.parent) as work:
         script = Path(work) / 'graph.txt'
         script.write_text(graph)
@@ -1463,7 +1520,7 @@ def _render_presenter(project: Project, seg_len: float, out: Path) -> Path:
     pres = project.presenter
     src = project_dir(project.id) / pres.path
     style = project.style
-    chain = _camera_look(style, pres.focal or None, (WIDTH, HEIGHT), src, FPS)
+    chain = _camera_look(style, pres.focal or None, frame_size(project), src, FPS)
 
     ffutil.run([
         "-ss", f"{max(0.0, pres.trim_start):.3f}", "-i", str(src),
@@ -1529,8 +1586,13 @@ def _build_outro(project: Project, progress: Progress,
 
     out = out or project_dir(project.id) / "segments" / "outro.mp4"
     try:
-        length = outro_mod.render_outro(channel, project.title or "", out,
-                                        backdrop, progress)
+        if frame_size(project) == (WIDTH, HEIGHT):
+            length = outro_mod.render_outro(channel, project.title or "", out, backdrop, progress)
+        else:
+            with tempfile.TemporaryDirectory(dir=out.parent, prefix='aspect-slate-') as work:
+                base = Path(work) / 'outro.mp4'
+                length = outro_mod.render_outro(channel, project.title or "", base, backdrop, progress)
+                _fit_clip(base, out, frame_size(project))
     except Exception as exc:
         # A broken end screen must not cost the creator a whole render.
         progress(f"End screen failed ({str(exc)[:100]}); rendering without it")
@@ -1851,6 +1913,8 @@ def _segment_key(project, group, settings) -> str:
             {k: v for k, v in settings.items() if k != "channel"}, graph,
             ffutil.video_args("segment.mp4", crf=settings["crf"], preset=settings["preset"]),
             ffutil.h264("segment.mp4", crf=settings["crf"], preset=settings["preset"])]
+    if project.aspect in {'portrait', 'square'}:
+        spec.append(['aspect-layout-v1', frame_size(project)])
     return hashlib.sha1(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -1999,7 +2063,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # scene's models load once; the segments then cut them in like clips.
     if "stage" in kinds.kinds_in(project):
         _stage_clips(project, groups, [seg_lens[i + slide_at] for i in range(len(groups))],
-                     (WIDTH, HEIGHT), FPS, progress, preview)
+                     frame_size(project), FPS, progress, preview)
 
     # ------------------------------------------------------------ narration
     narration = root / "out" / "narration.wav"
@@ -2044,7 +2108,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         chapter = (chapter_card(project, groups[i + 1][0][0])
                    if i + 1 < len(groups) else None)
         opts = dict(seg_len=seg_lens[i + slide_at], channel=seg_channel,
-                    chapter=chapter, threads=seg_threads, size=(WIDTH, HEIGHT), fps=FPS,
+                    chapter=chapter, threads=seg_threads, size=frame_size(project), fps=FPS,
                     crf=18, preset="veryfast", dip_out=_dips_into(groups, i + 1),
                     op=ops[i], camera_index=i, last_line=i == len(groups) - 1,
                     index=i + slide_at,
@@ -2134,8 +2198,14 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
             ctx["vars"] = {**ctx["vars"], **slot.vars}
             sponsor_T = _overlaps(project, groups)[gi + 1]
             ctx.update(script=slot.script, variant=slot.variant, take=slot.take, word_offset=sponsor_T / 2)
+            if frame_size(project) != (WIDTH, HEIGHT):
+                ctx = scenes._template_context(slot.template, ctx)
             clip = scenes.ensure_clip(project, slot.template, ctx,
-                                      seconds=seconds + sponsor_T, size=(WIDTH, HEIGHT), fps=FPS)
+                                      seconds=seconds + sponsor_T, size=(ctx["width"], ctx["height"]), fps=FPS)
+            if frame_size(project) != (WIDTH, HEIGHT):
+                fitted = seg_dir / f'sponsor_{slot.id}_{project.aspect}.mp4'
+                _fit_clip(clip, fitted, frame_size(project))
+                clip = fitted
             sponsor_indices.add(len(seg_paths))
             sponsor_entries.append((slot, start))
             seg_paths.append(clip)
@@ -2757,7 +2827,7 @@ def _slate_key(project: Project, kind: str) -> str:
               channel.frame.to_dict()]
              if channel else None)
     blob = json.dumps([PROXY_VERSION, scenes.SCENE_VERSION, kind, project.title,
-                       parts, extra, list(preview_size()), PREVIEW_FPS],
+                       parts, extra, list(preview_size(project)), PREVIEW_FPS],
                       default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -2820,7 +2890,7 @@ def _build_slate_proxy(project: Project, kind: str, progress: Progress) -> dict:
         raise ValueError("There is nothing to draw there: the "
                          + ("slate" if kind == "intro" else "end card")
                          + " cannot be made for this video.")
-    w, h = preview_size()
+    w, h = preview_size(project)
     ffutil.run(["-i", str(full), "-vf", f"scale={w}:{h},fps={PREVIEW_FPS}", "-an",
                 *ffutil.video_args(out, crf=PREVIEW_CRF), "-pix_fmt", "yuv420p", str(out)])
     full.unlink(missing_ok=True)
@@ -2852,7 +2922,6 @@ def _sponsor_preview(project, slot):
 
 
 def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
-    import tempfile
     from . import scene_builder, sponsors
     slot = next((s for s in project.sponsors if s.id == slot_id), None)
     if slot is None:
