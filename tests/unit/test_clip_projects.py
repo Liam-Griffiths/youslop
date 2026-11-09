@@ -90,10 +90,12 @@ def test_section_graph_has_original_audio_hard_video_cut_and_crossfade(clip_proj
     assert 'acrossfade=d=0.066667' in graph
     assert 'loudnorm=I=-14' in graph and 'crop=270:480' in graph
     assert seconds == 3
-    with pytest.raises(ValueError,match='full rendering is not available'):
-        render.render(project)
-    with pytest.raises(ValueError,match='timeline is not available'):
-        render.timeline(project)
+    timeline = render.timeline(project)
+    assert timeline['total'] == 6
+    assert [s['duration'] for s in timeline['segments']] == [3,3]
+    assert all(s['skip'] == 0 for s in timeline['segments'])
+    assert timeline['segments'][0]['paragraphs'][0]['word_times'][1]['w'] == 'world.'
+    assert timeline['mix']['audible']
 
 
 def test_preview_routes_through_source_graph(clip_project,monkeypatch):
@@ -123,3 +125,68 @@ def test_api_factory_and_locked_patch(clip_project):
     with pytest.raises(HTTPException) as exc:
         main.clip_project_edit(project.id,dict(in_s=1.5))
     assert exc.value.status_code == 400
+
+
+def test_source_types_tiny_spans_eof_and_music(clip_project, monkeypatch):
+    from app import clip_render
+    project, path = clip_project
+    monkeypatch.setattr(render.ffutil, 'dimensions', lambda p: (1920,1080))
+    project.clip.update(in_s=9.9, out_s=10, cuts=[[9.91,9.99]])
+    project.slides[0].candidates[0].update(in_s=9.9,out_s=10)
+    project.slides = project.slides[:1]
+    inputs, graph, seconds = clip_render.graph(project)
+    assert seconds == pytest.approx(.02)
+    assert 'acrossfade=d=0.010000' in graph
+    assert 'end=10.000000' in graph and 'apad=whole_dur=0.020000' in graph
+    shoot = footage.load('shoot')
+    shoot.files[0].audio = []
+    footage._save(shoot)
+    _, graph, _ = clip_render.graph(project)
+    assert 'anullsrc' in graph and '[0:a]' not in graph
+    shoot.files[0].kind = 'audio'
+    footage._save(shoot)
+    _, graph, _ = clip_render.graph(project)
+    assert 'color=c=black:s=270x480' in graph and '[0:v]' not in graph
+    assert '[0:a]atrim=' in graph
+    monkeypatch.setattr(render,'pick_music',lambda p: path)
+    inputs, graph, _ = clip_render.graph(project, sound_only=True)
+    assert inputs[-4:] == ['-stream_loop','-1','-i',str(path)]
+    assert '[1:a]' in graph and 'volume=-17.5dB' in graph and '[vout]' not in graph
+    assert clip_render.graph(project, sound_only=True, hide={'music'})[0] == ['-i',str(path)]
+
+
+def test_cache_dispatch_and_clip_check_without_encoding(clip_project, monkeypatch):
+    from pathlib import Path
+    from app import block_overlays, check, clip_render
+    from app.stages import render_signature, stages
+    project, source = clip_project
+    monkeypatch.setattr(render.ffutil,'dimensions',lambda p:(1920,1080))
+    calls = []
+    def fake(args):
+        calls.append(args)
+        Path(args[-1]).write_bytes(b'encoded')
+    monkeypatch.setattr(block_overlays, 'run_graph', fake)
+    assert check.run(project)['ok']
+    first = render.proxy_segment(project,0)
+    render.proxy_segment(project,0)
+    assert len(calls) == 1 and first['seconds'] == 4
+    assert render.timeline(project)['segments'][0]['ready']
+    old = render_signature(project)
+    project.clip['reframes'][project.slides[0].id] = 'left third'
+    assert render_signature(project) != old
+    assert not render.timeline(project)['segments'][0]['ready']
+    render.build_mix(project)
+    assert render.timeline(project)['mix']['ready']
+    result = render.render(project)  # encoder mocked; never a full render
+    assert result['duration'] == 7 and result['output'] == 'out/clip-final.mp4'
+    assert [s['id'] for s in stages(project, {})] == ['clip','edit','publish']
+    before = clip_render.key(project)
+    project.style.block_theme = {'accent': '#ffffff'}
+    assert clip_render.key(project) != before
+    project.style.block_theme = {}
+    stamp = source.stat().st_mtime_ns
+    source.touch()
+    assert clip_render.key(project) != before
+    # Restore the fixture's recorded timestamp after the deliberate cache test.
+    import os
+    os.utime(source, ns=(source.stat().st_atime_ns, stamp))

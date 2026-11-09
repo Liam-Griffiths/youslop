@@ -3576,9 +3576,9 @@ def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
         # and saves; the drawing itself does not, and edits stay possible.
         with store.lock_for(pid):
             p = store.load(pid)
-            groups = render._groups_for_preview(p)
+            groups = [[(s, 0)] for s in p.slides] if p.kind == 'clip' else render._groups_for_preview(p)
             leads = [groups[int(r)][0][0] for r in refs if r.isdigit() and int(r) < len(groups)]
-            if leads and render.media.download_chosen(p, progress, only=leads):
+            if p.kind != 'clip' and leads and render.media.download_chosen(p, progress, only=leads):
                 progress("Some pictures could not be downloaded; those play as graded slates")
             store.save(p)
         lock = _PROXY_LOCKS.setdefault(pid, threading.Lock())

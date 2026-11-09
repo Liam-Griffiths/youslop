@@ -23,6 +23,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-08 (afternoon):** owner rethink of video styles around blocks. Decisions: mix kinds of picture within a video; "Design a style" becomes "Design a block"; block themes per channel or standalone video, with previews; more blocks (inspired by the HyperFrames registry, clean-room); fix the block preview (doesn't play in the app window: H.264 previews, no expand). Queue: T12.11, T12.12a, T12.12b, T13.1, T13.2, T13.3, T13.4, T12.13 batches A–E. T13.5 later.
 > **2026-11-08 (evening):** owner asked for clipping of long recordings (podcasts, streams) into short-form clips: Phase 14 (T14.1–T14.6), queued after T12.13. Speech-to-text: support any installed engine (decided same evening).
 > **2026-11-08 (night):** owner asked for first-class local models (no frontier model needed). LM Studio backend landed in f2cef05; live runs on Granite 4.1 8B and Qwen 3.5 9B produced Phase 16 (T16.1–T16.5) and a step in T15.2. T16.3 done. Queue: T16.1, T16.2, T16.4, T16.5, then T12.13 C–E, Phase 14, T15.1/T15.2. Codex 5-hour reset, weekly 33%.
+> **2026-11-09 (paused by the owner):** since the last note: T14.2c (+ timeline follow-up), T14.3, T14.4, T14.4b done. New: Phase 17 (timeline editing, owner priority T17.4 section select-and-move) and Phase 18 (natural script voice). Resume order: T14.4c, T14.5, T14.6, T15.1/T15.2, then T18.1 (small, high value), T17.1, T17.7, T17.2, T17.4, T17.3, T17.5, T17.6, T18.2. Workflow: Claude manages and reviews; Codex implements and does review fixes (follow-up runs). Codex at about 40% of its 5-hour window, ~52% weekly.
+
 > **2026-11-08 (late night):** since the Phase 16 note: T16.1–T16.5, T12.13 batches C–E (block set v2 complete, 40 blocks), speech-to-text T14.1–T14.1e, T14.2 and T14.2b (portrait/square render; 9:16 checked, 1:1 overlay fallback in T14.2c). Codex 5-hour window 86% (weekly 46%): paused until it resets (~2¼ h), then T14.2c, T14.3–T14.6, T15.1/T15.2. Reviewer still owes: a real speech-to-text engine run (none installed), block motion in the player.
 > Owner checks collected per row below.
 
@@ -238,7 +240,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | done | 2026-11-09 Codex + review; ranking runs as a job on any writing model; project handoff and long-recording polish in T14.3b |
 | T14.3b | Clip finder: project handoff and long-recording polish | M | T14.3, T14.4 | todo | Make clips → linked projects; virtual scrolling; auto-refine after STT; envelope as a job |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | done | 2026-11-09 Codex + review; foundations (source-linked projects, word trims, crop presets, section preview); studio and render in T14.4b |
-| T14.4b | Clip studio, hook graphics and full render | L | T14.4 | doing | Clip/Edit/Publish UI, Timeline, hook overlay, eased reframes, music, full render |
+| T14.4b | Clip studio, hook graphics and full render | L | T14.4 | done | 2026-11-09 Codex + review (one follow-up run for snapshot findings); Clip/Edit/Publish, trims, crops, music, explicit render; graphics and reframing in T14.4c |
+| T14.4c | Clip graphics and reframing | M | T14.4b | todo | hook overlay, eased crop keyframes, two-speaker layout, complete publishing |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
 | T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
 

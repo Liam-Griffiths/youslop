@@ -23,6 +23,8 @@ def render_signature(project: Project) -> str:
         elif isinstance(value, list):
             value = [asdict(v) if hasattr(v, '__dataclass_fields__') else v for v in value]
         data[name] = value
+    if project.kind == 'clip':
+        data['clip'] = project.clip
     data['slides'] = [{k: getattr(s, k) for k in s.__dataclass_fields__
                        if k not in {'takes', 'history', 'queries', 'locked_media'}}
                       for s in project.slides]
@@ -96,6 +98,12 @@ def stages(project: Project, check_result: dict) -> list[dict]:
     Uses active `slide.take` (including legacy takes), never retired or
     inactive voices. No filesystem access, mutation or expensive operations.
     """
+    if project.kind == 'clip':
+        fresh = project.render.get('stage_signature') == render_signature(project)
+        return [dict(id=k, label=label, status=status, reason=reason, next=onward) for k,label,status,reason,onward in [
+            ('clip','Clip','ready','Original source linked','Edit the cut'),
+            ('edit','Edit','ready','Source ranges; no narration takes','Review the cut'),
+            ('publish','Publish','ready' if fresh else 'todo','Rendered' if fresh else 'Not rendered','Render the clip')]]
     slides = project.slides
     total = len(slides)
     written = sum(bool(s.narration.strip()) for s in slides)
@@ -157,6 +165,8 @@ def stages(project: Project, check_result: dict) -> list[dict]:
 def home_summary(project: Project) -> dict:
     """Next useful stage, using the same cheap readiness as the stage bar."""
     rows = stages(project, readiness_check(project))
+    if project.kind == 'clip':
+        return rows[-1] if project.render.get('output') else rows[0]
     # Imported scripts can be complete without an outline.
     if project.render.get('output'):
         return rows[-1]

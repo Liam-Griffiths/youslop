@@ -58,6 +58,9 @@ function tlInspector() {
   $('#tl-ask').onclick = tlAsk;
   $('#tl-kind').onchange = (e) => e.target.value ? tlSelectKind(e.target.value) : tlSelect(null);
   const body = $('#tl-fields');
+  if (p.kind === 'clip' && sel && sel.kind !== 'music') {
+    body.innerHTML = `<p>Original source range · ${tlClock(sel.t0)}–${tlClock(sel.t1)}</p><a class="btn" href="#/p/${p.id}/clip">Trim or reframe in Clip</a>`; return;
+  }
   if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
   if (sel.kind === 'overlay') { tlGraphicInspector(sel, body); return; }
   if (sel.kind === 'sponsor') {
@@ -416,6 +419,7 @@ function tlRazorTarget() {
 
 let tlSplitting = false;
 async function tlSplitHere() {
+  if (state.project?.kind === 'clip') { location.hash = `#/p/${state.project.id}/clip`; return; }
   if (tlSplitting) return;
   const {t, para} = tlRazorTarget();
   if (!para) { tlMsg('Place the playhead inside a paragraph.'); return; }

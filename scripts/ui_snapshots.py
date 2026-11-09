@@ -36,6 +36,8 @@ def routes():
         tabs += ('visuals/media', 'publish/render', 'publish/thumb')
         result.extend(f'#/p/psnap{fmt}/{tab}' for tab in tabs)
     result.extend(['#/p/psnapmixed/visuals', '#/p/psnapmixed/edit'])
+    result.extend(f'#/p/{pid}/{tab}' for pid in ('psnapclip','psnapmanual')
+                  for tab in ('clip','edit','publish','plan','script','voice'))
     return result
 
 
@@ -117,6 +119,17 @@ def seed():
     doc = dict(coverage=[[0, 2]], words=[dict(w='Helo.', start=.5, end=1.25, src='stt')], overrides=[])
     transcripts._rebuild(doc)
     transcripts._write(transcripts._path('saudio', 'a1'), doc)
+    # Linked clip screens, with words and without a transcript. No clip renders.
+    from app import clip_projects
+    p = clip_projects.create('saudio', 'a1clip', {})
+    p.id = 'psnapclip'
+    store.save(p)
+    manual = footage.Shoot('smanual', files=[footage.SourceFile('m1', str(audio), kind='audio', duration=4)],
+                           clips=[footage.Clip('mclip','m1',0,4)])
+    footage._save(manual)
+    p = clip_projects.create('smanual', 'mclip', {})
+    p.id = 'psnapmanual'
+    store.save(p)
     settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures',
         style=Style(block_theme={'accent':'#3DFFDC'}),
@@ -381,7 +394,37 @@ def capture(base, out):
                   return true;
                 })()""")
             if route.endswith('/publish'):
-                _evaluate(cdp, session, "if (document.querySelector('.style-picker') || !document.querySelector('#tabbody').textContent.includes('Change in Visuals')) throw Error('Publish style summary missing'); true")
+                _evaluate(cdp, session, """(() => {
+                  const body = document.querySelector('#tabbody');
+                  if (state.project.kind === 'clip') {
+                    const panel = body.querySelector('#clip-publish');
+                    if (!panel || !panel.textContent.includes('Source range:') ||
+                        !panel.querySelector('#clip-render') ||
+                        !panel.querySelector(`a[href="#/p/${state.project.id}/edit"]`) ||
+                        body.querySelector('a[href*="/visuals"]'))
+                      throw Error('Clip Publish controls missing or link to skipped Visuals stage');
+                  } else if (document.querySelector('.style-picker') || !body.textContent.includes('Change in Visuals')) {
+                    throw Error('Publish style summary missing');
+                  }
+                  return true;
+                })()""")
+            if route.endswith('/clip'):
+                _evaluate(cdp, session, """(() => {
+                  const panel = document.querySelector('#clip-controls');
+                  if (!panel || document.querySelector('.project-tools') ||
+                      !panel.querySelector('button[onclick="saveProjectFile()"]'))
+                    throw Error('Clip header has an extra tools band or lost project export');
+                  if (getComputedStyle(panel.querySelector('h2')).marginTop !== '0px')
+                    throw Error('Clip heading has excess top spacing');
+                  if (!document.querySelector('.project-meta').textContent.includes(' · Clip · '))
+                    throw Error('Clip project kind missing from shell');
+                  for (const slide of state.project.slides) {
+                    const text = document.querySelector(`[data-clip-paragraph="${slide.id}"] p`).textContent;
+                    if (text !== (slide.narration || 'No words in this range'))
+                      throw Error('Clip paragraph transcript or empty-range label missing');
+                  }
+                  return true;
+                })()""")
             if route == '#/p/psnapkenburns/visuals':
                 _evaluate(cdp, session, """(async () => {
                   const before = JSON.stringify(await api('/api/projects/psnapkenburns'));

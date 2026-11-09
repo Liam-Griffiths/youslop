@@ -186,6 +186,16 @@ def render(pid, payload, progress):
         blocked = render_check(p, payload)
         if blocked:
             return blocked
+    if p.kind == 'clip':
+        result = (renderer.preview_segment(p, section, progress) if section else
+                  renderer.render(p, progress, preview=bool(payload.get('preview'))))
+        if not section:
+            with store.lock_for(pid):
+                latest = store.load(pid)
+                latest.render = result
+                latest.status = p.status
+                store.save(latest)
+        return result
     with store.lock_for(pid):
         p = store.load(pid)
         if section:

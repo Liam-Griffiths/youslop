@@ -3,6 +3,7 @@ const STAGES = [
   ['plan', 'Plan'], ['script', 'Script'], ['voice', 'Voice'],
   ['visuals', 'Visuals'], ['edit', 'Edit'], ['publish', 'Review & publish'],
 ];
+const projectStages = p => p?.kind === 'clip' ? [['clip','Clip'],['edit','Edit'],['publish','Publish']] : STAGES;
 const LEGACY_STAGES = {media: 'visuals/media', cast: 'visuals/cast', stage: 'visuals/stage',
   record: 'voice', render: 'edit', thumb: 'publish/thumb'};
 
@@ -11,12 +12,12 @@ function canonicalHash(hash) {
   if (hash.startsWith('#/c/')) return hash.replace('#/c/', '#/channels/');
   const p = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?$/);
   if (!p) return hash;
-  const stage = LEGACY_STAGES[p[2]] || (STAGES.some(([id]) => id === p[2]) ? p[2] : 'plan');
+  const stage = LEGACY_STAGES[p[2]] || ([...STAGES, ['clip']].some(([id]) => id === p[2]) ? p[2] : 'plan');
   return `#/p/${p[1]}/${stage}`;
 }
 
 function stageTab(stage, subtab) {
-  return {plan: 'plan', script: 'script', voice: 'record',
+  return {clip: 'clip', plan: 'plan', script: 'script', voice: 'record',
     visuals: ['media', 'cast', 'stage'].includes(subtab) ? subtab : 'media',
     edit: 'edit', publish: 'render'}[stage] || 'script';
 }
@@ -68,10 +69,11 @@ function paintProjectShell() {
   $('#app-nav').hidden = true;
   const bar = $('#project-bar');
   bar.hidden = false;
-  const i = STAGES.findIndex(([id]) => id === state.stage);
-  const next = STAGES[i + 1];
+  const stages = projectStages(p);
+  const i = stages.findIndex(([id]) => id === state.stage);
+  const next = stages[i + 1];
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
-  const format = FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
+  const format = p.kind === 'clip' ? 'Clip' : FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
     <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</span>
     ${state.stage === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
@@ -88,7 +90,7 @@ function paintStageBar() {
   const bar = $('#stage-bar');
   bar.hidden = false;
   const stages = state.stageStates?.pid === p.id ? state.stageStates.items : [];
-  bar.innerHTML = STAGES.map(([id, label], i) => {
+  bar.innerHTML = projectStages(p).map(([id, label], i) => {
     const info = stages.find(s => (s.id || s.stage || s.key) === id);
     const active = id === state.stage;
     return `<a class="stage-link ${active ? 'active' : ''} ${info?.status === 'ready' ? 'done' : info?.status === 'warn' ? 'warn' : ''}"

@@ -437,6 +437,9 @@ async function render() {
   const p = state.project;
   if (!p) return;
   state.stage = state.stage || 'plan';
+  if (p.kind === 'clip' && !['clip','edit','publish'].includes(state.stage)) {
+    location.replace(`#/p/${p.id}/clip`); return;
+  }
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = state.stage === 'visuals'
     ? [['media', 'Picture picker'], ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
@@ -446,20 +449,20 @@ async function render() {
   restoreShellInspector();
   paintProjectShell();
   view.innerHTML = `
-    <div class="row project-tools">
+    ${state.stage !== 'clip' ? `<div class="row project-tools">
       <span class="sub">${esc(p.subtitle || p.outline.thesis || '')}</span>
       <div class="spacer"></div>
       <button class="btn ghost sm" onclick="saveProjectFile()"
         title="everything in this video as one file, to open on another computer">save project file…</button>
-    </div>
+    </div>` : ''}
     ${tabs.length > 1 && (state.stage !== 'visuals' || state.tab !== 'media') ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
       ${tabs.map(([id, label]) => `<a class="tab ${state.tab === id ? 'active' : ''}"
         ${state.tab === id ? 'aria-current="page"' : ''}
         href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}
     </nav>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
-    record: paintRecord, thumb: paintThumb, render: paintRender, edit: paintEdit }[state.tab] || paintScript)();
+  await ({ clip: paintClip, plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+    record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
   if (state.stage !== 'edit' && typeof tlPause === 'function') tlPause();
   focusPendingSlide();
@@ -642,11 +645,11 @@ async function previewBit(sid) {
 function playSegmentPreview(seg) {
   const p = state.project;
   openVideoModal(
-    `<strong>Picture ${seg.picture} of ${seg.pictures}</strong>
+    `<strong>${p.kind === 'clip' ? 'Clip section' : `Picture ${seg.picture} of ${seg.pictures}`}</strong>
      <span class="mono" style="color:var(--ink-faint)">
        ${seg.paragraphs} paragraph${seg.paragraphs > 1 ? 's' : ''} ·
        ${fmtTime(seg.seconds)} · rough ${seg.width}×${seg.height} at
-       ${seg.fps}fps — the cut itself renders at 1920×1080</span>`,
+       ${seg.fps}fps — ${p.kind === 'clip' ? "the cut uses the project's frame size" : 'the cut itself renders at 1920×1080'}</span>`,
     videoTag(`/api/projects/${p.id}/file/${seg.path}?v=${seg.rendered_at}`,
              { scope: 'project', id: p.id, rel: seg.path },
              'controls autoplay playsinline'));

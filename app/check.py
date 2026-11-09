@@ -568,6 +568,19 @@ def script(project) -> dict:
 
 
 def run(project, measure=False) -> dict:
+    if project.kind == 'clip':
+        from .clip_projects import source, ranges
+        findings = []
+        try:
+            source(project)
+            if not ranges(project):
+                raise ValueError('No remaining source range')
+            if any(s.overlays for s in project.slides):
+                raise ValueError('Clip graphics require T14.4c')
+        except (ValueError, FileNotFoundError) as exc:
+            findings.append(_finding('clip_source', 'P0', 0, '', str(exc)))
+        counts = {level: sum(f.level == level for f in findings) for level in ('P0','P1','P2')}
+        return dict(ok=not counts['P0'], counts=counts, findings=[f.to_dict() for f in findings])
     from .learning import effective_frame
     frame = effective_frame(project)
     sb = storyboard.build(project)

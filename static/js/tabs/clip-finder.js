@@ -95,7 +95,12 @@ async function renderClipFinder(sid, fid) {
     };
     $('#cf-whole').onclick=()=>transcribe(null); $('#cf-refresh').onclick=()=>renderClipFinder(sid,fid);
     const clips=shoot.clips.filter(c=>c.file===fid && c.finder);
-    $('#cf-clips').innerHTML=clips.map((c,i)=>`<div class="panel"><b>${esc(c.title)}</b><p class="mono">${c.in_s.toFixed(2)}–${c.out_s.toFixed(2)} s · ${(c.out_s-c.in_s).toFixed(2)} s</p><button class="btn" data-play="${i}">Select range</button><button class="btn" data-stt="${i}">Transcribe this clip</button><button class="btn" data-refine="${i}">Refine to words</button></div>`).join('') || '<p>No named clips yet. Mark in and out, then save a clip.</p>';
+    $('#cf-clips').innerHTML=clips.map((c,i)=>`<div class="panel"><b>${esc(c.title)}</b><p class="mono">${c.in_s.toFixed(2)}–${c.out_s.toFixed(2)} s · ${(c.out_s-c.in_s).toFixed(2)} s</p><button class="btn" data-project="${i}">Make clip</button><button class="btn" data-play="${i}">Select range</button><button class="btn" data-stt="${i}">Transcribe this clip</button><button class="btn" data-refine="${i}">Refine to words</button></div>`).join('') || '<p>No named clips yet. Mark in and out, then save a clip.</p>';
+    host.querySelectorAll('[data-project]').forEach(el=>el.onclick=async()=>{
+      el.disabled=true;
+      try { const p=await api(`${base}/clips/${clips[el.dataset.project].id}/project`,{method:'POST',body:'{}'});location.hash=`#/p/${p.id}/clip`; }
+      catch(error){toast(error.message,true);el.disabled=false;}
+    });
     host.querySelectorAll('[data-play]').forEach(el=>el.onclick=()=>{const c=clips[el.dataset.play];selection(c.in_s,c.out_s);player.currentTime=c.in_s;});
     host.querySelectorAll('[data-stt]').forEach(el=>el.onclick=()=>transcribe(clips[el.dataset.stt]));
     host.querySelectorAll('[data-refine]').forEach(el=>el.onclick=async()=>{try{const c=clips[el.dataset.refine];await save({in_s:c.in_s,out_s:c.out_s,refine:c.id});}catch(e){toast(e.message,true);}});

@@ -1955,7 +1955,8 @@ def render(project: Project, progress: Progress = lambda m: None,
 def _render(project: Project, progress: Progress, preview: bool) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
     if project.kind == 'clip':
-        raise ValueError('Clip full rendering is not available yet; preview a section')
+        from .clip_render import full_render
+        return full_render(project, progress, preview)
     from .learning import resolve_choices
     resolve_choices(project)
     _memory_check(progress)
@@ -2804,6 +2805,9 @@ def proxy_segment(project: Project, index: int,
     """The same small render, kept: the timeline plays these back to back, so
     one that is still right for the current script is reused rather than drawn
     again."""
+    if project.kind == 'clip':
+        from .clip_render import proxy
+        return proxy(project, index, progress, hide)
     from .learning import resolve_choices
     resolve_choices(project)
     groups = _groups_for_preview(project)
@@ -3104,6 +3108,9 @@ def build_mix(project: Project, progress: Progress = lambda m: None, *,
     however long the video is; the player uses it as the clock and plays the
     picture proxies silently against it.
     """
+    if project.kind == 'clip':
+        from .clip_render import mix
+        return mix(project, progress, hide)
     lay = _layout(project)
     state = _mix_state(project, lay, hide)
     if not state["audible"]:
@@ -3170,7 +3177,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
     yet drawn uses the length it was asked for.
     """
     if project.kind == 'clip':
-        raise ValueError('The clip timeline is not available yet; preview a section')
+        from .clip_render import timeline as clip_timeline
+        return clip_timeline(project, hide)
     from . import channels as channels_mod
     lay = _layout(project)
     groups, T = lay["groups"], lay["T"]

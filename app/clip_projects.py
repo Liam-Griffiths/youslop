@@ -1,7 +1,7 @@
 """Clip project foundations. All times are absolute seconds in the original.
 
 Source audio is never a take. Section previews read the original directly;
-whole-cut studio integration is tracked in T14.4b.
+Playback and encoding share the source-range graph in clip_render.
 """
 from copy import deepcopy
 import uuid
@@ -100,7 +100,8 @@ def update(project, payload):
         if x not in starts or y not in ends or list(transcripts._gaps(x, y, doc['coverage'])):
             raise ValueError('Select a covered word range')
     if 'in_s' in payload or 'out_s' in payload:
-        word_range(a, b)
+        if doc['words']:
+            word_range(a, b)
     cuts = payload.get('cuts', meta['cuts'])
     if not isinstance(cuts, list) or len(cuts) > 100:
         raise ValueError('Use at most 100 cut ranges')
@@ -126,57 +127,19 @@ def update(project, payload):
 
 def section_graph(project, slide_id):
     """Quarter-size source picture and audio, without legacy narration padding."""
-    from . import render
+    from .clip_render import graph
     slide = project.slide(slide_id)
     if slide is None:
         raise ValueError('That paragraph is not in the clip')
-    file, path = source(project)
-    if file.kind != 'video' or not file.audio:
-        raise ValueError('Section preview currently needs video with audio')
-    span = slide.candidates[0]
-    kept = ranges(project, span['in_s'], span['out_s'])
-    if not kept:
-        raise ValueError('That paragraph has no remaining source range')
-    w, h = render.preview_size(project)
-    fps, fade = render.PREVIEW_FPS, 2/render.FPS
-    point = PRESETS[project.clip['reframes'].get(slide_id, 'centre')]
-    crop, _ = render._cover_crop(path, w, h, [point, .5])
-    graph = []
-    for i, (a, b) in enumerate(kept):
-        graph += [f'[0:v]trim=start={a:.6f}:end={b:.6f},setpts=PTS-STARTPTS,'
-                  f'{crop},fps={fps},format=yuv420p[v{i}]',
-                  f'[0:a]atrim=start={a:.6f}:end={b+(fade if i < len(kept)-1 else 0):.6f},'
-                  f'asetpts=PTS-STARTPTS,aresample=48000,'
-                  f'apad=whole_dur={b-a+(fade if i < len(kept)-1 else 0):.6f}[a{i}]']
-    graph.append(''.join(f'[v{i}]' for i in range(len(kept))) + f'concat=n={len(kept)}:v=1:a=0[vout]')
-    last = '[a0]'
-    for i in range(1, len(kept)):
-        tag = f'[ac{i}]'
-        graph.append(f'{last}[a{i}]acrossfade=d={fade:.6f}:c1=tri:c2=tri{tag}')
-        last = tag
-    graph.append(f'{last}loudnorm=I=-14:TP=-1:LRA=11[aout]')
-    return ['-i', str(path)], ';'.join(graph), sum(b-a for a, b in kept)
+    return graph(project, slide)
 
 
 def preview_section(project, slide_id, progress=lambda m: None):
-    from . import block_overlays, render
-    inputs, graph, seconds = section_graph(project, slide_id)
-    root = store.project_dir(project.id) / 'cache'
-    root.mkdir(exist_ok=True)
-    # One file per paragraph, replaced on each press, so previews don't pile up.
-    out = root / f'clip-section-{slide_id}.mp4'
-    pending = root / f'clip-section-{slide_id}-{uuid.uuid4().hex[:8]}.part.mp4'
-    script = pending.with_suffix('.ffgraph')
-    script.write_text(graph)
-    progress('Previewing the original range at quarter size')
-    try:
-        block_overlays.run_graph([*inputs, '-filter_complex_script', str(script),
-            '-map', '[vout]', '-map', '[aout]', '-t', f'{seconds:.6f}',
-            '-r', str(render.PREVIEW_FPS), '-c:v', 'libx264', '-crf', str(render.PREVIEW_CRF),
-            '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(pending)])
-        pending.replace(out)
-    finally:
-        script.unlink(missing_ok=True)
-        pending.unlink(missing_ok=True)
-    return dict(path=f'cache/{out.name}', seconds=seconds,
-                rendered_at=round(out.stat().st_mtime))
+    from . import render
+    from .clip_render import encode
+    slide = project.slide(slide_id)
+    if slide is None:
+        raise ValueError('That paragraph is not in the clip')
+    result = encode(project, f'section-{slide_id}', progress, slide=slide)
+    w, h = render.preview_size(project)
+    return dict(result, width=w, height=h, fps=render.PREVIEW_FPS, paragraphs=1)

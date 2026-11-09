@@ -121,6 +121,7 @@ main { flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto; padding: 24px 2
 .shell-inspector:empty { display: none; width: 0; flex-basis: 0; padding: 0; border: 0; }
 .project-tools { margin-bottom: 12px; }
 .project-tools .sub { margin: 0; }
+#clip-controls > .row > h2 { margin: 0; }
 .stage-subtabs a { text-decoration: none; min-height: 34px; }
 .jobs-strip { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; height: 32px; background: var(--panel); border-top: 1px solid var(--line); display: flex; gap: 20px; align-items: center; padding: 0 20px; }
 .jobs-strip:has(.jobs-live-status) { height: 48px; }
