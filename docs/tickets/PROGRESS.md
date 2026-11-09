@@ -238,7 +238,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | done | 2026-11-09 Codex + review; ranking runs as a job on any writing model; project handoff and long-recording polish in T14.3b |
 | T14.3b | Clip finder: project handoff and long-recording polish | M | T14.3, T14.4 | todo | Make clips → linked projects; virtual scrolling; auto-refine after STT; envelope as a job |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | done | 2026-11-09 Codex + review; foundations (source-linked projects, word trims, crop presets, section preview); studio and render in T14.4b |
-| T14.4b | Clip studio, hook graphics and full render | L | T14.4 | todo | Clip/Edit/Publish UI, Timeline, hook overlay, eased reframes, music, full render |
+| T14.4b | Clip studio, hook graphics and full render | L | T14.4 | doing | Clip/Edit/Publish UI, Timeline, hook overlay, eased reframes, music, full render |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
 | T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
 
@@ -258,3 +258,19 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T16.3 | A default User-Agent that archives accept | S | — | done | 2026-11-08 Claude; old default got HTTP 403 from Wikimedia on every fresh install |
 | T16.4 | Script consistency check | M | — | done | 2026-11-08 Codex + review; works mechanically, but Granite 8B flags nothing (too small to judge); contradictions and impossible visuals as Check findings |
 | T16.5 | Speed test and thinking advice in Check LM Studio | S | T16.1 | done | 2026-11-08 Codex + review; Qwen advised thinking off, Granite not; estimate fixed to measured budget; tokens/s and reasoning split from one short prompt; advice only |
+
+## Phase 17: an edit timeline you can edit on
+
+Owner, 2026-11-09: easier moving, extending and shrinking, inserting (e.g. a
+clip after the intro), selecting sections and moving everything in them, and
+adding blocks. See `17-timeline/README.md`.
+
+| ID | Title | Size | Depends | Status | Notes |
+|---|---|---|---|---|---|
+| T17.1 | Undo and redo for project edits | M | — | todo | snapshots per edit; never touches audio |
+| T17.7 | Timeline ergonomics: fit zoom, wheel zoom, lanes, multi-select | M | — | todo | 11 s project opens 140 px wide today |
+| T17.2 | Inserts on the main track: model, timing and render | L | T17.1 | todo | clip/block/picture/card after any paragraph; ripple |
+| T17.4 | Select sections and move everything in them | L | T17.2, T17.1 | todo | owner priority; move/cut/copy/paste/duplicate/delete with ripple |
+| T17.3 | Insert from the timeline: +, smart insert, drop from panels | M | T17.2 | todo | |
+| T17.5 | Extend and shrink: picture tails, insert lengths, clip trims | M | T17.2, T17.1 | todo | ripple default, roll on Shift |
+| T17.6 | Blocks and graphics on the timeline | M | T17.3 | todo | drag from panel, duplicate, copy, nudge |
