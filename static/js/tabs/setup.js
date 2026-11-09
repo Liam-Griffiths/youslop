@@ -72,6 +72,7 @@ function paintSetupChecks() {
   const mic = !!navigator.mediaDevices;
   const rows = [
     ['ffmpeg', c.ffmpeg.ready ? c.ffmpeg.detail.replace(/\s*Copyright[\s\S]*$/, '') : `${c.ffmpeg.detail}. Install ffmpeg with libx264.`],
+    ['Speech-to-text', c.stt?.detail || 'none installed (optional)'],
     ['Chromium', c.chromium.ready ? c.chromium.path : c.chromium.detail],
     ['Graphics / RAM', `${c.system.available_ram_mb == null ? 'RAM unavailable' : `${Math.round(c.system.available_ram_mb)} MB RAM available`} · GPU not probed`],
     ['Microphone', mic ? 'Browser support detected · set up later in Voice' : 'Browser support unavailable · try localhost in a system browser']

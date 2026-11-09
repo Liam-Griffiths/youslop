@@ -20,6 +20,7 @@ from .config import DATA
 
 FOOTAGE_DIR = DATA / 'footage'
 _VIDEO_EXT = {'.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.mts', '.m2ts', '.mxf'}
+_AUDIO_EXT = {'.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus'}
 _PROCESS_LOCK = threading.Lock()  # One source at a time, even across background jobs.
 Progress = Callable[[str], None]
 
@@ -40,6 +41,7 @@ class SourceFile:
     gps: str = ''                      # Original ISO6709 tag, without precision loss.
     audio: list[dict] = field(default_factory=list)
     error: str = ''
+    kind: str = 'video'
 
     @classmethod
     def from_dict(cls, raw: dict) -> SourceFile:
@@ -122,8 +124,10 @@ def _probe(source: SourceFile, path: Path) -> None:
     streams = info.get('streams', [])
     video = next((s for s in streams if s.get('codec_type') == 'video'
                   and not s.get('disposition', {}).get('attached_pic')), None)
-    if video is None:
-        raise ValueError(f'No video stream: {path}')
+    source.kind = 'video' if video else 'audio'
+    if video is None and not any(s.get('codec_type') == 'audio' for s in streams):
+        raise ValueError(f'No video or audio stream: {path}')
+    video = video or {}
     fmt = info.get('format', {})
     tags = {k.lower(): v for k, v in {**fmt.get('tags', {}), **video.get('tags', {})}.items()}
     stat = path.stat()
@@ -161,7 +165,7 @@ def import_shoot(path: str | Path, *, copy: bool = False,
         if existing:
             return existing
         paths = sorted(p for p in (path.rglob('*') if path.is_dir() else [path])
-                       if p.is_file() and p.suffix.lower() in _VIDEO_EXT)
+                       if p.is_file() and p.suffix.lower() in (_VIDEO_EXT | _AUDIO_EXT))
         if not paths:
             raise ValueError(f'No camera files found: {path}')
         shoot = Shoot('s' + uuid.uuid4().hex[:12], str(path), copy, time.time())
@@ -205,7 +209,7 @@ def status(shoot_id: str) -> dict:
     for source in shoot.files:
         proxy, sprite = _outputs(shoot, source)
         files.append({**asdict(source), 'proxy': str(proxy), 'sprite': str(sprite),
-                      'ready': _complete(proxy) and _complete(sprite)})
+                      'ready': (source.kind == 'audio' or _complete(proxy)) and _complete(sprite)})
     return {'id': shoot.id, 'path': shoot.path, 'copied': shoot.copied,
             'total': len(files), 'ready': sum(f['ready'] for f in files), 'files': files,
             'clips': [asdict(c) for c in shoot.clips]}
@@ -235,18 +239,23 @@ def process_shoot(shoot_id: str, progress: Progress = lambda m: None) -> dict:
                     src = dest
                 for out in (proxy, sprite):
                     out.parent.mkdir(exist_ok=True)
-                if not _complete(proxy):
+                if source.kind != 'audio' and not _complete(proxy):
                     temporary = proxy.with_suffix('.part.mp4')
                     _proxy(src, temporary)
                     temporary.replace(proxy)
                 if not _complete(sprite):
                     temporary = sprite.with_suffix('.part.jpg')
-                    frames = max(1, math.ceil(source.duration / 2))
-                    rows = math.ceil(frames / 10)
-                    ffutil.run(['-i', str(proxy), '-vf',
-                                f'fps=1/2:start_time=0:round=up,scale=160:90:force_original_aspect_ratio=decrease,'
-                                f'pad=160:90:(ow-iw)/2:(oh-ih)/2,tile=10x{rows}:nb_frames={frames}',
-                                '-frames:v', '1', '-update', '1', str(temporary)])
+                    if source.kind == 'audio':
+                        ffutil.run(['-i', str(src), '-filter_complex',
+                                    'aformat=channel_layouts=mono,showwavespic=s=1600x90:colors=0xFF5A1F',
+                                    '-frames:v', '1', '-update', '1', str(temporary)])
+                    else:
+                        frames = max(1, math.ceil(source.duration / 2))
+                        rows = math.ceil(frames / 10)
+                        ffutil.run(['-i', str(proxy), '-vf',
+                                    f'fps=1/2:start_time=0:round=up,scale=160:90:force_original_aspect_ratio=decrease,'
+                                    f'pad=160:90:(ow-iw)/2:(oh-ih)/2,tile=10x{rows}:nb_frames={frames}',
+                                    '-frames:v', '1', '-update', '1', str(temporary)])
                     # Catch an empty sprite (e.g. an unreadable/empty video).
                     with Image.open(temporary) as img:
                         img.verify()
@@ -291,6 +300,8 @@ def analyze_quality(shoot_id: str, progress: Progress = lambda m: None) -> list[
         audio = {}
         for clip in shoot.clips:
             progress(f'Analyzing quality: {clip.id}')
+            if sources[clip.file].kind == 'audio':
+                continue  # Video quality and duplicate checks require pictures.
             proxy, _ = _outputs(shoot, sources[clip.file])
             if clip.file not in audio:
                 audio[clip.file] = ffutil.has_audio(proxy)
@@ -385,6 +396,11 @@ def detect_shots(shoot_id: str, *, min_s: float = MIN_CLIP_S, max_s: float = MAX
     with _PROCESS_LOCK:
         shoot = load(shoot_id)
         for source in shoot.files:
+            if source.kind == 'audio':
+                if not any(c.file == source.id for c in shoot.clips):
+                    shoot.clips.append(Clip('c' + uuid.uuid4().hex[:12], source.id, 0, source.duration))
+                    _save(shoot)
+                continue
             progress(f'Detecting shots: {source.id}')
             proxy, _ = _outputs(shoot, source)
             if not _complete(proxy):
@@ -494,6 +510,12 @@ def media_path(shoot_id: str, kind: str, filename: str) -> Path:
                 or not path.is_relative_to(root / 'thumbs') or not path.is_file()):
             raise FileNotFoundError('Unknown clip thumbnail')
         return path
+    if kind == 'audio':
+        shoot = load(shoot_id)
+        source = next((f for f in shoot.files if f.id == filename and f.kind == 'audio'), None)
+        if source is None or not source_path(shoot, source).is_file():
+            raise FileNotFoundError('Audio source unavailable')
+        return source_path(shoot, source)
     if kind not in {'proxies', 'sprites'}:
         raise FileNotFoundError('Only viewing media is available')
     root = shoot_dir(shoot_id).resolve()

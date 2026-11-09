@@ -43,6 +43,8 @@ def _entries(shoot):
     sources = {s.id: s for s in shoot.files}
     entries = []
     for clip in shoot.clips:
+        if sources[clip.file].kind == 'audio':
+            continue
         if len(clip.thumbs) < 2:
             raise ValueError(f'Detect middle thumbnail first: {clip.id}')
         path = (root / clip.thumbs[1]).resolve()

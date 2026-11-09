@@ -43,7 +43,9 @@ def _detect(folder='', executable=''):
                 hub = Path(os.environ.get('HF_HUB_CACHE', Path.home() / '.cache/huggingface/hub'))
                 models = [str(p.parent) for p in hub.glob('models--*whisper*/snapshots/*/config.json')]
             result[name] = dict(installed=installed, version=version, models=sorted(models),
-                                device='Apple Silicon' if module == 'mlx_whisper' else 'CPU (build/runtime dependent)',
+                                device=('Apple Silicon' if module == 'mlx_whisper' else
+                                        'CPU · int8 or CUDA · float16 (selected per run)' if module == 'faster_whisper' else
+                                        'CPU' if module == 'whisper' else 'Unknown until runtime; depends on executable build'),
                                 word_timestamps=True, notes='', install_url=url)
         except Exception as exc:
             result[name] = dict(installed=False, version='', models=[], device='',
@@ -69,3 +71,49 @@ def transcribe(engine, path, **kwargs):
         if not isinstance(exc, JobCancelled):
             _ERRORS[engine] = f'{type(exc).__name__}: {exc}'
         raise
+
+
+def configured(refresh=False):
+    """Read launch-time settings; match Settings' restart semantics."""
+    from .. import brand
+    return detect(folder=brand.env('STT_FOLDER', ''),
+                  executable=brand.env('STT_EXECUTABLE', ''), refresh=refresh)
+
+
+def setup_status(refresh=False):
+    from .. import brand
+    engines = configured(refresh)
+    default = brand.env('STT_ENGINE', '')
+    installed = [name for name, info in engines.items() if info['installed']]
+    detail = ('none installed (optional)' if not installed else
+              default if default in installed else 'Choose a default in Settings (optional)')
+    return dict(ready=bool(installed), detail=detail, engine=default)
+
+
+def resolve(options):
+    from .. import brand
+    if options.keys() - {'engine', 'model', 'language', 'start', 'end', 'retranscribe'}:
+        raise ValueError('Unknown transcription option')
+    result = dict(options)
+    for key in ('engine', 'model'):
+        value = result.get(key, brand.env('STT_' + key.upper(), ''))
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError('Choose a default engine and local model in Settings, or specify them for this run')
+        result[key] = value
+    engine = result['engine']
+    if engine not in ENGINES or not configured()[engine]['installed']:
+        raise ValueError('Speech-to-text engine is not installed; see Settings')
+    from .common import local_model
+    result['model'] = local_model(result['model'])
+    if engine == 'whisper.cpp':
+        result['executable'] = brand.env('STT_EXECUTABLE', '')
+    if engine == 'faster-whisper':
+        result['device'] = brand.env('STT_DEVICE', 'cpu')
+        if result['device'] not in ('cpu', 'cuda'):
+            raise ValueError('Device must be cpu or cuda')
+    if result.get('language') is not None and (not isinstance(result['language'], str)
+            or not result['language'].isalpha() or len(result['language']) > 8):
+        raise ValueError('Language must be a language code or null')
+    if type(result.get('retranscribe', False)) is not bool:
+        raise ValueError('retranscribe must be boolean')
+    return result

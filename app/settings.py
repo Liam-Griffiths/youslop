@@ -55,6 +55,17 @@ class Field:
 # The whole of what Settings can configure — everything `.env.example` lists,
 # as a form instead of a file. Order here is UI order.
 FIELDS: list[Field] = [
+    Field("stt_engine", brand.ENV_PREFIX + "STT_ENGINE", "Default engine",
+          group="Speech-to-text", options=(("", "Choose an engine"),
+          ("faster-whisper", "faster-whisper"), ("whisper.cpp", "whisper.cpp"),
+          ("openai-whisper", "openai-whisper"), ("mlx-whisper", "mlx-whisper"))),
+    Field("stt_model", brand.ENV_PREFIX + "STT_MODEL", "Default model path",
+          "An existing local model file or folder. Transcription never downloads models.", group="Speech-to-text"),
+    Field("stt_folder", brand.ENV_PREFIX + "STT_FOLDER", "whisper.cpp model folder", group="Speech-to-text"),
+    Field("stt_executable", brand.ENV_PREFIX + "STT_EXECUTABLE", "whisper.cpp executable", group="Speech-to-text"),
+    Field("stt_device", brand.ENV_PREFIX + "STT_DEVICE", "faster-whisper device",
+          "CPU uses int8; CUDA uses float16 and requires a compatible installation.",
+          group="Speech-to-text", options=(("cpu", "CPU · int8"), ("cuda", "CUDA · float16")), default="cpu"),
     Field("setup_complete", brand.ENV_PREFIX + "SETUP_COMPLETE", "Setup complete",
           group="Internal"),
     Field("llm_backend", brand.ENV_PREFIX + "LLM_BACKEND", "Which model writes",

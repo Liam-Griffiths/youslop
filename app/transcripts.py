@@ -25,7 +25,8 @@ def _path(shoot_id, source_id):
 
 def load(shoot_id, source_id):
     path = _path(shoot_id, source_id)
-    return json.loads(path.read_text()) if path.exists() else dict(coverage=[], words=[], segments=[], overrides=[])
+    defaults = dict(coverage=[], words=[], segments=[], overrides=[])
+    return {**defaults, **json.loads(path.read_text())} if path.exists() else defaults
 
 
 def _ranges(ranges):
@@ -75,7 +76,7 @@ def override(shoot_id, source_id, start, end, text):
 
 
 def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None, end=None,
-               retranscribe=False, progress=lambda message: None):
+               retranscribe=False, executable='', device=None, progress=lambda message: None):
     """Synchronous worker for CLI or jobs.start; never mutates a source/take."""
     with _WORKERS_LOCK:
         lock = _WORKERS.setdefault((shoot_id, source_id), threading.Lock())
@@ -104,10 +105,13 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
         ranges = [(a, b)] if retranscribe or start is not None or end is not None else list(_gaps(a, b, doc['coverage']))
         chunks = [(x, min(x + 600, stop)) for begin, stop in ranges
                   for x in (begin + i * 600 for i in range(math.ceil((stop - begin) / 600)))]
+        adapter_options = {'executable': executable} if engine == 'whisper.cpp' else {}
+        if engine == 'faster-whisper' and device is not None:
+            adapter_options['device'] = device
         elapsed, decoded = 0, 0
         for n, (x, y) in enumerate(chunks, 1):
             progress(f'chunk {n} of {len(chunks)}, about {round(elapsed / decoded * sum(v-u for u,v in chunks[n-1:]) / 60, 1) if decoded else "unknown"} min left')
-            key = hashlib.sha256(json.dumps([identity, engine, model, language, x, y]).encode()).hexdigest()[:20]
+            key = hashlib.sha256(json.dumps([identity, engine, model, language, adapter_options, x, y]).encode()).hexdigest()[:20]
             cache = root / f'{source_id}.chunks' / f'{key}.json'
             began = time.monotonic()
             if cache.exists() and not retranscribe:
@@ -115,7 +119,7 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
             else:
                 items = []
                 for segment in stt.transcribe(engine, wav, model=model, language=language, start=x, end=y,
-                                               progress=progress, cancel=lambda: progress('Transcribing speech')):
+                                               progress=progress, cancel=lambda: progress('Transcribing speech'), **adapter_options):
                     raw = segment.get('words') or words.spread(segment['text'].split(), [(segment['start'], segment['end'])])
                     for w in raw:
                         mid = (w['start'] + w['end']) / 2
@@ -143,3 +147,30 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
 def start_job(shoot_id, source_id, **options):
     return jobs.start('transcribe', shoot_id,
                       lambda progress: transcribe(shoot_id, source_id, progress=progress, **options), cancellable=True)
+
+
+def source_range(shoot_id, source_id, start=None, end=None):
+    shoot = footage.load(shoot_id)
+    source = next((s for s in shoot.files if s.id == source_id), None)
+    if source is None:
+        raise FileNotFoundError('Unknown source')
+    original = footage.source_path(shoot, source)
+    if not original.is_file():
+        raise FileNotFoundError('Source unavailable')
+    a, b = 0 if start is None else start, source.duration if end is None else end
+    if (any(type(v) not in (int, float) or not math.isfinite(v) for v in (a, b))
+            or not 0 <= a < b <= source.duration):
+        raise ValueError('Require 0 <= start < end <= source duration; process the source first')
+    return a, b
+
+
+def prepare(shoot_id, source_id, options):
+    """Validate synchronously before any job is created; no inference or downloads."""
+    a, b = source_range(shoot_id, source_id, options.get('start'), options.get('end'))
+    resolved = stt.resolve(options)
+    ranges = ([(a, b)] if options.get('retranscribe') or options.get('start') is not None
+              or options.get('end') is not None else list(_gaps(a, b, load(shoot_id, source_id)['coverage'])))
+    seconds = sum(y - x for x, y in ranges)
+    return resolved, dict(seconds=seconds, chunks=sum(math.ceil((y-x)/600) for x, y in ranges),
+                         detail='Runtime depends on engine, model and device; no measured estimate yet',
+                         engine=resolved['engine'], model=resolved['model'])

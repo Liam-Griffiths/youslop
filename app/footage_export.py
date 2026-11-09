@@ -56,18 +56,24 @@ def export_clips(shoot_id: str, clip_ids: list[str], output: str | Path, *,
         name = re.sub(r'[^\w.-]+', '-', name, flags=re.UNICODE).strip('.-')[:160]
         if not name:
             raise ValueError('Naming pattern produces an empty filename')
-        plans.append((clip, src, name))
+        plans.append((clip, src, name, source.kind))
     folder = Path(output).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=True)
     rows = []
-    for clip, src, name in plans:
+    for clip, src, name, kind in plans:
         # Matroska accommodates original codecs in stream-copy mode.
-        path, handle = _reserve(folder, name + ('.mkv' if mode == 'copy' else '.mp4'))
+        suffix = ('.mka' if mode == 'copy' else '.m4a') if kind == 'audio' else ('.mkv' if mode == 'copy' else '.mp4')
+        path, handle = _reserve(folder, name + suffix)
         handle.close()
         args = ['-ss', str(clip.in_s), '-i', str(src), '-t', str(clip.out_s - clip.in_s),
-                '-map', '0:V:0', '-map', '0:a?', '-map_metadata', '0']
+                '-map', '0:a:0' if kind == 'audio' else '0:V:0']
+        if kind != 'audio':
+            args += ['-map', '0:a?']
+        args += ['-map_metadata', '0']
         if mode == 'copy':
             args += ['-c', 'copy', '-avoid_negative_ts', 'make_zero']
+        elif kind == 'audio':
+            args += ['-vn', '-c:a', 'aac', '-movflags', '+faststart']
         else:
             args += ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
                      '-c:a', 'aac', '-movflags', '+faststart']

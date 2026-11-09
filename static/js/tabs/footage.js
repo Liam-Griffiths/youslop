@@ -1,4 +1,4 @@
-/* Proxy-only footage logger. Transcripts can join footageSearchText when ASR exists. */
+/* Footage and audio logger. */
 let footageView = null, footagePoll, footageReverse;
 const footageURL = (tail = '') => `/api/footage/shoots/${footageView.id}${tail}`;
 const footageClip = () => footageView?.clips.find(c => c.id === footageView.current);
@@ -10,7 +10,7 @@ async function renderFootage(id) {
   try {
     if (!id) {
       const shoots = await api('/api/footage/shoots');
-      view.innerHTML = `<h1>Footage</h1><p class="sub">Import a folder or camera card. Proxies process in the background.</p>
+      view.innerHTML = `<h1>Footage</h1><p class="sub">Import a folder, camera card or audio file. Viewing media processes in the background.</p>
         ${shoots.map(s => `<a class="home-shoot" href="#/footage/${esc(s.id)}"><b>${esc(s.name)}</b><span class="mono">${s.files} files · ${s.clips} clips · ${s.labelled} labelled</span></a>`).join('') || '<p>No shoots yet.</p>'}
         <section class="panel footage-import"><h2>Import a shoot</h2><label for="footage-path">Source folder or file</label>
         <div class="row"><input id="footage-path" type="text"><button class="btn" onclick="footagePick('footage-path')">Choose folder</button></div>
@@ -23,7 +23,7 @@ async function renderFootage(id) {
     if (location.hash !== `#/footage/${id}`) return;
     footageView = {...previous, ...data, selected: previous.selected || new Set(), query: previous.query || '', filter: previous.filter || 'all'};
     footageView.current = data.clips.some(c => c.id === previous.current) ? previous.current : data.clips.find(c => !c.rejected)?.id;
-    view.innerHTML = `<div class="row"><a href="#/footage">All shoots</a><h1>${esc(data.path.split('/').pop() || id)}</h1><span class="mono">${data.status.ready}/${data.status.total} proxies · ${data.clips.length} clips</span></div>
+    view.innerHTML = `<div class="row"><a href="#/footage">All shoots</a><h1>${esc(data.path.split('/').pop() || id)}</h1><span class="mono">${data.status.ready}/${data.status.total} ready · ${data.clips.length} clips</span></div>
       <p id="footage-status" role="status" aria-live="polite">${data.processing ? 'Processing — logger read-only until done' : 'Ready to log'}</p>
       <div class="footage-layout"><aside class="panel"><h2>Your labels</h2><div id="footage-palette"></div>
       <label for="footage-vocabulary">Vocabulary (one per line)</label><textarea id="footage-vocabulary" ${data.processing ? 'disabled' : ''}>${esc(data.vocabulary.join('\n'))}</textarea>
@@ -75,8 +75,9 @@ function footageCount() { $('#footage-count').textContent = `${footageView.selec
 function footageSelectVisible() { footageVisible().forEach(c=>footageView.selected.add(c.id)); footageGrid(); }
 function footageScrub(e,id) {
   const c = footageView.clips.find(c=>c.id===id), tile=e.currentTarget, box=tile.getBoundingClientRect();
-  const duration=footageView.files.find(f=>f.id===c.file).duration;
+  const source=footageView.files.find(f=>f.id===c.file), duration=source.duration;
   const t=c.in_s+(c.out_s-c.in_s)*Math.max(0,Math.min(1,(e.clientX-box.left)/box.width));
+  if (source.kind === 'audio') { tile.style.backgroundSize='100% 100%'; tile.style.backgroundPosition='center'; return; }
   const frame=Math.max(0,Math.min(Math.ceil(duration/2)-1,Math.floor(t/2))), scale=box.width/160;
   tile.style.backgroundSize=`${1600*scale}px auto`; tile.style.backgroundPosition=`${-frame%10*box.width}px ${-Math.floor(frame/10)*90*scale}px`;
 }
@@ -84,11 +85,12 @@ function footageChoose(id) { clearInterval(footageReverse); footageView.current=
 function footageInspect() {
   const c=footageClip(), player=$('#footage-player');
   if (!c) { $('#footage-inspector').textContent='Select a clip to log.'; player.removeAttribute('src'); return; }
-  const duration=footageView.files.find(f=>f.id===c.file).duration;
+  const source=footageView.files.find(f=>f.id===c.file), duration=source.duration;
   $('#footage-trim').innerHTML=`<span style="margin-left:${c.in_s/duration*100}%;width:${(c.out_s-c.in_s)/duration*100}%" class="mono">${c.in_s.toFixed(2)}–${c.out_s.toFixed(2)} s</span>`;
-  player.src=footageURL(`/media/proxies/${c.file}.mp4`); player.onloadedmetadata=()=>{player.currentTime=c.in_s;};
+  player.src=footageURL(source.kind === 'audio' ? `/media/audio/${c.file}` : `/media/proxies/${c.file}.mp4`);
+  player.setAttribute('aria-label', source.kind === 'audio' ? 'Audio recording' : 'Video recording'); player.onloadedmetadata=()=>{player.currentTime=c.in_s;};
   player.ontimeupdate=()=>{if (player.currentTime>=c.out_s) player.pause();};
-  $('#footage-inspector').innerHTML=`<h2>${esc(c.id)}</h2><fieldset ${footageView.processing?'disabled':''}><legend>Clip</legend>
+  $('#footage-inspector').innerHTML=`<h2>${source.kind === 'audio' ? 'Audio · ' : ''}${esc(c.id)}</h2><fieldset ${footageView.processing?'disabled':''}><legend>Clip</legend>
     <div class="footage-inout"><label for="footage-in">In (s)</label><label for="footage-out">Out (s)</label>
     <div class="row"><input class="mono" id="footage-in" type="number" step="0.01" value="${c.in_s}" onchange="footagePatch({in_s:Number(this.value)})"><button class="btn sm" onclick="footageMark('in_s')" title="Set in at the playhead (I)">I</button></div>
     <div class="row"><input class="mono" id="footage-out" type="number" step="0.01" value="${c.out_s}" onchange="footagePatch({out_s:Number(this.value)})"><button class="btn sm" onclick="footageMark('out_s')" title="Set out at the playhead (O)">O</button></div></div>

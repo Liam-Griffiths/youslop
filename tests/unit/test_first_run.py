@@ -59,7 +59,7 @@ def test_checks_endpoint(root, monkeypatch):
     response = asyncio.run(request())
     assert response.status_code == 200
     data = response.json()
-    assert set(data) == {'needed', 'ffmpeg', 'chromium', 'llm', 'tts', 'paths', 'system', 'youtube'}
+    assert set(data) == {'needed', 'ffmpeg', 'chromium', 'llm', 'tts', 'paths', 'system', 'youtube', 'stt'}
     assert data['ffmpeg'] == {'ready': True, 'detail': 'ffmpeg fixture'}
     assert data['chromium'] == {'ready': False, 'detail': 'Install Chromium', 'path': None}
     assert data['llm']['resolved'] == 'cli'

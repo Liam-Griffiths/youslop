@@ -82,6 +82,7 @@ async function renderSettings() {
         <div class="panel">
           ${g.fields.map(settingsFieldRow).join('')}
           ${g.name === 'Writing model' ? localModelCheckRow() : ''}
+          ${g.name === 'Speech-to-text' ? '<button class="btn" onclick="checkSpeechEngines(true)">Re-check engines</button><div id="stt-engines" role="status"></div>' : ''}
         </div>`).join('')}
     </div>
 
@@ -90,6 +91,7 @@ async function renderSettings() {
       <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
     </div>`;
   await renderPacks();
+  await checkSpeechEngines();
 }
 
 // LM Studio check: one request to the local server when clicked, never on load.
@@ -224,4 +226,19 @@ async function removePack(id) {
     await renderPacks();
     toast('Pack removed. Its folder was kept.');
   } catch (e) { toast(e.message, true); }
+}
+
+
+async function checkSpeechEngines(refresh = false) {
+  const host = $('#stt-engines');
+  if (!host) return;
+  try {
+    const engines = await api(`/api/stt/engines?refresh=${refresh}`);
+    if (!host.isConnected) return;
+    host.innerHTML = `<p class="sub">Optional. Save settings and restart to use changed paths or defaults.</p>` +
+      Object.entries(engines).map(([name, info]) => `<div class="field" style="margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--line)"><strong>${esc(name)} · ${info.installed ? 'Installed' : 'Not found'}</strong>
+        <p class="mono">${esc([info.version, info.device, info.notes].filter(Boolean).join(' · '))}</p>
+        <p class="mono">Models: ${esc(info.models.join(', ') || 'No local models found')}</p>
+        <a href="${esc(info.install_url)}" target="_blank" rel="noopener">Install instructions</a></div>`).join('');
+  } catch (e) { host.textContent = e.message; }
 }

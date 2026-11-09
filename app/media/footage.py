@@ -22,6 +22,8 @@ def suggestions(text: str, limit: int = 20, *, rerank: bool = False):
             if clip.rejected or clip.file not in sources or clip.out_s <= clip.in_s:
                 continue
             source = sources[clip.file]
+            if source.kind == 'audio':
+                continue
             labels = list(dict.fromkeys(clip.labels + [str(v) for k, v in clip.auto_labels.items()
                                                        if not k.startswith('_') and isinstance(v, str)]))
             description = ' '.join(labels + [clip.note])

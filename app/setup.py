@@ -1,7 +1,7 @@
 """Read-only first-run checks. Never starts a model, browser or download."""
 import sys
 
-from . import config, llm, paths, settings, stage, sysinfo, tts, youtube
+from . import config, llm, paths, settings, stage, stt, sysinfo, tts, youtube
 
 
 def ffmpeg_check():
@@ -21,6 +21,7 @@ def checks() -> dict:
                      "path": stage.browser()},
         "llm": llm.backend_status(),
         "tts": tts.status(),
+        "stt": stt.setup_status(refresh=True),
         "paths": paths.describe(),
         # macOS's helper runs two subprocesses; keep this endpoint cheap.
         "system": {"available_ram_mb": sysinfo.available_mb() if sys.platform != "darwin" else None,

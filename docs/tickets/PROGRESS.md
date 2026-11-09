@@ -227,7 +227,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T14.1 | Local speech-to-text: word-timed transcripts | L | T11.1, T9.12 | done | 2026-11-08 Codex + review; backend only (UI split to T14.1b); no engine installed here; engine adapters for whatever is installed (faster-whisper, whisper.cpp, openai-whisper, mlx-whisper), default + per-run choice; whole or single range; audio-only import; chunked, resumable |
-| T14.1b | Speech-to-text: audio import and studio integration | L | T14.1 | todo | split from T14.1: audio-only import, Settings, setup, API, transcript UI, Voice retime |
+| T14.1b | Speech-to-text: audio import and studio integration | L | T14.1 | done | 2026-11-08 Codex + review; audio import, Settings, setup, API; controls split to T14.1c |
+| T14.1c | Transcript controls, model downloads and Voice retime | M | T14.1b | todo | whole/range transcribe UI with estimate, transcript view and word edits, downloads on click, voiced-interval timing, turn markers, Voice retime |
 | T14.2 | Vertical and square output for the render pipeline | L | — | todo | WIDTH/HEIGHT fixed at 1920×1080 today; landscape goldens must stay identical |
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | transcript mode (whole, with suggestions) or manual mode (scrub, I/O, transcribe just this clip); LLM ranking opt-in |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |

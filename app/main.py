@@ -991,6 +991,54 @@ def _footage_call(fn, *args, **kwargs):
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get('/api/stt/engines')
+def speech_engines(refresh: bool = False):
+    from . import stt
+    return stt.configured(refresh=refresh)
+
+
+@app.get('/api/footage/shoots/{sid}/transcripts/{source_id}')
+def transcript_read(sid: str, source_id: str):
+    from . import transcripts
+    def read():
+        transcripts.source_range(sid, source_id)
+        return transcripts.load(sid, source_id)
+    return _footage_call(read)
+
+
+@app.patch('/api/footage/shoots/{sid}/transcripts/{source_id}')
+def transcript_override(sid: str, source_id: str, payload: dict = Body(...)):
+    from . import footage, transcripts
+    def edit():
+        with footage.lock_for(sid):
+            footage.editable(sid)
+            if set(payload) != {'start', 'end', 'text'} or not isinstance(payload['text'], str):
+                raise ValueError('Require start, end and text')
+            transcripts.source_range(sid, source_id, payload['start'], payload['end'])
+            transcripts.override(sid, source_id, payload['start'], payload['end'], payload['text'])
+            return transcripts.load(sid, source_id)
+    return _footage_call(edit)
+
+
+@app.post('/api/footage/shoots/{sid}/transcripts/{source_id}/{action}')
+def transcript_action(sid: str, source_id: str, action: str, payload: dict = Body(...)):
+    from . import footage, transcripts
+    def run():
+        if action not in {'estimate', 'start'}:
+            raise HTTPException(404, 'Unknown transcript action')
+        options = dict(payload)
+        confirmed = options.pop('confirm', None)
+        with footage.lock_for(sid):
+            footage.editable(sid)
+            resolved, estimate = transcripts.prepare(sid, source_id, options)
+            if action == 'estimate':
+                return estimate
+            if confirmed is not True:
+                raise ValueError('Review the estimate and confirm before starting')
+            return {'job': transcripts.start_job(sid, source_id, **resolved)}
+    return _footage_call(run)
+
+
 @app.get('/api/footage/shoots/{sid}')
 def footage_detail(sid: str):
     from . import footage
