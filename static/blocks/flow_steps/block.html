@@ -2,7 +2,12 @@
 {% block content %}
 {% for row in s.rows %}
 {% set cw = s.w if s.portrait else (s.w-40*(s.rows|length-1))/s.rows|length %}
-<div class="item panel flow" {{ layer('step-'~loop.index,loop.index0*0.3) }} style="left:{{ s.x if s.portrait else s.x+loop.index0*(cw+40) }}px;width:{{ cw }}px;top:{{ s.y+loop.index0*s.gap if s.portrait else s.y+100 }}px;height:{{ s.gap-40 if s.portrait else 280 }}px"><span class="small flow-index">{{ loop.index }}</span><p class="copy" data-fit style="height:{{ s.gap-90 if s.portrait else 220 }}px;font-size:32px;line-height:1.4">{{ row.label }}</p></div>
-{% if not loop.last %}<div class="item flow-gap" {{ layer('arrow-'~loop.index,loop.index0*0.3+0.15,'fade') }} style="{% if s.portrait %}left:{{ s.x }}px;width:{{ s.w }}px;top:{{ s.y+loop.index0*s.gap+s.gap-40 }}px;height:40px{% else %}left:{{ s.x+loop.index0*(cw+40)+cw }}px;width:40px;top:{{ s.y+100 }}px;height:280px{% endif %}"><span class="arrow">{{ '↓' if s.portrait else '→' }}</span></div>{% endif %}
+{% set bh = s.gap-40 if s.portrait else 280 %}
+{# One layer per step: the step box and the arrow after it arrive together.
+   Each arrow sits in its own gap box so it never draws outside a parent. #}
+<div class="item" {{ layer('step-'~loop.index,loop.index0*0.3) }} style="left:{{ s.x if s.portrait else s.x+loop.index0*(cw+40) }}px;top:{{ s.y+loop.index0*s.gap if s.portrait else s.y+100 }}px;width:{{ s.w if s.portrait else cw+(0 if loop.last else 40) }}px;height:{{ s.gap if s.portrait else 280 }}px">
+<div class="panel flow" style="position:absolute;left:0;top:0;width:{{ cw }}px;height:{{ bh }}px"><span class="small flow-index">{{ loop.index }}</span><p class="copy" data-fit style="height:{{ bh-50 if s.portrait else 220 }}px;font-size:32px;line-height:1.4">{{ row.label }}</p></div>
+{% if not loop.last %}<div class="flow-gap" style="position:absolute;{% if s.portrait %}left:0;top:{{ bh }}px;width:{{ s.w }}px;height:40px{% else %}left:{{ cw }}px;top:0;width:40px;height:280px{% endif %}"><span class="arrow">{{ '↓' if s.portrait else '→' }}</span></div>{% endif %}
+</div>
 {% endfor %}
 {% endblock %}
