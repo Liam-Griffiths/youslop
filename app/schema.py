@@ -829,7 +829,7 @@ class Project:
     # in this record: it can be thousands of words, and project.json is read and
     # rewritten constantly. Only the flag and the mode live here.
     has_source: bool = False
-    aspect: str = "landscape"      # landscape | portrait; rendering stays landscape for now
+    aspect: str = "landscape"      # landscape | portrait | square
     delivery: str = "voice_over"    # voice_over | on_camera | mixed
     fidelity: str = "faithful"      # faithful | adapted
     tone: str = "warm documentary"

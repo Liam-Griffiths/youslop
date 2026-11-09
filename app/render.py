@@ -203,6 +203,11 @@ def _kenburns(move: str, frames: int, amount: float,
         fx, fy = focal_px
         x = _clamp_to_focal(x, fx, "iw/zoom", "iw")
         y = _clamp_to_focal(y, fy, "ih/zoom", "ih")
+        if size[0] * HEIGHT != size[1] * WIDTH:
+            # An edge focal point cannot satisfy both inset bounds. For new
+            # aspects the image boundary wins, including at zoom=1.
+            x = f"clip({x},0,iw-iw/zoom)"
+            y = f"clip({y},0,ih-ih/zoom)"
     return (f"zoompan=z='{z}':x='{x}':y='{y}':"
             f"d={n}:s={size[0]}x{size[1]}:fps={fps}")
 
@@ -767,7 +772,7 @@ def _essay_stage(source: str, accent: str, src: Path | None,
 def _segment_graph(
     project: Project, group: list[tuple[Slide, float]], seg_len: float,
     op: str, channel=None, chapter: tuple[str, str] | None = None,
-    size: tuple[int, int] = (WIDTH, HEIGHT), fps: int = FPS,
+    size: tuple[int, int] | None = None, fps: int = FPS,
     dip_out: bool = False, camera_index: int = 0, last_line: bool = False,
     hide: frozenset = frozenset(), *, prepare_only: bool = False,
 ) -> tuple[list[str], str, str]:
@@ -779,12 +784,23 @@ def _segment_graph(
     fmt = kinds.kind_for(project, group[0][0])
     style = project.style
     frame = project.frame
+    size = size if size is not None else frame_size(project)
     w, h = size
     essay = fmt == "essay" and not group[0][0].on_camera
     camera_captions = (group[0][0].kind or style.format) == "essay" and group[0][0].on_camera
+    if (essay or camera_captions) and w * HEIGHT != h * WIDTH:
+        # Essay pictures and captions share landscape coordinates. Keep that
+        # composition intact until T14.2b supplies native aspect layouts.
+        inputs, graph, last = _segment_graph(
+            project, group, seg_len, op, channel, chapter, (WIDTH, HEIGHT), fps,
+            dip_out, camera_index, last_line, hide, prepare_only=prepare_only)
+        graph += (f";{last}scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[aspect]")
+        return inputs, graph, "[aspect]"
     slide = group[0][0]
-    # Segment proxies use preview_size(); full output uses (WIDTH, HEIGHT).
-    src, kind, focal = _chosen(project, slide, preview=size != (WIDTH, HEIGHT))
+    # A full portrait/square graph must still read the original footage.
+    src, kind, focal = _chosen(
+        project, slide, preview=size not in {frame_size(project), (WIDTH, HEIGHT)})
     source_slide = _picture_source(project, slide)
     candidate = next((c for c in source_slide.candidates if c['id'] == source_slide.chosen_id), {})
     span = ((candidate['in_s'], candidate['out_s'])
@@ -802,6 +818,11 @@ def _segment_graph(
     # The type cards are drawn once at 1080p and cached for the real render;
     # a smaller frame scales them on the way in rather than drawing a second set.
     card_fit = "" if (w, h) == (WIDTH, HEIGHT) else f",scale={w}:{h}"
+    if w * HEIGHT != h * WIDTH:
+        # Until the native type layouts land in T14.2b, preserve every edge
+        # of landscape title/chapter plates instead of stretching their text.
+        card_fit = (f",scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                    f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black@0")
 
     inputs: list[str] = []
     chain: list[str] = []
@@ -1047,7 +1068,7 @@ def _chapter_tail(project, out, chapter, seg_len, hold, size, fps, crf, threads,
 def _render_segment(
     project: Project, group: list[tuple[Slide, float]], seg_len: float,
     index: int, out: Path, channel=None, chapter: tuple[str, str] | None = None,
-    threads: int = 0, size: tuple[int, int] = (WIDTH, HEIGHT),
+    threads: int = 0, size: tuple[int, int] | None = None,
     fps: int = FPS, crf: int = 18, preset: str = "veryfast",
     frames: tuple[int, int] | None = None, dip_out: bool = False,
     op: str = "set", camera_index: int = 0, last_line: bool = False,
@@ -1071,6 +1092,7 @@ def _render_segment(
     essay card, the blur, the type cards — scales with `size`, so a preview is
     the same picture seen smaller rather than a differently composed one.
     """
+    size = size if size is not None else frame_size(project)
     fmt = kinds.kind_for(project, group[0][0])
     if "chapters" in hide:
         chapter = None
@@ -2320,10 +2342,25 @@ PREVIEW_FPS = max(1, FPS // 2)
 PREVIEW_CRF = 30
 
 
-def preview_size() -> tuple[int, int]:
+def frame_size(project: Project | None = None, preview: bool = False) -> tuple[int, int]:
+    """Project output dimensions; absent/unknown aspects keep the legacy size.
+
+    Explicit segment sizes still override this for callers composing proxies.
+    Preview axes are even because the encoder requires it. Keep the landscape
+    arithmetic unchanged so existing graph text and cache keys stay identical.
+    """
+    aspect = project.aspect if project is not None else "landscape"
+    w, h = {"portrait": (HEIGHT, WIDTH), "square": (HEIGHT, HEIGHT)}.get(
+        aspect, (WIDTH, HEIGHT))
+    if preview:
+        return (max(2, round(w * PREVIEW_SCALE) // 2 * 2),
+                max(2, round(h * PREVIEW_SCALE) // 2 * 2))
+    return w, h
+
+
+def preview_size(project: Project | None = None) -> tuple[int, int]:
     """The preview frame, even on both axes because the encoder insists."""
-    return (max(2, round(WIDTH * PREVIEW_SCALE) // 2 * 2),
-            max(2, round(HEIGHT * PREVIEW_SCALE) // 2 * 2))
+    return frame_size(project, preview=True)
 
 
 def _segments_before_slides(project: Project) -> int:

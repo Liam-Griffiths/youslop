@@ -62,3 +62,13 @@ def test_footage_overlay(project, request, monkeypatch):
     monkeypatch.setattr(render.ffutil, 'duration', lambda path: 12.)
     monkeypatch.setattr(block_overlays, 'clip', lambda *a, **kw: Path('<OVERLAY>/lower_third.mov'))
     test_segment_graph(project, request, 'footage_overlay', 'kenburns', (480, 270), 15, seg_len=9.)
+
+
+@pytest.mark.parametrize('aspect', ['portrait', 'square'])
+def test_new_aspect_graph(project, request, aspect):
+    # New references only: focal cover-crop, bounded drift and fitted type.
+    project.aspect = aspect
+    slide = project.slides[0]
+    next(c for c in slide.candidates if c['id'] == slide.chosen_id)['focal'] = [.85, .4]
+    test_segment_graph(project, request, f'doc_{aspect}', 'kenburns',
+                       render.frame_size(project), render.FPS)

@@ -231,7 +231,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.1c | Transcript controls, model downloads and Voice retime | M | T14.1b | done | 2026-11-08 Codex + review; controls, word edits, resumable replace; downloads and Voice retime split to T14.1d |
 | T14.1d | Speech-to-text inference refinements and Voice retime | M | T14.1c | done | 2026-11-08 Codex + review; voiced timing, turn markers, Voice retime (words only); downloads and seams split to T14.1e |
 | T14.1e | Speech-to-text Settings downloads and seam jitter | S | T14.1d | done | 2026-11-08 Codex + review; click-only whisper.cpp downloads, seam joins; real-engine check still to do |
-| T14.2 | Vertical and square output for the render pipeline | L | — | todo | WIDTH/HEIGHT fixed at 1920×1080 today; landscape goldens must stay identical |
+| T14.2 | Vertical and square output for the render pipeline | L | — | done | 2026-11-08 Codex + review; frame_size, focal cover-crop, portrait + square goldens; landscape byte-identical; pipeline wiring split to T14.2b |
+| T14.2b | Aspect through the whole pipeline, native layouts | L | T14.2 | todo | full-render wiring, portrait/square captions, essay and cards, proxies, Timeline, thumbnails, stage previews; reviewer previews at 9:16 and 1:1 |
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | transcript mode (whole, with suggestions) or manual mode (scrub, I/O, transcribe just this clip); LLM ranking opt-in |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
