@@ -10,13 +10,14 @@ import string
 import threading
 from typing import Any, Callable
 
-from . import kinds
+from . import kinds, llm
 from . import research as script_research
 from .config import WORDS_PER_MINUTE
 from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
 from .schema import Project, Slide
 
 Progress = Callable[[str], None]
+SEQUENTIAL_LOCAL = True
 
 
 def _context_map(pool, fn, items):
@@ -433,7 +434,8 @@ def _hook_for_section(hook: Any, sec: dict, opening: bool = False) -> str:
     return "\n".join(x for x in ["HOOK PLAN FOR THIS SECTION:" if lines else "", *lines, note] if x)
 
 
-def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
+def _write_section(project: Project, outline: dict, idx: int,
+                   written_before: list[str] | None = None) -> list[dict]:
     sections = outline["sections"]
     sec = sections[idx]
     words = int(sec.get("words") or 220)
@@ -467,6 +469,11 @@ def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
     if cast_block:
         facts_section += f"\n{cast_block}\n"
     visual_note = cast_mod.visual_rule(project)
+    narrated = ""
+    if written_before:
+        recent = " ".join(" ".join(written_before).split()[-1200:])
+        narrated = ("\n\nALREADY NARRATED (earlier sections, do not repeat their facts or lines):\n"
+                    + recent)
     prompt = f"""Write the narration for one section of a video.
 
 VIDEO: {outline.get('title')}
@@ -481,7 +488,7 @@ SECTIONS AFTER THIS ONE: {after}
 
 {kind_note}
 
-{_hook_for_section(outline.get("hook"), sec, opening=idx == 0)}
+{_hook_for_section(outline.get("hook"), sec, opening=idx == 0)}{narrated}
 
 {_frame_text(project)}
 
@@ -524,14 +531,17 @@ def draft_key(project: Project) -> str:
 
 
 def write_script(project: Project, outline: dict, progress: Progress = lambda m: None,
-                 checkpoint: Callable[[], None] = lambda: None) -> list[Slide]:
-    """Write every section. Sections are independent, so they run in parallel.
+                 checkpoint: Callable[[], None] = lambda: None,
+                 sequential: bool | None = None) -> list[Slide]:
+    """Write sections in order locally, or in parallel on hosted backends.
 
     Each finished section is banked on the project before the next one is waited
     on, and a section that fails does not discard the ones that succeeded
     alongside it. A run that dies halfway can then be re-run for the half it is
     missing rather than from the top.
     """
+    if sequential is None:
+        sequential = SEQUENTIAL_LOCAL and llm.resolve_backend() in llm.LOCAL_BACKENDS
     sections = outline["sections"]
     banked: dict[int, list[dict]] = {
         int(k): v for k, v in (project.draft.get("sections") or {}).items()
@@ -549,26 +559,35 @@ def write_script(project: Project, outline: dict, progress: Progress = lambda m:
     results = dict(banked)
     guard = threading.Lock()
     failure: BaseException | None = None
-    with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(copy_context().run, _write_section, project, outline, i): i for i in todo}
-        done = len(banked)
-        for fut in cf.as_completed(futures):
-            i = futures[fut]
-            try:
-                paragraphs = fut.result()
-            except BaseException as exc:      # noqa: BLE001 - re-raised below
-                # Keep going: the other sections in flight are still worth
-                # banking, and one of them failing does not spoil them.
-                failure = failure or exc
-                progress(f"Section “{sections[i].get('heading')}” failed: {str(exc)[:120]}")
-                continue
-            results[i] = paragraphs
-            done += 1
-            with guard:
-                project.draft.setdefault("sections", {})[str(i)] = paragraphs
-                checkpoint()
-            progress(f"Section {done}/{len(sections)} written "
-                     f"({sections[i].get('heading')})")
+    done = len(banked)
+
+    def finish(i: int, get_result: Callable[[], list[dict]]) -> None:
+        nonlocal done, failure
+        try:
+            paragraphs = get_result()
+        except BaseException as exc:      # noqa: BLE001 - re-raised below
+            # Keep successful sections even when another section fails.
+            failure = failure or exc
+            progress(f"Section “{sections[i].get('heading')}” failed: {str(exc)[:120]}")
+            return
+        results[i] = paragraphs
+        done += 1
+        with guard:
+            project.draft.setdefault("sections", {})[str(i)] = paragraphs
+            checkpoint()
+        progress(f"Section {done}/{len(sections)} written "
+                 f"({sections[i].get('heading')})")
+
+    if sequential:
+        for i in todo:
+            written_before = [p["text"] for earlier in range(i)
+                              for p in results.get(earlier, [])]
+            finish(i, lambda: _write_section(project, outline, i, written_before))
+    else:
+        with cf.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(copy_context().run, _write_section, project, outline, i): i for i in todo}
+            for fut in cf.as_completed(futures):
+                finish(futures[fut], fut.result)
     if failure is not None:
         raise failure
 
