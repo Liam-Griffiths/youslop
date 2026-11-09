@@ -33,9 +33,9 @@ def validate(take, overlays):
     return clean
 
 
-def compose(project, slide, inputs, graph, last, size, fps, *, prepare_only=False):
+def compose(project, slide, inputs, graph, last, size, fps, *, prepare_only=False, preview=False):
     """The camera keeps running under hard, enabled overlays, including punches."""
-    from . import cuts, render, scenes, scene_builder
+    from . import blocks, cuts, render, scenes, scene_builder
     take = project.active_take(slide) or {}
     w, h = size
     lead = cuts.transition_for(project.style) / 2 + cuts.head_pad_for(project, slide)
@@ -45,20 +45,25 @@ def compose(project, slide, inputs, graph, last, size, fps, *, prepare_only=Fals
         if source.get('template'):
             ctx = scenes.context_base(project)
             ctx.update(source.get('context') or {}, duration=seconds)
-            _, html, ctx = scenes._prepare(project, source['template'], ctx, seconds, size, fps,
+            source_size = blocks.source_size(f"{ctx['width']}:{ctx['height']}", size) if project.aspect in {'portrait', 'square'} else size
+            _, html, ctx = scenes._prepare(project, source['template'], ctx, seconds, source_size, fps,
                                            ('camera-builder-v1', scene_builder.MOTIONS))
             path = html.with_suffix('.mp4')
             if not prepare_only and not path.exists():
                 scene_builder.render(project, source['template'], ctx, path,
-                                     seconds=seconds, size=size, fps=fps, crf=18)
+                                     seconds=seconds, size=source_size, fps=fps, crf=18)
             kind, focal = 'video', []
         else:
             candidate = next((c for c in slide.candidates if c['id'] == source.get('candidate_id')), {})
-            path = render.project_dir(project.id) / candidate.get('local_path', '')
-            if not candidate.get('local_path') or not path.is_file():
+            if candidate.get('provider') == 'footage':
+                from .media.footage import resolve
+                path = resolve(candidate, preview=preview)
+            else:
+                path = render.project_dir(project.id) / candidate.get('local_path', '')
+            if not path or not path.is_file():
                 continue
             kind, focal = candidate.get('kind', 'image'), candidate.get('focal')
-        crop, point = ((f'scale={w}:{h}', None) if source.get('template') else
+        crop, point = ((render._fit_filter(size), None) if source.get('template') else
                        render._cover_crop(path, w * 2 if kind != 'video' else w,
                                           h * 2 if kind != 'video' else h, focal))
         if kind == 'video':
@@ -79,7 +84,8 @@ def compose(project, slide, inputs, graph, last, size, fps, *, prepare_only=Fals
             if item['kind'] == 'split':
                 half = w // 4 * 2
                 fit = f'scale={w}:{h},crop={half}:{h},setsar=1'
-                graph += (f';[{tag}cam]{fit}[{tag}c];[{tag}s]{fit}[{tag}m];'
+                media_fit = render._fit_filter((half, h)) if source.get('template') and project.aspect in {'portrait', 'square'} else fit
+                graph += (f';[{tag}cam]{fit}[{tag}c];[{tag}s]{media_fit}[{tag}m];'
                           f'[{tag}c][{tag}m]hstack=shortest=1[{tag}layout]')
             else:
                 bw, bh = w // 6 * 2, h // 6 * 2

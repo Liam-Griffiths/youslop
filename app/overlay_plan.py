@@ -42,7 +42,7 @@ def apply(project, slide):
     proposals = suggest(slide.narration, slide.visual_note, slide.title,
                         footage=base.get('provider') == 'footage',
                         channel=channels.load_or_none(project.channel_id),
-                        aspect='9:16' if project.aspect == 'portrait' else '16:9')
+                        aspect={'portrait': '9:16', 'square': '1:1'}.get(project.aspect, '16:9'))
     hand = [o for o in slide.overlays if o.get('by', 'hand') == 'hand']
     library = blocks.discover()
     used = {o['id'] for o in hand}

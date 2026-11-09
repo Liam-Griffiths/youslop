@@ -188,7 +188,7 @@ function visualPreview(g, byId) {
   return `<div class="mono">Picture ${g.i+1} · ¶${g.ids.map(id => byId[id].i+1).join(', ')} · ${g.seconds ? fmtTime(g.seconds)+' from the takes' : 'unvoiced'}</div>
     <h2>${esc(s.title || s.beat || 'Choose a picture')}</h2>${kindControl(s)}
     <p role="status">${esc(visualFinding(s))}</p>
-    <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : ''}">
+    <div class="visual-frame ${p.aspect === 'portrait' ? 'portrait' : p.aspect === 'square' ? 'square' : ''}">
       ${s.cues?.blocks?.length && !s.on_camera ? visualBlockStill(p, s) : c && !drawn && !s.on_camera ? `<img src="${thumbUrl(c)}" loading="lazy" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`
         : `<p>${s.on_camera ? 'Camera take · layouts and jump cuts in Edit' : drawn ? 'Drawn from the narration · preview on click' : pictureKind(s) === 'stage' ? '3D shot · open the shot editor to inspect' : 'Choose a source to fill this picture.'}</p>`}
@@ -340,7 +340,7 @@ function visualBlockStill(p, s) {
     : `<p role="status">${esc(trial?.error || (trial?.disabled ? 'Block preview disabled for snapshots.' : 'Loading block still…'))}</p>`;
 }
 function visualBlockPanel(p, s) {
-  const data = visualBlockData(p), aspect = p.aspect === 'portrait' ? '9:16' : '16:9';
+  const data = visualBlockData(p), aspect = p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9';
   const suggestions = data.suggestions.get(visualSuggestionKey(s)) || [];
   const available = (data.items || []).filter(b => b.kind === 'segment' && b.aspects.includes(aspect));
   const presets = (data.presets || []).filter(pr => !pr.missing && available.some(b => b.ref === pr.block));
@@ -394,14 +394,14 @@ async function loadVisualBlocks(p, s) {
   if (cue && !data.trials.has(trialKey)) {
     data.trials.set(trialKey, {});
     api(`/api/blocks/${cue.block}/preview`, {method:'POST',body:JSON.stringify({values:cue.vars || {},
-      aspect:p.aspect === 'portrait' ? '9:16' : '16:9',kind:'trial',session:visualBlockSession,sequence:++visualBlockSequence})})
+      aspect:p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9',kind:'trial',session:visualBlockSession,sequence:++visualBlockSequence})})
       .then(trial => {
         if (trial.stale) data.trials.delete(trialKey); else data.trials.set(trialKey,trial);
         repaint();
       })
       .catch(e => { data.trials.set(trialKey,{error:e.message}); repaint(); });
   }
-  const presetChoices = (data.presets || []).filter(pr => !pr.missing && (data.items || []).some(b => b.ref === pr.block && b.kind === 'segment' && b.aspects.includes(p.aspect === 'portrait' ? '9:16' : '16:9')));
+  const presetChoices = (data.presets || []).filter(pr => !pr.missing && (data.items || []).some(b => b.ref === pr.block && b.kind === 'segment' && b.aspects.includes(p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9')));
   document.querySelectorAll('[data-visual-preset]').forEach(card => { card.onclick = () => {
     const pr = presetChoices[Number(card.dataset.visualPreset)];
     openBlockPicker(p.id,s.id,{block:pr.block,vars:pr.values,preset:{id:pr.id,scope:pr.scope}});

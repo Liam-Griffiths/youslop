@@ -39,7 +39,7 @@ def validate(payload, previous=None):
         if key == 'seconds' and (isinstance(value, bool) or not isinstance(value, (int, float))
                                 or not math.isfinite(value) or value <= 0):
             raise ValueError('Preset seconds must be positive and finite')
-        if key == 'aspect' and (value not in ('16:9', '9:16') or block and value not in block['meta']['aspects']):
+        if key == 'aspect' and (value not in ('16:9', '9:16', '1:1') or block and value not in block['meta']['aspects']):
             raise ValueError('Unsupported preset aspect')
         result[key] = value
     return result

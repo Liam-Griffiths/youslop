@@ -170,7 +170,9 @@ def overlay_budget(sb, frame, ctx):
 def small_text(sb, frame, ctx):
     out, scene_small = [], {}
     for line in ctx.lines:
-        if line['type'] == 'caption':
+        if line['type'] in {'caption', 'title'} and line.get('native_metrics'):
+            size = line['native_metrics']['size']
+        elif line['type'] == 'caption':
             if sb.get('style', {}).get('captions_engine', 'scene') != 'pillow':
                 metrics = line.get('metrics')
                 if metrics is None:
@@ -605,7 +607,14 @@ def run(project, measure=False) -> dict:
     ctx = _ctx(sb)
     from . import scenes, stage
     can_measure = measure and bool(stage.browser())
-    if 'essay' in kinds.kinds_in(project) and project.style.captions_engine != 'pillow':
+    if project.aspect in {'portrait', 'square'}:
+        slide_by_id = {s.id: s for s in project.slides}
+        for line in ctx.lines:
+            if line['type'] in {'caption', 'title'}:
+                kicker = slide_by_id[line['slide_id']].beat if line['type'] == 'title' else ''
+                line['native_metrics'] = titles._native_card(line['text'], kicker,
+                    project.style.accent, None, render.frame_size(project), line['type'], measure_only=True)
+    elif 'essay' in kinds.kinds_in(project) and project.style.captions_engine != 'pillow':
         lines = [line for line in ctx.lines if line['type'] == 'caption']
         if lines:
             for line, metrics in zip(lines, scenes.measure_captions(
@@ -623,6 +632,22 @@ def run(project, measure=False) -> dict:
     if project.aspect in {'portrait', 'square'}:
         for para in sb['paragraphs']:
             slide = next(s for s in project.slides if s.id == para['id'])
+            from . import blocks
+            aspect = blocks.aspect_for(render.frame_size(project))
+            library = blocks.discover() if slide.overlays else {}
+            for overlay in slide.overlays:
+                meta = library.get(overlay['block_id'], {}).get('meta', {})
+                if meta.get('aspects') and aspect not in meta['aspects']:
+                    findings.append(_finding('aspect_overlay', 'P2', para['start'], slide.id,
+                        f"{overlay['block_id']} has no {aspect} layout; only this graphic is fitted from {blocks.nearest_aspect(meta, aspect)} at its own edge."))
+            if slide.on_camera:
+                w, h = render.frame_size(project)
+                for overlay in (project.active_take(slide) or {}).get('overlays', []):
+                    source = overlay.get('source', {})
+                    context = source.get('context') or {}
+                    if source.get('template') and context.get('width', 1920) * h != context.get('height', 1080) * w:
+                        findings.append(_finding('aspect_letterbox', 'P2', para['start'], slide.id,
+                            f"Camera overlay {source['template']} retains its source canvas and is fitted proportionally."))
             fallback = render.layout_fallback(project, slide)
             if fallback:
                 findings.append(_finding('aspect_letterbox', 'P2', para['start'], slide.id,

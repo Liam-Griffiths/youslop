@@ -72,6 +72,14 @@ def resolved(take, overlays, length=None):
     return result
 
 
+def fallback_geometry(size, aspect, position):
+    from . import titles
+    _, top, _, bottom = titles.safe_area(size)
+    source = blocks.source_size(aspect, (size[0], bottom-top))
+    y = top if position.startswith('top') else bottom-source[1]
+    return source, y
+
+
 def clip(project, item, size, fps, channel=None, *, prepare_only=False):
     block = deepcopy(blocks.discover().get(item['block_id']))
     if block is None:
@@ -80,19 +88,31 @@ def clip(project, item, size, fps, channel=None, *, prepare_only=False):
     block['meta']['duration'] = dict(mode='range', min=0)
     ctx = scenes.context_base(project, channel)
     ctx['fps'] = fps
+    target = blocks.aspect_for(size)
+    aspect = blocks.nearest_aspect(block['meta'], target)
+    source_size, y = fallback_geometry(size, aspect, item['position']) if aspect != target else (size, 0)
+    extra = ('overlay-fit-v1', size, item['position']) if aspect != target else ()
     template, ctx = blocks.prepare(item['block_id'], item['vars'],
-        ('16:9' if size[0] * 9 == size[1] * 16 else
-         '9:16' if size[1] > size[0] else '1:1'), item['dur'], context=ctx,
+        aspect, item['dur'], context=ctx,
         _block=block, overlay=True, position=item['position'])
-    _, html, ctx = scenes._prepare(project, template, ctx, item['dur'], size, fps,
-                                  ('block-overlay-v1', scene_builder.MOTIONS))
+    _, html, ctx = scenes._prepare(project, template, ctx, item['dur'], source_size, fps,
+                                  ('block-overlay-v1', scene_builder.MOTIONS, *extra))
     out = html.with_suffix('.mov')
     if not prepare_only and (not out.exists() or not out.stat().st_size):
         with tempfile.TemporaryDirectory(dir=out.parent, prefix='overlay-') as work:
             from pathlib import Path
             scene_builder.render(project, template, ctx, Path(work)/'clip.mov',
-                                 seconds=item['dur'], size=size, fps=fps, crf=18)
-            (Path(work)/'clip.mov').replace(out)
+                                 seconds=item['dur'], size=source_size, fps=fps, crf=18)
+            source = Path(work)/'clip.mov'
+            if aspect != target:
+                from . import ffutil
+                # Keep the authored inset and place the source canvas at its
+                # own edge, inside the destination's conservative safe area.
+                ffutil.run(['-i', str(source), '-vf',
+                    f'format=rgba,pad={size[0]}:{size[1]}:(ow-iw)/2:{y}:color=black@0',
+                    '-c:v', 'png', '-pix_fmt', 'rgba', '-an', str(out)])
+            else:
+                source.replace(out)
     return out
 
 

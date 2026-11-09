@@ -73,13 +73,21 @@ def _geometry(project, item, block, context):
     """Reuse scene text measurements, with no Chromium even on explicit Check."""
     block = deepcopy(block)
     block['meta']['duration'] = dict(mode='range', min=0)
+    target = blocks.aspect_for(render.frame_size(project))
+    aspect = blocks.nearest_aspect(block['meta'], target)
     template, ctx = blocks.prepare(item['block_id'], item['vars'],
-        '9:16' if project.aspect == 'portrait' else '16:9', item['dur'],
+        aspect, item['dur'],
         context=context, _block=block, overlay=True, position=item['position'])
     rows = scenes.measure_many(project, [(template, ctx, 0)], render=False)[0]
-    return [(r['x']/ctx['width'], r['y']/ctx['height'],
+    boxes = [(r['x']/ctx['width'], r['y']/ctx['height'],
              (r['x']+r['width'])/ctx['width'], (r['y']+r['height'])/ctx['height'])
             for r in rows if r.get('width', 0) > 0 and r.get('height', 0) > 0]
+    if aspect != target:
+        w, h = render.frame_size(project)
+        (sw, sh), y = block_overlays.fallback_geometry((w, h), aspect, item['position'])
+        boxes = [((x0*sw+(w-sw)/2)/w, (y0*sh+y)/h,
+                  (x1*sw+(w-sw)/2)/w, (y1*sh+y)/h) for x0, y0, x1, y1 in boxes]
+    return boxes
 
 
 def _region(position, portrait):
@@ -123,7 +131,7 @@ def run(project, sb):
     library, context = blocks.discover(), scenes.context_base(project)
     colors = context['vars']
     portrait = project.aspect == 'portrait'
-    size = (270, 480) if portrait else (480, 270)
+    size = render.preview_size(project)
     paras = {p['id']: p for p in sb['paragraphs']}
     slides = {s.id: s for s in project.slides}
     for seg in sb['segments']:

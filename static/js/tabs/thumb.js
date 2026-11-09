@@ -123,7 +123,7 @@ async function paintThumb() {
     <div class="thumb-wrap">
       <div>
         <button type="button" class="btn sm" onclick="renderThumb()">Draw thumbnail</button>
-        <div class="thumb-stage">
+        <div class="thumb-stage" style="aspect-ratio:${p.aspect === 'portrait' ? '9/16' : p.aspect === 'square' ? '1/1' : '16/9'}">
           ${t.rendered_at
             ? `<img id="thumbimg" src="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at}">`
             : `<div class="empty-note" id="thumbimg">Choose a picture, then draw the thumbnail.</div>`}

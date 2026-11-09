@@ -43,7 +43,7 @@ def test_photographic_chapter_dispatch(project, tmp_path, monkeypatch, engine, b
     chapter = ('Next chapter', '')
     calls = []
 
-    def graph(*args):
+    def graph(*args, **kwargs):
         calls.append(('graph', args[5]))
         return [], '[0:v]null[v]', '[v]'
 

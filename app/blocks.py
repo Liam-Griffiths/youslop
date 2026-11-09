@@ -251,6 +251,31 @@ class Loader(jinja2.BaseLoader):
         raise jinja2.TemplateNotFound(template)
 
 
+def aspect_for(size):
+    return '16:9' if size[0] * 9 == size[1] * 16 else '9:16' if size[1] > size[0] else '1:1'
+
+
+def nearest_aspect(meta, target):
+    """Prefer the closest declared ratio; square ties prefer landscape."""
+    if target in meta['aspects']:
+        return target
+    ratio = lambda a: int(a.split(':')[0]) / int(a.split(':')[1])
+    return min(meta['aspects'], key=lambda a: (round(abs(math.log(ratio(a) / ratio(target))), 8), a != '16:9'))
+
+
+def source_size(aspect, target):
+    """An even source canvas fitted inside the destination without distortion.
+
+    Both sides are whole multiples of the reduced ratio, so the canvas is the
+    composition's exact aspect (Chromium capture refuses even a 1px drift).
+    """
+    w, h = map(int, aspect.split(':'))
+    g = math.gcd(w, h)
+    a, b = 2 * w // g, 2 * h // g
+    k = max(1, min(target[0] // a, target[1] // b))
+    return a * k, b * k
+
+
 def prepare(block_id, values=None, aspect='16:9', seconds=None, *, context=None, theme=None, _block=None, overlay=False, position=None):
     block = _block if _block is not None else discover().get(block_id)
     if block is None:

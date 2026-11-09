@@ -383,7 +383,7 @@ def theme_context(scope='', owner='', overrides=None):
             apply(project, channel, scope, 'block.' + key, value)
     tokens = block_theme.resolve(project, channel)
     return dict(tokens=tokens, theme={k: v['value'] for k, v in tokens.items()},
-                aspect='9:16' if obj and getattr(obj, 'aspect', '') == 'portrait' else '16:9')
+                aspect={'portrait': '9:16', 'square': '1:1'}.get(getattr(obj, 'aspect', ''), '16:9'))
 
 
 def theme_sheet(payload):
@@ -396,7 +396,7 @@ def theme_sheet(payload):
     refs = [payload['ref']] if 'ref' in payload else SHEET_BLOCKS
     aspect = payload.get('aspect', context['aspect'])
     found = registry()
-    if any(ref not in found or aspect not in found[ref]['meta']['aspects'] for ref in refs):
+    if aspect not in ('16:9', '9:16', '1:1') or any(ref not in found for ref in refs):
         raise ValueError('Unknown block or unsupported aspect')
     with _LOCK:
         if sequence <= _REQUESTS.get(session, -1):
@@ -410,8 +410,10 @@ def theme_sheet(payload):
     for ref in refs:
         item = found[ref]
         values = SHEET_VALUES.get(ref, {})
-        template, ctx = blocks.prepare(ref, values, aspect, _block=item, theme=context['theme'])
-        key = sheet_poster_key(item, context['theme'], aspect, values)
+        source_aspect = blocks.nearest_aspect(item['meta'], aspect)
+        template, ctx = blocks.prepare(ref, values, source_aspect, _block=item, theme=context['theme'])
+        geometry = aspect if source_aspect == aspect else [aspect, source_aspect, 'fit-v1']
+        key = sheet_poster_key(item, context['theme'], geometry, values)
         out = preview_file(key, 'trial')
         if disabled and not out.exists():
             continue
@@ -426,7 +428,14 @@ def theme_sheet(payload):
         out = outputs[ref]
         out.parent.mkdir(parents=True, exist_ok=True)
         temporary = out.with_suffix('.part')
-        temporary.write_bytes(png)
+        if aspect not in found[ref]['meta']['aspects']:
+            import io
+            from PIL import Image, ImageOps
+            canvas = {'16:9': (480, 270), '9:16': (270, 480), '1:1': (270, 270)}[aspect]
+            image = ImageOps.pad(Image.open(io.BytesIO(png)).convert('RGB'), canvas, color='#0E0F11')
+            image.save(temporary, format='PNG')
+        else:
+            temporary.write_bytes(png)
         os.replace(temporary, out)
     with _RENDER_LOCK:
         if _REQUESTS.get(session) != sequence:

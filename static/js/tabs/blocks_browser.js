@@ -36,7 +36,7 @@ async function renderBlocks(path = '', options = {}) {
       ${options.project ? `<option value="project:${esc(options.project)}">This project</option>` : ''}</select>
     <label for="blocks-search">Find a block</label><input type="search" id="blocks-search" value="${esc(query)}" placeholder="Name, tag or variable">
     ${[['category','Category', [...new Set(items.map(b => b.category))].sort()],
-       ['aspect','Aspect',['16:9','9:16']], ['source','Source',['built-in','packs','mine']]].map(([key,label,values]) => `
+       ['aspect','Aspect',['16:9','9:16','1:1']], ['source','Source',['built-in','packs','mine']]].map(([key,label,values]) => `
       <label for="blocks-${key}">${label}</label><select id="blocks-${key}"><option value="">All</option>
       ${values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>`).join('')}
     <label><input type="checkbox" id="blocks-data"> Works with data</label>
@@ -449,7 +449,7 @@ async function blockProjectTarget(selection) {
 async function openBlockPicker(pid, sid, selection = null, targets = null) {
   const p = state.project;
   selection ||= p?.slides.find(s => s.id === sid)?.cues?.blocks?.[0];
-  await renderBlocks(selection?.block || '', {mode:'pick', project:pid, slide:sid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : '16:9', onUse:async selection => {
+  await renderBlocks(selection?.block || '', {mode:'pick', project:pid, slide:sid, channel:p?.channel_id, selection, aspect:p?.aspect === 'portrait' ? '9:16' : p?.aspect === 'square' ? '1:1' : '16:9', onUse:async selection => {
     for (const id of targets || [sid]) await applyBlockToSlide(pid,id,selection);
     state.project = await api(`/api/projects/${pid}`);
     await render();

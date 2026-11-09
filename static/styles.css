@@ -1155,6 +1155,7 @@ audio, video { color-scheme: dark; }
 .visual-preview { padding:16px 20px; min-width:0; }
 .visual-preview h2 { font-size:16px; }
 .visual-frame { aspect-ratio:16/9; display:grid; place-items:center; background:var(--panel); border:1px solid var(--line); overflow:hidden; margin:12px 0; }
+.visual-frame.square { aspect-ratio:1/1; max-width:480px; margin-inline:auto; }
 .visual-frame.portrait { aspect-ratio:9/16; max-width:270px; margin-inline:auto; }
 .visual-frame img { width:100%; height:100%; object-fit:contain; min-height:0; }
 .visual-frame p { padding:16px; color:var(--dim); text-align:center; }

@@ -402,7 +402,7 @@ def safe_area(canvas):
     return round(w * .08), round(h * .10), round(w * .80), round(h * .72)
 
 
-def _native_card(text, kicker, accent, out_path, canvas, kind):
+def _native_card(text, kicker, accent, out_path, canvas, kind, *, measure_only=False):
     # Measure every glyph, including an unbroken URL; never truncate a line.
     w, h = canvas
     left, top, right, bottom = safe_area(canvas)
@@ -439,6 +439,8 @@ def _native_card(text, kicker, accent, out_path, canvas, kind):
     kfont, klines, klead = fit(kicker.upper(), 24, max_h * .25) if kicker else (None, [], 0)
     kh = len(klines) * klead + (24 if kicker else 0)
     font, lines, leading = fit(text, 62 if kind == 'caption' else 80, max_h - kh)
+    if measure_only:
+        return dict(size=font.size, px=font.size, overflow=False, lines=len(lines))
     block_h = len(lines) * leading + kh
     y = bottom - block_h - 24 if kind != 'chapter' else (top + bottom - block_h) / 2
     plate_top = y - 20

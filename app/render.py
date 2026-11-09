@@ -515,16 +515,16 @@ def _reframe(size: tuple[int, int], fps: int) -> tuple[str, ...]:
     return ("-vf", _fit_filter(size), "-r", str(fps))
 
 
-def _fit_filter(size):
+def _fit_filter(size, *, proportional=False):
     w, h = size
-    if w * HEIGHT == h * WIDTH:
+    if w * HEIGHT == h * WIDTH and not proportional:
         return f"scale={w}:{h}"
     return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
             f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
 
 
-def _fit_clip(src, out, size, fps=FPS, crf=18):
-    ffutil.run(['-i', str(src), '-vf', _fit_filter(size), '-r', str(fps),
+def _fit_clip(src, out, size, fps=FPS, crf=18, *, proportional=False):
+    ffutil.run(['-i', str(src), '-vf', _fit_filter(size, proportional=proportional), '-r', str(fps),
                 *ffutil.video_args(out, crf=crf), '-pix_fmt', 'yuv420p', '-an', str(out)])
     return out
 
@@ -533,11 +533,6 @@ def layout_fallback(project, slide):
     """One policy shared by rendering and check findings for legacy layouts."""
     from . import blocks
     aspect = {'portrait': '9:16', 'square': '1:1'}.get(project.aspect, '16:9')
-    if slide.overlays:
-        library = blocks.discover()
-        if any(aspect not in library.get(o['block_id'], {}).get('meta', {}).get('aspects', {})
-               for o in slide.overlays):
-            return 'Overlay block'
     if slide.on_camera:
         return None
     selected = (slide.cues or {}).get('blocks')
@@ -813,7 +808,7 @@ def _segment_graph(
     op: str, channel=None, chapter: tuple[str, str] | None = None,
     size: tuple[int, int] | None = None, fps: int = FPS,
     dip_out: bool = False, camera_index: int = 0, last_line: bool = False,
-    hide: frozenset = frozenset(), *, prepare_only: bool = False,
+    hide: frozenset = frozenset(), *, prepare_only: bool = False, preview: bool | None = None,
 ) -> tuple[list[str], str, str]:
     """Return input args, filtergraph and output label for a photographic segment.
 
@@ -830,7 +825,7 @@ def _segment_graph(
     slide = group[0][0]
     # A full portrait/square graph must still read the original footage.
     src, kind, focal = _chosen(
-        project, slide, preview=size not in {frame_size(project), (WIDTH, HEIGHT)})
+        project, slide, preview=(size not in {frame_size(project), (WIDTH, HEIGHT)} if preview is None else preview))
     source_slide = _picture_source(project, slide)
     candidate = next((c for c in source_slide.candidates if c['id'] == source_slide.chosen_id), {})
     span = ((candidate['in_s'], candidate['out_s'])
@@ -923,7 +918,7 @@ def _segment_graph(
     if slide.on_camera:
         from .camera_overlays import compose
         inputs, graph, last = compose(project, slide, inputs, graph, last, size, fps,
-                                      prepare_only=prepare_only)
+                                      prepare_only=prepare_only, preview=(size != frame_size(project) if preview is None else preview))
         n_inputs = inputs.count('-i')
 
     if 'graphics' not in hide and not slide.on_camera and any(s.overlays for s, _ in group):
@@ -1118,7 +1113,7 @@ def _render_segment(
     fps: int = FPS, crf: int = 18, preset: str = "veryfast",
     frames: tuple[int, int] | None = None, dip_out: bool = False,
     op: str = "set", camera_index: int = 0, last_line: bool = False,
-    hide: frozenset = frozenset(),
+    hide: frozenset = frozenset(), preview: bool | None = None,
 ) -> Path:
     """Render one held picture to a silent mp4 of exactly `seg_len` seconds.
 
@@ -1139,14 +1134,8 @@ def _render_segment(
     the same picture seen smaller rather than a differently composed one.
     """
     size = size if size is not None else frame_size(project)
+    preview = size != frame_size(project) if preview is None else preview
     fmt = kinds.kind_for(project, group[0][0])
-    if size[0] * HEIGHT != size[1] * WIDTH and layout_fallback(project, group[0][0]):
-        with tempfile.TemporaryDirectory(dir=out.parent, prefix='aspect-base-') as work:
-            base = Path(work) / 'base.mp4'
-            _render_segment(project, group, seg_len, index, base, channel, chapter,
-                threads, (WIDTH, HEIGHT), fps, crf, preset, dip_out=dip_out,
-                op=op, camera_index=camera_index, last_line=last_line, hide=hide, frames=frames)
-            return _fit_clip(base, out, size, fps, crf)
     if "chapters" in hide:
         chapter = None
     style = project.style
@@ -1160,7 +1149,7 @@ def _render_segment(
     if group[0][0].on_camera:
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
-                               crf=crf, preset=preset, last_line=last_line, hide=hide)
+                               crf=crf, preset=preset, last_line=last_line, hide=hide, preview=preview)
     if ('graphics' not in hide and any(s.overlays for s, _ in group) and not cuts.is_cut(fmt)
             and ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt)
                  or fmt.startswith('custom:'))):
@@ -1174,7 +1163,7 @@ def _render_segment(
             base = Path(work) / 'base.mp4'
             _render_segment(project, base_group, seg_len, index, base, channel,
                 None, threads, size, fps, crf, preset, dip_out=dip_out, op=op,
-                camera_index=camera_index, last_line=last_line, hide=hide)
+                camera_index=camera_index, last_line=last_line, hide=hide, preview=preview)
             inputs, graph, last = compose(project, group, ['-i', str(base)],
                 '[0:v]null[base]', '[base]', size, fps, channel)
             script = Path(work) / 'graph.ffgraph'
@@ -1185,6 +1174,13 @@ def _render_segment(
                 '-pix_fmt', 'yuv420p', '-an', str(out)], threads=threads)
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
+    if size[0] * HEIGHT != size[1] * WIDTH and layout_fallback(project, group[0][0]) not in {None, 'Block'}:
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix='aspect-base-') as work:
+            base = Path(work) / 'base.mp4'
+            _render_segment(project, group, seg_len, index, base, channel, chapter,
+                threads, preview_size() if preview else (WIDTH, HEIGHT), fps, crf, preset, dip_out=dip_out,
+                op=op, camera_index=camera_index, last_line=last_line, hide=hide, frames=frames, preview=preview)
+            return _fit_clip(base, out, size, fps, crf)
     if (group[0][0].cues or {}).get('blocks'):
         from . import blocks, scene_builder
         from copy import deepcopy
@@ -1196,11 +1192,19 @@ def _render_segment(
         block['meta']['duration'] = dict(mode='range', min=0)
         ctx = scenes.context_base(project, channel)
         ctx.update(narration=slide.narration, take=slide.take, research=project.research)
-        template, ctx = blocks.prepare(cue['block'], cue['vars'],
-            ('16:9' if size[0] * HEIGHT == size[1] * WIDTH else
-             '9:16' if size[1] > size[0] else '1:1'), seg_len, context=ctx, _block=block)
-        scene_builder.render(project_dir(project.id), template, ctx, out,
-                             seconds=seg_len, size=size, fps=fps, crf=crf, frames=frames)
+        aspect = blocks.nearest_aspect(block['meta'], blocks.aspect_for(size))
+        template, ctx = blocks.prepare(cue['block'], cue['vars'], aspect,
+                                       seg_len, context=ctx, _block=block)
+        source_size = blocks.source_size(aspect, size)
+        if source_size == size:
+            scene_builder.render(project_dir(project.id), template, ctx, out,
+                                 seconds=seg_len, size=size, fps=fps, crf=crf, frames=frames)
+        else:
+            with tempfile.TemporaryDirectory(dir=out.parent, prefix='block-base-') as work:
+                base = Path(work) / 'base.mp4'
+                scene_builder.render(project_dir(project.id), template, ctx, base,
+                    seconds=seg_len, size=source_size, fps=fps, crf=crf, frames=frames)
+                _fit_clip(base, out, size, fps, crf, proportional=True)
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
     if not cuts.is_cut(fmt) and scenes.handles(fmt):
@@ -1221,7 +1225,7 @@ def _render_segment(
         # silence on the video's first paragraph.
         return cuts.render_segment(
             project, group, seg_len, out, channel=channel,
-            image_for=lambda s: _chosen(project, s)[0], size=size, fps=fps,
+            image_for=lambda s: _chosen(project, s, preview=preview)[0], size=size, fps=fps,
             crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
             chapter=chapter, frames=frames,
             hold=hold, hide=hide)
@@ -1230,7 +1234,7 @@ def _render_segment(
         board_mod.render_segment(
             project, group, seg_len, out, channel=channel,
             cache=project_dir(project.id) / "board",
-            image_for=lambda s: _chosen(project, s)[0],
+            image_for=lambda s: _chosen(project, s, preview=preview)[0],
             crf=crf, extra=_reframe(size, fps))
         return _chapter_tail(project, out, chapter, seg_len, hold, size,
                              fps, crf, threads, channel)
@@ -1238,7 +1242,7 @@ def _render_segment(
     scene_chapter = bool(chapter and style.chapter_engine == "scene" and size[0] * HEIGHT == size[1] * WIDTH and stage.browser())
     inputs, graph, last = _segment_graph(
         project, group, seg_len, op, channel, None if scene_chapter else chapter, size, fps, dip_out,
-        camera_index, last_line, hide)
+        camera_index, last_line, hide, preview=preview)
 
     args = [*inputs, "-filter_complex", graph, "-map", last,
             "-t", f"{seg_len:.3f}", "-r", str(fps),
@@ -1492,11 +1496,11 @@ def camera_thumbnail(project, slide) -> Path:
 
 def _camera_segment(project, group, seg_len, out, size, fps, *, channel=None,
                     chapter=None, threads=0, crf=18, preset="veryfast",
-                    last_line=False, hide=frozenset()):
+                    last_line=False, hide=frozenset(), preview=None):
     # Camera footage uses photographic titles/cards in every format. This graph
     # only draws static cards once; the moving picture stays entirely in ffmpeg.
     inputs, graph, last = _segment_graph(project, group, seg_len, "set", channel,
-                                        chapter, size, fps, last_line=last_line, hide=hide)
+                                        chapter, size, fps, last_line=last_line, hide=hide, preview=preview)
     with tempfile.TemporaryDirectory(prefix='camera-graph-', dir=out.parent) as work:
         script = Path(work) / 'graph.txt'
         script.write_text(graph)
@@ -1914,7 +1918,7 @@ def _segment_key(project, group, settings) -> str:
             ffutil.video_args("segment.mp4", crf=settings["crf"], preset=settings["preset"]),
             ffutil.h264("segment.mp4", crf=settings["crf"], preset=settings["preset"])]
     if project.aspect in {'portrait', 'square'}:
-        spec.append(['aspect-layout-v1', frame_size(project)])
+        spec.append(['aspect-layout-v2', frame_size(project)])
     return hashlib.sha1(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -2616,6 +2620,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     from .camera import target
     if lead.on_camera:
         slides[0].append(target(project))
+    if project.aspect in {'portrait', 'square'}:
+        slides.append(['aspect-preview-v2', frame_size(project)])
     blob = json.dumps(
         [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
          index, [sum(d for _, d in g) for g in groups[:index]], slides, _stat(pic),
@@ -2627,7 +2633,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
          cache_owner(project.style), project.frame.to_dict(),
          camera_plan(project, groups)[index],
          cache_owner(channel),
-         _segments_before_slides(project), list(preview_size()), PREVIEW_FPS],
+         _segments_before_slides(project), list(preview_size(project)), PREVIEW_FPS],
         default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -2700,7 +2706,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
     lead = group[0][0]
     channel = channels_mod.load_or_none(project.channel_id)
     out, keyfile = _proxy_paths(project, lead, hide)
-    size = preview_size()
+    size = preview_size(project)
     key = _proxy_key(project, groups, index, channel, hide)
     dur, T, seg_len = _segment_timing(project, groups, index)
 
@@ -2914,7 +2920,7 @@ def _sponsor_preview(project, slot):
     template, ctx = blocks.prepare(block_id, values, '16:9', sponsors.duration(slot),
                                    context=ctx, _block=block)
     take_path = (slot.take or {}).get('path')
-    key, _html = scenes._key(template, ctx, sponsors.duration(slot), preview_size(),
+    key, _html = scenes._key(template, ctx, sponsors.duration(slot), preview_size(project),
                             PREVIEW_FPS, ('sponsor-proxy-v1', scene_builder.MOTIONS,
                                           _stat(project_dir(project.id) / take_path) if take_path else None))
     out = project_dir(project.id) / 'cache' / f'tl_sponsor_{key}.mp4'
@@ -2922,7 +2928,7 @@ def _sponsor_preview(project, slot):
 
 
 def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
-    from . import scene_builder, sponsors
+    from . import blocks, scene_builder, sponsors
     slot = next((s for s in project.sponsors if s.id == slot_id), None)
     if slot is None:
         raise ValueError('Sponsor slot not found')
@@ -2934,8 +2940,13 @@ def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
         with tempfile.TemporaryDirectory(dir=out.parent, prefix='sponsor-') as work:
             pending = Path(work) / 'preview.mp4'
             scene_builder.render(project, template, ctx, pending, seconds=seconds,
-                                 size=preview_size(), fps=PREVIEW_FPS, crf=PREVIEW_CRF)
-            pending.replace(out)
+                                 size=blocks.source_size(
+                                     blocks.aspect_for((ctx['width'], ctx['height'])),
+                                     preview_size(project)), fps=PREVIEW_FPS, crf=PREVIEW_CRF)
+            if project.aspect in {'portrait', 'square'}:
+                _fit_clip(pending, out, preview_size(project), PREVIEW_FPS, PREVIEW_CRF)
+            else:
+                pending.replace(out)
     if audible and slot.take and slot.take.get('path'):
         voiced = out.with_name(out.stem + '_voice.mp4')
         if not voiced.exists():
@@ -3291,7 +3302,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
     for n, seg in enumerate(segments):
         seg["index"] = n
     from . import sponsors
-    size = preview_size()
+    size = preview_size(project)
     pres = project.presenter
     return {
         "sponsor_suggestions": sponsors.suggest_slots(project),

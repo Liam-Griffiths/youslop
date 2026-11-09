@@ -971,6 +971,16 @@ def scene_context(project: Project, root: Path, src: _Source) -> dict:
     return ctx
 
 
+def _project_thumb(project, image):
+    if project.aspect not in {'portrait', 'square'}:
+        return image
+    from . import render
+    from PIL import ImageOps
+    w, h = render.frame_size(project)
+    return ImageOps.pad(image, (round(w * 720 / h), 720), color=(10, 11, 14),
+                        method=Image.Resampling.LANCZOS)
+
+
 def render_thumb(project: Project, root: Path, out_path: Path) -> Path:
     """Draw the thumbnail to a jpeg. Returns the path written."""
     t: Thumb = project.thumb
@@ -987,7 +997,7 @@ def render_thumb(project: Project, root: Path, out_path: Path) -> Path:
                                  t=0.0, size=(W, H))
             out = Image.open(io.BytesIO(png)).convert('RGB')
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out.save(out_path, 'JPEG', quality=90, optimize=True, progressive=True)
+            _project_thumb(project, out).save(out_path, 'JPEG', quality=90, optimize=True, progressive=True)
             return out_path
         except Exception:
             log.warning('Thumbnail scene failed for %s; using Pillow', t.template, exc_info=True)
@@ -998,7 +1008,7 @@ def render_thumb(project: Project, root: Path, out_path: Path) -> Path:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # YouTube's ceiling is 2MB; quality 90 at 1280×720 lands around 250KB.
-    out.save(out_path, "JPEG", quality=90, optimize=True, progressive=True)
+    _project_thumb(project, out).save(out_path, "JPEG", quality=90, optimize=True, progressive=True)
     return out_path
 
 

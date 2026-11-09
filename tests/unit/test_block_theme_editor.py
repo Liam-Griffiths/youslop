@@ -86,3 +86,26 @@ def test_all_preview_kinds_resolve_scope_and_scratch(owners, monkeypatch):
         main.block_preview('title_card', dict(kind=kind, theme_context=dict(scope='channel', owner=channel.id, overrides={'accent':'#FF3366'})))
         assert preview.call_args.kwargs['theme']['accent'] == '#FF3366'
     assert channels.load(channel.id).style.block_theme['accent'] == '#3DFFDC'
+
+
+def test_square_sheet_fits_each_available_source(owners, monkeypatch):
+    import io
+    from PIL import Image
+    _, project = owners
+    project.aspect = 'square'
+    store.save(project)
+    seen = []
+    def capture(items, root, *, on_still):
+        for item in items:
+            seen.append(item['size'])
+            png = io.BytesIO()
+            Image.new('RGB', item['size'], 'white').save(png, format='PNG')
+            on_still(item['clip'], png.getvalue())
+    monkeypatch.setattr(library.stage, 'capture_stills', capture)
+    result = library.theme_sheet(dict(scope='project', id=project.id,
+                                     session='square-sheet', sequence=0, ref='title_card'))
+    assert result['aspect'] == '1:1' and seen == [(480, 270)]
+    key = result['posters'][0]['url'].split('/')[-2]
+    with Image.open(library.preview_file(key, 'trial')) as image:
+        assert image.size == (270, 270)
+        assert image.getpixel((0, 0)) != image.getpixel((135, 135))

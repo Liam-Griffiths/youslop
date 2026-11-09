@@ -1690,7 +1690,7 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             edits.patch_slide_fields(s, payload)
             if isinstance(payload.get('cues'), dict) and payload['cues'].get('blocks'):
                 from . import blocks
-                aspect = '9:16' if p.aspect == 'portrait' else '16:9'
+                aspect = {'portrait': '9:16', 'square': '1:1'}.get(p.aspect, '16:9')
                 found = blocks.discover()
                 if s.on_camera or any(aspect not in found[c['block']]['meta']['aspects'] for c in s.cues['blocks']):
                     raise edits.EditError('Choose a non-camera paragraph with a supported aspect.')
@@ -1712,7 +1712,7 @@ def block_suggestions(pid: str, sid: str) -> list[dict]:
     from .block_library import registry
     p = _load(pid)
     s = _slide(p, sid)
-    aspect = '9:16' if p.aspect == 'portrait' else '16:9'
+    aspect = {'portrait': '9:16', 'square': '1:1'}.get(p.aspect, '16:9')
     found = registry()
     from .blocks import validate_vars
     out = []
@@ -4341,6 +4341,7 @@ def shot_scene(pid: str, sid: str) -> dict:
         raise HTTPException(400, "No subject in this shot has a model yet.")
     entries = [{"sid": e["sid"], "manifest": _model_or_404(e["model"])} for e in shots_mod.entries(p, it)]
     return {"entries": entries, "intent": it, "solved": (s.shot or {}).get("solved"), "secs": secs,
+            "size": render.frame_size(p),
             "locked": bool((s.shot or {}).get("locked"))}
 
 

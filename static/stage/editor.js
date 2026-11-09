@@ -28,9 +28,10 @@ async function mount(el, data, { onTime = () => {} } = {}) {
     renderer.dispose();
     throw new Error(`Could not load the scene: ${e.message || e}`);
   }
-  const fitCam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);
-  const cam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);
-  const checkCam = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 1000);
+  const [W, H] = data.size || [1920, 1080];
+  const fitCam = new THREE.PerspectiveCamera(35, W / H, 0.1, 1000);
+  const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 1000);
+  const checkCam = new THREE.PerspectiveCamera(35, W / H, 0.1, 1000);
   const plan = planFor(data.intent, sc, fitCam, { secs: data.secs });
   const checks = (data.solved && data.solved.checks) || {};
   let undoLook = applyLook(renderer, sc.scene, plan.look, { models: sc.holders, haze: checks.haze });
@@ -41,10 +42,10 @@ async function mount(el, data, { onTime = () => {} } = {}) {
   controls.enabled = false; controls.enableDamping = true;
 
   function size() {
-    const w = el.clientWidth || 640, h = Math.round(w * 9 / 16);
+    const w = el.clientWidth || 640, h = Math.round(w * H / W);
     renderer.setSize(w, h, false);
     renderer.domElement.style.width = '100%'; renderer.domElement.style.height = 'auto';
-    cam.aspect = 16 / 9; cam.updateProjectionMatrix();
+    cam.aspect = W / H; cam.updateProjectionMatrix();
     return [w, h];
   }
   const ro = new ResizeObserver(size); ro.observe(el);
@@ -53,7 +54,7 @@ async function mount(el, data, { onTime = () => {} } = {}) {
   function pose() {
     if (!shot || free) return;
     const N = frameCount(shot);
-    applyPose(cam, poseAt(shot, Math.min(N - 1, Math.round(t * FPS))), { W: 1920, H: 1080 });
+    applyPose(cam, poseAt(shot, Math.min(N - 1, Math.round(t * FPS))), { W, H });
   }
   // A view to start the free camera from, when there is no shot yet.
   function startView() {

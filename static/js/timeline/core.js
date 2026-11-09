@@ -95,7 +95,7 @@ async function tlMount() {
     </div>
     <div class="tl-main">
       <section class="tl-player" aria-label="Player">
-        <div class="tl-stage" id="tl-stage">
+        <div class="tl-stage" id="tl-stage" style="aspect-ratio:${TL.data.width}/${TL.data.height};width:min(100%,calc(65vh * ${TL.data.width} / ${TL.data.height}));margin-inline:auto">
           <div class="tl-msg" id="tl-msg"></div>
         </div>
         <div class="tl-transport">
