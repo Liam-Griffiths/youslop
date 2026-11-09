@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import concurrent.futures as cf
+from contextvars import copy_context
 import hashlib
 import re
 import string
@@ -16,6 +17,12 @@ from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
 from .schema import Project, Slide
 
 Progress = Callable[[str], None]
+
+
+def _context_map(pool, fn, items):
+    """Like executor.map, with a separate caller context for each task."""
+    futures = [pool.submit(copy_context().run, fn, item) for item in items]
+    return (future.result() for future in futures)
 
 
 NARRATOR_SYSTEM = """You write narration for long-form informational YouTube videos \
@@ -543,7 +550,7 @@ def write_script(project: Project, outline: dict, progress: Progress = lambda m:
     guard = threading.Lock()
     failure: BaseException | None = None
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_write_section, project, outline, i): i for i in todo}
+        futures = {pool.submit(copy_context().run, _write_section, project, outline, i): i for i in todo}
         done = len(banked)
         for fut in cf.as_completed(futures):
             i = futures[fut]
@@ -686,7 +693,7 @@ of these {len(chunk)} paragraphs should get one. Everything else gets "".
             require_hint='Each item needs "n" and a "queries" array.')
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for ci, plan in pool.map(run, list(enumerate(chunks))):
+        for ci, plan in _context_map(pool, run, enumerate(chunks)):
             chunk = chunks[ci]
             records = find_records(plan, "queries")
             by_n = {}
@@ -800,7 +807,7 @@ a hierarchy, an overlap, a loop. At most {max(1, len(chunk) // 4)} of these
             require_hint='Each item needs "n" and a "lead".')
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for ci, plan in pool.map(run, list(enumerate(chunks))):
+        for ci, plan in _context_map(pool, run, enumerate(chunks)):
             chunk = chunks[ci]
             by_n = {}
             for pos, item in enumerate(find_records(plan, "lead"), 1):
@@ -902,7 +909,7 @@ def _plan_cues_kind(project, slides, fmt, progress, instruction):
             require_hint='Each item needs "n" and a "cues" list.')
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for ci, plan in pool.map(run, list(enumerate(chunks))):
+        for ci, plan in _context_map(pool, run, enumerate(chunks)):
             chunk = chunks[ci]
             by_n = {}
             for pos, item in enumerate(find_records(plan, "cues"), 1):
@@ -976,7 +983,7 @@ Return JSON: a list of objects, one per paragraph that has a problem:
 
     all_flags: list[dict] = []
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for flags in pool.map(run, list(enumerate(chunks))):
+        for flags in _context_map(pool, run, enumerate(chunks)):
             all_flags.extend(flags)
     progress(f"Fact check: {len(all_flags)} paragraph(s) flagged")
     return all_flags + hook_flags
@@ -1202,7 +1209,7 @@ example", a numeral stays a numeral only if you would say it that way.""",
     results: dict[int, list[dict]] = {}
     with cf.ThreadPoolExecutor(max_workers=3) as pool:
         done = 0
-        for ci, paras in pool.map(segment, list(enumerate(chunks))):
+        for ci, paras in _context_map(pool, segment, enumerate(chunks)):
             results[ci] = paras
             done += 1
             progress(f"Chunk {done}/{len(chunks)} segmented ({len(paras)} paragraphs)")
@@ -1416,7 +1423,7 @@ Rules:
             require_hint='Each item needs "n" and a "slots" array.')
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        for ci, plan in pool.map(run, list(enumerate(chunks))):
+        for ci, plan in _context_map(pool, run, enumerate(chunks)):
             chunk = chunks[ci]
             by_n = {}
             for pos, item in enumerate(find_records(plan, "slots"), 1):

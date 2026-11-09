@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import wraps
 import json
 import logging
 import re
@@ -38,6 +39,57 @@ _USAGE = ContextVar('llm_usage', default=None)
 # Set by complete_json() so a backend that can constrain its output to JSON
 # does, without changing complete()'s signature for every caller.
 _WANT_JSON = ContextVar('llm_want_json', default=False)
+status_sink: ContextVar[Callable[[str], None] | None] = ContextVar('llm_status', default=None)
+status_label: ContextVar[Callable[[], str]] = ContextVar('llm_label', default=lambda: 'Model call')
+
+
+@contextmanager
+def call_status(backend: str):
+    sink = status_sink.get()
+    label = status_label.get()()[:60]
+    if sink:
+        sink(f"{label} · waiting for {BACKEND_LABELS[backend]}")
+    try:
+        yield
+    finally:
+        if sink:
+            sink("")
+
+
+def _local_status(backend):
+    def decorate(fn):
+        @wraps(fn)
+        def run(*args, **kwargs):
+            with call_status(backend):
+                return fn(*args, **kwargs)
+        return run
+    return decorate
+
+
+class _StreamProgress:
+    """Deltas approximate tokens until the server supplies its final usage.
+
+    Count content and reasoning separately; neither reasoning nor partial JSON
+    is exposed to the UI. Only arrivals trigger updates, so a stalled stream
+    leaves its last counter visible.
+    """
+    def __init__(self):
+        self.sink = status_sink.get()
+        self.label = status_label.get()
+        self.started = time.monotonic()
+        self.last = self.started
+        self.content = self.reasoning = 0
+
+    def update(self, content="", reasoning="", total=None, force=False):
+        self.content += bool(content)
+        self.reasoning += bool(reasoning)
+        now = time.monotonic()
+        if not self.sink or (not force and now - self.last < .5):
+            return
+        n = total if total is not None else self.content + self.reasoning
+        thinking = " (thinking)" if self.reasoning and not self.content else ""
+        self.sink(f"{self.label()[:60]} · {n:,} tokens · {n / max(now - self.started, .001):.0f} tok/s{thinking}")
+        self.last = now
 
 
 @contextmanager
@@ -353,6 +405,7 @@ def _complete_api(
     return text
 
 
+@_local_status("ollama")
 def _complete_ollama(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
     effort: str = "", images: list[bytes] | None = None,
@@ -381,31 +434,45 @@ def _complete_ollama(
                     + [{"role": "user", "content": prompt,
                         # a vision model reads these; a text-only one ignores them
                         **({"images": [base64.b64encode(d).decode() for d in images]} if images else {})}],
-        "stream": False,
+        "stream": True,
         "options": {"temperature": 0.3, "num_ctx": OLLAMA_CONTEXT},
     }
+    chunks, payload = [], {}
+    counter = _StreamProgress()
     try:
-        response = httpx.post(f"{OLLAMA_URL}/api/chat", json=body, timeout=timeout)
+        with httpx.stream("POST", f"{OLLAMA_URL}/api/chat", json=body, timeout=timeout) as response:
+            if response.status_code != 200:
+                response.read()
+                if response.status_code == 404:
+                    raise LLMUnavailable(
+                        f"Ollama has no model called {OLLAMA_MODEL!r}. "
+                        f"Run: ollama pull {OLLAMA_MODEL}")
+                raise LLMError(f"Ollama error {response.status_code}: {response.text[:400]}")
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                    if payload.get("error"):
+                        raise LLMError(f"Ollama error: {payload['error']}")
+                    message = payload.get("message") or {}
+                    content = message.get("content") or ""
+                    chunks.append(content)
+                    counter.update(content, message.get("thinking") or "")
+                except (ValueError, TypeError, AttributeError) as exc:
+                    raise LLMError("Unexpected Ollama stream reply") from exc
+                if payload.get("done"):
+                    break
     except httpx.ConnectError as exc:
         raise LLMUnavailable(
-            f"Could not reach Ollama at {OLLAMA_URL} — is `ollama serve` "
-            f"running? ({exc})"
-        ) from exc
+            f"Could not reach Ollama at {OLLAMA_URL} — is `ollama serve` running? ({exc})") from exc
     except httpx.TimeoutException as exc:
         raise LLMError(f"Ollama call timed out after {timeout}s") from exc
 
-    if response.status_code == 404:
-        raise LLMUnavailable(
-            f"Ollama has no model called {OLLAMA_MODEL!r}. "
-            f"Run: ollama pull {OLLAMA_MODEL}"
-        )
-    if response.status_code != 200:
-        raise LLMError(f"Ollama error {response.status_code}: {response.text[:400]}")
-
-    payload = response.json()
     _record_usage(payload.get('model', OLLAMA_MODEL),
                   dict(input_tokens=payload.get('prompt_eval_count', 0), output_tokens=payload.get('eval_count', 0)))
-    text = strip_reasoning((payload.get("message") or {}).get("content", ""))
+    counter.update(total=payload.get('eval_count'), force=True)
+    text = strip_reasoning("".join(chunks))
     if not text:
         raise LLMError("Ollama returned an empty response")
     return text
@@ -647,6 +714,7 @@ def _openai_user_content(prompt: str, images: list[bytes] | None) -> Any:
     return parts
 
 
+@_local_status("lmstudio")
 def _complete_lmstudio(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
     effort: str = "", images: list[bytes] | None = None,
@@ -672,7 +740,8 @@ def _complete_lmstudio(
         "messages": ([{"role": "system", "content": system}] if system else [])
                     + [{"role": "user", "content": _openai_user_content(prompt, images)}],
         "temperature": 0.3,
-        "stream": False,
+        "stream": True,
+        "stream_options": {"include_usage": True},
     }
     # Grammar-constrained JSON: the commonest way a local model fails a JSON
     # call is prose or a cut-off brace, and constraining the sampler removes
@@ -693,8 +762,37 @@ def _complete_lmstudio(
 
     def send(payload):
         try:
-            return httpx.post(f"{LMSTUDIO_URL}/chat/completions", json=payload,
-                              timeout=timeout)
+            with httpx.stream("POST", f"{LMSTUDIO_URL}/chat/completions", json=payload,
+                              timeout=timeout) as response:
+                if response.status_code != 200:
+                    response.read()  # Error text is unavailable until consumed.
+                    return response, None
+                chunks, usage, reply_model, finish = [], {}, model_id, None
+                counter = _StreamProgress()
+                for line in response.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        if chunk.get("error"):
+                            raise LLMError(f"LM Studio error: {chunk['error']}")
+                        reply_model = chunk.get("model", reply_model)
+                        usage = chunk.get("usage") or usage
+                        for choice in chunk.get("choices", []):
+                            delta = choice.get("delta") or {}
+                            content = delta.get("content") or ""
+                            chunks.append(content)
+                            counter.update(content, delta.get("reasoning_content") or "")
+                            finish = choice.get("finish_reason") or finish
+                    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                        raise LLMError("Unexpected LM Studio stream reply") from exc
+                counter.update(total=usage.get("completion_tokens"), force=True)
+                return response, {"model": reply_model, "usage": usage,
+                                  "choices": [{"message": {"content": "".join(chunks)},
+                                               "finish_reason": finish}]}
         except httpx.TimeoutException as exc:
             raise LLMError(f"LM Studio call timed out after {timeout}s. A large model "
                            "on this machine may need a smaller model or GPU offload.") from exc
@@ -703,24 +801,24 @@ def _complete_lmstudio(
                 f"Could not reach LM Studio at {LMSTUDIO_URL}. Open LM Studio, go to "
                 f"the Developer tab and start the server. ({exc})") from exc
 
-    response = send(body)
+    response, payload = send(body)
     if (constrained and response.status_code == 400
             and re.search(r"response_format|json_schema|grammar|schema", response.text, re.I)):
         log.info("lmstudio: server rejected response_format; sending JSON calls "
                  "unconstrained for this session")
         _json_mode["on"] = False
         body.pop("response_format")
-        response = send(body)
+        response, payload = send(body)
     if (level and response.status_code == 400
             and re.search(r"reasoning", response.text, re.I)):
         log.info("lmstudio: server rejected reasoning_effort; leaving it out "
                  "for this session")
         _effort_ok["on"] = False
         body.pop("reasoning_effort")
-        response = send(body)
+        response, payload = send(body)
 
-    said = response.text[:600]
     if response.status_code != 200:
+        said = response.text[:600]
         _detected["models"] = None        # the loaded model may have changed
         if _CONTEXT_FULL.search(said):
             raise LLMUnavailable(
@@ -738,10 +836,9 @@ def _complete_lmstudio(
         raise LLMError(f"LM Studio error {response.status_code}: {said}")
 
     try:
-        payload = response.json()
         text = payload["choices"][0]["message"].get("content") or ""
     except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
-        raise LLMError(f"Unexpected LM Studio reply: {said[:300]}") from exc
+        raise LLMError("Unexpected LM Studio reply") from exc
     usage = payload.get("usage") or {}
     _record_usage(payload.get("model", model_id),
                   dict(usage, input_tokens=usage.get("prompt_tokens", 0),
@@ -812,12 +909,14 @@ def complete(
     backend = resolve_backend()
     if backend in LOCAL_BACKENDS:
         timeout = int(timeout * LOCAL_TIMEOUT_FACTOR)
-    if backend in OPENAI_COMPAT:
-        return _complete_openai_compat(backend, prompt, system, model, timeout,
-                                       allow_search, effort or EFFORT)
-    fn = {"api": _complete_api, "ollama": _complete_ollama,
-          "lmstudio": _complete_lmstudio}.get(backend, _complete_cli)
-    return fn(prompt, system, model, timeout, allow_search, effort or EFFORT, images)
+        fn = {"ollama": _complete_ollama, "lmstudio": _complete_lmstudio}[backend]
+        return fn(prompt, system, model, timeout, allow_search, effort or EFFORT, images)
+    with call_status(backend):
+        if backend in OPENAI_COMPAT:
+            return _complete_openai_compat(backend, prompt, system, model, timeout,
+                                           allow_search, effort or EFFORT)
+        fn = _complete_api if backend == "api" else _complete_cli
+        return fn(prompt, system, model, timeout, allow_search, effort or EFFORT, images)
 
 
 # --------------------------------------------------------------- json helpers

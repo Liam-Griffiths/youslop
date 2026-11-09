@@ -107,6 +107,7 @@ function watchJob(id, kind, onDone) {
     state.job.since = j.log_total;
     state.job.lines.push(...j.log.map((l) => l.m));
     state.job.elapsed = j.elapsed;
+    state.job.status = j.status || "";
     paintJob();
     if (j.state !== 'running') {
       clearInterval(state.poll);
@@ -136,6 +137,8 @@ function paintJob() {
     box.textContent = state.job.lines.join('\n');
     box.scrollTop = box.scrollHeight;
   }
+  const status = $('#jobstatus');
+  if (status) { status.textContent = state.job.status || ''; status.hidden = !state.job.status; }
   const el = $('#jobstate');
   if (el) el.textContent = state.job.done ? state.job.done : `${state.job.elapsed || 0}s`;
   // The rendering placeholder says what the renderer last said, so a slate that
@@ -159,6 +162,7 @@ function jobPanel() {
       ${running ? '' : `<button class="btn sm ghost" onclick="state.job=null;render()">dismiss</button>`}
     </div>
     <div class="joblog" id="joblog"></div>
+    <div class="sub mono" id="jobstatus" hidden></div>
   </div>`;
 }
 

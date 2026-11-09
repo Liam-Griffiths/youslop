@@ -7,6 +7,8 @@ import traceback
 import uuid
 from typing import Any, Callable
 
+from . import llm
+
 _JOBS: dict[str, dict] = {}
 _LOCK = threading.Lock()
 MAX_JOBS = 60
@@ -22,7 +24,7 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
     jid = f"j{uuid.uuid4().hex[:10]}"
     job = {
         "id": jid, "kind": kind, "project_id": project_id, "state": "running",
-        "log": [], "error": "", "result": None,
+        "log": [], "status": "", "error": "", "result": None,
         "started_at": time.time(), "finished_at": 0.0,
         "cancellable": cancellable, "cancel_requested": False,
     }
@@ -40,7 +42,17 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
             job["log"].append({"t": time.time(), "m": str(message)})
             del job["log"][:-400]
 
+    def status(message: str) -> None:
+        with _LOCK:
+            job["status"] = str(message)
+
+    def label() -> str:
+        with _LOCK:
+            return job["log"][-1]["m"] if job["log"] else kind
+
     def runner() -> None:
+        sink_token = llm.status_sink.set(status)
+        label_token = llm.status_label.set(label)
         try:
             result = fn(progress)
             with _LOCK:
@@ -56,7 +68,10 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
                 job["state"] = "error"
                 job["log"].append({"t": time.time(), "m": f"FAILED: {exc}"})
         finally:
+            llm.status_sink.reset(sink_token)
+            llm.status_label.reset(label_token)
             with _LOCK:
+                job["status"] = ""
                 job["finished_at"] = time.time()
 
     threading.Thread(target=runner, name=f"job-{kind}", daemon=True).start()
@@ -86,7 +101,7 @@ def recent() -> list[dict]:
     with _LOCK:
         now = time.time()
         return [{key: j[key] for key in
-                 ("id", "kind", "project_id", "state", "cancellable")} | {
+                 ("id", "kind", "project_id", "state", "cancellable", "status")} | {
                      "last_log_line": j["log"][-1]["m"] if j["log"] else "",
                      "elapsed": round((j["finished_at"] or now) - j["started_at"], 1),
                  } for j in sorted(_JOBS.values(), key=lambda j: j["started_at"], reverse=True)]

@@ -111,3 +111,37 @@ def test_default_cannot_cancel_and_missing_is_404(workers):
         assert request('POST', '/api/jobs/missing/cancel').status_code == 404
     finally:
         release.set()
+
+
+@pytest.mark.parametrize('end', ['done', 'error', 'cancelled'])
+def test_status_replaces_without_logging_and_clears(workers, end):
+    from app import llm
+    ready, release = threading.Event(), threading.Event()
+
+    def work(progress):
+        progress('Writing section')
+        sink = llm.status_sink.get()
+        sink('1 tokens')
+        sink('2 tokens')
+        ready.set()
+        assert release.wait(1)
+        # A status update must remain legal after a cancellation request.
+        sink('3 tokens')
+        if end == 'error':
+            raise ValueError('synthetic failure')
+        progress('Finished section')
+
+    jid = jobs.start('script', '', work, cancellable=True)
+    try:
+        assert ready.wait(1)
+        detail = request('GET', f'/api/jobs/{jid}').json()
+        assert detail['status'] == '2 tokens' and detail['log_total'] == 1
+        assert request('GET', '/api/jobs').json()[0]['status'] == '2 tokens'
+        if end == 'cancelled':
+            jobs.cancel(jid)
+    finally:
+        release.set()
+        workers[0].join(1)
+    assert jobs.get(jid)['state'] == end
+    assert jobs.get(jid)['status'] == ''
+    assert all('tokens' not in row['m'] for row in jobs.get(jid)['log'])

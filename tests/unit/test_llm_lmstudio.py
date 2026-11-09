@@ -1,6 +1,6 @@
 """LM Studio backend: model detection, reasoning stripping, error mapping.
 
-No real server: httpx.get/post are monkeypatched.
+No real server: httpx.get/stream are monkeypatched.
 """
 import json
 
@@ -15,6 +15,23 @@ class Resp:
         self.status_code = status
         self._body = body if body is not None else {}
         self.text = json.dumps(self._body)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def read(self):
+        return self.text.encode()
+
+    def iter_lines(self):
+        for choice in self._body.get("choices", []):
+            yield "data: " + json.dumps({"choices": [{
+                "delta": choice["message"], "finish_reason": choice.get("finish_reason")}]})
+        yield "data: " + json.dumps({"choices": [], "model": self._body.get("model"),
+                                    "usage": self._body.get("usage", {})})
+        yield "data: [DONE]"
 
     def json(self):
         return self._body
@@ -38,6 +55,8 @@ def lmstudio(monkeypatch):
     monkeypatch.setattr(llm, "LMSTUDIO_URL", "http://127.0.0.1:1234/v1")
     monkeypatch.setattr(llm, "LMSTUDIO_MODEL", "")
     monkeypatch.setattr(llm, "LMSTUDIO_MODEL_UTILITY", "")
+    monkeypatch.setitem(llm._json_mode, "on", True)
+    monkeypatch.setitem(llm._effort_ok, "on", True)
     llm._detected.update(at=0.0, models=None)
     yield
     llm._detected.update(at=0.0, models=None)
@@ -91,11 +110,11 @@ def test_complete_strips_thinking_and_sends_images(monkeypatch):
     monkeypatch.setattr(httpx, "get", _native_get)
     sent = {}
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         sent.update(url=url, body=json)
         return Resp(200, {"model": "qwen3-30b", "usage": {"prompt_tokens": 5, "completion_tokens": 2},
                           "choices": [{"message": {"content": "<think>{\"draft\": 1}</think>\n{\"ok\": true}"}}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     with llm.capture_usage() as usage:
         assert llm.complete_json("x", images=[b"\x89PNG\r\n\x1a\nrest"]) == {"ok": True}
     assert sent["url"].endswith("/v1/chat/completions")
@@ -109,10 +128,10 @@ def test_context_overflow_is_not_retried(monkeypatch):
     monkeypatch.setattr(httpx, "get", _native_get)
     calls = []
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         calls.append(1)
         return Resp(400, {"error": "The number of tokens to keep from the initial prompt is greater than the context length"})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     with pytest.raises(llm.LLMUnavailable, match="larger context length"):
         llm.complete_json("x")
     assert len(calls) == 1
@@ -151,12 +170,12 @@ def test_json_calls_are_constrained_and_fall_back(monkeypatch):
     monkeypatch.setitem(llm._json_mode, "on", True)
     bodies = []
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         bodies.append(dict(json))
         if "response_format" in json:
             return Resp(400, {"error": "'response_format.type' must be 'json_schema'"})
         return Resp(200, {"choices": [{"message": {"content": "[1]"}}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     assert llm.complete_json("x") == [1]
     assert "response_format" in bodies[0] and "response_format" not in bodies[1]
     assert llm._json_mode["on"] is False
@@ -169,10 +188,10 @@ def test_plain_calls_are_not_constrained(monkeypatch):
     monkeypatch.setitem(llm._json_mode, "on", True)
     seen = {}
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         seen.update(body=json, timeout=timeout)
         return Resp(200, {"choices": [{"message": {"content": "prose"}}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     monkeypatch.setattr(llm, "LOCAL_TIMEOUT_FACTOR", 3.0)
     assert llm.complete("x", timeout=100) == "prose"
     assert "response_format" not in seen["body"]
@@ -184,10 +203,10 @@ def test_thinking_auto_skips_chores_and_keeps_script(monkeypatch):
     monkeypatch.setattr(llm, "LMSTUDIO_THINKING", "auto")
     bodies = []
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         bodies.append(dict(json))
         return Resp(200, {"choices": [{"message": {"content": "ok"}}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     llm.complete("chore", model=llm.MODEL_UTILITY)
     llm.complete("script", model=llm.MODEL_SCRIPT, effort="")
     llm.complete("script", model=llm.MODEL_SCRIPT, effort="max")
@@ -201,27 +220,28 @@ def test_rejected_reasoning_effort_is_dropped(monkeypatch):
     monkeypatch.setitem(llm._effort_ok, "on", True)
     bodies = []
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         bodies.append(dict(json))
         if "reasoning_effort" in json:
             return Resp(400, {"error": "Unrecognized key: reasoning_effort"})
         return Resp(200, {"choices": [{"message": {"content": "ok"}}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     assert llm.complete("chore") == "ok"
     assert llm._effort_ok["on"] is False
     monkeypatch.setitem(llm._effort_ok, "on", True)
 
 
-def test_replies_are_capped(monkeypatch):
+def test_replies_are_capped(monkeypatch, caplog):
     monkeypatch.setattr(httpx, "get", _native_get)
     monkeypatch.setattr(llm, "LMSTUDIO_THINKING", "auto")
     bodies = []
 
-    def post(url, json=None, timeout=None):
+    def stream(method, url, json=None, timeout=None):
         bodies.append(dict(json))
         return Resp(200, {"choices": [{"message": {"content": "[1]"}, "finish_reason": "length"}]})
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", stream)
     llm.complete("chore", model=llm.MODEL_UTILITY)
     llm.complete("script", model=llm.MODEL_SCRIPT)
     assert bodies[0]["max_tokens"] == llm.LOCAL_MAX_TOKENS
     assert bodies[1]["max_tokens"] == llm.LOCAL_MAX_TOKENS_THINKING
+    assert "reply limit" in caplog.text

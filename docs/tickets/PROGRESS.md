@@ -244,8 +244,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| T16.1 | Live progress during model calls | M | — | todo | streamed token counter in a replaceable job status line; LM Studio and Ollama |
-| T16.2 | Write sections in order for local models | S | — | todo | each section sees what came before; parallel stays for hosted backends |
+| T16.1 | Live progress during model calls | M | — | done | 2026-11-08 Codex + review; live counter checked on Granite (16 tok/s, count matched usage); streamed token counter in a replaceable job status line; LM Studio and Ollama |
+| T16.2 | Write sections in order for local models | S | — | doing | 2026-11-08 Codex; each section sees what came before; parallel stays for hosted backends |
 | T16.3 | A default User-Agent that archives accept | S | — | done | 2026-11-08 Claude; old default got HTTP 403 from Wikimedia on every fresh install |
 | T16.4 | Script consistency check | M | — | todo | contradictions and impossible visuals as Check findings |
 | T16.5 | Speed test and thinking advice in Check LM Studio | S | T16.1 | todo | tokens/s and reasoning split from one short prompt; advice only |

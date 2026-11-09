@@ -36,7 +36,8 @@ function openJobs() {
           ${j.state === 'running' && j.cancellable ? `<button type="button" class="btn sm ghost"
             data-cancel-job="${esc(j.id)}" aria-label="Cancel ${esc(j.kind)} for ${esc(j.project_title || j.project_id || 'Library')}">Cancel</button>` : ''}</div>
         <div class="sub mono">${esc(j.project_title || j.project_id || 'Library')} · ${esc(j.id)}</div>
-        <p class="mono jobs-last-line">${esc(j.last_log_line || '—')}</p></article>`).join('')
+        <p class="mono jobs-last-line">${esc(j.last_log_line || '—')}</p>
+        ${j.state === 'running' && j.status ? `<div class="sub mono">${esc(j.status)}</div>` : ''}</article>`).join('')
         || '<p class="sub">No jobs yet.</p>';
       if (focused) {
         const button = [...dialog.querySelectorAll('[data-cancel-job]')].find(b => b.dataset.cancelJob === focused);

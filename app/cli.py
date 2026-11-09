@@ -37,7 +37,24 @@ def _guard_write():
     path.unlink(missing_ok=True)
 
 
+class _StatusLine:
+    def __init__(self):
+        self.width = 0
+        self.label = "Model call"
+
+    def status(self, message):
+        if sys.stderr.isatty() and (message or self.width):
+            print("\r" + message.ljust(self.width), end="\r", file=sys.stderr, flush=True)
+            self.width = len(message)
+
+    def progress(self, message):
+        self.status("")
+        self.label = str(message)
+        print(message, file=sys.stderr, flush=True)
+
+
 def _operation(name, pid, payload):
+    output = _StatusLine()
     try:
         server = json.loads((CACHE_DIR / "server.json").read_text())
     except FileNotFoundError:
@@ -76,7 +93,8 @@ def _operation(name, pid, payload):
                 response.raise_for_status()
                 job = response.json()
                 for row in job['log']:
-                    print(row['m'], file=sys.stderr, flush=True)
+                    output.progress(row['m'])
+                output.status(job.get('status', '') if job['state'] == 'running' else '')
                 since = job['log_total']
                 if job['state'] == 'error':
                     raise ValueError(job['error'])
@@ -87,7 +105,14 @@ def _operation(name, pid, payload):
             return {'project': initial['project']} if name == 'create' else result
     if name != 'check':
         _guard_write()
-    return getattr(ops, name)(pid, payload, lambda msg: print(msg, file=sys.stderr, flush=True))
+    sink_token = llm.status_sink.set(output.status)
+    label_token = llm.status_label.set(lambda: output.label)
+    try:
+        return getattr(ops, name)(pid, payload, output.progress)
+    finally:
+        output.status("")
+        llm.status_label.reset(label_token)
+        llm.status_sink.reset(sink_token)
 
 
 def cmd_render(args):

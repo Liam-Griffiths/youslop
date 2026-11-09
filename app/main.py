@@ -4122,7 +4122,7 @@ def job_status(jid: str, since: int = 0) -> dict:
         raise HTTPException(404, "No such job")
     return {
         "id": job["id"], "kind": job["kind"], "state": job["state"],
-        "error": job["error"], "result": job["result"],
+        "error": job["error"], "result": job["result"], "status": job["status"],
         "log": job["log"][since:], "log_total": len(job["log"]),
         "elapsed": round((job["finished_at"] or time.time()) - job["started_at"], 1),
     }

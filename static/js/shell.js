@@ -114,9 +114,12 @@ async function loadStageStates(project) {
 function paintJobsStrip() {
   const j = state.job;
   const rows = jobsSummary.filter(row => row.state === 'running' && row.id !== j?.id);
-  const items = rows.map(row => `${row.kind} · ${row.elapsed}s · ${row.last_log_line}`);
-  if (j && !j.done) items.unshift(`${j.kind} · ${j.elapsed || 0}s${j.lines?.length ? ' · ' + j.lines.at(-1) : ''}`);
-  $('#jobs-status').textContent = items.join(' · ') || 'Idle';
+  if (j && !j.done) rows.unshift({kind: j.kind, elapsed: j.elapsed || 0,
+    last_log_line: j.lines?.at(-1) || '', status: j.status});
+  $('#jobs-status').innerHTML = rows.map(row => `<span class="jobs-strip-item">
+    <span>${esc(row.kind)} · ${row.elapsed}s · ${esc(row.last_log_line)}</span>
+    ${row.status ? `<span class="jobs-live-status">${esc(row.status)}</span>` : ''}
+    </span>`).join('') || 'Idle';
 }
 
 for (const [id, label] of STAGES) {
