@@ -1,0 +1,6 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+<div class="box strip" {{ layer('strip',0,'none') }} data-path='[{"t":0,"x":{{ 0 if portrait else 60 }},"y":{{ 60 if portrait else 0 }}},{"t":{{ duration-0.25 }},"x":0,"y":0,"ease":"linear"}]' style="left:{{ x }}px;top:{{ y }}px;width:{{ w-80 if not portrait else w }}px;height:{{ h-80 if portrait else h }}px">
+{% for i in range(vars.count|int) %}<img src="{{ vars['picture'~(i+1)] }}" alt="">{% endfor %}
+</div>
+{% endblock %}

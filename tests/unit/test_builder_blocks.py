@@ -340,3 +340,32 @@ def test_screens_dense_inputs_compile(ref, aspect, capture_mock, tmp_path):
         for row in parsed.rows:
             row['arrival'] *= 1.4
         builder._plan(dict(layers=parsed.rows,screens=[],budget=parsed.budget),4,30)
+
+
+BATCH_E = ('photo_stack', 'filmstrip', 'polaroid_pair', 'viewfinder',
+           'archive_frame', 'triptych', 'zoom_detail', 'caption_strip')
+
+
+@pytest.mark.parametrize('ref', BATCH_E)
+@pytest.mark.parametrize('aspect', ['16:9', '9:16'])
+def test_pictures_maximum_inputs_compile(ref, aspect, capture_mock, tmp_path):
+    meta = blocks.discover()[ref]['meta']
+    values = block_authoring.samples(meta)
+    if 'count' in values:
+        values['count'] = meta['variables']['count']['choices'][-1]
+    if ref == 'zoom_detail':
+        values.update(focal_x=0, focal_y=1)
+    template, ctx = blocks.prepare(ref, values, aspect, seconds=4,
+        overlay=bool(meta.get('overlay')))
+    html = scenes.render_html(template, ctx)
+    parsed = Layers(html)
+    assert all(r['exit'] == .25 for r in parsed.rows)
+    assert len({r['id'] for r in parsed.rows}) == len(parsed.rows)
+    assert ctx.get('builder_alpha', False) == bool(meta.get('overlay'))
+    stats = builder.inspect(tmp_path, template, ctx, seconds=4,
+        size=(ctx['width']//4, ctx['height']//4), fps=30)
+    assert stats['captured_frames'] == 0 and stats['passes'] == 1
+    assert stats['layers'] <= 4 and stats['largest_graph_bytes'] < 65536
+    for row in parsed.rows:
+        row['arrival'] *= 1.4
+    builder._plan(dict(layers=parsed.rows, screens=[], budget=parsed.budget),4,30)

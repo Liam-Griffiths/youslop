@@ -1,0 +1,6 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+<div class="box focus" data-original {{ layer('original',0,'fade') }} style="left:{{ x }}px;top:{{ y }}px;width:{{ w if portrait else 900 }}px;height:{{ 470 if portrait else h }}px"><img class="picture" src="{{ vars.picture }}" alt=""><div class="cross"></div></div>
+<div class="box inset" data-inset {{ layer('detail',0.45,'scale-in') }} style="left:{{ x if portrait else x+940 }}px;top:{{ y+500 if portrait else y }}px;width:{{ w if portrait else 520 }}px;height:{{ 280 if portrait else 410 }}px"><img src="{{ vars.picture }}" alt=""></div>
+<div class="box caption" {{ layer('detail-caption',0.65,'rise') }} style="left:{{ x if portrait else x+940 }}px;top:{{ y+800 if portrait else y+430 }}px;width:{{ w if portrait else 520 }}px;height:{{ 140 if portrait else 210 }}px"><p data-fit data-var-text="caption" style="height:100%">{{ vars.caption }}</p></div>
+{% endblock %}

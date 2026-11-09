@@ -78,7 +78,8 @@ def test_visual_planner_uses_existing_call_only(project, monkeypatch):
 
 def test_overlay_browse_and_hide_contract():
     rows = main.list_blocks(overlay=True)
-    assert len(rows) == 14 and all(r['overlay'] for r in rows)
+    assert len(rows) == 16 and all(r['overlay'] for r in rows)
+    assert {'viewfinder', 'caption_strip'} <= {r['ref'] for r in rows}
     assert {'lower_third_kicker', 'lower_third_underline', 'lower_third_pill',
             'lower_third_reveal', 'lower_third_portrait'} <= {r['ref'] for r in rows}
     assert 'number_slam' not in {r['ref'] for r in rows}

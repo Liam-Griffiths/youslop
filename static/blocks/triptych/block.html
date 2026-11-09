@@ -1,0 +1,8 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+{% set pw = w if portrait else (w-40)/3 %}
+{% set ph = 300 if portrait else h %}
+{% for i in range(3) %}
+<div class="box triptych" {{ layer('panel-'~i,i*0.3,'wipe') }} style="left:{{ x if portrait else x+i*(pw+20) }}px;top:{{ y+i*320 if portrait else y }}px;width:{{ pw }}px;height:{{ ph }}px"><img class="picture" style="height:{{ ph-140 }}px" src="{{ vars['picture'~(i+1)] }}" alt=""><p class="caption" data-fit data-var-text="caption{{ i+1 }}" style="height:140px">{{ vars['caption'~(i+1)] }}</p></div>
+{% endfor %}
+{% endblock %}

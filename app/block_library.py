@@ -30,6 +30,9 @@ def signature(item, theme=None):
     digest = hashlib.sha256(b'block-posters-v1')
     # Include runtime/templates/fonts as well as authored defaults and assets.
     roots = [item['root'], scenes.SCENE_DIR, paths.resource_root() / 'resources/fonts']
+    if item['meta']['id'] in ('photo_stack', 'filmstrip', 'polaroid_pair', 'viewfinder',
+                              'archive_frame', 'triptych', 'zoom_detail', 'caption_strip') and item['root'].is_relative_to(blocks.BUILTIN_DIR):
+        roots += [blocks.BUILTIN_DIR / 'photo_stack']
     from . import place_blocks, screen_blocks
     if item['meta']['id'] in place_blocks.IDS and item['root'].is_relative_to(blocks.BUILTIN_DIR):
         roots += [blocks.BUILTIN_DIR / 'route_map', blocks.BUILTIN_DIR / '_geo']

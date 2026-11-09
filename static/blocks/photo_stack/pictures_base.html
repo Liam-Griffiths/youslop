@@ -1,0 +1,73 @@
+{% extends '_base.html' %}
+{% set portrait = height > width %}
+{% set x = 130 if portrait else 230 %}
+{% set w = 756 if portrait else 1460 %}
+{% set y = 500 if portrait else 280 %}
+{% set h = 940 if portrait else 640 %}
+{% block head %}
+<style>
+body { width:{{ width }}px;height:{{ height }}px; }
+* { box-sizing:border-box; }
+p,h1 { margin:0; }
+.heading { position:absolute;left:{{ x }}px;top:{{ 310 if portrait else 120 }}px;width:{{ w }}px;height:160px;font:var(--weight-display,800) 64px/1.15 var(--font-display,Inter),sans-serif; }
+.box { position:absolute; }
+.mount { padding:18px;background:var(--panel);border:2px solid var(--line);border-radius:var(--radius,0px); }
+.picture { display:block;width:100%;height:100%;object-fit:cover; }
+.caption { padding:8px 18px;background:var(--panel);color:var(--ink);font:44px/1.4 var(--font-body,Inter),sans-serif; }
+[data-fit] { overflow-wrap:anywhere;min-width:0; }
+.tab { position:absolute;top:18px;left:18px;width:70px;height:12px;background:var(--accent); }
+.print .caption { border-bottom:6px solid var(--accent); }
+.triptych .caption { border-left:8px solid var(--accent); }
+.strip { display:flex;gap:16px;{{ 'flex-direction:column;' if portrait else '' }}padding:{{ '16px 28px' if portrait else '28px 16px' }};border:12px dashed var(--accent);background:var(--panel); }
+.strip img { min-height:0;min-width:0;flex:1 1 0;object-fit:cover;{{ "height:0;width:100%;" if portrait else "width:0;height:100%;" }} }
+.corner { position:absolute;width:90px;height:90px;border-color:var(--accent);border-style:solid;border-width:0; }
+.top-left { left:0;top:0;border-top-width:8px;border-left-width:8px; }
+.top-right { right:0;top:0;border-top-width:8px;border-right-width:8px; }
+.bottom-left { left:0;bottom:0;border-bottom-width:8px;border-left-width:8px; }
+.bottom-right { right:0;bottom:0;border-bottom-width:8px;border-right-width:8px; }
+.record { border-left:14px solid var(--accent); }
+.catalogue { border-top:8px solid var(--accent); }
+.focus { overflow:hidden;background:var(--panel); }
+.focus img { object-fit:contain; }
+.cross { position:absolute;width:34px;height:34px;border:5px solid var(--accent);transform:translate(-50%,-50%); }
+.inset { overflow:hidden;border:10px solid var(--accent);background:var(--panel);border-radius:var(--radius,0px); }
+.inset img { position:absolute;max-width:none; }
+.subtitle { background:var(--panel);border-bottom:10px solid var(--accent);padding:24px {{ x }}px; }
+</style>
+{% endblock %}
+{% macro layer(id,start=0,motion='rise',arrival=0.45) %}data-layer="{{ id }}" data-start="{{ start }}" data-duration="{{ duration-start }}" data-motion="{{ motion }}" data-motion-duration="{{ arrival }}" data-motion-exit="0.25"{% endmacro %}
+{% block body %}
+{# Every block receives the channel's title among its vars, so overlays,
+   which sit over a picture with nothing behind the text, empty this block. #}
+{% block heading %}{% if vars.title is defined %}<h1 class="heading" data-fit data-var-text="title">{{ vars.title }}</h1>{% endif %}{% endblock %}
+{% block content %}{% endblock %}
+{% endblock %}
+{% block script %}
+<script>
+window.__ready = window.__ready.then(async () => {
+  document.querySelectorAll('[data-fit]').forEach(el => {
+    const full = el.textContent.trim(); el.title = full;
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.matches('.heading') && size > 44 && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      size -= 1; el.style.fontSize = size+'px';
+    }
+    let text = full;
+    while (text && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      text = text.slice(0,-1).trimEnd(); el.textContent = text + '…';
+    }
+  });
+  const original = document.querySelector('[data-original]');
+  if (original) {
+    const image = original.querySelector('img'), inset = document.querySelector('[data-inset]'), detail = inset.querySelector('img');
+    await image.decode();
+    const scale = Math.min(original.clientWidth/image.naturalWidth, original.clientHeight/image.naturalHeight);
+    const fx = window.__vars.focal_x, fy = window.__vars.focal_y;
+    const cross = original.querySelector('.cross');
+    cross.style.left = ((original.clientWidth-image.naturalWidth*scale)/2+fx*image.naturalWidth*scale)+'px';
+    cross.style.top = ((original.clientHeight-image.naturalHeight*scale)/2+fy*image.naturalHeight*scale)+'px';
+    const dw = image.naturalWidth*scale*2, dh = image.naturalHeight*scale*2;
+    Object.assign(detail.style,{width:dw+'px',height:dh+'px',left:(inset.clientWidth/2-fx*dw)+'px',top:(inset.clientHeight/2-fy*dh)+'px'});
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block heading %}{% endblock %}
+{% block content %}
+<div class="box" {{ layer('framing',0,'fade') }} style="left:{{ x }}px;top:{{ 340 if portrait else 150 }}px;width:{{ w }}px;height:{{ 1110 if portrait else 780 }}px">
+{% for c in ('top-left','top-right','bottom-left','bottom-right') %}<div class="corner {{ c }}"></div>{% endfor %}
+<div class="box caption record" style="left:48px;top:48px;width:640px;height:164px"><p data-fit data-var-text="label" style="height:64px">{{ vars.label }}</p><p data-fit data-var-text="timecode" style="height:64px;font-variant-numeric:tabular-nums">{{ vars.timecode }}</p></div>
+</div>
+{% endblock %}

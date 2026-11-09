@@ -1,0 +1,9 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+{% set n = vars.count|int %}
+{% set pw = 580 if portrait else 1050 %}
+{% set ph = 720 if portrait else 500 %}
+{% for i in range(n) %}
+<div class="box mount" {{ layer('print-'~i,i*0.35,'rise') }} data-motion-y="-80" style="left:{{ x+(w-pw)/2+(i-(n-1)/2)*32 }}px;top:{{ y+40+i*32 }}px;width:{{ pw }}px;height:{{ ph }}px"><img class="picture" src="{{ vars['picture'~(i+1)] }}" alt=""><div class="tab" style="width:{{ 70+i*30 }}px"></div></div>
+{% endfor %}
+{% endblock %}

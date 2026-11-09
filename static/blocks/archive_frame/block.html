@@ -1,0 +1,5 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+<div class="box mount" {{ layer('mount',0,'scale-in') }} style="left:{{ x }}px;top:{{ y }}px;width:{{ w }}px;height:{{ h-156 }}px;padding:24px"><img class="picture" style="object-fit:contain" src="{{ vars.picture }}" alt=""><div class="tab" style="width:120px;height:18px"></div></div>
+<div class="box caption catalogue" {{ layer('catalogue',0.4,'wipe') }} style="left:{{ x }}px;top:{{ y+h-140 }}px;width:{{ w }}px;height:140px"><p data-fit data-var-text="catalogue" style="height:110px">{{ vars.catalogue }}</p></div>
+{% endblock %}

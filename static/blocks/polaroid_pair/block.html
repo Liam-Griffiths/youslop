@@ -1,0 +1,8 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block content %}
+{% set pw = w if portrait else (w-40)/2 %}
+{% set ph = 440 if portrait else h %}
+{% for i in range(2) %}
+<div class="box mount print" {{ layer('print-'~i,i*0.4,'fly-left' if i==0 else 'fly-right') }} style="left:{{ x if portrait else x+i*(pw+40) }}px;top:{{ y+i*480 if portrait else y }}px;width:{{ pw }}px;height:{{ ph }}px"><img class="picture" style="height:{{ ph-204 }}px" src="{{ vars['picture'~(i+1)] }}" alt=""><p class="caption" data-fit data-var-text="caption{{ i+1 }}" style="height:164px">{{ vars['caption'~(i+1)] }}</p></div>
+{% endfor %}
+{% endblock %}

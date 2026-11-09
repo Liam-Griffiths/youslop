@@ -1,0 +1,5 @@
+{% extends '_blocks/photo_stack/pictures_base.html' %}
+{% block heading %}{% endblock %}
+{% block content %}
+<div class="box subtitle" {{ layer('caption',0,'rise') }} style="left:0;top:{{ 1100 if portrait else 680 }}px;width:{{ width }}px;height:{{ 340 if portrait else 280 }}px;padding-right:{{ width-x-w }}px"><p class="caption" data-fit data-var-text="caption" style="height:100%;padding:0">{{ vars.caption }}</p></div>
+{% endblock %}

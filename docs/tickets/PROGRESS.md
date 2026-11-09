@@ -210,7 +210,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T12.11 | Block preview player: plays in the app window, expands, scrubs | M | T12.8b | done | 2026-11-08 Codex + review; VP9 webm previews (the app window has no H.264), full length, expanded player with scrub/loop/aspect/show-over; owner: confirm it plays in the desktop app |
 | T12.12a | Block themes: tokens per channel or standalone video | M | T12.9b | done | 2026-11-08 Codex + review; Style.block_theme sparse overrides, default→theme→channel→project, CSS tokens incl. fonts/radius/weight/pace, token lint; defaults pixel-identical (69 captures); 6 pre-existing block-check failures noted |
 | T12.12b | Block themes: editor and live previews | M | T12.12a, T12.11 | done | 2026-11-08 Codex + review; theme panel on channel + project Look, live six-poster sheet (cold 1.36 s), Preview as on Blocks; review: pending posters, readable token labels |
-| T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | doing | 2026-11-08 batches A (8 names/titles) and B (8 numbers) done, sheets v2-a/v2-b; C (6 places, v2-c) and D (10 screens, v2-d) done; E (pictures) running |
+| T12.13 | Block set v2: ~40 new blocks in five batches | L | T12.12a, T12.11 | done | 2026-11-08 Codex + review; 40 blocks in 5 batches, sheets v2-a to v2-e; motion only checked from still frames |
 
 ## Phase 13: styles as starting kits
 
