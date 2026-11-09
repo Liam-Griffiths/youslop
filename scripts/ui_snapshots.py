@@ -196,8 +196,9 @@ def server():
         raise RuntimeError('LLM calls are forbidden in UI snapshots')
 
     def missing_engines(**kwargs):
-        from app.stt import ENGINES
-        return {name: dict(installed=False, version='', models=[], device='', notes='', install_url=url)
+        from app.stt import ENGINES, METADATA
+        return {name: dict(installed=False, version='', models=[], device='', notes='', install_url=url,
+                           downloads=METADATA[name]['downloads'])
                 for name, (_, url) in ENGINES.items()}
 
     with patch('app.stt.configured', missing_engines), patch('app.ops.initialize', lambda *args: None), patch('app.llm.complete', no_llm), patch('app.llm.complete_json', no_llm), socket.socket() as sock:
@@ -269,6 +270,36 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/settings':
+                _evaluate(cdp, session, """(async () => {
+                  const host = document.querySelector('#stt-engines');
+                  if (!host.textContent.includes('Not found') ||
+                      host.querySelectorAll('a').length < 4 ||
+                      !document.querySelector('[id*="stt_hub_cache"]'))
+                    throw Error('Speech Settings fields or missing-engine links missing');
+                  const button = host.querySelector('[data-stt-download]');
+                  if (!button) throw Error('Explicit model download missing');
+                  const real = api, requests = [];
+                  try {
+                    api = async (url, options) => {
+                      requests.push({url, options});
+                      if (url === '/api/stt/download') return {job:'fake-download'};
+                      if (url.endsWith('/cancel')) return {};
+                      if (url === '/api/jobs/fake-download') {
+                        // Exercise the real Cancel handler while progress is visible.
+                        await host.querySelector('[data-download-status] button').onclick();
+                        return {state:'cancelled', log:[{m:'4 of 8 bytes'}]};
+                      }
+                      throw Error('Unexpected download request');
+                    };
+                    await button.onclick();
+                    if (!JSON.parse(requests[0].options.body).confirm ||
+                        !requests.some(r=>r.url.endsWith('/cancel')) || button.disabled ||
+                        !host.textContent.includes('Download cancelled.'))
+                      throw Error('Explicit download/cancellation flow failed');
+                  } finally { api = real; }
+                  return true;
+                })()""")
             if route == '#/p/psnapkenburns/voice':
                 _evaluate(cdp, session, """(async () => {
                   const p = structuredClone(state.project), s = p.slides[state.rec.index];

@@ -3,6 +3,7 @@ import importlib
 import importlib.metadata
 import importlib.util
 import platform
+import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +15,27 @@ ENGINES = {
     'mlx-whisper': ('mlx_whisper', 'https://github.com/ml-explore/mlx-examples/tree/main/whisper'),
 }
 _ERRORS = {}
+_RUNTIME = {}
+
+
+def register(name, module, install_url, *, cache='', pattern='', downloads=()):
+    """One registration supplies lazy adapter and Settings discovery metadata."""
+    ENGINES[name] = (module, install_url)
+    METADATA[name] = dict(cache=cache, pattern=pattern, downloads=list(downloads))
+    _detect.cache_clear()
+
+
+def report(engine, *, version=None, device=''):
+    """Called by a loaded runtime, never by cheap detection."""
+    if version is None:
+        try:
+            version = importlib.metadata.version(engine)
+        except importlib.metadata.PackageNotFoundError:
+            version = 'unknown'
+    _RUNTIME[engine] = dict(version=version, device=str(device))
+
+
+METADATA = {}
 
 
 def binary(configured=''):
@@ -22,7 +44,7 @@ def binary(configured=''):
 
 
 @lru_cache(maxsize=16)
-def _detect(folder='', executable=''):
+def _detect(folder='', executable='', whisper_cache='', hub_cache=''):
     result = {}
     for name, (module, url) in ENGINES.items():
         try:
@@ -33,15 +55,12 @@ def _detect(folder='', executable=''):
                 version = importlib.metadata.version(name) if installed and module != 'cpp' else ''
             except importlib.metadata.PackageNotFoundError:
                 version = ''
-            models = []
-            if module == 'cpp' and folder:
-                models = [str(p) for p in Path(folder).expanduser().glob('ggml-*.bin')]
-            elif module == 'whisper':
-                models = [str(p) for p in (Path.home() / '.cache/whisper').glob('*.pt')]
-            elif module in ('faster_whisper', 'mlx_whisper'):
-                import os
-                hub = Path(os.environ.get('HF_HUB_CACHE', Path.home() / '.cache/huggingface/hub'))
-                models = [str(p.parent) for p in hub.glob('models--*whisper*/snapshots/*/config.json')]
+            metadata = METADATA.get(name, {})
+            roots = dict(cpp=folder, whisper=whisper_cache or Path.home() / '.cache/whisper',
+                         hub=hub_cache or os.environ.get('HF_HUB_CACHE', Path.home() / '.cache/huggingface/hub'))
+            cache = roots.get(metadata.get('cache'), metadata.get('cache'))
+            paths = Path(cache).expanduser().glob(metadata['pattern']) if cache and metadata.get('pattern') else []
+            models = [str(p.parent if metadata.get('cache') == 'hub' else p) for p in paths]
             result[name] = dict(installed=installed, version=version, models=sorted(models),
                                 device=('Apple Silicon' if module == 'mlx_whisper' else
                                         'CPU · int8 or CUDA · float16 (selected per run)' if module == 'faster_whisper' else
@@ -53,12 +72,14 @@ def _detect(folder='', executable=''):
     return result
 
 
-def detect(*, folder='', executable='', refresh=False):
+def detect(*, folder='', executable='', whisper_cache='', hub_cache='', refresh=False):
     if refresh:
         _detect.cache_clear()
         _ERRORS.clear()
-    return {name: {**info, 'notes': _ERRORS.get(name, info['notes'])}
-            for name, info in _detect(folder, executable).items()}
+    return {name: {**info, 'runtime': _RUNTIME.get(name),
+                   'downloads': METADATA.get(name, {}).get('downloads', []),
+                   'notes': _ERRORS.get(name, info['notes'])}
+            for name, info in _detect(folder, executable, whisper_cache, hub_cache).items()}
 
 
 def transcribe(engine, path, **kwargs):
@@ -76,7 +97,10 @@ def transcribe(engine, path, **kwargs):
 def configured(refresh=False):
     """Read launch-time settings; match Settings' restart semantics."""
     from .. import brand
-    return detect(folder=brand.env('STT_FOLDER', ''),
+    from .downloads import folder
+    return detect(folder=str(folder()),
+                  whisper_cache=brand.env('STT_WHISPER_CACHE', ''),
+                  hub_cache=brand.env('STT_HUB_CACHE', ''),
                   executable=brand.env('STT_EXECUTABLE', ''), refresh=refresh)
 
 
@@ -117,3 +141,13 @@ def resolve(options):
     if type(result.get('retranscribe', False)) is not bool:
         raise ValueError('retranscribe must be boolean')
     return result
+
+
+# New adapters register here; optional packages remain unimported.
+from .downloads import MODELS
+for _name, (_module, _url) in list(ENGINES.items()):
+    _cache, _pattern = (('cpp', 'ggml-*.bin') if _module == 'cpp' else
+                        ('whisper', '*.pt') if _module == 'whisper' else
+                        ('hub', 'models--*whisper*/snapshots/*/config.json'))
+    register(_name, _module, _url, cache=_cache, pattern=_pattern,
+             downloads=MODELS if _name == 'whisper.cpp' else ())

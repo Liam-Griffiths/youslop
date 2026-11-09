@@ -8,9 +8,10 @@ import uuid
 from pathlib import Path
 
 from . import ffutil, footage, jobs, stt
+from .stt.seams import clip, join
 from .stt.timing import mark_turns, segment_words
 
-CACHE_VERSION = 2  # Voiced fallback and energy turns replace segment-span estimates.
+CACHE_VERSION = 3  # Padded words are aligned before range clipping.
 _WORKERS = {}
 _WORKERS_LOCK = threading.Lock()
 
@@ -149,25 +150,33 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
             else:
                 items = []
                 for segment in stt.transcribe(engine, wav, model=model, language=language, start=x, end=y,
-                                               progress=progress, cancel=lambda: progress('Transcribing speech'), **adapter_options):
+                                               progress=progress, context=True, cancel=lambda: progress('Transcribing speech'), **adapter_options):
                     raw = segment_words(segment, wav)
                     for w in raw:
-                        mid = (w['start'] + w['end']) / 2
-                        if x <= mid < y and w['end'] > w['start']:
-                            items.append({**w, 'start': max(x, w['start']), 'end': min(y, w['end']),
-                                          'src': w['src'],
-                                          'p': w.get('p'), 'engine': engine, 'model': model})
+                        if w['end'] > w['start']:
+                            items.append({**w, 'p': w.get('p'), 'engine': engine, 'model': model})
                 items.sort(key=lambda w: w['start'])
                 mark_turns(items, wav)
                 _write(cache, items)
             # Persist before the next cancellation checkpoint; crash after cache is recoverable.
             with footage.lock_for(shoot_id):
                 doc = load(shoot_id, source_id)
-                previous = [w for w in doc['words'] if w['end'] <= x]
-                if items and previous:
-                    mark_turns(items[:1], wav, previous[-1])
-                doc['words'] = sorted([w for w in doc['words'] if not x <= (w['start'] + w['end']) / 2 < y] + items,
-                                      key=lambda w: w['start'])
+                previous = [w for w in doc['words'] if (w['start']+w['end'])/2 < x]
+                tail = doc.get('seam_tail', {})
+                if tail.get('end') == x and tail.get('version') == CACHE_VERSION:
+                    previous = [w for w in previous if w['start'] < x-2] + tail['words']
+                merged = join(previous, items, x) if previous else [w for w in items if (w['start']+w['end'])/2 >= x]
+                following = [w for w in doc['words'] if (w['start']+w['end'])/2 >= y]
+                # Save untrimmed right context for cancellation/resume at this seam.
+                doc['seam_tail'] = dict(end=y, version=CACHE_VERSION,
+                                        words=[w for w in merged if w['start'] >= y-2])
+                if following:
+                    merged = join(merged, following, y)
+                doc['words'] = clip(merged, 0, duration if following else y)
+                before = [w for w in doc['words'] if w['start'] < x]
+                after = [w for w in doc['words'] if w['start'] >= x]
+                if before and after:
+                    mark_turns(after[:1], wav, before[-1])
                 doc['coverage'] = _ranges(doc['coverage'] + [[x, y]])
                 doc.update(engine=engine, model=model, language=language, duration=duration,
                            created=doc.get('created', time.time()), source_identity=identity)

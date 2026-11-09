@@ -4,7 +4,7 @@ from . import binary
 from .common import local_model, normalize, window
 
 
-def transcribe(path, *, model, language=None, start=None, end=None, progress, cancel, executable=''):
+def transcribe(path, *, model, language=None, start=None, end=None, progress, cancel, context=False, executable=''):
     with window(path, start, end) as (wav, offset):
         output = wav.with_suffix('')
         command = [binary(executable) or 'whisper-cli', '-m', local_model(model), '-f', str(wav),
@@ -31,8 +31,12 @@ def transcribe(path, *, model, language=None, start=None, end=None, progress, ca
             if code:
                 log.seek(0)
                 raise RuntimeError(log.read()[-2000:])
+        result = json.loads(output.with_suffix('.json').read_text())
+        from . import report
+        report('whisper.cpp', version=result.get('version', 'unknown (executable did not report)'),
+               device='unknown (executable did not report execution device)')
         rows = []
-        for s in json.loads(output.with_suffix('.json').read_text())['transcription']:
+        for s in result['transcription']:
             words = []
             for token in s.get('tokens', []):
                 text = token['text']
@@ -46,4 +50,4 @@ def transcribe(path, *, model, language=None, start=None, end=None, progress, ca
                     words.append(dict(w=text.strip(), start=a, end=b, p=token.get('p')))
             rows.append(dict(start=s['offsets']['from'] / 1000, end=s['offsets']['to'] / 1000,
                              text=s['text'], words=words))
-        yield from normalize(rows, offset, start, end, cancel)
+        yield from normalize(rows, offset, start, end, cancel, context)

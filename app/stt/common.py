@@ -23,7 +23,7 @@ def window(path, start, end):
         yield target, offset
 
 
-def normalize(segments, offset, start, end, cancel):
+def normalize(segments, offset, start, end, cancel, context=False):
     for segment in segments:
         cancel()
         segment = dict(segment)
@@ -31,7 +31,8 @@ def normalize(segments, offset, start, end, cancel):
         segment['end'] += offset
         segment['words'] = [{**w, 'start': w['start'] + offset, 'end': w['end'] + offset}
                             for w in segment.get('words', [])]
-        lo, hi = start or 0, float('inf') if end is None else end
+        lo = max(0, (start or 0) - (2 if context else 0))
+        hi = float('inf') if end is None else end + (2 if context else 0)
         if segment['end'] <= lo or segment['start'] >= hi:
             continue
         segment['start'], segment['end'] = max(lo, segment['start']), min(hi, segment['end'])

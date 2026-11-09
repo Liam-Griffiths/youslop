@@ -125,3 +125,20 @@ def test_camera_timings_use_processed_audio_clock(recorded, monkeypatch):
     take = store.load(pid).slides[0].take
     assert take['words'][0]['start'] == .2  # No raw/video trim offset.
     assert take['trimmed'] == [3, 5] and take['video'] == 'takes/kept.mp4'
+
+
+def test_retime_uses_shared_jitter_seams(recorded, monkeypatch):
+    pid, _ = recorded
+    monkeypatch.setattr(take_timing.ffutil, 'duration', lambda path: 601)
+    def infer(**kw):
+        assert kw['context'] is True
+        shift = .3 if kw['start'] == 0 else -.3
+        yield dict(start=598, end=601, text='go go now', words=[
+            dict(w=text, start=t+shift, end=t+.1+shift)
+            for text,t in [('go',599.7), ('go',600.1), ('now',600.6)]])
+    monkeypatch.setattr(stt, 'transcribe', infer)
+    assert run(pid) == {'words': 3}
+    words = store.load(pid).slides[0].take['words']
+    assert [w['w'] for w in words] == ['go','go','now']
+    assert all(w['src'] == 'stt' for w in words)
+    assert all(a['end'] <= b['start'] for a,b in zip(words, words[1:]))

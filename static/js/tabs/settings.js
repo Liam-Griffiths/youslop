@@ -236,9 +236,49 @@ async function checkSpeechEngines(refresh = false) {
     const engines = await api(`/api/stt/engines?refresh=${refresh}`);
     if (!host.isConnected) return;
     host.innerHTML = `<p class="sub">Optional. Save settings and restart to use changed paths or defaults.</p>` +
-      Object.entries(engines).map(([name, info]) => `<div class="field" style="margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--line)"><strong>${esc(name)} · ${info.installed ? 'Installed' : 'Not found'}</strong>
+      Object.entries(engines).map(([name, info], index) => `<div class="field" style="margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--line)"><strong>${esc(name)} · ${info.installed ? 'Installed' : 'Not found'}</strong>
         <p class="mono">${esc([info.version, info.device, info.notes].filter(Boolean).join(' · '))}</p>
+        <p class="mono">Last runtime: ${esc(info.runtime ? `${info.runtime.version || 'Version unknown'} · ${info.runtime.device || 'Device unknown'}` : 'Not run in this session')}</p>
         <p class="mono">Models: ${esc(info.models.join(', ') || 'No local models found')}</p>
-        <a href="${esc(info.install_url)}" target="_blank" rel="noopener">Install instructions</a></div>`).join('');
+        <a href="${esc(info.install_url)}" target="_blank" rel="noopener">Install instructions</a>
+        ${(info.downloads || []).length ? `<div class="row"><label for="stt-download-${index}">Model to download</label><select id="stt-download-${index}">${info.downloads.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('')}</select><button class="btn" data-stt-download="${esc(name)}" data-select="stt-download-${index}">Download model</button></div><p class="sub">Downloads use the whisper.cpp folder active when the app started (default ~/.cache/whisper.cpp). Save and restart before downloading to a changed folder. Existing models are kept. Choose the downloaded path as your default, save and restart.</p><div data-download-status role="status"></div>` : '<p class="sub">Use the engine’s instructions to obtain a model, then choose its local path above.</p>'}</div>`).join('');
+    host.querySelectorAll('[data-stt-download]').forEach(button => {
+      button.onclick = () => downloadSpeechModel(button);
+    });
   } catch (e) { host.textContent = e.message; }
+}
+
+async function downloadSpeechModel(button) {
+  const status = button.closest('.field').querySelector('[data-download-status]');
+  button.disabled = true;
+  try {
+    const model = document.getElementById(button.dataset.select).value;
+    const {job} = await api('/api/stt/download', {method:'POST', body:JSON.stringify({
+      engine:button.dataset.sttDownload, model, confirm:true})});
+    status.innerHTML = '<progress aria-label="Model download progress"></progress> <span class="mono" data-progress></span> <button class="btn sm">Cancel download</button>';
+    const cancel = status.querySelector('button');
+    cancel.onclick = async () => {
+      try { await api(`/api/jobs/${job}/cancel`, {method:'POST'}); cancel.disabled = true; }
+      catch(e) { toast(e.message, true); }
+    };
+    while (true) {
+      const current = await api(`/api/jobs/${job}`);
+      if (status.isConnected) {
+        const message = current.log?.at(-1)?.m || current.state;
+        status.querySelector('[data-progress]').textContent = message;
+        const counts = message.match(/(\d+) of (\d+) bytes/);
+        if (counts && Number(counts[2]) > 0) {
+          const bar = status.querySelector('progress');
+          bar.max = Number(counts[2]); bar.value = Number(counts[1]);
+        }
+      }
+      if (current.state !== 'running') {
+        status.textContent = current.state === 'done' ? `Downloaded: ${current.result.model}. Set the default model path above.` :
+          current.state === 'cancelled' ? 'Download cancelled.' : current.error;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  } catch (e) { status.textContent = e.message; }
+  finally { button.disabled = false; }
 }

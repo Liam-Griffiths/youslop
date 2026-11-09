@@ -112,7 +112,8 @@ def test_missing_engines_setup_settings(api_request, monkeypatch):
         assert stt.setup_status()['detail'] == 'none installed (optional)'
         fields = api_request('GET', '/api/settings').json()['fields']
         assert {f['key'] for f in fields if f['group'] == 'Speech-to-text'} == {
-            'stt_engine', 'stt_model', 'stt_folder', 'stt_executable', 'stt_device'}
+            'stt_engine', 'stt_model', 'stt_folder', 'stt_executable', 'stt_device',
+            'stt_whisper_cache', 'stt_hub_cache'}
     finally:
         stt._detect.cache_clear()
 
@@ -193,3 +194,18 @@ def test_retime_api_explicit_defaults_and_stale_click(api_request, tmp_path, mon
     assert api_request('POST', base, dict(track='mic', path='takes/kept.wav')).json()['job'] == 'fake-retime'
     assert calls[0][0][:2] == ('retime', 'retime') and calls[0][1]['cancellable'] is True
     assert path.read_bytes() == b'kept recording'
+
+
+def test_download_api_requires_explicit_click_and_catalog(api_request, monkeypatch, tmp_path):
+    from app.stt import downloads
+    monkeypatch.setenv('CORKBORED_STT_FOLDER', str(tmp_path))
+    calls = []
+    monkeypatch.setattr(jobs, 'start', lambda *a, **kw: calls.append((a,kw)) or 'download-job')
+    monkeypatch.setattr(downloads, 'urlopen', lambda *a, **kw: pytest.fail('API must not fetch'))
+    for body in ({}, {'engine':'whisper.cpp', 'model':'tiny'},
+                 {'engine':'whisper.cpp', 'model':'../bad', 'confirm':True},
+                 {'engine':'unknown', 'model':'tiny', 'confirm':True}):
+        assert api_request('POST', '/api/stt/download', body).status_code == 400
+    assert not calls
+    assert api_request('POST', '/api/stt/download', dict(engine='whisper.cpp', model='tiny', confirm=True)).json() == {'job':'download-job'}
+    assert calls[0][0][:2] == ('stt-download', '') and calls[0][1]['cancellable'] is True

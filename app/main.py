@@ -997,6 +997,19 @@ def speech_engines(refresh: bool = False):
     return stt.configured(refresh=refresh)
 
 
+@app.post('/api/stt/download')
+def speech_download(payload: dict = Body(...)):
+    from .stt import downloads
+    try:
+        if set(payload) != {'engine', 'model', 'confirm'} or payload['confirm'] is not True:
+            raise ValueError('An explicit download confirmation is required')
+        if not isinstance(payload['engine'], str) or not isinstance(payload['model'], str):
+            raise ValueError('Choose an engine and model')
+        return {'job': downloads.start_job(payload['engine'], payload['model'])}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
 @app.get('/api/footage/shoots/{sid}/transcripts/{source_id}')
 def transcript_read(sid: str, source_id: str):
     from . import transcripts

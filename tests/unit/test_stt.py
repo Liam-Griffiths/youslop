@@ -261,3 +261,46 @@ def test_fallback_cache_version_invalidates_old_chunks(source, monkeypatch):
     monkeypatch.setattr(transcripts, 'CACHE_VERSION', transcripts.CACHE_VERSION + 1)
     transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=0, end=2)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize('shift', [-.35, .35])
+def test_jitter_seams_repeated_words_resume_and_range(source, monkeypatch, shift):
+    def infer(engine, path, *, start, end, **kw):
+        delta = shift if start == 0 else -shift
+        # Both decodes see the same ordered phrase, with the seam words moved
+        # to opposite sides. Two real occurrences of "very" must survive.
+        words = [dict(w=text, start=t+delta, end=t+.1+delta, p=.9)
+                 for text,t in [('before',598), ('very',599.8), ('very',600.2), ('after',601)]]
+        yield dict(start=598, end=602, text='before very very after', words=words)
+    monkeypatch.setattr(stt, 'transcribe', infer)
+    def cancel(message):
+        if message.startswith('chunk 2'):
+            raise jobs.JobCancelled()
+    with pytest.raises(jobs.JobCancelled):
+        transcripts.transcribe('shoot', 'file', engine='fake', model='small', progress=cancel)
+    resumed = transcripts.transcribe('shoot', 'file', engine='fake', model='small')
+    full = transcripts.transcribe('shoot', 'file', engine='fake', model='small', retranscribe=True)
+    assert resumed['words'] == full['words']
+    assert [w['w'] for w in full['words']] == ['before', 'very', 'very', 'after']
+    assert all(a['end'] <= b['start'] for a,b in zip(full['words'], full['words'][1:]))
+    assert all(w['src'] == 'stt' for w in full['words'])
+    # A range with no preceding words must not acquire left padding.
+    transcripts._path('shoot', 'file').unlink()
+    result = transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=600, end=602)
+    assert all(600 <= w['start'] < w['end'] <= 602 for w in result['words'])
+
+
+def test_adapter_retains_context_only_when_requested():
+    from app.stt.common import normalize
+    rows = [dict(start=0, end=4, text='left right', words=[
+        dict(w='left', start=1.7, end=1.9), dict(w='right', start=2.2, end=2.4)])]
+    assert len(list(normalize(rows, 0, 2, 3, lambda: None))[0]['words']) == 1
+    assert len(list(normalize(rows, 0, 2, 3, lambda: None, context=True))[0]['words']) == 2
+
+
+def test_seam_timing_repair_keeps_words_at_range_end():
+    from app.stt.seams import clip
+    items = [dict(w='same', start=.8, end=1), dict(w='same', start=.7, end=.99)]
+    repaired = clip(items, 0, 1)
+    assert len(repaired) == 2
+    assert 0 <= repaired[0]['start'] < repaired[0]['end'] <= repaired[1]['start'] < repaired[1]['end'] <= 1

@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from . import ffutil, jobs, store, stt
+from .stt.seams import clip, join
 from .stt.timing import segment_words
 
 
@@ -45,12 +46,14 @@ def retime(pid, sid, track, expected_path, identity, options, progress):
                 break
             end = min(start + 600, duration)
             progress('Retiming recorded speech')
-            for segment in stt.transcribe(path=wav, start=start, end=end, progress=progress,
+            items = []
+            for segment in stt.transcribe(path=wav, start=start, end=end, context=True, progress=progress,
                                            cancel=lambda: progress('Retiming recorded speech'), **options):
                 for w in segment_words(segment, wav):
-                    if start <= (w['start'] + w['end']) / 2 < end and w['end'] > w['start']:
-                        result.append({**w, 'start': max(start, w['start']), 'end': min(end, w['end']),
-                                       'engine': options['engine'], 'model': options['model']})
+                    if w['end'] > w['start']:
+                        items.append({**w, 'engine': options['engine'], 'model': options['model']})
+            result = join(result, items, start) if result else items
+        result = clip(result, 0, duration)
         if not result or any(w['src'] != 'stt' for w in result):
             raise ValueError('Engine returned no real word timings; existing timings kept')
     progress('Saving word timings')  # Cancellation cannot leave partially applied words.
