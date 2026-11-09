@@ -28,7 +28,7 @@ def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
     result = ['#/', '#/setup', '#/library', '#/settings', '#/guide', '#/projects',
               '#/blocks', '#/blocks/number_slam', '#/blocks/search/zzznomatch',
-              '#/footage', '#/footage/ssnapshot', '#/packs', '#/channels', '#/channels/csnapshot',
+              '#/footage', '#/footage/ssnapshot', '#/footage/saudio', '#/packs', '#/channels', '#/channels/csnapshot',
               '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
         tabs = tuple(dict.fromkeys(PROJECT_STAGES + PROJECT_TABS)) + (
@@ -101,6 +101,22 @@ def seed():
             Image.new('RGB', (320, 180), (70 + 40 * n, 70, 90)).save(root / f'thumbs/{clip.id}-{i}.jpg')
             clip.thumbs.append(f'thumbs/{clip.id}-{i}.jpg')
     footage._save(shoot)
+    # Audio logger and transcript editing fixture: no engine or inference.
+    import wave
+    from app import transcripts
+    audio_root = footage.shoot_dir('saudio')
+    (audio_root / 'sprites').mkdir(parents=True)
+    audio = audio_root / 'fixture.wav'
+    with wave.open(str(audio), 'wb') as wav:
+        wav.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(b'\0\0' * 64000)
+    Image.new('RGB', (1600, 90), (60, 60, 60)).save(audio_root / 'sprites/a1.jpg')
+    footage._save(footage.Shoot('saudio', path='/synthetic/Audio interview',
+        files=[footage.SourceFile('a1', str(audio), kind='audio', duration=4)],
+        clips=[footage.Clip('a1clip', 'a1', 0, 4)]))
+    doc = dict(coverage=[[0, 2]], words=[dict(w='Helo.', start=.5, end=1.25, src='stt')], overrides=[])
+    transcripts._rebuild(doc)
+    transcripts._write(transcripts._path('saudio', 'a1'), doc)
     settings.save_file({'setup_complete': 'true'})
     channels.save(Channel(id='csnapshot', name='Snapshot channel', concept='Synthetic UI fixtures',
         style=Style(block_theme={'accent':'#3DFFDC'}),
@@ -179,7 +195,12 @@ def server():
     def no_llm(*args, **kwargs):
         raise RuntimeError('LLM calls are forbidden in UI snapshots')
 
-    with patch('app.ops.initialize', lambda *args: None), patch('app.llm.complete', no_llm), patch('app.llm.complete_json', no_llm), socket.socket() as sock:
+    def missing_engines(**kwargs):
+        from app.stt import ENGINES
+        return {name: dict(installed=False, version='', models=[], device='', notes='', install_url=url)
+                for name, (_, url) in ENGINES.items()}
+
+    with patch('app.stt.configured', missing_engines), patch('app.ops.initialize', lambda *args: None), patch('app.llm.complete', no_llm), patch('app.llm.complete_json', no_llm), socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         instance = uvicorn.Server(uvicorn.Config(app, log_level='warning', lifespan='off'))
         thread = threading.Thread(target=instance.run, kwargs={'sockets': [sock]}, daemon=True)
@@ -248,6 +269,48 @@ def capture(base, out):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/footage/saudio':
+                _evaluate(cdp, session, """(async () => {
+                  const host = document.querySelector('#footage-transcript');
+                  if (!host.textContent.includes('No speech-to-text engine installed') ||
+                      !document.querySelector('#transcript-estimate').disabled ||
+                      !document.querySelector('#footage-player').src.includes('/media/audio/'))
+                    throw Error('Audio/missing-engine transcript state missing');
+                  const base = '/api/footage/shoots/saudio/transcripts/a1';
+                  const before = (await api(base)).words;
+                  const form = host.querySelector('form');
+                  form.querySelector('input').value = 'Hello.';
+                  await form.onsubmit({preventDefault(){}});
+                  const after = (await api(base)).words;
+                  if (after.length !== before.length || after[0].w !== 'Hello.' ||
+                      ['start','end','src'].some(k=>after[0][k] !== before[0][k]))
+                    throw Error('Word correction changed timing metadata');
+                  // Exercise confirmation with a fake transport; never create a worker.
+                  const real = api, requests = [];
+                  try {
+                    api = async (url, options) => {
+                      if (!url.startsWith(base)) return real(url, options);
+                      requests.push({url, body:JSON.parse(options.body)});
+                      if (url.endsWith('/start')) throw Error('Synthetic start stopped');
+                      return {seconds:4, chunks:1, engine:'fake', model:'local', detail:'Runtime unknown'};
+                    };
+                    const estimate = document.querySelector('#transcript-estimate');
+                    for (const scope of ['whole','range','replace']) {
+                      document.querySelector('#transcript-scope').value = scope;
+                      await estimate.onclick();
+                      if (requests.at(-1).url.endsWith('/start')) throw Error('Estimate started inference');
+                      const body = requests.at(-1).body;
+                      if ((scope === 'range') !== ('start' in body) ||
+                          (scope === 'replace') !== !!body.retranscribe) throw Error('Run scope lost');
+                    }
+                    const confirm = document.querySelector('#transcript-confirm');
+                    await confirm.onclick({target:confirm});
+                    if (!requests.at(-1).body.confirm) throw Error('Explicit confirmation missing');
+                    host.querySelector('fieldset').dispatchEvent(new Event('input'));
+                    if (document.querySelector('#transcript-confirm')) throw Error('Stale estimate still confirmable');
+                  } finally { api = real; }
+                  return true;
+                })()""")
             if route.endswith('/publish'):
                 _evaluate(cdp, session, "if (document.querySelector('.style-picker') || !document.querySelector('#tabbody').textContent.includes('Change in Visuals')) throw Error('Publish style summary missing'); true")
             if route == '#/p/psnapkenburns/visuals':

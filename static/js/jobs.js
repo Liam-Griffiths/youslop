@@ -36,6 +36,7 @@ function openJobs() {
           ${j.state === 'running' && j.cancellable ? `<button type="button" class="btn sm ghost"
             data-cancel-job="${esc(j.id)}" aria-label="Cancel ${esc(j.kind)} for ${esc(j.project_title || j.project_id || 'Library')}">Cancel</button>` : ''}</div>
         <div class="sub mono">${esc(j.project_title || j.project_id || 'Library')} · ${esc(j.id)}</div>
+        ${j.kind === 'transcribe' ? `<a href="#/footage/${encodeURIComponent(j.project_id)}" data-shoot>Open shoot</a>` : ''}
         <p class="mono jobs-last-line">${esc(j.last_log_line || '—')}</p>
         ${j.state === 'running' && j.status ? `<div class="sub mono">${esc(j.status)}</div>` : ''}</article>`).join('')
         || '<p class="sub">No jobs yet.</p>';
@@ -51,6 +52,7 @@ function openJobs() {
     }
   };
   dialog.addEventListener('click', async e => {
+    if (e.target.closest('[data-shoot]')) { dialog.close(); return; }
     const button = e.target.closest('[data-cancel-job]');
     if (!button || button.disabled) return;
     button.disabled = true;

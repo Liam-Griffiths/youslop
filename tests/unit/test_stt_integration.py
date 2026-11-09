@@ -129,3 +129,40 @@ def test_worker_forwards_adapter_options(audio, monkeypatch, engine, extra):
     result = transcripts.transcribe(shoot.id, source.id, engine=engine, model='fake', **extra)
     assert result['coverage'] == [[0, 2]] and result['words'][0]['engine'] == engine
     assert all(calls[0][1][key] == value for key, value in extra.items())
+
+
+def test_measured_estimate_and_replacement_resume(audio, api_request, tmp_path, monkeypatch):
+    shoot, source, path = audio
+    base = f'/api/footage/shoots/{shoot.id}/transcripts/{source.id}'
+    model = tmp_path / 'model.bin'
+    model.write_bytes(b'fake')
+    monkeypatch.setattr(stt, 'configured', lambda **kw: {'openai-whisper': {'installed': True}})
+    options = dict(engine='openai-whisper', model=str(model), retranscribe=True)
+    calls = []
+    def fake(*a, **kw):
+        calls.append(kw)
+        yield dict(start=0, end=1, text='word.', words=[dict(w='word.', start=0, end=1, src='stt')])
+    monkeypatch.setattr(stt, 'transcribe', fake)
+    real_monotonic = transcripts.time.monotonic
+    clock = iter([0, 4, 4])
+    monkeypatch.setattr(transcripts.time, 'monotonic', lambda: next(clock))
+    # Complete chunk saved, crash before marking the replacement plan complete.
+    original_write = transcripts._write
+    def crash(path, value):
+        if path.name.endswith('.run.json') and value['complete']:
+            raise jobs.JobCancelled()
+        original_write(path, value)
+    monkeypatch.setattr(transcripts, '_write', crash)
+    with pytest.raises(jobs.JobCancelled):
+        transcripts.transcribe(shoot.id, source.id, **options)
+    monkeypatch.setattr(transcripts.time, 'monotonic', real_monotonic)
+    assert len(calls) == 1
+    estimate = api_request('POST', base + '/estimate', options).json()
+    assert estimate['seconds'] == 0 and estimate['chunks'] == 0 and estimate['runtime_seconds'] == 0
+    assert len(calls) == 1  # Estimate never starts inference.
+    whole = api_request('POST', base + '/estimate', {**options, 'retranscribe': False, 'start': 0, 'end': 1}).json()
+    assert whole['runtime_seconds'] == 2
+    assert 'Approximate' in whole['detail']
+    model.write_bytes(b'changed')
+    changed = api_request('POST', base + '/estimate', options).json()
+    assert changed['seconds'] == 2 and changed['runtime_seconds'] is None

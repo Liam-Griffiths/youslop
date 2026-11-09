@@ -8,9 +8,9 @@ from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 75
+    assert len(paths) == len(set(paths)) == 76
     assert paths[:5] == ['#/', '#/setup', '#/library', '#/settings', '#/guide']
-    assert '#/footage/ssnapshot' in paths
+    assert '#/footage/ssnapshot' in paths and '#/footage/saudio' in paths
     assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
     for fmt in FORMATS:
         expected = set(PROJECT_STAGES) | {'media', 'record', 'thumb', 'render',
@@ -23,7 +23,7 @@ def test_routes_match_current_tabs_and_families():
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 75
+    assert len(set(paths)) == 76
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)
@@ -66,6 +66,10 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     seed()
     assert len(footage.load('ssnapshot').clips) == 2
     assert footage.status('ssnapshot')['ready'] == 1
+    audio = footage.load('saudio')
+    assert audio.files[0].kind == 'audio' and footage.status('saudio')['ready'] == 1
+    from app import transcripts
+    assert transcripts.load('saudio', 'a1')['words'][0]['src'] == 'stt'
     assert settings.load_file()['setup_complete'] == 'true'
     assert not settings.setup_needed()
     assert channels.load('csnapshot').name == 'Snapshot channel'

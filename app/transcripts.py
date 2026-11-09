@@ -4,6 +4,7 @@ import json
 import math
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from . import ffutil, footage, jobs, stt, words
@@ -70,9 +71,32 @@ def override(shoot_id, source_id, start, end, text):
         raise ValueError('Require a finite word span and nonempty text')
     with footage.lock_for(shoot_id):
         doc = load(shoot_id, source_id)
-        doc['overrides'].append(dict(start=start, end=end, w=text))
+        if not any(w['start'] == start and w['end'] == end for w in doc['words']):
+            raise ValueError('Select one existing word to correct')
+        doc['overrides'].append(dict(start=start, end=end, w=text.strip()))
         _rebuild(doc)
         _write(_path(shoot_id, source_id), doc)
+
+
+def _model_identity(model):
+    """Track local files, including in-place edits and directory/symlink targets."""
+    path = Path(model).expanduser()
+    files = sorted(p for p in path.rglob('*') if p.is_file()) if path.is_dir() else [path]
+    return [[str(p.resolve()), s.st_size, s.st_mtime_ns, s.st_ctime_ns]
+            for p in files if p.exists() for s in [p.stat()]]
+
+
+def _run_plan(root, source_id, signature, chunks, replacement):
+    if not replacement:
+        return None, dict(chunks=chunks, generation='')
+    path = root / f'{footage._key(source_id)}.run.json'
+    old = json.loads(path.read_text()) if path.exists() else {}
+    if old.get('signature') == signature and not old.get('complete'):
+        return path, old
+    plan = dict(signature=signature, chunks=chunks, complete=False,
+                generation=uuid.uuid4().hex)
+    _write(path, plan)
+    return path, plan
 
 
 def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None, end=None,
@@ -108,13 +132,17 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
         adapter_options = {'executable': executable} if engine == 'whisper.cpp' else {}
         if engine == 'faster-whisper' and device is not None:
             adapter_options['device'] = device
+        signature = [identity, engine, model, _model_identity(model), language, adapter_options, a, b, retranscribe]
+        plan_path, plan = _run_plan(root, source_id, signature, chunks, retranscribe)
+        chunks = plan['chunks']
         elapsed, decoded = 0, 0
         for n, (x, y) in enumerate(chunks, 1):
             progress(f'chunk {n} of {len(chunks)}, about {round(elapsed / decoded * sum(v-u for u,v in chunks[n-1:]) / 60, 1) if decoded else "unknown"} min left')
-            key = hashlib.sha256(json.dumps([identity, engine, model, language, adapter_options, x, y]).encode()).hexdigest()[:20]
-            cache = root / f'{source_id}.chunks' / f'{key}.json'
+            key = hashlib.sha256(json.dumps([signature[:6], plan['generation'], x, y]).encode()).hexdigest()[:20]
+            cache = root / f'{footage._key(source_id)}.chunks' / f'{key}.json'
             began = time.monotonic()
-            if cache.exists() and not retranscribe:
+            cached = cache.exists()
+            if cached:
                 items = json.loads(cache.read_text())
             else:
                 items = []
@@ -136,10 +164,18 @@ def transcribe(shoot_id, source_id, *, engine, model, language=None, start=None,
                 doc['coverage'] = _ranges(doc['coverage'] + [[x, y]])
                 doc.update(engine=engine, model=model, language=language, duration=duration,
                            created=doc.get('created', time.time()), source_identity=identity)
+                if not cached:
+                    measured = dict(signature=signature[1:6], audio_seconds=y-x,
+                                    wall_seconds=time.monotonic()-began)
+                    doc['measurement'] = measured
                 _rebuild(doc)
                 _write(_path(shoot_id, source_id), doc)
-            elapsed += time.monotonic() - began
-            decoded += y - x
+            if not cached:
+                elapsed += time.monotonic() - began
+                decoded += y - x
+        if plan_path is not None:
+            plan['complete'] = True
+            _write(plan_path, plan)
         progress('Transcript saved')
         return load(shoot_id, source_id)
 
@@ -170,7 +206,25 @@ def prepare(shoot_id, source_id, options):
     resolved = stt.resolve(options)
     ranges = ([(a, b)] if options.get('retranscribe') or options.get('start') is not None
               or options.get('end') is not None else list(_gaps(a, b, load(shoot_id, source_id)['coverage'])))
+    signature = [resolved['engine'], resolved['model'], _model_identity(resolved['model']),
+                 resolved.get('language'),
+                 ({'executable': resolved.get('executable', '')} if resolved['engine'] == 'whisper.cpp'
+                  else {'device': resolved['device']} if 'device' in resolved else {})]
+    root = _path(shoot_id, source_id).parent
+    plan_path = root / f'{footage._key(source_id)}.run.json'
+    plan = json.loads(plan_path.read_text()) if plan_path.exists() else {}
+    full_signature = plan.get('signature', [])
+    if (options.get('retranscribe') and not plan.get('complete') and len(full_signature) == 9
+            and full_signature[1:6] == signature and full_signature[6:] == [a, b, True]):
+        ranges = [span for span in plan['chunks'] if not (root / f'{footage._key(source_id)}.chunks' /
+                  (hashlib.sha256(json.dumps([full_signature[:6], plan['generation'], *span]).encode()).hexdigest()[:20] + '.json')).exists()]
     seconds = sum(y - x for x, y in ranges)
+    measurement = load(shoot_id, source_id).get('measurement', {})
+    runtime = (seconds * measurement['wall_seconds'] / measurement['audio_seconds']
+               if measurement.get('signature') == signature and measurement.get('audio_seconds', 0) > 0 else None)
     return resolved, dict(seconds=seconds, chunks=sum(math.ceil((y-x)/600) for x, y in ranges),
-                         detail='Runtime depends on engine, model and device; no measured estimate yet',
+                         runtime_seconds=runtime,
+                         detail=('Approximate runtime from the last measured chunk; content and load vary'
+                                 if runtime is not None else
+                                 'Runtime depends on engine, model and device; no measured estimate yet'),
                          engine=resolved['engine'], model=resolved['model'])

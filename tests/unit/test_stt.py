@@ -69,7 +69,7 @@ def test_cancel_resume_seams(source, monkeypatch):
     uninterrupted = transcripts.transcribe('shoot', 'file', engine='fake', model='small', retranscribe=True)
     assert resumed['words'] == uninterrupted['words']
     assert len(resumed['words']) == 1500
-    assert len(list((footage.shoot_dir('shoot') / 'transcripts/file.chunks').glob('*.json'))) == 3
+    assert len(list((footage.shoot_dir('shoot') / 'transcripts/file.chunks').glob('*.json'))) == 6  # Replacement has its own cache generation.
 
 
 def test_detection_missing_cached_and_broken(monkeypatch):
@@ -137,3 +137,92 @@ def test_padding_does_not_become_segment_fallback():
     assert list(normalize(rows, 0, 2, 3, lambda: None)) == []
     with pytest.raises(ValueError, match='never downloads'):
         local_model('/nonexistent/corkbored-stt-test-model')
+
+
+def test_replacement_resume_and_new_generation(source, monkeypatch):
+    calls = []
+    monkeypatch.setattr(stt, 'transcribe', fake_engine(calls))
+    run = lambda **kw: transcripts.transcribe('shoot', 'file', engine='fake', model='small', **kw)
+    original = run()
+    calls.clear()
+    def cancel(message):
+        if message.startswith('chunk 2'):
+            raise jobs.JobCancelled()
+    with pytest.raises(jobs.JobCancelled):
+        run(retranscribe=True, progress=cancel)
+    assert transcripts.load('shoot', 'file')['coverage'] == [[0, 1500]]
+    assert calls == [('fake', 0, 600)]
+    resumed = run(retranscribe=True)
+    assert calls == [('fake', 0, 600), ('fake', 600, 1200), ('fake', 1200, 1500)]
+    assert resumed['words'] == original['words']
+    calls.clear()
+    run(retranscribe=True)
+    assert len(calls) == 3  # A completed plan is not resumed for a fresh replacement.
+
+
+def test_model_directory_changes_invalidate_chunks(source, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(stt, 'transcribe', fake_engine(calls))
+    model = tmp_path / 'model'
+    model.mkdir()
+    weights = model / 'weights.bin'
+    weights.write_bytes(b'old')
+    run = lambda: transcripts.transcribe('shoot', 'file', engine='fake', model=str(model), start=0, end=10)
+    run()
+    run()
+    assert len(calls) == 1
+    weights.write_bytes(b'new weights')
+    run()
+    assert len(calls) == 2
+    (model / 'config.json').write_text('{}')
+    run()
+    assert len(calls) == 3
+
+
+def test_correction_keeps_all_word_metadata(source, monkeypatch):
+    monkeypatch.setattr(stt, 'transcribe', fake_engine([]))
+    original = transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=0, end=2)
+    transcripts.override('shoot', 'file', 0, .25, 'Corrected name')
+    edited = transcripts.load('shoot', 'file')
+    assert edited['words'] == [{**original['words'][0], 'w': 'Corrected name'}, original['words'][1]]
+    with pytest.raises(ValueError, match='one existing word'):
+        transcripts.override('shoot', 'file', 0, 2, 'must not replace several words')
+    rerun = transcripts.transcribe('shoot', 'file', engine='fake', model='small', start=0, end=2, retranscribe=True)
+    assert rerun['words'] == edited['words']
+
+
+def test_cpp_cancellation_terminates_subprocess(tmp_path, monkeypatch):
+    from app.stt import cpp
+    path = tmp_path / 'audio.wav'
+    with wave.open(str(path), 'wb') as wav:
+        wav.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(b'\0\0' * 16000)
+    model = tmp_path / 'model.bin'
+    model.write_bytes(b'fake')
+    events = []
+    class Process:
+        def __init__(self, *a, **kw): events.append('started')
+        def poll(self): return None
+        def terminate(self): events.append('terminate')
+        def wait(self, **kw): events.append('wait'); return 0
+    monkeypatch.setattr(cpp.subprocess, 'Popen', Process)
+    def cancel():
+        raise jobs.JobCancelled()
+    with pytest.raises(jobs.JobCancelled):
+        list(cpp.transcribe(path, model=str(model), progress=lambda m: None, cancel=cancel))
+    assert events == ['started', 'terminate', 'wait']
+
+
+def test_gap_run_does_not_discard_pending_replacement(source, monkeypatch):
+    calls = []
+    monkeypatch.setattr(stt, 'transcribe', fake_engine(calls))
+    run = lambda **kw: transcripts.transcribe('shoot', 'file', engine='fake', model='small', **kw)
+    def cancel(message):
+        if message.startswith('chunk 2'):
+            raise jobs.JobCancelled()
+    with pytest.raises(jobs.JobCancelled):
+        run(retranscribe=True, progress=cancel)
+    run()  # Fill uncovered gaps while retaining the explicit replacement plan.
+    calls.clear()
+    run(retranscribe=True)
+    assert calls == [('fake', 600, 1200), ('fake', 1200, 1500)]
