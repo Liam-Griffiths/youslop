@@ -1,4 +1,6 @@
-"""Reaches Claude one of two ways: the local `claude` CLI, or the Anthropic API.
+"""Reaches a language model: the `claude` CLI or the Anthropic API by default,
+or, when chosen in Settings, a local model (LM Studio or Ollama) or another
+hosted provider. The first two paragraphs below describe the original pair.
 
 The CLI is billed to the user's own Claude subscription and was the only
 backend that existed before this — every call is one-shot (`--print`), with
@@ -25,12 +27,17 @@ from typing import Any, Callable
 
 from . import brand
 from .config import (
-    ANTHROPIC_API_KEY, CLAUDE_BIN, EFFORT, LLM_BACKEND, MODEL_SCRIPT,
-    MODEL_UTILITY, OLLAMA_CONTEXT, OLLAMA_MODEL, OLLAMA_URL, OPENAI_COMPAT,
+    ANTHROPIC_API_KEY, CLAUDE_BIN, EFFORT, LLM_BACKEND, LMSTUDIO_JSON_MODE,
+    LMSTUDIO_MODEL, LMSTUDIO_MODEL_UTILITY, LMSTUDIO_THINKING, LMSTUDIO_MODEL_VISION, LMSTUDIO_URL,
+    LOCAL_TIMEOUT_FACTOR, MODEL_SCRIPT, MODEL_UTILITY, OLLAMA_CONTEXT,
+    OLLAMA_MODEL, OLLAMA_URL, OPENAI_COMPAT,
 )
 
 log = logging.getLogger(f"{brand.SLUG}.llm")
 _USAGE = ContextVar('llm_usage', default=None)
+# Set by complete_json() so a backend that can constrain its output to JSON
+# does, without changing complete()'s signature for every caller.
+_WANT_JSON = ContextVar('llm_want_json', default=False)
 
 
 @contextmanager
@@ -97,6 +104,15 @@ def _api_model_id(model: str) -> str:
     return MODEL_API_IDS.get(model, model)
 
 
+# Every backend that can be named explicitly. "auto" is not one: it resolves
+# to "cli" or "api", never to a local model (see resolve_backend()).
+BACKENDS = ("cli", "api", "ollama", "lmstudio", *OPENAI_COMPAT)
+LOCAL_BACKENDS = ("ollama", "lmstudio")
+BACKEND_LABELS = {"cli": "Claude CLI", "api": "Anthropic API", "ollama": "Ollama",
+                  "lmstudio": "LM Studio",
+                  **{k: v["label"] for k, v in OPENAI_COMPAT.items()}}
+
+
 def resolve_backend() -> str:
     """Which backend a call will actually use, right now.
 
@@ -107,7 +123,7 @@ def resolve_backend() -> str:
     is never chosen by auto — see the note on `OLLAMA_URL` in config.py for
     why a fully-local fallback needs to be a decision, not a default.
     """
-    if LLM_BACKEND in ("cli", "api", "ollama", *OPENAI_COMPAT):
+    if LLM_BACKEND in BACKENDS:
         return LLM_BACKEND
     if shutil.which(CLAUDE_BIN) or Path(CLAUDE_BIN).is_file():
         return "cli"
@@ -125,13 +141,16 @@ def backend_status() -> dict:
     """
     cli_found = bool(shutil.which(CLAUDE_BIN)
                      or Path(CLAUDE_BIN).is_file())
+    resolved = resolve_backend()
     return {
-        "configured": LLM_BACKEND if LLM_BACKEND in ("cli", "api", "ollama",
-                                                    *OPENAI_COMPAT) else "auto",
-        "resolved": resolve_backend(),
+        "configured": LLM_BACKEND if LLM_BACKEND in BACKENDS else "auto",
+        "resolved": resolved,
+        "label": BACKEND_LABELS.get(resolved, resolved),
+        "local": resolved in LOCAL_BACKENDS,
         "cli_found": cli_found,
         "cli_path": CLAUDE_BIN if cli_found else "",
         "api_key_set": bool(ANTHROPIC_API_KEY),
+        "lmstudio_url": LMSTUDIO_URL,
     }
 
 
@@ -386,7 +405,7 @@ def _complete_ollama(
     payload = response.json()
     _record_usage(payload.get('model', OLLAMA_MODEL),
                   dict(input_tokens=payload.get('prompt_eval_count', 0), output_tokens=payload.get('eval_count', 0)))
-    text = (payload.get("message") or {}).get("content", "").strip()
+    text = strip_reasoning((payload.get("message") or {}).get("content", ""))
     if not text:
         raise LLMError("Ollama returned an empty response")
     return text
@@ -452,6 +471,324 @@ def _complete_openai_compat(
         raise LLMError(f"{cfg['label']} returned an empty response")
     return text
 
+# ------------------------------------------------------------------ LM Studio
+_THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
+
+
+def strip_reasoning(text: str) -> str:
+    """The answer without a local reasoning model's visible thinking.
+
+    Qwen3, DeepSeek-R1 distills and similar write `<think>…</think>` before
+    the answer. Left in, that block holds draft JSON and stray braces which
+    `_extract_json` can take for the real reply. Some chat templates send the
+    opening tag in the prompt, so the reply has only the closing one.
+    """
+    text = _THINK.sub("", text or "")
+    if "</think>" in text.lower():
+        text = text[text.lower().rindex("</think>") + len("</think>"):]
+    return text.strip()
+
+
+# What LM Studio says when a prompt overflows the loaded context. llama.cpp
+# and MLX word it differently, and so do LM Studio versions.
+_CONTEXT_FULL = re.compile(
+    r"context (length|window|size)|n_ctx|tokens to keep|exceeds? the|"
+    r"too (long|many tokens)|maximum context", re.I)
+
+# The loaded model, detected rather than configured, cached for a short time.
+# One models request per call would be cheap, but a project makes hundreds of
+# calls; 30 seconds still notices a model swapped in LM Studio between stages.
+_DETECT_TTL = 30.0
+_detected: dict[str, Any] = {"at": 0.0, "models": None}
+
+
+LOCAL_MAX_TOKENS = 6144
+LOCAL_MAX_TOKENS_THINKING = 16384
+_json_mode = {"on": LMSTUDIO_JSON_MODE}
+_effort_ok = {"on": True}
+
+
+def _lmstudio_effort(alias: str, effort: str) -> str | None:
+    """`reasoning_effort` for this call, or None to leave the model's default.
+
+    LM Studio honours "none" on reasoning models (Qwen 3.5 measured: 84 s →
+    4 s on a small JSON call); `reasoning.effort` and `enable_thinking` were
+    ignored. The app-wide effort setting picks the level when thinking is on.
+    """
+    if LMSTUDIO_THINKING == "off":
+        return "none"
+    if LMSTUDIO_THINKING != "on" and alias != MODEL_SCRIPT:
+        return "none"
+    if effort in ("low", "medium", "high"):
+        return effort
+    if effort in ("xhigh", "max"):
+        return "high"
+    return None
+
+
+def _lmstudio_root() -> str:
+    """The server root without the OpenAI `/v1` suffix, for LM Studio's own
+    REST API, which reports which models are loaded and their context."""
+    return re.sub(r"/v1$", "", LMSTUDIO_URL)
+
+
+def lmstudio_models(timeout: float = 5.0, fresh: bool = False) -> list[dict]:
+    """What the server has: id, kind, loaded and context per model.
+
+    LM Studio's own `/api/v0/models` gives the loaded state and context
+    length. A plain OpenAI-compatible server only has `/v1/models`, and for
+    those `loaded` and `context` are None ("not known"), not False.
+    Raises LLMUnavailable when the server cannot be reached at all.
+    """
+    import httpx
+
+    now = time.monotonic()
+    if not fresh and _detected["models"] is not None and now - _detected["at"] < _DETECT_TTL:
+        return _detected["models"]
+    models: list[dict] | None = None
+    try:
+        r = httpx.get(f"{_lmstudio_root()}/api/v0/models", timeout=timeout)
+        if r.status_code == 200 and isinstance(r.json().get("data"), list):
+            models = [{
+                "id": m.get("id", ""),
+                "kind": m.get("type") or "",
+                "loaded": m.get("state") == "loaded",
+                "context": (m.get("loaded_context_length")
+                            or (m.get("max_context_length") if m.get("state") == "loaded"
+                                and "loaded_context_length" not in m else None)),
+                "max_context": m.get("max_context_length"),
+            } for m in r.json()["data"] if m.get("id")]
+        if models is None:
+            r = httpx.get(f"{LMSTUDIO_URL}/models", timeout=timeout)
+            r.raise_for_status()
+            models = [{"id": m.get("id", ""), "kind": "", "loaded": None,
+                       "context": None, "max_context": None}
+                      for m in r.json().get("data", []) if m.get("id")]
+    except httpx.HTTPError as exc:
+        raise LLMUnavailable(
+            f"Could not reach LM Studio at {LMSTUDIO_URL}. Open LM Studio, go to "
+            "the Developer tab and start the server (or run `lms server start`). "
+            f"({type(exc).__name__}: {exc})") from exc
+    except ValueError as exc:
+        raise LLMUnavailable(f"{LMSTUDIO_URL} did not answer like an "
+                             "OpenAI-compatible server.") from exc
+    _detected.update(at=now, models=models)
+    return models
+
+
+def _is_chat_model(m: dict) -> bool:
+    return m["kind"] not in ("embeddings", "embedding") and "embed" not in m["id"].lower()
+
+
+def _lmstudio_model(alias: str, vision: bool = False) -> str:
+    """The model id to send for an "opus"/"sonnet"-style alias.
+
+    `vision` is a call that carries pictures: it takes the vision model when
+    one is named, else a loaded vision model (LM Studio reports type "vlm")
+    ahead of the usual choice."""
+    if vision:
+        if LMSTUDIO_MODEL_VISION:
+            return LMSTUDIO_MODEL_VISION
+        try:
+            vlm = [m for m in lmstudio_models() if m["kind"] == "vlm" and m["loaded"]]
+        except LLMUnavailable:
+            vlm = []
+        if vlm:
+            return vlm[0]["id"]
+    if alias == MODEL_UTILITY and LMSTUDIO_MODEL_UTILITY:
+        return LMSTUDIO_MODEL_UTILITY
+    if alias in (MODEL_SCRIPT, MODEL_UTILITY, *MODEL_API_IDS):
+        if LMSTUDIO_MODEL:
+            return LMSTUDIO_MODEL
+        chat = [m for m in lmstudio_models() if _is_chat_model(m)]
+        loaded = [m for m in chat if m["loaded"]]
+        if loaded:
+            return loaded[0]["id"]
+        if chat and all(m["loaded"] is None for m in chat):
+            return chat[0]["id"]          # a generic server: it serves what it lists
+        raise LLMUnavailable(
+            "LM Studio is running but has no model loaded. Load one in LM Studio "
+            "(Developer tab, or `lms load <model>`), or name a model in Settings."
+            + (f" Downloaded: {', '.join(m['id'] for m in chat[:6])}." if chat else ""))
+    return alias                          # a real model id, passed straight through
+
+
+def local_context_tokens() -> int | None:
+    """The local model's context window in tokens, or None for a hosted
+    backend whose window is large enough not to plan around.
+
+    For LM Studio this is the loaded model's actual context length when the
+    server reports it, because that, not a setting here, is what LM Studio
+    truncates or refuses at. Falls back to the context-window setting.
+    """
+    backend = resolve_backend()
+    if backend == "ollama":
+        return OLLAMA_CONTEXT
+    if backend != "lmstudio":
+        return None
+    try:
+        model = _lmstudio_model(MODEL_SCRIPT)
+        for m in lmstudio_models():
+            if m["id"] == model and m["context"]:
+                return int(m["context"])
+    except LLMError:
+        pass
+    return OLLAMA_CONTEXT
+
+
+def _openai_user_content(prompt: str, images: list[bytes] | None) -> Any:
+    if not images:
+        return prompt
+    parts: list[dict] = [{"type": "text", "text": prompt}]
+    for data in images:
+        kind = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+        parts.append({"type": "image_url", "image_url": {
+            "url": f"data:{kind};base64,{base64.b64encode(data).decode()}"}})
+    return parts
+
+
+def _complete_lmstudio(
+    prompt: str, system: str, model: str, timeout: int, allow_search: bool,
+    effort: str = "", images: list[bytes] | None = None,
+) -> str:
+    """The same prompt, answered by a model loaded in LM Studio.
+
+    `model` is the usual alias; see `_lmstudio_model()` for how it becomes a
+    loaded model. `allow_search` and `effort` are ignored: research searches
+    on its own in app/research.py. `effort` and the thinking setting become
+    `reasoning_effort`; see `_lmstudio_effort()`.
+    Pictures are sent as OpenAI image parts, which a vision model (VLM) reads.
+    """
+    import httpx
+
+    model_id = _lmstudio_model(model, vision=bool(images))
+    approx_tokens = (len(system) + len(prompt)) // 4
+    window = local_context_tokens()
+    if window and approx_tokens > window:
+        log.warning("lmstudio: prompt is about %d tokens, over the loaded %d-token "
+                    "context of %s", approx_tokens, window, model_id)
+    body = {
+        "model": model_id,
+        "messages": ([{"role": "system", "content": system}] if system else [])
+                    + [{"role": "user", "content": _openai_user_content(prompt, images)}],
+        "temperature": 0.3,
+        "stream": False,
+    }
+    # Grammar-constrained JSON: the commonest way a local model fails a JSON
+    # call is prose or a cut-off brace, and constraining the sampler removes
+    # that. The schema allows any object or array; each caller's `require`
+    # still checks the shape.
+    level = _lmstudio_effort(model, effort) if _effort_ok["on"] else None
+    if level:
+        body["reasoning_effort"] = level
+    # A ceiling on the reply. Small local models can loop: Qwen 3.5 9B once
+    # wrote 16,000 tokens into one JSON string on a fact check that needed
+    # 300, until the timeout ended it 19 minutes later. Measured normal
+    # replies: chores 88–302 tokens; script calls 4–8k thinking + ~1k answer.
+    body["max_tokens"] = LOCAL_MAX_TOKENS if level == "none" else LOCAL_MAX_TOKENS_THINKING
+    constrained = _WANT_JSON.get() and _json_mode["on"]
+    if constrained:
+        body["response_format"] = {"type": "json_schema", "json_schema": {
+            "name": "reply", "schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}}
+
+    def send(payload):
+        try:
+            return httpx.post(f"{LMSTUDIO_URL}/chat/completions", json=payload,
+                              timeout=timeout)
+        except httpx.TimeoutException as exc:
+            raise LLMError(f"LM Studio call timed out after {timeout}s. A large model "
+                           "on this machine may need a smaller model or GPU offload.") from exc
+        except httpx.HTTPError as exc:
+            raise LLMUnavailable(
+                f"Could not reach LM Studio at {LMSTUDIO_URL}. Open LM Studio, go to "
+                f"the Developer tab and start the server. ({exc})") from exc
+
+    response = send(body)
+    if (constrained and response.status_code == 400
+            and re.search(r"response_format|json_schema|grammar|schema", response.text, re.I)):
+        log.info("lmstudio: server rejected response_format; sending JSON calls "
+                 "unconstrained for this session")
+        _json_mode["on"] = False
+        body.pop("response_format")
+        response = send(body)
+    if (level and response.status_code == 400
+            and re.search(r"reasoning", response.text, re.I)):
+        log.info("lmstudio: server rejected reasoning_effort; leaving it out "
+                 "for this session")
+        _effort_ok["on"] = False
+        body.pop("reasoning_effort")
+        response = send(body)
+
+    said = response.text[:600]
+    if response.status_code != 200:
+        _detected["models"] = None        # the loaded model may have changed
+        if _CONTEXT_FULL.search(said):
+            raise LLMUnavailable(
+                f"The prompt (about {approx_tokens} tokens) does not fit the context "
+                f"{model_id} was loaded with in LM Studio. Reload it with a larger "
+                "context length (model settings → Context Length; 32k or more suits "
+                f"research), or pick a smaller research depth. LM Studio said: {said}")
+        if response.status_code == 404 or re.search(r"model.*(not found|not loaded)|no models? loaded", said, re.I):
+            raise LLMUnavailable(f"LM Studio could not use model {model_id!r}: {said}")
+        if images and re.search(r"image|vision|multimodal", said, re.I):
+            raise LLMUnavailable(f"{model_id} cannot read pictures. Load a vision "
+                                 f"model in LM Studio for this step. ({said})")
+        if response.status_code >= 500:
+            raise LLMError(f"LM Studio error {response.status_code}: {said}")
+        raise LLMError(f"LM Studio error {response.status_code}: {said}")
+
+    try:
+        payload = response.json()
+        text = payload["choices"][0]["message"].get("content") or ""
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise LLMError(f"Unexpected LM Studio reply: {said[:300]}") from exc
+    usage = payload.get("usage") or {}
+    _record_usage(payload.get("model", model_id),
+                  dict(usage, input_tokens=usage.get("prompt_tokens", 0),
+                       output_tokens=usage.get("completion_tokens", 0)))
+    if payload["choices"][0].get("finish_reason") == "length":
+        # Cut off at max_tokens. A JSON reply then fails to parse and is
+        # retried with the rejection noted; plain text is used as it stands.
+        log.warning("lmstudio: %s hit the %d-token reply limit", model_id, body["max_tokens"])
+    text = strip_reasoning(text)
+    if not text:
+        raise LLMError(f"LM Studio ({model_id}) returned an empty response")
+    return text
+
+
+def local_probe() -> dict:
+    """A live check of the LM Studio server, for the Settings button.
+
+    One GET to the configured local URL, nothing else: no prompt is sent, so
+    it is quick and loads no model. Says what would answer and warns about the
+    one setting that most often breaks research: a small loaded context.
+    """
+    out: dict[str, Any] = {"url": LMSTUDIO_URL, "reachable": False, "models": [],
+                           "model": "", "context": None, "warning": ""}
+    try:
+        models = lmstudio_models(fresh=True)
+    except LLMUnavailable as exc:
+        out["warning"] = str(exc)
+        return out
+    out["reachable"] = True
+    out["models"] = [m for m in models if _is_chat_model(m)]
+    try:
+        out["model"] = _lmstudio_model(MODEL_SCRIPT)
+    except LLMUnavailable as exc:
+        out["warning"] = str(exc)
+        return out
+    match = next((m for m in models if m["id"] == out["model"]), None)
+    out["context"] = match["context"] if match else None
+    if out["context"] and out["context"] < 16384:
+        out["warning"] = (f"{out['model']} is loaded with a {out['context']}-token "
+                          "context. Research sends long prompts; reload it in LM "
+                          "Studio with 16k or more (32k is better).")
+    elif match is None and LMSTUDIO_MODEL:
+        out["warning"] = (f"LM Studio does not list {LMSTUDIO_MODEL!r}. Check the "
+                          "model name in Settings, or leave it blank to use "
+                          "whichever model is loaded.")
+    return out
+
 
 def complete(
     prompt: str,
@@ -473,10 +810,13 @@ def complete(
     different level for just this one call can still pass its own.
     """
     backend = resolve_backend()
+    if backend in LOCAL_BACKENDS:
+        timeout = int(timeout * LOCAL_TIMEOUT_FACTOR)
     if backend in OPENAI_COMPAT:
         return _complete_openai_compat(backend, prompt, system, model, timeout,
                                        allow_search, effort or EFFORT)
-    fn = {"api": _complete_api, "ollama": _complete_ollama}.get(backend, _complete_cli)
+    fn = {"api": _complete_api, "ollama": _complete_ollama,
+          "lmstudio": _complete_lmstudio}.get(backend, _complete_cli)
     return fn(prompt, system, model, timeout, allow_search, effort or EFFORT, images)
 
 
@@ -573,8 +913,17 @@ def complete_json(
     well as on syntax matters: a reply that parses but nests the payload under a
     wrapper key used to escape this function and blow up somewhere less obvious.
     """
+    want = _WANT_JSON.set(True)
+    try:
+        return _complete_json_attempts(prompt, prompt, system, model, timeout, retries,
+                                       require, require_hint, allow_search, effort, images)
+    finally:
+        _WANT_JSON.reset(want)
+
+
+def _complete_json_attempts(prompt, original, system, model, timeout, retries,
+                            require, require_hint, allow_search, effort, images):
     last: Exception | None = None
-    original = prompt
     for attempt in range(retries + 1):
         try:
             text = complete(prompt, system=system, model=model, timeout=timeout,
@@ -602,4 +951,5 @@ def complete_json(
 
 
 __all__ = ["complete", "complete_json", "LLMError", "LLMUnavailable",
-           "MODEL_SCRIPT", "MODEL_UTILITY", "resolve_backend", "backend_status"]
+           "MODEL_SCRIPT", "MODEL_UTILITY", "resolve_backend", "backend_status",
+           "local_context_tokens", "local_probe", "strip_reasoning"]

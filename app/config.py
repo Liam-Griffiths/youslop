@@ -201,6 +201,55 @@ OLLAMA_MODEL = brand.env("OLLAMA_MODEL", "qwen2.5:7b-instruct")
 # overflows, so this is always sent explicitly.
 OLLAMA_CONTEXT = int(brand.env("OLLAMA_CONTEXT", "32768") or 32768)
 
+# LM Studio (https://lmstudio.ai), the other local option, and the easier one:
+# load a model in its Developer tab, start the server, choose "lmstudio" here.
+# No key. Opt-in only, for the same reason as Ollama above. The URL can point
+# at any local server that speaks the OpenAI chat-completions protocol
+# (llama.cpp's llama-server, Jan, vLLM); LM Studio-only extras such as
+# reading the loaded model's context length are skipped when they're missing.
+# A blank model means "whichever model is loaded right now", detected per call
+# (cached briefly), so swapping models in LM Studio needs no settings change.
+# The utility model is optional: blank uses the script model, which avoids
+# LM Studio unloading one model to load the other between calls.
+def _lmstudio_default_url() -> str:
+    """LM Studio's own server address on this machine, read from its config.
+
+    LM Studio's port is 1234 by default but configurable, and an install can
+    serve elsewhere (1235 was seen). Its server settings live in
+    `~/.lmstudio/apps/<app>/.internal/http-server-config.json` (older builds:
+    `~/.lmstudio/.internal/`). A cheap file read, no network.
+    """
+    import json
+    home = Path.home() / ".lmstudio"
+    for f in [*sorted(home.glob("apps/*/.internal/http-server-config.json")),
+              home / ".internal" / "http-server-config.json"]:
+        try:
+            port = int(json.loads(f.read_text()).get("port") or 0)
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        if port:
+            return f"http://127.0.0.1:{port}/v1"
+    return "http://127.0.0.1:1234/v1"
+
+
+LMSTUDIO_URL = (brand.env("LMSTUDIO_URL", "").strip() or _lmstudio_default_url()).rstrip("/")
+LMSTUDIO_MODEL = brand.env("LMSTUDIO_MODEL", "").strip()
+LMSTUDIO_MODEL_UTILITY = brand.env("LMSTUDIO_MODEL_UTILITY", "").strip()
+# For the steps that read pictures (reviewing shots, identifying people,
+# labelling footage). Blank prefers a loaded vision model, else the script one.
+LMSTUDIO_MODEL_VISION = brand.env("LMSTUDIO_MODEL_VISION", "").strip()
+# Ask LM Studio to constrain replies to valid JSON for JSON calls. Turned off
+# automatically for the session if the server rejects `response_format`.
+LMSTUDIO_JSON_MODE = brand.env("LMSTUDIO_JSON_MODE", "1").strip() not in ("0", "false", "no", "")
+# Whether a local reasoning model thinks before answering. "auto" lets it
+# think when writing the script and skips thinking for everything else
+# (planning, titles, JSON chores): on Qwen 3.5 9B that took a small JSON call
+# from 84 s to 4 s with the same answer. "on" always thinks; "off" never does.
+LMSTUDIO_THINKING = brand.env("LMSTUDIO_THINKING", "auto").strip().lower()
+# Call timeouts were sized for hosted models. A local model on a laptop can be
+# several times slower, so local backends multiply every timeout by this.
+LOCAL_TIMEOUT_FACTOR = max(1.0, float(brand.env("LOCAL_TIMEOUT_FACTOR", "3") or 3))
+
 # Other chat providers, opt-in only. All three speak the OpenAI chat-completions
 # protocol, so one client serves them (see app/llm.py). The model names are
 # defaults that were not verified against each provider's live model list when

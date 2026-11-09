@@ -19,6 +19,7 @@ const esc = value => String(value), toast = message => { throw Error(message); }
 const go = hash => {location.hash=hash;};
 const $ = selector => ({focus(){}, value:'changed-key', innerHTML:''});
 const settingsFieldRow = field => `<input id="set_${field.key}">`;
+const localModelCheckRow = () => '';
 const data = {paths:{data:'/tmp/synthetic'}, llm:{resolved:'cli',cli_found:false},
  tts:{ready:false,weights:false,detail:'Missing files',model_path:'/tmp/model',voices_path:'/tmp/voices'},
  ffmpeg:{ready:true,detail:'ffmpeg fixture'}, chromium:{ready:false,detail:'Install Chromium'},
@@ -26,7 +27,7 @@ const data = {paths:{data:'/tmp/synthetic'}, llm:{resolved:'cli',cli_found:false
 async function api(url, options) {
  if(options) { writes.push(JSON.parse(options.body)); return {}; }
  if(url==='/api/setup') return data;
- if(url==='/api/settings') return {fields:[{key:'anthropic_api_key',group:'Claude'}]};
+ if(url==='/api/settings') return {fields:[{key:'anthropic_api_key',group:'Writing model'}]};
  throw Error('Unexpected request '+url);
 }
 '''

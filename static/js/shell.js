@@ -57,7 +57,7 @@ async function loadShellStatus() {
   ]);
   const [llm, voice, settings] = await state.shellStatus;
   if (state.project) return;
-  const backend = llm ? `Claude · ${llm.resolved}${llm.resolved === 'cli' && !llm.cli_found ? ' unavailable' : ''}` : 'Claude · unknown';
+  const backend = llm ? `Writing · ${llm.label || llm.resolved}${llm.local ? ' (local)' : ''}${llm.resolved === 'cli' && !llm.cli_found ? ' unavailable' : ''}` : 'Writing · unknown';
   $('#topbar-right').textContent = [backend,
     voice ? `Voice · ${voice.ready ? 'ready' : 'not ready'}` : 'Voice · unknown',
     settings ? `Scenes · ${settings.card_engine}` : 'Scenes · unknown'].join(' · ');

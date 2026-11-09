@@ -399,6 +399,33 @@ def _delivery_text(project: Project) -> str:
     return CAMERA_DELIVERY if project.delivery == "on_camera" else ""
 
 
+def _hook_for_section(hook: Any, sec: dict, opening: bool = False) -> str:
+    """The part of the hook plan this section is responsible for.
+
+    Only the opening section gets the first line and first image. Given the
+    whole plan, small local models opened every section with the video's
+    first line (seen on Qwen 3.5 9B and Granite 4.1 8B); later sections get
+    only the open questions they plant or pay off, and are told not to repeat
+    the opening.
+    """
+    if not isinstance(hook, dict) or not hook:
+        return ""
+    heading = sec.get("heading")
+    loops = [l for l in hook.get("open_loops") or [] if isinstance(l, dict)]
+    if opening or sec.get("kind") == "intro":
+        return f"HOOK PLAN (open with this line and plant these questions): {hook}"
+    lines = []
+    for l in loops:
+        if l.get("plant_beat") == heading:
+            lines.append(f'- Raise this question: {l.get("question")}')
+        if l.get("payoff_beat") == heading:
+            lines.append(f'- Answer this question the opening raised: {l.get("question")}')
+    first = hook.get("first_line")
+    note = (f'The video already opened with: "{first}" Do not repeat or '
+            "paraphrase that line.") if first else ""
+    return "\n".join(x for x in ["HOOK PLAN FOR THIS SECTION:" if lines else "", *lines, note] if x)
+
+
 def _write_section(project: Project, outline: dict, idx: int) -> list[dict]:
     sections = outline["sections"]
     sec = sections[idx]
@@ -447,7 +474,7 @@ SECTIONS AFTER THIS ONE: {after}
 
 {kind_note}
 
-HOOK PLAN (honour its opening and promised payoffs): {outline.get("hook", {})}
+{_hook_for_section(outline.get("hook"), sec, opening=idx == 0)}
 
 {_frame_text(project)}
 

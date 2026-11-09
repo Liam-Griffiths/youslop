@@ -157,3 +157,15 @@ def test_check_hook_checks_every_loop_without_truncating_headings():
     flags = script_gen.check_hook(outline)
     assert len(flags) == 1
     assert flags[0]['claim'] == 'Unpaid fourth loop'
+
+
+def test_only_the_opening_section_gets_the_first_line(project, monkeypatch):
+    prompts = []
+    monkeypatch.setattr(script_gen, 'complete_json', lambda prompt, **kw: prompts.append(prompt) or [])
+    project.outline = hook_outline()
+    for i in range(3):
+        script_gen._write_section(project, project.outline, i)
+    assert 'open with this line' in prompts[0] and 'Why did it stop?' in prompts[0]
+    assert 'open with this line' not in prompts[1]
+    assert 'Do not repeat or paraphrase' in prompts[1] and 'Why did it stop?' not in prompts[1]
+    assert 'Answer this question the opening raised: Why did it stop?' in prompts[2]

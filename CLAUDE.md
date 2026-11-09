@@ -37,6 +37,8 @@ Never call a real LLM in tests; monkeypatch `llm.complete_json`.
 ## Architecture: stage → files
 
 - Research → `app/research.py`; scripts and planning → `app/script_gen.py`.
+- Language models → `app/llm.py` (Claude CLI/API, LM Studio, Ollama, others);
+  local-only setup → `docs/local-models.md`.
 - Assets → `app/media/`; narration → `app/tts.py`; audio cleanup and timing
   → `app/audio.py`.
 - Photographic ffmpeg rendering and timeline/proxies → `app/render.py`;

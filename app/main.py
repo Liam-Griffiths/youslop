@@ -1821,6 +1821,13 @@ def llm_status() -> dict:
     return llm_mod.backend_status()
 
 
+@app.get("/api/llm/local")
+def llm_local() -> dict:
+    """Is LM Studio's server up, and which model would answer? Asked for by
+    a button, never on page load: one GET to the local server, no prompt."""
+    return llm_mod.local_probe()
+
+
 # ---------------------------------------------------------------------- media
 @app.get("/api/providers")
 def providers() -> list[dict]:

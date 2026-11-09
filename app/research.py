@@ -39,10 +39,9 @@ from .config import (
     ANTHROPIC_API_KEY, BRAVE_SEARCH_KEY, RESEARCH_MODE, SEARCH_BACKEND,
     SEARXNG_URL, USER_AGENT,
 )
-from .config import OLLAMA_CONTEXT
 from .llm import (
     LLMError, MODEL_SCRIPT, MODEL_UTILITY, _api_model_id, complete,
-    complete_json, resolve_backend,
+    complete_json, local_context_tokens,
 )
 
 Progress = Callable[[str], None]
@@ -519,12 +518,13 @@ def _source_blocks(sources: list[dict]) -> list[str]:
 
 def _chunk_budget() -> int | None:
     """How many characters of source text one call may carry, or None when the
-    backend's window is large enough to take them all. Only the local model
+    backend's window is large enough to take them all. Only a local model
     has a window that small. Half the window is kept back for the instructions
     and the reply; about four characters make a token."""
-    if resolve_backend() != "ollama":
+    window = local_context_tokens()
+    if window is None:
         return None
-    return OLLAMA_CONTEXT * 4 // 2
+    return window * 4 // 2
 
 
 _SUMMARY_PROMPT = """Below are numbered sources fetched from the web for a

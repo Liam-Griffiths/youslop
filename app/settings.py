@@ -57,32 +57,71 @@ class Field:
 FIELDS: list[Field] = [
     Field("setup_complete", brand.ENV_PREFIX + "SETUP_COMPLETE", "Setup complete",
           group="Internal"),
-    Field("llm_backend", brand.ENV_PREFIX + "LLM_BACKEND", "How to reach Claude",
-         "Auto prefers a signed-in Claude Code CLI — it costs nothing beyond "
-         "your subscription — and falls back to the API key below.",
-         aliases=tuple(brand.env_names("LLM_BACKEND")[1:]), group="Claude", options=(
+    Field("llm_backend", brand.ENV_PREFIX + "LLM_BACKEND", "Which model writes",
+         "Research, scripts and planning all go through this. Auto prefers a "
+         "signed-in Claude Code CLI, then an Anthropic API key. A local model "
+         "(LM Studio or Ollama) keeps everything on your machines with no "
+         "account and no per-token bill; it is used only when chosen here.",
+         aliases=tuple(brand.env_names("LLM_BACKEND")[1:]), group="Writing model", options=(
              ("auto", "Auto — CLI if signed in, else the API key"),
              ("cli", "Claude Code CLI only"),
              ("api", "Anthropic API only"),
-             ("ollama", "Local model (Ollama) — opt in deliberately"),
+             ("lmstudio", "Local model (LM Studio) — no key, no token bill"),
+             ("ollama", "Local model (Ollama) — no key, no token bill"),
              ("openai", "OpenAI (ChatGPT) — API key"),
              ("deepseek", "DeepSeek — API key"),
              ("grok", "Grok (xAI) — API key"),
          ), default="auto"),
+    Field("lmstudio_url", brand.ENV_PREFIX + "LMSTUDIO_URL", "LM Studio server address",
+         "Where LM Studio's local server listens: Developer tab → Start Server. "
+         "Blank reads the port from LM Studio's own settings on this machine. "
+         "Set it for LM Studio on another computer, or for any other "
+         "OpenAI-compatible server (llama.cpp, Jan, vLLM).",
+         aliases=tuple(brand.env_names("LMSTUDIO_URL")[1:]), group="Writing model"),
+    Field("lmstudio_model", brand.ENV_PREFIX + "LMSTUDIO_MODEL", "LM Studio model",
+         "Blank uses whichever model is loaded in LM Studio, so you can switch "
+         "models there without coming back here. Writing quality depends on the "
+         "model: a 30B-class or larger instruct model writes far better scripts "
+         "than a 7B one.",
+         aliases=tuple(brand.env_names("LMSTUDIO_MODEL")[1:]), group="Writing model"),
+    Field("lmstudio_thinking", brand.ENV_PREFIX + "LMSTUDIO_THINKING",
+         "Local model thinking",
+         "Reasoning models (Qwen 3.5 and others) can think before answering. "
+         "Thinking on every call is many times slower; Auto keeps it for the "
+         "script and skips it for planning, titles and other chores.",
+         aliases=tuple(brand.env_names("LMSTUDIO_THINKING")[1:]), group="Writing model",
+         options=(
+             ("auto", "Auto — think when writing the script only"),
+             ("on", "Always think — slowest, most careful"),
+             ("off", "Never think — fastest"),
+         ), default="auto"),
+    Field("lmstudio_model_vision", brand.ENV_PREFIX + "LMSTUDIO_MODEL_VISION",
+         "LM Studio vision model",
+         "Used for the steps that look at pictures: reviewing shots, identifying "
+         "people, labelling footage. Blank uses a loaded vision model if there is "
+         "one, otherwise the model above (which then has to read pictures itself).",
+         aliases=tuple(brand.env_names("LMSTUDIO_MODEL_VISION")[1:]), group="Writing model"),
+    Field("lmstudio_model_utility", brand.ENV_PREFIX + "LMSTUDIO_MODEL_UTILITY",
+         "LM Studio utility model",
+         "Optional smaller model for planning pictures, titles and pronunciation. "
+         "Blank uses the model above. A second model makes LM Studio swap "
+         "between them unless both fit in memory.",
+         aliases=tuple(brand.env_names("LMSTUDIO_MODEL_UTILITY")[1:]), group="Writing model"),
     Field("openai_api_key", "OPENAI_API_KEY", "OpenAI API key", secret=True,
          help="For the OpenAI option above. Billed per token to your OpenAI account.",
-         group="Claude"),
+         group="Writing model"),
     Field("deepseek_api_key", "DEEPSEEK_API_KEY", "DeepSeek API key", secret=True,
          help="For the DeepSeek option above. Billed per token to your DeepSeek account.",
-         group="Claude"),
+         group="Writing model"),
     Field("xai_api_key", "XAI_API_KEY", "xAI (Grok) API key", secret=True,
          help="For the Grok option above. Billed per token to your xAI account.",
-         group="Claude"),
+         group="Writing model"),
     Field("ollama_context", brand.ENV_PREFIX + "OLLAMA_CONTEXT", "Local model context window",
          "How much text the local model can read in one call. Research on a big "
          "subject can send tens of thousands of tokens of sources; anything past "
-         "this is silently cut off. Larger needs more memory.",
-         aliases=tuple(brand.env_names("OLLAMA_CONTEXT")[1:]), group="Claude",
+         "this is silently cut off. Larger needs more memory. For LM Studio, the "
+         "context length the model was loaded with is used when LM Studio reports it.",
+         aliases=tuple(brand.env_names("OLLAMA_CONTEXT")[1:]), group="Writing model",
          options=(
              ("8192", "8k tokens"),
              ("16384", "16k tokens"),
@@ -91,20 +130,20 @@ FIELDS: list[Field] = [
          ), default="32768"),
     Field("anthropic_api_key", "ANTHROPIC_API_KEY", "Anthropic API key", secret=True,
          help="Only needed if Claude Code isn't installed. Billed per token.",
-         group="Claude"),
-    Field("model_script", brand.ENV_PREFIX + "MODEL_SCRIPT", "Script-writing model",
+         group="Writing model"),
+    Field("model_script", brand.ENV_PREFIX + "MODEL_SCRIPT", "Claude script-writing model",
          "The paragraphs themselves — the one place quality is worth paying "
-         "for.",
-         aliases=tuple(brand.env_names("MODEL_SCRIPT")[1:]), group="Claude", options=(
+         "for. Claude only; local models are chosen in their own fields.",
+         aliases=tuple(brand.env_names("MODEL_SCRIPT")[1:]), group="Writing model", options=(
              ("opus", "Opus — best writing, the default"),
              ("sonnet", "Sonnet — faster and cheaper, noticeably plainer prose"),
              ("haiku", "Haiku — fastest, for a rough draft only"),
          ), default="opus"),
-    Field("model_utility", brand.ENV_PREFIX + "MODEL_UTILITY", "Utility model",
+    Field("model_utility", brand.ENV_PREFIX + "MODEL_UTILITY", "Claude utility model",
          "The fiddly bits — planning which picture each paragraph wants, "
          "thumbnail text, pronunciation. Structured, not prose; sonnet is "
          "normally plenty.",
-         aliases=tuple(brand.env_names("MODEL_UTILITY")[1:]), group="Claude", options=(
+         aliases=tuple(brand.env_names("MODEL_UTILITY")[1:]), group="Writing model", options=(
              ("opus", "Opus"),
              ("sonnet", "Sonnet — the default"),
              ("haiku", "Haiku — fastest, for the simplest calls"),
@@ -114,7 +153,7 @@ FIELDS: list[Field] = [
          "the same scale either way. Higher costs more time and, on the API "
          "backend, more money. Blank leaves it at the backend's own default "
          "(high).",
-         aliases=tuple(brand.env_names("EFFORT")[1:]), group="Claude", options=(
+         aliases=tuple(brand.env_names("EFFORT")[1:]), group="Writing model", options=(
              ("", "Default"),
              ("low", "Low — fastest, for simple calls"),
              ("medium", "Medium"),
@@ -122,11 +161,17 @@ FIELDS: list[Field] = [
              ("xhigh", "Extra high"),
              ("max", "Max — slowest, when correctness matters most"),
          )),
-    Field("llm_ollama_model", brand.ENV_PREFIX + "OLLAMA_MODEL", "Local model (Ollama)",
-         "Only used when \"How to reach Claude\" above is set to ollama — a "
-         "fully local, no-account backend. Noticeably lower script quality "
-         "than Claude; opt in deliberately, it is never chosen automatically.",
-         aliases=tuple(brand.env_names("OLLAMA_MODEL")[1:]), group="Claude"),
+    Field("llm_ollama_url", brand.ENV_PREFIX + "OLLAMA_URL", "Ollama server address",
+         "Only used when \"Which model writes\" is Ollama. Can be another "
+         "machine on your network, e.g. http://192.168.1.20:11434.",
+         aliases=tuple(brand.env_names("OLLAMA_URL")[1:]), group="Writing model",
+         default="http://127.0.0.1:11434"),
+    Field("llm_ollama_model", brand.ENV_PREFIX + "OLLAMA_MODEL", "Ollama model",
+         "Only used when \"Which model writes\" is Ollama. The model name as "
+         "`ollama list` shows it. A vision-capable model also handles the steps "
+         "that look at pictures.",
+         aliases=tuple(brand.env_names("OLLAMA_MODEL")[1:]), group="Writing model",
+         default="qwen2.5:7b-instruct"),
     Field("elevenlabs_api_key", "ELEVENLABS_API_KEY", "ElevenLabs API key", secret=True,
          help="For narration in an ElevenLabs voice, your cloned voices included. "
          "Billed per character to your ElevenLabs plan. Works as soon as it's "
@@ -173,12 +218,12 @@ FIELDS: list[Field] = [
          ), default="auto"),
     Field("research_mode", brand.ENV_PREFIX + "RESEARCH_MODE", "Research depth",
          "Quick is one search pass, then the script is written. Deep is "
-         "Claude's research mode: it plans, runs follow-up searches and reads "
+         "a research loop: the writing model plans, runs follow-up searches and reads "
          "pages over several rounds before writing. Deep takes longer and makes "
          "more Claude calls.",
          aliases=tuple(brand.env_names("RESEARCH_MODE")[1:]), group="Research", options=(
              ("quick", "Quick — one search pass"),
-             ("deep", "Deep — Claude's research mode, several rounds"),
+             ("deep", "Deep — several rounds of searching and reading"),
          ), default="quick"),
     Field("google_client_id", "GOOGLE_CLIENT_ID", "Google OAuth client id",
          group="Publishing"),

@@ -1,5 +1,5 @@
 // A route, not a gate: Skip and Finish later always leave a way forward.
-const SETUP_STEPS = ['Where projects live', 'Claude', 'A voice for drafts', 'Research', 'YouTube'];
+const SETUP_STEPS = ['Where projects live', 'Writing model', 'A voice for drafts', 'Research', 'YouTube'];
 let setupStep = 0;
 let setupData = null;
 
@@ -11,11 +11,11 @@ async function renderSetup(step = 0) {
     if (location.hash !== '#/setup') return;
     setupData = checks;
     settingsDirty.clear();
-    const groups = {1: ['Claude'], 3: ['Research'], 4: ['Publishing']};
+    const groups = {1: ['Writing model'], 3: ['Research'], 4: ['Publishing']};
     const fields = settings.fields.filter(f => (groups[step] || []).includes(f.group));
     const descriptions = [
       'Projects, recordings and model files stay in your data folder.',
-      'Choose how the app reaches Claude. These checks detect configuration; they do not make a model call or verify sign-in.',
+      'Choose which model researches and writes: Claude, or a local model on your own machines. These checks detect configuration; they do not make a model call or verify sign-in.',
       'A local voice lets you hear the cut before recording it yourself. You can use your own recordings instead.',
       'Choose a search backend for research. DuckDuckGo needs no key. No search runs during setup.',
       'Publishing is optional. Connect YouTube from a channel after saving your Google credentials and restarting.'
@@ -24,7 +24,8 @@ async function renderSetup(step = 0) {
       checks.tts.ready ? 'Ready' : 'Not ready', 'Optional', checks.youtube.connected ? 'Connected' : 'Optional'];
     let content = fields.map(settingsFieldRow).join('');
     if (step === 1) content = `<p class="mono">Backend: ${esc(checks.llm.resolved)} · CLI ${checks.llm.cli_found ? 'found (sign-in not checked)' : 'not found'}</p>
-      <p class="sub">For the CLI backend, install Claude Code and sign in outside the app. For the API backend, enter your key below.</p>` + content;
+      <p class="sub">For the CLI backend, install Claude Code and sign in outside the app. For the API backend, enter your key below.
+      To write with a free local model instead, open LM Studio, load a model, start its server (Developer tab), then choose LM Studio below.</p>` + content + localModelCheckRow();
     if (step === 0) content = `<label class="field"><span>Data folder</span>
       <input type="text" class="mono" readonly value="${esc(checks.paths.data)}"></label>
       <p class="sub">To use another folder, set CORKBORED_DATA before launching the app. Keep your existing data folder when upgrading.</p>`;

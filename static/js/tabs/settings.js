@@ -81,6 +81,7 @@ async function renderSettings() {
         <h2 style="font-size:15px;margin:26px 0 10px">${esc(g.name)}</h2>
         <div class="panel">
           ${g.fields.map(settingsFieldRow).join('')}
+          ${g.name === 'Writing model' ? localModelCheckRow() : ''}
         </div>`).join('')}
     </div>
 
@@ -89,6 +90,28 @@ async function renderSettings() {
       <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
     </div>`;
   await renderPacks();
+}
+
+// LM Studio check: one request to the local server when clicked, never on load.
+function localModelCheckRow() {
+  return `<div class="field"><span>Local model</span>
+    <div class="row"><button type="button" class="btn" onclick="checkLocalModel()">Check LM Studio</button>
+      <span class="mono" id="local-model-state" style="color:var(--ink-faint)">Checks the saved server address. Sends no prompt.</span></div></div>`;
+}
+
+async function checkLocalModel() {
+  const out = $('#local-model-state');
+  if (!out) return;
+  out.textContent = 'Checking…';
+  try {
+    const r = await api('/api/llm/local');
+    const parts = [];
+    if (r.reachable && r.model) parts.push(`Connected · ${r.model}${r.context ? ` · ${r.context.toLocaleString()}-token context` : ''}`);
+    else if (r.reachable) parts.push('Connected');
+    if (r.warning) parts.push(r.warning);
+    if (r.reachable && r.models.length > 1) parts.push(`Available: ${r.models.map((m) => m.id + (m.loaded ? ' (loaded)' : '')).join(', ')}`);
+    out.textContent = parts.join(' — ');
+  } catch (e) { out.textContent = e.message; }
 }
 
 async function saveSettingsForm() {
