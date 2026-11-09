@@ -101,6 +101,7 @@ YS_VISUAL=1 .venv/bin/pytest tests/visual -q   # slow, opt-in
 | `10-sponsors` | 10 | sponsor segments: short and long reads, placement, templates, checks, publishing |
 | `12-blocks` | 12 | Corkbored's own blocks: format, authoring kit, core set, data blocks, browser, make-your-own, retiring the third-party catalog, overlays over any picture |
 | `11-footage` | 11 | the user's own footage: import, proxies, shot detection, quality, labels, logger, clips into the edit |
+| `16-local-models` | 16 | local models first class: live progress, ordered sections, consistency check, speed test |
 
 Phase 0 is done first in full. Phases 1 and 2 are independent of each other.
 Phase 3 needs both. Phase 4 needs T0.6 and T0.7. Phase 5 is a queue. Phase 6

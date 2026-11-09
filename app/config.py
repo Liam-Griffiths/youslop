@@ -314,10 +314,23 @@ RESEARCH_MODE = brand.env("RESEARCH_MODE", "quick").strip().lower()
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
-USER_AGENT = brand.env(
-    "USER_AGENT",
-    f"{brand.SLUG}/1.0 (local research tool; contact: set {brand.ENV_PREFIX}USER_AGENT)",
-)
+def _user_agent(contact: str) -> str:
+    """The User-Agent for archive and research requests.
+
+    Wikimedia rejects (HTTP 403) a client string with no way to reach anyone:
+    the old default, "corkbored/1.0 (local research tool; contact: set …)",
+    lost every Wikipedia search and page on a fresh install (measured
+    2026-11-08). A product token plus the site URL passes; a contact the user
+    adds in Settings, usually an email address, is appended to it.
+    """
+    contact = contact.strip()
+    if "/" in contact.split(" ")[0]:
+        return contact                       # already a full User-Agent
+    base = f"{brand.NAME}/1.0 (+https://{brand.SITE_URL}"
+    return f"{base}; {contact})" if contact else f"{base})"
+
+
+USER_AGENT = _user_agent(brand.env("USER_AGENT", ""))
 
 # ---------------------------------------------------------------- narration
 # Kokoro runs locally: no key, no request, nothing leaves the machine. The two

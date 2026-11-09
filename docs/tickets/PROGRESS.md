@@ -22,6 +22,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-08 (morning): queue complete; ready for user testing.** Done since the night note: T12.8 (+b, c), T12.5, T12.10a/b/c, T12.9 (+b), T12.7, T10.2, T10.4, T10.7, T8.3 step 3, T1.7 (implemented; owner listens). Owner items: (1) listen to the T1.7 before/after section and keep or revert the linear master; (2) decide "Duplicate as mine" for built-in blocks (T12.8c log); (3) first real paid-sponsor upload confirms the YouTube flag path (T10.7). Codex 5-hour ~40%, weekly ~19%.
 > **2026-11-08 (afternoon):** owner rethink of video styles around blocks. Decisions: mix kinds of picture within a video; "Design a style" becomes "Design a block"; block themes per channel or standalone video, with previews; more blocks (inspired by the HyperFrames registry, clean-room); fix the block preview (doesn't play in the app window: H.264 previews, no expand). Queue: T12.11, T12.12a, T12.12b, T13.1, T13.2, T13.3, T13.4, T12.13 batches A–E. T13.5 later.
 > **2026-11-08 (evening):** owner asked for clipping of long recordings (podcasts, streams) into short-form clips: Phase 14 (T14.1–T14.6), queued after T12.13. Speech-to-text: support any installed engine (decided same evening).
+> **2026-11-08 (night):** owner asked for first-class local models (no frontier model needed). LM Studio backend landed in f2cef05; live runs on Granite 4.1 8B and Qwen 3.5 9B produced Phase 16 (T16.1–T16.5) and a step in T15.2. T16.3 done. Queue: T16.1, T16.2, T16.4, T16.5, then T12.13 C–E, Phase 14, T15.1/T15.2. Codex 5-hour reset, weekly 33%.
 > Owner checks collected per row below.
 
 ## Phase 0: foundations
@@ -238,3 +239,13 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 |---|---|---|---|---|---|
 | T15.1 | Bundled example channel and video | S | T9.13, example content | todo | content built (isolated data dir): "The Tube Mail", 37 paragraphs, 14 blocks + 9 lower thirds + board, 23 PD/CC0 pictures, Kokoro narration; bundle 66.9 MB; owner: where to keep the binary (git LFS, plain git, or download) |
 | T15.2 | Picture search relevance: subject-aware queries and a relevance gate | M | — | todo | auto-gather picked a car race and business-school campuses for every paragraph; good PD material was one query away |
+
+## Phase 16: local models, first class
+
+| Ticket | Title | Size | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| T16.1 | Live progress during model calls | M | — | todo | streamed token counter in a replaceable job status line; LM Studio and Ollama |
+| T16.2 | Write sections in order for local models | S | — | todo | each section sees what came before; parallel stays for hosted backends |
+| T16.3 | A default User-Agent that archives accept | S | — | done | 2026-11-08 Claude; old default got HTTP 403 from Wikimedia on every fresh install |
+| T16.4 | Script consistency check | M | — | todo | contradictions and impossible visuals as Check findings |
+| T16.5 | Speed test and thinking advice in Check LM Studio | S | T16.1 | todo | tokens/s and reasoning split from one short prompt; advice only |
