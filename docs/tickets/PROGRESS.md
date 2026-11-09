@@ -274,3 +274,14 @@ adding blocks. See `17-timeline/README.md`.
 | T17.3 | Insert from the timeline: +, smart insert, drop from panels | M | T17.2 | todo | |
 | T17.5 | Extend and shrink: picture tails, insert lengths, clip trims | M | T17.2, T17.1 | todo | ripple default, roll on Shift |
 | T17.6 | Blocks and graphics on the timeline | M | T17.3 | todo | drag from panel, duplicate, copy, nudge |
+
+## Phase 18: scripts that sound like a person
+
+Owner, 2026-11-09: no reflexive rule-of-three, no punchy fragment runs, no
+teaser/hype lines; longer, varied, natural sentences. Our prompt currently asks
+for "Short declarative sentences. One idea per sentence." See `18-script-voice/README.md`.
+
+| ID | Title | Size | Depends | Status | Notes |
+|---|---|---|---|---|---|
+| T18.1 | Narration voice: rewrite the rules, add a style lint | M | — | todo | owner priority; one shared voice constant; offline lint as P3 findings |
+| T18.2 | Revise flagged lines: optional targeted rewrite pass | S | T18.1 | todo | batched, fact-guarded, accept/reject per change |
