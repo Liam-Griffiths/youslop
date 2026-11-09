@@ -58,6 +58,8 @@ async function tlMount() {
   const host = $('#tl');
   if (!host) return;
   const p = state.project;
+  // The player takes the project's shape; TL.data is not loaded yet here.
+  const [aw, ah] = p?.aspect === 'portrait' ? [9, 16] : p?.aspect === 'square' ? [1, 1] : [16, 9];
   if (!TL.vids) {
     TL.vids = [0, 1].map(() => {
       const v = document.createElement('video');
@@ -95,7 +97,7 @@ async function tlMount() {
     </div>
     <div class="tl-main">
       <section class="tl-player" aria-label="Player">
-        <div class="tl-stage" id="tl-stage" style="aspect-ratio:${TL.data.width}/${TL.data.height};width:min(100%,calc(65vh * ${TL.data.width} / ${TL.data.height}));margin-inline:auto">
+        <div class="tl-stage" id="tl-stage" style="aspect-ratio:${aw}/${ah};width:min(100%,calc(65vh * ${aw} / ${ah}));margin-inline:auto">
           <div class="tl-msg" id="tl-msg"></div>
         </div>
         <div class="tl-transport">

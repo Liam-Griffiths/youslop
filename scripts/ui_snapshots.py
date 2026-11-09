@@ -28,7 +28,7 @@ def routes():
     """Actual core.js routes; extend here when Phase 9 adds screens."""
     result = ['#/', '#/setup', '#/library', '#/settings', '#/guide', '#/projects',
               '#/blocks', '#/blocks/number_slam', '#/blocks/search/zzznomatch',
-              '#/footage', '#/footage/ssnapshot', '#/footage/saudio', '#/packs', '#/channels', '#/channels/csnapshot',
+              '#/footage', '#/footage/ssnapshot', '#/footage/saudio', '#/footage/saudio/clips/a1', '#/packs', '#/channels', '#/channels/csnapshot',
               '#/channels/csnapshot/setup', '#/c/csnapshot', '#/c/csnapshot/setup']
     for fmt in FORMATS:
         tabs = tuple(dict.fromkeys(PROJECT_STAGES + PROJECT_TABS)) + (
@@ -195,7 +195,7 @@ def server():
     def no_llm(*args, **kwargs):
         raise RuntimeError('LLM calls are forbidden in UI snapshots')
 
-    def missing_engines(**kwargs):
+    def missing_engines(*args, **kwargs):
         from app.stt import ENGINES, METADATA
         return {name: dict(installed=False, version='', models=[], device='', notes='', install_url=url,
                            downloads=METADATA[name]['downloads'])
@@ -323,6 +323,19 @@ def capture(base, out):
                       throw Error('Retime selection or cancellation lost');
                     if (!document.querySelector('.voice-takes audio[controls]')) throw Error('Playback control removed');
                   } finally { api = real; }
+                  return true;
+                })()""")
+            if route == '#/footage/saudio/clips/a1':
+                _evaluate(cdp, session, """(() => {
+                  const host=document.querySelector('#clip-finder'), player=document.querySelector('#cf-player');
+                  if(!host || !document.querySelector('#cf-text').hidden) throw Error('Manual clip finder missing');
+                  const key=k=>host.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true}));
+                  player.currentTime=.2; key('i'); player.currentTime=1.8; key('o');
+                  if(Number(document.querySelector('#cf-in').value)!==.2 || Number(document.querySelector('#cf-out').value)!==1.8) throw Error('I/O failed');
+                  key('j'); key('k'); key('l'); key(' '); key('k');
+                  document.querySelector('#cf-mode').click();
+                  document.querySelector('[data-word="0"]').click();
+                  if(Number(document.querySelector('#cf-in').value)!==.5) throw Error('Word selection failed');
                   return true;
                 })()""")
             if route == '#/footage/saudio':
