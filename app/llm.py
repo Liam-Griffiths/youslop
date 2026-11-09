@@ -714,6 +714,63 @@ def _openai_user_content(prompt: str, images: list[bytes] | None) -> Any:
     return parts
 
 
+def _lmstudio_stream(payload, timeout, metrics=None):
+    """Shared SSE reader; optional timing for the explicit speed test."""
+    import httpx
+
+    started = time.monotonic() if metrics is not None else None
+    first = None
+    reasoning_chunks = []
+    model_id = payload["model"]
+    try:
+        with httpx.stream("POST", f"{LMSTUDIO_URL}/chat/completions", json=payload,
+                          timeout=timeout) as response:
+            if response.status_code != 200:
+                response.read()  # Error text is unavailable until consumed.
+                return response, None
+            chunks, usage, reply_model, finish = [], {}, model_id, None
+            counter = _StreamProgress()
+            for line in response.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                    if chunk.get("error"):
+                        raise LLMError(f"LM Studio error: {chunk['error']}")
+                    reply_model = chunk.get("model", reply_model)
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices", []):
+                        delta = choice.get("delta") or {}
+                        content = delta.get("content") or ""
+                        reasoning = delta.get("reasoning_content") or delta.get("reasoning") or ""
+                        if metrics is not None and (content or reasoning) and first is None:
+                            first = time.monotonic()
+                        reasoning_chunks.append(reasoning)
+                        chunks.append(content)
+                        counter.update(content, reasoning)
+                        finish = choice.get("finish_reason") or finish
+                except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                    raise LLMError("Unexpected LM Studio stream reply") from exc
+            if metrics is not None:
+                metrics.update(first_token_seconds=None if first is None else first - started,
+                               generation_seconds=0 if first is None else time.monotonic() - first,
+                               reasoning_text="".join(reasoning_chunks))
+            counter.update(total=usage.get("completion_tokens"), force=True)
+            return response, {"model": reply_model, "usage": usage,
+                              "choices": [{"message": {"content": "".join(chunks)},
+                                           "finish_reason": finish}]}
+    except httpx.TimeoutException as exc:
+        raise LLMError(f"LM Studio call timed out after {timeout}s. A large model "
+                       "on this machine may need a smaller model or GPU offload.") from exc
+    except httpx.HTTPError as exc:
+        raise LLMUnavailable(
+            f"Could not reach LM Studio at {LMSTUDIO_URL}. Open LM Studio, go to "
+            f"the Developer tab and start the server. ({exc})") from exc
+
+
 @_local_status("lmstudio")
 def _complete_lmstudio(
     prompt: str, system: str, model: str, timeout: int, allow_search: bool,
@@ -727,8 +784,6 @@ def _complete_lmstudio(
     `reasoning_effort`; see `_lmstudio_effort()`.
     Pictures are sent as OpenAI image parts, which a vision model (VLM) reads.
     """
-    import httpx
-
     model_id = _lmstudio_model(model, vision=bool(images))
     approx_tokens = (len(system) + len(prompt)) // 4
     window = local_context_tokens()
@@ -761,45 +816,7 @@ def _complete_lmstudio(
             "name": "reply", "schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}}
 
     def send(payload):
-        try:
-            with httpx.stream("POST", f"{LMSTUDIO_URL}/chat/completions", json=payload,
-                              timeout=timeout) as response:
-                if response.status_code != 200:
-                    response.read()  # Error text is unavailable until consumed.
-                    return response, None
-                chunks, usage, reply_model, finish = [], {}, model_id, None
-                counter = _StreamProgress()
-                for line in response.iter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if chunk.get("error"):
-                            raise LLMError(f"LM Studio error: {chunk['error']}")
-                        reply_model = chunk.get("model", reply_model)
-                        usage = chunk.get("usage") or usage
-                        for choice in chunk.get("choices", []):
-                            delta = choice.get("delta") or {}
-                            content = delta.get("content") or ""
-                            chunks.append(content)
-                            counter.update(content, delta.get("reasoning_content") or "")
-                            finish = choice.get("finish_reason") or finish
-                    except (ValueError, KeyError, TypeError, AttributeError) as exc:
-                        raise LLMError("Unexpected LM Studio stream reply") from exc
-                counter.update(total=usage.get("completion_tokens"), force=True)
-                return response, {"model": reply_model, "usage": usage,
-                                  "choices": [{"message": {"content": "".join(chunks)},
-                                               "finish_reason": finish}]}
-        except httpx.TimeoutException as exc:
-            raise LLMError(f"LM Studio call timed out after {timeout}s. A large model "
-                           "on this machine may need a smaller model or GPU offload.") from exc
-        except httpx.HTTPError as exc:
-            raise LLMUnavailable(
-                f"Could not reach LM Studio at {LMSTUDIO_URL}. Open LM Studio, go to "
-                f"the Developer tab and start the server. ({exc})") from exc
+        return _lmstudio_stream(payload, timeout)
 
     response, payload = send(body)
     if (constrained and response.status_code == 400
@@ -851,6 +868,82 @@ def _complete_lmstudio(
     if not text:
         raise LLMError(f"LM Studio ({model_id}) returned an empty response")
     return text
+
+
+@_local_status("lmstudio")
+def local_speed_test() -> dict:
+    """One opt-in prompt, leaving thinking at the loaded model's default.
+
+    Usage is authoritative. Servers without token details get explicitly
+    labelled estimates (characters / 4, apportioned to the reported total).
+    Generation time excludes the wait for the first content/reasoning delta.
+    The answer may be truncated by the 1,024-token cap; it is never retried.
+    """
+    probe = local_probe()
+    if not probe["reachable"] or not probe["model"]:
+        raise LLMUnavailable(probe["warning"] or "No local model available")
+    metrics = {}
+    response, payload = _lmstudio_stream({
+        "model": probe["model"],
+        "messages": [{"role": "user", "content":
+                      "Return only a JSON array of five short strings naming everyday objects."}],
+        "max_tokens": 1024, "stream": True,
+        "stream_options": {"include_usage": True},
+    }, timeout=180, metrics=metrics)
+    if response.status_code != 200:
+        raise LLMError(f"LM Studio error {response.status_code}: {response.text[:400]}")
+    if metrics["first_token_seconds"] is None:
+        raise LLMError("LM Studio returned no tokens for the speed test")
+    content = payload["choices"][0]["message"]["content"]
+    answer = strip_reasoning(content)
+    # Some chat templates put thinking in content instead of reasoning deltas.
+    reasoning = metrics.pop("reasoning_text")
+    if "<think>" in content.lower() and "</think>" not in content.lower():
+        reasoning += content
+        answer = ""
+    else:
+        reasoning += "".join(_THINK.findall(content))
+        if "</think>" in content.lower() and not _THINK.search(content):
+            reasoning += content[:content.lower().rindex("</think>")]
+    usage = payload["usage"]
+    total = usage.get("completion_tokens")
+    reported_reasoning = (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+    estimated = total is None or reported_reasoning is None
+    if total is None:
+        total = max(1, round((len(reasoning) + len(answer)) / 4))
+    if reported_reasoning is None:
+        fraction = len(reasoning) / max(len(reasoning) + len(answer), 1)
+        reported_reasoning = max(1 if reasoning else 0, round(total * fraction))
+    reasoning_tokens = min(total, max(0, reported_reasoning))
+    speed = total / max(metrics["generation_seconds"], .001)
+    advice = [probe["warning"]] if probe["warning"] else []
+    estimates = None
+    if reasoning_tokens > 0 and speed < 30:
+        advice.append('Recommend Local model thinking: Never.')
+        # Token budget of a one-minute --test project, measured on Granite 4.1
+        # 8B and Qwen 3.5 9B (2026-11-08): 4 script calls answering ~400
+        # tokens, each thinking ~6,500 when thinking is on (Auto thinks only
+        # here), and 8 chores of ~300 tokens that never think under Auto.
+        never = 4 * 400 + 8 * 300
+        auto = never + 4 * 6500
+        wait = 12 * metrics["first_token_seconds"]
+        estimates = {"auto_minutes": (wait + auto / speed) / 60,
+                     "never_minutes": (wait + never / speed) / 60}
+        advice.append(f"A one-minute test project takes roughly "
+                      f"{estimates['auto_minutes']:.0f} min with thinking on for the "
+                      f"script (Auto) and {estimates['never_minutes']:.0f} min with "
+                      "Never, at this speed.")
+    if speed < 5:
+        advice.append("Try a smaller model or GPU offload in LM Studio.")
+    if estimated:
+        advice.append("Token counts/split are estimated; this server omitted usage details.")
+    truncated = payload["choices"][0]["finish_reason"] == "length"
+    if truncated:
+        advice.append("Stopped at the 1,024-token limit; thinking may not have finished.")
+    return dict(model=payload["model"] or probe["model"], context=probe["context"],
+                **metrics, tokens_per_second=speed, completion_tokens=total,
+                reasoning_tokens=reasoning_tokens, answer_tokens=total - reasoning_tokens,
+                estimated=estimated, truncated=truncated, estimates=estimates, advice=advice)
 
 
 def local_probe() -> dict:
@@ -1051,4 +1144,4 @@ def _complete_json_attempts(prompt, original, system, model, timeout, retries,
 
 __all__ = ["complete", "complete_json", "LLMError", "LLMUnavailable",
            "MODEL_SCRIPT", "MODEL_UTILITY", "resolve_backend", "backend_status",
-           "local_context_tokens", "local_probe", "strip_reasoning"]
+           "local_context_tokens", "local_probe", "local_speed_test", "strip_reasoning"]

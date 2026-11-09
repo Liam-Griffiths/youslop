@@ -248,4 +248,4 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T16.2 | Write sections in order for local models | S | — | done | 2026-11-08 Codex + review; Granite live run had no repeated facts; each section sees what came before; parallel stays for hosted backends |
 | T16.3 | A default User-Agent that archives accept | S | — | done | 2026-11-08 Claude; old default got HTTP 403 from Wikimedia on every fresh install |
 | T16.4 | Script consistency check | M | — | done | 2026-11-08 Codex + review; works mechanically, but Granite 8B flags nothing (too small to judge); contradictions and impossible visuals as Check findings |
-| T16.5 | Speed test and thinking advice in Check LM Studio | S | T16.1 | doing | 2026-11-08 Codex; tokens/s and reasoning split from one short prompt; advice only |
+| T16.5 | Speed test and thinking advice in Check LM Studio | S | T16.1 | done | 2026-11-08 Codex + review; Qwen advised thinking off, Granite not; estimate fixed to measured budget; tokens/s and reasoning split from one short prompt; advice only |

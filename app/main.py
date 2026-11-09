@@ -1831,6 +1831,12 @@ def llm_local() -> dict:
     return llm_mod.local_probe()
 
 
+@app.post("/api/llm/local/speed")
+def llm_local_speed() -> dict:
+    """Explicitly send one short prompt and report speed through a job."""
+    return {"job": jobs.start("local speed test", "", lambda pr: llm_mod.local_speed_test())}
+
+
 # ---------------------------------------------------------------------- media
 @app.get("/api/providers")
 def providers() -> list[dict]:

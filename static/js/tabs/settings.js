@@ -96,7 +96,9 @@ async function renderSettings() {
 function localModelCheckRow() {
   return `<div class="field"><span>Local model</span>
     <div class="row"><button type="button" class="btn" onclick="checkLocalModel()">Check LM Studio</button>
-      <span class="mono" id="local-model-state" style="color:var(--ink-faint)">Checks the saved server address. Sends no prompt.</span></div></div>`;
+      <button type="button" class="btn" id="local-speed-test" onclick="testLocalModelSpeed()">Test speed</button></div>
+    <p class="mono" style="color:var(--dim)">Check sends no prompt. Test speed sends one short prompt to the saved server address; it may take a minute or two.</p>
+    <div class="mono" id="local-model-state" role="status" style="color:var(--dim)"></div></div>`;
 }
 
 async function checkLocalModel() {
@@ -112,6 +114,31 @@ async function checkLocalModel() {
     if (r.reachable && r.models.length > 1) parts.push(`Available: ${r.models.map((m) => m.id + (m.loaded ? ' (loaded)' : '')).join(', ')}`);
     out.textContent = parts.join(' — ');
   } catch (e) { out.textContent = e.message; }
+}
+
+async function testLocalModelSpeed() {
+  const out = $('#local-model-state');
+  const button = $('#local-speed-test');
+  if (!out || !button || button.disabled) return;
+  button.disabled = true;
+  out.textContent = 'Starting speed test…';
+  try {
+    const { job } = await api('/api/llm/local/speed', { method: 'POST' });
+    while (out.isConnected) {
+      const j = await api(`/api/jobs/${job}`);
+      if (!out.isConnected) return;
+      if (j.state === 'error') throw new Error(j.error || 'Speed test failed');
+      if (j.state === 'done') {
+        const r = j.result;
+        out.textContent = `${r.model} · ${r.estimated ? 'estimated ' : ''}${r.tokens_per_second.toFixed(1)} tok/s · first token ${r.first_token_seconds.toFixed(2)} s · ${r.reasoning_tokens.toLocaleString()} reasoning / ${r.answer_tokens.toLocaleString()} answer tokens` +
+          (r.advice.length ? ` — ${r.advice.join(' ')}` : ' — No speed or thinking changes recommended.');
+        return;
+      }
+      out.textContent = j.status || 'Waiting for LM Studio…';
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+  } catch (e) { if (out.isConnected) out.textContent = e.message; }
+  finally { button.disabled = false; }
 }
 
 async function saveSettingsForm() {
