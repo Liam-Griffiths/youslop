@@ -100,6 +100,7 @@ function footageInspect() {
     <label for="footage-labels">Labels (comma separated)</label><input type="text" id="footage-labels" value="${esc(c.labels.join(', '))}" onchange="footagePatch({labels:this.value.split(',').map(x=>x.trim()).filter(Boolean)})">
     <label for="footage-note">Note</label><textarea id="footage-note" rows="2" onchange="footagePatch({note:this.value})">${esc(c.note)}</textarea>
     <button class="btn" aria-pressed="${c.starred}" onclick="footagePatch({starred:!footageClip().starred})">S · Star</button><button class="btn" aria-pressed="${c.rejected}" onclick="footageReject()">X · Reject</button></fieldset>
+    <p><a href="#/footage/${esc(footageView.id)}/clips/${esc(c.file)}">Find clips in this recording</a></p>
     <p>${esc((c.quality.reasons || []).join(', ') || 'No quality flags')}</p><p>${c.duplicate_group ? `Similar takes · best: ${esc(c.best_take)}` : ''}</p>`;
   footageTranscript();
 }

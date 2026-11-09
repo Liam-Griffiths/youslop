@@ -235,7 +235,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.2 | Vertical and square output for the render pipeline | L | — | done | 2026-11-08 Codex + review; frame_size, focal cover-crop, portrait + square goldens; landscape byte-identical; pipeline wiring split to T14.2b |
 | T14.2b | Aspect through the whole pipeline, native layouts | L | T14.2 | done | 2026-11-08 Codex + review; 9:16 preview correct; 1:1 letterboxes when an overlay block lacks a square layout (fix in T14.2c) |
 | T14.2c | Aspect previews and studio integration | L | T14.2b | done | 2026-11-09 Codex + review; previews follow the aspect; square overlay fallback per block (exact-ratio fix in review) |
-| T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | todo | transcript mode (whole, with suggestions) or manual mode (scrub, I/O, transcribe just this clip); LLM ranking opt-in |
+| T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | done | 2026-11-09 Codex + review; ranking runs as a job on any writing model; project handoff and long-recording polish in T14.3b |
+| T14.3b | Clip finder: project handoff and long-recording polish | M | T14.3, T14.4 | todo | Make clips → linked projects; virtual scrolling; auto-refine after STT; envelope as a job |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | todo | range of the original, never copied; crop keyframes; hook overlay block |
 | T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
 | T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |

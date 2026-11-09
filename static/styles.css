@@ -1421,3 +1421,18 @@ img.themed-pending { opacity:.45; }
 .style-dialog h3 { margin:18px 0 8px; }
 .field .row:has(> input[type=color]) { gap:10px; align-items:center; }
 .field input[type=color] { width:42px; height:34px; padding:3px; border:1px solid var(--line); border-radius:4px; background-color:var(--bg); }
+
+/* Clip finder uses bounded word pages for long recordings. */
+#cf-work { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+#cf-text { max-height: 420px; overflow: auto; }
+#cf-text[hidden] { display: none; }
+#cf-player, #cf-wave, #cf-time { width: 100%; }
+#cf-wave { background: var(--panel); touch-action: none; cursor: crosshair; }
+.cf-word { border: 0; background: transparent; color: var(--ink); font: inherit; padding: 3px; }
+.cf-word:focus, .cf-word:hover { background: var(--raised); }
+@media (max-width: 800px) { #cf-work { grid-template-columns: 1fr; } }
+#clip-finder fieldset { border: 1px solid var(--line); border-radius: 4px; padding: 12px 16px; margin: 16px 0; }
+#clip-finder fieldset .row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 6px 0; }
+#clip-finder fieldset .row label { margin: 0; }
+#cf-in, #cf-out { width: 110px; }
+#cf-title { flex: 1; min-width: 200px; }

@@ -63,6 +63,9 @@ class Clip:
     starred: bool = False
     rejected: bool = False
     note: str = ''
+    title: str = ''
+    hook: str = ''
+    finder: bool = False  # Named ranges created by the clip finder.
 
     @classmethod
     def from_dict(cls, raw: dict) -> Clip:
@@ -409,7 +412,7 @@ def detect_shots(shoot_id: str, *, min_s: float = MIN_CLIP_S, max_s: float = MAX
             if min_s < 1 / fps:
                 raise ValueError('min_s must be at least one proxy frame')
             edges = _shot_boundaries(duration, fps, cuts, motion, silence, min_s, max_s)
-            old = {(c.in_s, c.out_s): c for c in shoot.clips if c.file == source.id}
+            old = {(c.in_s, c.out_s): c for c in shoot.clips if c.file == source.id and not c.finder}
             clips = []
             for start, end in zip(edges, edges[1:]):
                 clip = old.get((start, end)) or Clip('c' + uuid.uuid4().hex[:12], source.id, start, end)
@@ -429,7 +432,7 @@ def detect_shots(shoot_id: str, *, min_s: float = MIN_CLIP_S, max_s: float = MAX
                     thumbs.append(str(out.relative_to(shoot_dir(shoot.id))))
                 clip.thumbs = thumbs
                 clips.append(clip)
-            shoot.clips = [c for c in shoot.clips if c.file != source.id] + clips
+            shoot.clips = [c for c in shoot.clips if c.file != source.id or c.finder] + clips
             _save(shoot)
         progress(f'Done: {len(shoot.clips)} clips')
         return shoot.clips

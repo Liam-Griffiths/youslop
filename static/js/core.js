@@ -201,7 +201,8 @@ async function route() {
     await renderBlocks(hash.slice(9));
   } else if (hash.startsWith('#/footage')) {
     state.project = null; state.channel = null;
-    await renderFootage(hash.split('/')[2]);
+    if (hash.split('/')[3] === 'clips') await renderClipFinder(hash.split('/')[2], hash.split('/')[4]);
+    else await renderFootage(hash.split('/')[2]);
   } else if (guidePage) {
     state.project = null;
     state.channel = null;

@@ -1010,6 +1010,31 @@ def speech_download(payload: dict = Body(...)):
         raise HTTPException(400, str(exc))
 
 
+@app.post('/api/footage/shoots/{sid}/finder/{source_id}/rank')
+def clip_finder_rank(sid: str, source_id: str, payload: dict = Body(...)):
+    """Unconfirmed: the estimate. Confirmed: a job, since a local model can take minutes."""
+    from . import clip_finder
+    estimate = _footage_call(clip_finder.rank, sid, source_id, {})
+    if payload.get('confirm') is not True:
+        return estimate
+    if payload.get('estimate') != estimate:
+        raise HTTPException(400, 'The transcript changed; estimate again before ranking')
+    return {'job': jobs.start('clip ranking', sid,
+                              lambda progress: clip_finder.rank(sid, source_id, payload))}
+
+
+@app.get('/api/footage/shoots/{sid}/finder/{source_id}')
+def clip_finder_read(sid: str, source_id: str):
+    from . import clip_finder
+    return _footage_call(clip_finder.read, sid, source_id)
+
+
+@app.post('/api/footage/shoots/{sid}/finder/{source_id}')
+def clip_finder_create(sid: str, source_id: str, payload: dict = Body(...)):
+    from . import clip_finder
+    return _footage_call(clip_finder.create, sid, source_id, payload)
+
+
 @app.get('/api/footage/shoots/{sid}/transcripts/{source_id}')
 def transcript_read(sid: str, source_id: str):
     from . import transcripts
