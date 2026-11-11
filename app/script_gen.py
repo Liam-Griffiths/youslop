@@ -1283,6 +1283,8 @@ def generate(project: Project, progress: Progress = lambda m: None,
     `checkpoint` persists the project mid-run; without one this still works, it
     just has nothing to come back to.
     """
+    if any(s.insert for s in project.slides):
+        raise ValueError('Preserving inserts during script regeneration is pending T17.2b.')
     outline = brief(project, progress, checkpoint, fresh)
     slides = write_script(project, outline, progress, checkpoint)
     if not slides:
@@ -1392,6 +1394,8 @@ fix errors. Stay recognisably in the author's voice and never add new claims."""
 def import_script(project: Project, raw_text: str, fidelity: str = "faithful",
                   progress: Progress = lambda m: None) -> Project:
     """Turn a pasted article into a narrated, illustrated video."""
+    if any(s.insert for s in project.slides):
+        raise ValueError('Preserving inserts during script replacement is pending T17.2b.')
     text = clean_pasted(raw_text)
     words = len(text.split())
     if words < 120:
@@ -1778,6 +1782,8 @@ Example: {{"html": "<section class=\\"cb-slide\\"><p class=\\"cb-label\\">The tu
 
 def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:
     """Rewrite one paragraph against a creator instruction, keeping the flow."""
+    if slide.insert:
+        raise ValueError('Inserts are non-spoken; edit them through the inserts endpoint.')
     idx = project.slides.index(slide)
     prev = project.slides[idx - 1].narration if idx > 0 else "(start of video)"
     nxt = project.slides[idx + 1].narration if idx + 1 < len(project.slides) else "(end of video)"

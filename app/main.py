@@ -1458,6 +1458,47 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
     return p.to_dict()
 
 
+@app.post('/api/projects/{pid}/inserts')
+def add_insert(pid: str, payload: dict = Body(...)) -> dict:
+    return _edit_insert(pid, payload)
+
+
+@app.patch('/api/projects/{pid}/inserts/{sid}')
+def patch_insert(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    return _edit_insert(pid, payload, sid)
+
+
+@app.delete('/api/projects/{pid}/inserts/{sid}')
+def delete_insert(pid: str, sid: str) -> dict:
+    return _edit_insert(pid, {}, sid, delete=True)
+
+
+def _edit_insert(pid, payload, sid=None, delete=False):
+    from . import inserts, undo
+    with store.lock_for(pid):
+        p = _load(pid)
+        slide = _slide(p, sid) if sid else None
+        if slide and not slide.insert:
+            raise HTTPException(400, 'This row is a narrated paragraph, not an insert')
+        try:
+            if delete:
+                p.slides.remove(slide)
+            else:
+                row, after = inserts.prepare(p, payload, slide)
+                inserts.place(p, row, after)
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        # HTTP middleware supplies X-Edit-Label; direct callers get a useful
+        # default too. All mutations publish once, through the undo-aware store.
+        token = undo.edit_source.set(undo.edit_source.get() or (
+            'delete insert' if delete else 'change insert' if sid else 'add insert', ''))
+        try:
+            store.save(p)
+        finally:
+            undo.edit_source.reset(token)
+        return p.to_dict()
+
+
 @app.post("/api/projects/{pid}/sponsors")
 def add_sponsor(pid: str, payload: dict = Body(...)) -> dict:
     from .schema import SponsorSlot
@@ -1944,7 +1985,8 @@ def split_slide(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
 @app.post("/api/projects/{pid}/slides/{sid}/rewrite")
 def rewrite(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     p = _load(pid)
-    _slide(p, sid)
+    if _slide(p, sid).insert:
+        raise HTTPException(400, 'Inserts have no narration to rewrite')
 
     def work(progress):
         with store.lock_for(pid):

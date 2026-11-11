@@ -560,7 +560,7 @@ def script(project) -> dict:
     from .script_gen import check_hook
     findings = []
     for slide in project.slides:
-        if not slide.narration.strip():
+        if not slide.insert and not slide.narration.strip():
             findings.append(_finding('empty_narration', 'P0', 0, slide.id,
                                      'This paragraph has no narration.', 'words').to_dict())
     for flag in check_hook(project.outline) + (project.research or {}).get('flags', []):

@@ -1,0 +1,92 @@
+"""Non-spoken main-track rows. Validate a detached row before changing order."""
+from copy import deepcopy
+import math
+
+from .schema import Slide
+
+FIELDS = {
+    'clip': {'shoot_id', 'source_id', 'in_s', 'out_s', 'source_audio'},
+    'block': {'block', 'vars'},
+    'picture': {'asset_id'},
+    'card': {'text'},
+}
+
+
+def _text(data, key):
+    value = data.get(key)
+    if not isinstance(value, str) or not value.strip() or len(value) > 400:
+        raise ValueError(f'{key} must be non-empty text (at most 400 characters)')
+    return value
+
+
+def prepare(project, payload, slide=None):
+    """Return a validated copy and its requested position, without any writes."""
+    if project.kind == 'clip':
+        raise ValueError('Inserts belong to video projects, not source-linked clip projects')
+    row = deepcopy(slide) if slide else Slide(kind='kenburns', picture_mode='new', locked_media=True)
+    data = {**row.insert, **payload}
+    kind = data.get('kind')
+    if not isinstance(kind, str) or kind not in FIELDS:
+        raise ValueError('Insert kind must be clip, block, picture or card')
+    if slide and kind != slide.insert['kind']:
+        raise ValueError('Insert kind cannot be changed; add a new insert')
+    if payload.keys() - (FIELDS[kind] | {'kind', 'seconds', 'after'}):
+        raise ValueError('Unknown insert field')
+    after = data.pop('after', None)
+    if 'after' in payload:
+        if not isinstance(after, str) or (after not in {'', 'intro'} and
+                not any(s.id == after and s.id != row.id for s in project.slides)):
+            raise ValueError('Unknown main-track boundary')
+    elif slide is None:
+        after = ''
+    if kind == 'clip':
+        from . import footage, transcripts
+        sid, fid = _text(data, 'shoot_id'), _text(data, 'source_id')
+        # Require explicit endpoints; source_range also checks manifest ownership,
+        # finite numbers, source bounds and the original's availability.
+        if any(type(data.get(key)) not in (int, float) for key in ('in_s', 'out_s')):
+            raise ValueError('A clip needs in_s and out_s')
+        a, b = transcripts.source_range(sid, fid, data['in_s'], data['out_s'])
+        source = next(s for s in footage.load(sid).files if s.id == fid)
+        if source.kind != 'video':
+            raise ValueError('A clip insert needs a video source')
+        sound = data.get('source_audio', False)
+        if not isinstance(sound, bool) or (sound and not source.audio):
+            raise ValueError('source_audio must be boolean and the source must have audio')
+        data.update(in_s=a, out_s=b, source_audio=sound, seconds=b-a)
+        if 'seconds' in payload and (type(payload['seconds']) not in (int, float)
+                or payload['seconds'] != b-a):
+            raise ValueError('Clip seconds must equal out_s minus in_s')
+    else:
+        seconds = data.get('seconds')
+        if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError('seconds must be finite and greater than zero')
+        if kind == 'picture':
+            from . import library
+            ident = _text(data, 'asset_id')
+            asset, path = library.get(ident), library.file_path(ident)
+            if not asset or asset['kind'] not in {'image', 'video'} or not path or not path.is_file():
+                raise ValueError('Library picture is unavailable')
+        elif kind == 'block':
+            from . import blocks
+            block = blocks.discover().get(_text(data, 'block'))
+            aspect = {'portrait': '9:16', 'square': '1:1'}.get(project.aspect, '16:9')
+            if not block or aspect not in block['meta']['aspects']:
+                raise ValueError('Choose a block that supports the project aspect')
+            data['vars'] = blocks.validate_vars(block['meta'], data.get('vars', {}))
+        else:
+            data['text'] = _text(data, 'text')
+    row.insert = deepcopy(data)
+    row.narration = ''
+    return row, after
+
+
+def place(project, row, after):
+    """Apply only after prepare succeeds; None preserves a patched row's order."""
+    if after is None:
+        project.slides[project.slides.index(project.slide(row.id))] = row
+        return
+    rows = [s for s in project.slides if s.id != row.id]
+    index = 0 if after in {'', 'intro'} else next(i+1 for i, s in enumerate(rows) if s.id == after)
+    rows.insert(index, row)
+    project.slides = rows

@@ -53,6 +53,8 @@ def build(project) -> dict:
                          "duration": take_duration(take),
                          "words": take_words(take)},
             })
+            if slide.insert:
+                paragraphs[-1].update(insert=deepcopy(slide.insert), label=para['text'])
             if slide.on_camera:
                 paragraphs[-1]['take'].update({k: deepcopy(v) for k, v in
                     (project.active_take(slide) or {}).items() if k in {

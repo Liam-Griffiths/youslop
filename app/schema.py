@@ -145,6 +145,7 @@ class Slide:
     # human locked it. Only paragraphs whose visual line is a 3D beat have
     # one. See app/shots.py.
     shot: dict = field(default_factory=dict)
+    insert: dict = field(default_factory=dict)  # non-spoken main-track item; explicit seconds
 
     @property
     def word_count(self) -> int:
@@ -152,6 +153,8 @@ class Slide:
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
+        if not self.insert:
+            d.pop("insert")
         d["word_count"] = self.word_count
         return d
 
@@ -159,6 +162,7 @@ class Slide:
     def from_dict(cls, d: dict) -> "Slide":
         known = {f for f in cls.__dataclass_fields__}
         slide = cls(**{k: v for k, v in d.items() if k in known})
+        slide.insert = deepcopy(slide.insert or {})
         if slide.take:
             slide.take = {"words": [], **slide.take}
         slide.takes = {track: {"words": [], **take} for track, take in slide.takes.items()}
@@ -183,7 +187,8 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
         mode = getattr(slide, "picture_mode", "auto")
         if (getattr(slide, "chapter", "") or "").strip():
             mode = "new"
-        if (not runs or slide.on_camera or runs[-1][-1].on_camera
+        if (not runs or slide.insert or runs[-1][-1].insert
+                or slide.on_camera or runs[-1][-1].on_camera
                 or (slide.cues or {}).get('blocks') or (runs[-1][-1].cues or {}).get('blocks')
                 or mode == "new" or (mode != "hold" and n >= every)):
             runs.append([])
@@ -904,7 +909,9 @@ class Project:
             return duration(self)
         from .config import PARAGRAPH_GAP, WORDS_PER_MINUTE
         words = sum(s.word_count for s in self.slides)
-        return words / WORDS_PER_MINUTE * 60 + PARAGRAPH_GAP * len(self.slides)
+        return (words / WORDS_PER_MINUTE * 60
+                + PARAGRAPH_GAP * sum(not s.insert for s in self.slides)
+                + sum(s.insert['seconds'] for s in self.slides if s.insert))
 
     def recorded_seconds(self) -> float:
         from .take_edits import take_duration

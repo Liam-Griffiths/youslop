@@ -253,6 +253,9 @@ def _slide_durations(project: Project, use_estimates: bool) -> list[tuple[Slide,
     gaps = audio_mod.gap_map(project)
     out: list[tuple[Slide, float]] = []
     for s in project.slides:
+        if s.insert:
+            out.append((s, s.insert['seconds']))
+            continue
         take = s.take or {}
         d = take_duration(take)
         if d <= 0:
@@ -1135,6 +1138,8 @@ def _render_segment(
     """
     size = size if size is not None else frame_size(project)
     preview = size != frame_size(project) if preview is None else preview
+    if any(s.insert for s, _ in group):
+        raise ValueError('Insert picture rendering is pending T17.2b.')
     fmt = kinds.kind_for(project, group[0][0])
     if "chapters" in hide:
         chapter = None
@@ -1873,6 +1878,8 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
+        if not row['insert']:
+            row.pop('insert')
         if not row["kind"]:
             row.pop("kind")
         if (slide.cues or {}).get('blocks') or slide.overlays:
@@ -1954,6 +1961,8 @@ def render(project: Project, progress: Progress = lambda m: None,
 
 def _render(project: Project, progress: Progress, preview: bool) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
+    if any(s.insert for s in project.slides):
+        raise ValueError('Insert rendering is pending T17.2b.')
     if project.kind == 'clip':
         from .clip_render import full_render
         return full_render(project, progress, preview)
@@ -2600,6 +2609,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
+        if not row['insert']:
+            row.pop('insert')
         if not row["kind"]:
             row.pop("kind")
         if (s.cues or {}).get('blocks') or s.overlays:
@@ -3261,6 +3272,9 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                 "effective_cues": cue_times.get(s.id, ([], []))[0],
                 "recorded": bool(s.take), "section": s.section, "on_camera": s.on_camera,
             })
+            if s.insert:
+                paras[-1].update(insert=dict(s.insert), spoken=0.0,
+                    text=f"Insert · {s.insert['kind']} · {d:.1f} s")
             if s.on_camera:
                 take = project.active_take(s) or {}
                 paras[-1]['camera_edit'] = {k: take.get(k, default) for k, default in
@@ -3270,9 +3284,9 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
-        if kinds.kind_for(project, lead) in {"kenburns", "essay", "stage"} and not _picture_source(project, lead).chosen_id:
+        if not lead.insert and kinds.kind_for(project, lead) in {"kenburns", "essay", "stage"} and not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
-        missing = sum(1 for s, _d in group if not s.take)
+        missing = sum(1 for s, _d in group if not s.take and not s.insert)
         if missing:
             problems.append(f"{missing} paragraph{'s' if missing > 1 else ''} not recorded"
                             " (estimated length)")
@@ -3329,7 +3343,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
         "last_line_min_s": project.frame.last_line_min_s,
         "mix": _mix_state(project, lay, hide),
         "camera_clip": bool(pres.usable() and (project_dir(project.id) / pres.path).exists()),
-        "estimated": any(not s.take for s in project.slides),
+        "estimated": any(not s.take and not s.insert for s in project.slides),
     }
 
 

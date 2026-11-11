@@ -33,6 +33,8 @@ def _focal(value) -> list[float]:
 
 def patch_slide_fields(s, payload: dict) -> list[str]:
     """Apply API field validation in place; return the fields that changed."""
+    if s.insert and set(payload) & {'narration', 'on_camera', 'kind', 'cues', 'chosen_id', 'gap_override'}:
+        raise EditError('Use the inserts endpoint to change this non-spoken item.')
     before = {key: copy.deepcopy(getattr(s, key if key != "focal" else "candidates"))
               for key in payload if key in EDITABLE}
     for key in TIMING_FIELDS & payload.keys():

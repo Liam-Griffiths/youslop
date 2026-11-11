@@ -43,7 +43,13 @@ def paragraph_gaps(project: Project) -> list[float]:
     slides = project.slides
     gaps: list[float] = []
     for i, s in enumerate(slides):
+        if s.insert:
+            gaps.append(0.0)
+            continue
         nxt = slides[i + 1] if i + 1 < len(slides) else None
+        if nxt and nxt.insert:
+            # Non-spoken items must not change the surrounding paragraph pause.
+            nxt = next((row for row in slides[i + 1:] if not row.insert), None)
         text = (s.narration or "").strip()
         end = text[-1:] if text else "."
         factor = 1.0
@@ -495,6 +501,9 @@ def slide_durations(project: Project) -> list[tuple[str, float]]:
     gaps = gap_map(project)
     out = []
     for s in project.slides:
+        if s.insert:
+            out.append((s.id, s.insert['seconds']))
+            continue
         take = s.take or {}
         d = take_duration(take)
         if d <= 0:
@@ -535,6 +544,8 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
                   fill: dict[str, float] | None = None, extra_gaps=None) -> float:
     from .store import project_dir
 
+    if any(s.insert for s in slides):
+        raise ValueError('Insert audio assembly is pending T17.2b.')
     root = project_dir(project.id)
     wanted = {s.id for s in slides}
     fill = fill or {}
