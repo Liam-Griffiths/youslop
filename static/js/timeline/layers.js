@@ -32,7 +32,7 @@ function tlWireLayers() {
     el.onclick = (e) => {
       e.stopPropagation();
       if (el.dataset.eye) tlHideLayer(el.dataset.eye);
-      else tlSelect(TL.data.layers[el.dataset.layer][+el.dataset.item]);
+      else tlSelect(TL.data.layers[el.dataset.layer][+el.dataset.item], e.shiftKey);
     };
     el.ondblclick = (e) => {
       e.stopPropagation();

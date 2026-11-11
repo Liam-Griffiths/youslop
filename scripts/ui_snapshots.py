@@ -38,6 +38,7 @@ def routes():
     result.extend(['#/p/psnapmixed/visuals', '#/p/psnapmixed/edit'])
     result.extend(f'#/p/{pid}/{tab}' for pid in ('psnapclip','psnapmanual')
                   for tab in ('clip','edit','publish','plan','script','voice'))
+    result.append('#/p/psnaplong/edit')
     return result
 
 
@@ -197,6 +198,16 @@ def seed():
         cues={'blocks':[{'block':'title_card','vars':{'title':'The next chapter'}}]}))
     shutil.copytree(source, store.project_dir(mixed.id), dirs_exist_ok=True)
     store.save(mixed)
+    # Twenty estimated minutes, without takes, a mix job or a render.
+    long = store.load('psnapkenburns')
+    long.id, long.title = 'psnaplong', 'Snapshot · twenty minute timeline'
+    from app.config import WORDS_PER_MINUTE
+    long.slides = [Slide(id=f'long{i}', narration=' '.join(['Timeline'] * WORDS_PER_MINUTE),
+        title=f'Section {i+1}: a long title for truncation', gap_override=0,
+        candidates=long.slides[0].candidates, chosen_id=long.slides[0].chosen_id)
+        for i in range(20)]
+    shutil.copytree(source, store.project_dir(long.id), dirs_exist_ok=True)
+    store.save(long)
     library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
 
 

@@ -189,7 +189,7 @@ function tlWireSponsorDrag() {
     el.onclick = (e) => { if (moved) { e.stopPropagation(); moved = false; } else click(e); };
     el.onpointerdown = (e) => {
       e.stopPropagation();
-      if (e.button !== 0 || TL.drag) return;
+      if (e.button !== 0 || TL.drag || e.shiftKey) return;
       const sel = TL.data.layers.sponsors[+el.dataset.item];
       const boundaries = tlParas().map((q) => ({id: q.id, t: q.start + q.duration}));
       if (!boundaries.length) return;

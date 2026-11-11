@@ -25,6 +25,7 @@ document.addEventListener('keydown', (e) => {
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
   if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
+  if (typeof tlErgonomicsKey === 'function' && tlErgonomicsKey(e)) { e.preventDefault(); return; }
   if (tlGraphicKey(e)) { e.preventDefault(); return; }
   if (k === 'g' || k === 'G') tlGraphicAdd();
   else if (k === '?') tlShortcuts();

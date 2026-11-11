@@ -1,4 +1,4 @@
-// One explicit selection, independent of playback and scrubbing.
+// Explicit selections, independent of playback and scrubbing.
 function tlItems(kind) {
   if (kind === 'sponsor') return tlSponsorItems();
   const row = Object.keys(TL_LAYER_KINDS).find((key) => TL_LAYER_KINDS[key] === kind);
@@ -17,19 +17,25 @@ function tlItems(kind) {
   return tlParas().map((q) => ({kind, id: q.id, sid: q.id, t0: q.start, t1: q.start + q.duration}));
 }
 
-function tlSelect(sel) {
-  TL.selection = sel;
+function tlSelect(sel, additive = false) {
+  const old = TL.selections || (TL.selection ? [TL.selection] : []);
+  TL.selections = !sel ? [] : additive
+    ? old.some(s => tlSameItem(s, sel)) ? old.filter(s => !tlSameItem(s, sel)) : [...old, sel]
+    : [sel];
+  TL.selection = TL.selections.at(-1) || null;
   tlInspector();
   tlSelectionPaint();
 }
 
 function tlSelectionPaint() {
   document.querySelectorAll('#tl-track [data-seg], #tl-track [data-para], #tl-track [data-layer]').forEach((el) => {
-    const s = TL.selection;
-    el.classList.toggle('sel', !!s && (el.dataset.layer && TL.data.layers[el.dataset.layer][+el.dataset.item]?.id === s.id
-      && TL_LAYER_KINDS[el.dataset.layer] === s.kind || el.dataset.para === s.sid && s.kind === 'paragraph'
-      || el.dataset.seg !== undefined && ['picture', 'slate'].includes(s.kind)
-      && tlSegs()[+el.dataset.seg]?.ref === s.id));
+    // Painting runs every frame; identify nodes without rebuilding item lists.
+    const seg = el.dataset.seg !== undefined && tlSegs()[+el.dataset.seg];
+    const item = el.dataset.layer ? TL.data.layers[el.dataset.layer][+el.dataset.item]
+      : el.dataset.para ? {kind:'paragraph', id:el.dataset.para, sid:el.dataset.para}
+      : seg && {kind:seg.type === 'picture' ? 'picture' : seg.type === 'sponsor' ? 'sponsor' : 'slate',
+        id:seg.sponsor || seg.ref, sid:seg.type === 'sponsor' ? '' : seg.lead};
+    el.classList.toggle('sel', (TL.selections || []).some(s => tlSameItem(s, item)));
   });
 }
 
@@ -51,6 +57,7 @@ function tlSelectNext(dir) {
 function tlInspector() {
   const box = $('#tl-inspector');
   if (!box) return;
+  if (TL.selections?.length > 1) { tlMultiInspector(box); return; }
   const sel = TL.selection, p = state.project;
   const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay'];
   box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
@@ -195,6 +202,7 @@ function tlInspectorSave(sel, key, raw, el) {
       if (TL.selection?.id === sel.id && TL.selection?.kind === sel.kind) {
         const next = tlItems(sel.kind).find((s) => s.id === sel.id);
         TL.selection = key === 'remove' && sel.kind === 'cue' ? null : next || null;
+        TL.selections = TL.selection ? [TL.selection] : [];
         // Keep the live field and its caret while typing.
         if (!$('#tl-inspector')?.contains(document.activeElement)) tlInspector();
       }
@@ -244,7 +252,7 @@ async function tlRefreshProject() {
   TL.lastPara = '';
   TL.mixFailed = false;
   await tlRefresh(true);
-  if (TL.selection) tlSelect(tlItems(TL.selection.kind).find((s) => s.id === TL.selection.id) || null);
+  tlReconcileSelection(); tlInspector();
 }
 
 function tlEditPicture(leadId) { tlModal(() => openMediaSearch(leadId)); }

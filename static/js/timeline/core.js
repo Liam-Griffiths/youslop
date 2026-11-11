@@ -20,7 +20,7 @@
 // its media elements live out here and are re-attached on every mount.
 const TL = {
   hidden: {titles: false, cues: false, chapters: false, music: false, stings: false, notes: false},
-  pid: '', data: null, host: null, selection: null,
+  pid: '', data: null, host: null, selection: null, selections: [], collapsed: {}, zoomReady: false,
   inspectorTemplates: [], inspectorEndTemplates: [], inspectorMusic: [], inspectorChannel: null,
   cur: 0, playing: false, speed: 1, loop: false, zoom: 10,
   vids: null, active: 0, seg: -1,
@@ -71,7 +71,7 @@ async function tlMount() {
   if (TL.pid !== p.id) {
     tlPause();
     Object.assign(TL, { pid: p.id, hidden: {}, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
-                        pending: new Set(), wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
+                        pending: new Set(), selections: [], collapsed: {}, zoomReady: false, wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
     TL.vids.forEach((v) => { v.removeAttribute('src'); v.dataset.seg = ''; v.load(); });
     TL.audio.removeAttribute('src'); TL.audio.load();
   }
@@ -109,10 +109,11 @@ async function tlMount() {
           <span class="mono tl-clock" id="tl-clock"></span>
           <div class="spacer"></div>
           <label class="row" style="gap:6px"><span class="mono tl-note">zoom</span>
-            <input type="range" id="tl-zoom" min="2" max="60" step="1" value="${TL.zoom}" style="width:130px"></label>
+            <input type="range" id="tl-zoom" min="0.01" max="240" step="0.01" value="${TL.zoom}" style="width:110px"></label><button type="button" class="btn sm" id="tl-fit" aria-keyshortcuts="Shift+Z">Fit</button>
         </div>
       </section>
     </div>
+    <div id="tl-hover" class="mono tl-note" aria-live="off">Hover over the timeline for time and item.</div>
     <div class="tl-scroll" aria-label="Timeline lanes" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
     <details class="tl-check"><summary id="tl-check-summary">Check</summary>
       <div class="tl-problems" id="tl-problems"></div></details>
@@ -134,7 +135,9 @@ async function tlMount() {
   $('#tl-fwd').onclick = () => tlStep(1);
   $('#tl-prev').onclick = () => tlPara(-1);
   $('#tl-next').onclick = () => tlPara(1);
-  $('#tl-zoom').oninput = (e) => { TL.zoom = +e.target.value; tlDraw(); };
+  $('#tl-zoom').oninput = (e) => tlZoomAt(+e.target.value);
+  $('#tl-fit').onclick = tlFit;
+  tlWireZoom();
   tlWireScrub();
   TL.vids.forEach((v) => { v.onerror = () => tlVideoFailed(v); });
 
@@ -160,6 +163,8 @@ async function tlRefresh(redrawCurrent = false) {
   catch (e) { const n = $('#tl-note'); if (n) n.textContent = e.message; return; }
   if (query !== tlHideQuery()) return;
   TL.data = data;
+  if (!TL.zoomReady) tlRestoreZoom();
+  tlReconcileSelection();
   TL.vids.forEach((v) => {
     const ref = v.dataset.seg.split(':')[0];
     if (v.dataset.seg && !data.segments.some((s) => s.ref === ref)) v.dataset.seg = '';

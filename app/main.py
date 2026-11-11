@@ -808,7 +808,7 @@ def preview_intro(cid: str, payload: dict = Body(default={})) -> dict:
         intro_mod.mux_sting(ch, out, length, progress)
         return {"path": "cache/intro_preview.webm"}
 
-    return {"job": jobs.start("intro preview", cid, work)}
+    return {"job": jobs.start("intro preview", cid, work, writes=False)}
 
 
 @app.post("/api/channels/{cid}/outro-preview")
@@ -830,7 +830,7 @@ def preview_outro(cid: str, payload: dict = Body(default={})) -> dict:
         outro_mod.render_outro(ch, sample, out, backdrop, progress)
         return {"path": "cache/outro_preview.webm"}
 
-    return {"job": jobs.start("end screen preview", cid, work)}
+    return {"job": jobs.start("end screen preview", cid, work, writes=False)}
 
 
 @app.post("/api/channels/{cid}/music")
@@ -1235,8 +1235,8 @@ def _restore_project_edit(pid, direction):
     from . import undo
     with store.lock_for(pid):
         _load(pid)
-        if jobs.active_for(pid):
-            raise HTTPException(409, 'Wait for this project’s running jobs to finish before undo or redo.')
+        if jobs.active_for(pid, writing=True):
+            raise HTTPException(409, 'Wait for jobs that update this project to finish before undo or redo.')
         try:
             label = undo.restore(project_dir(pid), direction)
         except ValueError as exc:
@@ -1615,7 +1615,7 @@ def preview_sponsor(pid: str, slot_id: str) -> dict:
     if not any(s.id == slot_id for s in p.sponsors):
         raise HTTPException(404, "Sponsor slot not found")
     return {"job": jobs.start("sponsor preview", pid,
-        lambda progress: render.sponsor_proxy(store.load(pid), slot_id, progress, audible=True))}
+        lambda progress: render.sponsor_proxy(store.load(pid), slot_id, progress, audible=True), writes=False)}
 
 
 @app.delete("/api/projects/{pid}")
@@ -1762,6 +1762,28 @@ def agent_apply(pid: str, payload: dict = Body(...)) -> dict:
         return review.apply_ask(pid, payload)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@app.patch('/api/projects/{pid}/slides-batch')
+def patch_slides_batch(pid: str, payload: dict = Body(...)) -> dict:
+    """One multi-selection gesture: validate everything, then save once."""
+    allowed = {'title', 'title_at', 'chapter', 'cues', 'overlays'}
+    entries = payload.get('edits')
+    if not isinstance(entries, list) or not entries:
+        raise HTTPException(400, 'Expected a non-empty edits list.')
+    with store.lock_for(pid):
+        p = _load(pid)
+        for entry in entries:
+            if (not isinstance(entry, dict) or not isinstance(entry.get('patch'), dict)
+                    or not set(entry['patch']) <= allowed):
+                raise HTTPException(400, 'Unsupported group edit.')
+            s = _slide(p, entry.get('sid'))
+            try:
+                edits.patch_slide_fields(s, entry['patch'])
+            except edits.EditError as exc:
+                raise HTTPException(exc.status, str(exc)) from exc
+        store.save(p)
+        return p.to_dict()
 
 
 @app.patch("/api/projects/{pid}/slides/{sid}")
@@ -2009,7 +2031,7 @@ def llm_local() -> dict:
 @app.post("/api/llm/local/speed")
 def llm_local_speed() -> dict:
     """Explicitly send one short prompt and report speed through a job."""
-    return {"job": jobs.start("local speed test", "", lambda pr: llm_mod.local_speed_test())}
+    return {"job": jobs.start("local speed test", "", lambda pr: llm_mod.local_speed_test(), writes=False)}
 
 
 # ---------------------------------------------------------------------- media
@@ -3482,10 +3504,9 @@ def preview_opening(pid: str, payload: dict = Body(default={})) -> dict:
                                  "preview it on the channel page.")
 
     def work(progress):
-        with store.lock_for(pid):
-            return render.preview_opening(store.load(pid), kind, progress)
+        return render.preview_opening(store.load(pid), kind, progress)
 
-    return {"job": jobs.start(f"{kind} preview", pid, work)}
+    return {"job": jobs.start(f"{kind} preview", pid, work, writes=False)}
 
 
 @app.post("/api/projects/{pid}/slides/{sid}/preview")
@@ -3498,6 +3519,7 @@ def preview_segment(pid: str, sid: str) -> dict:
     """
     _slide(_load(pid), sid)
 
+    # ops.render saves non-clip projects after preview, so keep the writer guard.
     return {"job": jobs.start("segment preview", pid,
                              lambda pr: ops.render(pid, {"section": sid}, pr), cancellable=True)}
 
@@ -3662,7 +3684,8 @@ def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
                 done.append(render.proxy_ref(p, r, progress, download=False, hide=hidden))
         return {"segments": done}
 
-    return {"job": jobs.start("timeline proxy", pid, work, cancellable=True)}
+    # The only project save is picture downloading above, after a locked reload.
+    return {"job": jobs.start("timeline proxy", pid, work, cancellable=True, writes=False)}
 
 
 @app.post("/api/projects/{pid}/timeline/mix")
@@ -3679,7 +3702,7 @@ def timeline_mix(pid: str, hide: str = "") -> dict:
         with lock:
             return render.build_mix(store.load(pid), progress, hide=hidden)
 
-    return {"job": jobs.start("timeline sound", pid, work, cancellable=True)}
+    return {"job": jobs.start("timeline sound", pid, work, cancellable=True, writes=False)}
 
 
 @app.post("/api/projects/{pid}/description")

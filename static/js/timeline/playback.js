@@ -309,16 +309,18 @@ function tlWireScrub() {
   };
   track.onpointerdown = (e) => {
     if (e.button !== 0) return;
+    if (e.target.closest('.tl-layer-label, em')) return;
+    if (!e.target.closest('[data-para], [data-seg], .tl-ruler')) { tlMarquee(e); return; }
     track.setPointerCapture(e.pointerId);
     TL.scrubbing = true;
     if (TL.playing) tlPause();
     tlSeek(at(e), { ensure: false });
-    tlSelectTarget(e.target);
+    tlSelectTarget(e.target, e.shiftKey);
   };
   // Keyboard activation of lane buttons selects and seeks without a pointer.
   track.onclick = (e) => {
     if (e.detail !== 0) return;
-    tlSelectTarget(e.target);
+    tlSelectTarget(e.target, e.shiftKey);
     if (TL.selection) { tlPause(); tlSeek(TL.selection.t0, {ensure: false}); }
   };
   track.onpointermove = (e) => { if (TL.scrubbing) tlSeek(at(e), { ensure: false }); };
@@ -331,13 +333,13 @@ function tlWireScrub() {
   track.onpointercancel = up;
 }
 
-function tlSelectTarget(target) {
+function tlSelectTarget(target, additive = false) {
   const para = target.closest('[data-para]');
   const picture = target.closest('[data-seg]');
-  if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para));
+  if (para) tlSelect(tlItems('paragraph').find((s) => s.id === para.dataset.para), additive);
   else if (picture) {
     const seg = tlSegs()[+picture.dataset.seg];
     const kind = seg.type === 'sponsor' ? 'sponsor' : seg.type === 'picture' ? 'picture' : 'slate';
-    tlSelect(tlItems(kind).find((s) => s.id === (seg.sponsor || seg.ref)) || null);
+    tlSelect(tlItems(kind).find((s) => s.id === (seg.sponsor || seg.ref)) || null, additive);
   }
 }

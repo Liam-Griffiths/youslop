@@ -162,6 +162,67 @@ def test_job_writes_not_undoable_and_running_jobs_refused(saved):
     assert store.load(saved.id).render == p.render
 
 
+@pytest.mark.parametrize('writes', [False, True])
+def test_restore_only_refuses_writing_jobs(saved, writes):
+    edit(saved, {'title': 'User title'})
+    ready, finish = threading.Event(), threading.Event()
+
+    def work(progress):
+        ready.set()
+        assert finish.wait(2)
+
+    jid = jobs.start('undo-guard', saved.id, work, writes=writes)
+    try:
+        assert ready.wait(2)
+        assert jid in {j['id'] for j in jobs.active_for(saved.id)}
+        assert (jid in {j['id'] for j in jobs.active_for(saved.id, writing=True)}) == writes
+        for restore, title in ((main.undo_project, ''), (main.redo_project, 'User title')):
+            if writes:
+                with pytest.raises(main.HTTPException) as err:
+                    restore(saved.id)
+                assert err.value.status_code == 409
+            else:
+                assert restore(saved.id)['slides'][0]['title'] == title
+            assert jobs.get(jid)['state'] == 'running'
+    finally:
+        thread = next(t for t in threading.enumerate() if t.name == 'job-undo-guard')
+        finish.set()
+        thread.join(2)
+    assert jobs.get(jid)['state'] == 'done'
+
+
+def test_timeline_proxy_allows_undo_without_overwriting_edit(saved, monkeypatch):
+    edit(saved, {'title': 'User title'})
+    ready, finish = threading.Event(), threading.Event()
+    monkeypatch.setattr(main.render, '_groups_for_preview', lambda p: [[(p.slides[0], 1)]])
+
+    def download(p, progress, only):
+        p.slides[0].candidates = [{'id': 'synthetic', 'local_path': 'media/test.jpg'}]
+        return []
+
+    def proxy(p, ref, progress, **kwargs):
+        ready.set()
+        assert finish.wait(2)
+        return {'ref': ref}
+
+    monkeypatch.setattr(main.render.media, 'download_chosen', download)
+    monkeypatch.setattr(main.render, 'proxy_ref', proxy)
+    jid = main.timeline_proxy(saved.id, {'refs': ['0']}, hide='')['job']
+    try:
+        assert ready.wait(2)
+        assert jobs.get(jid)['writes'] is False
+        main.undo_project(saved.id)
+        p = store.load(saved.id)
+        assert p.slides[0].title == ''
+        assert p.slides[0].candidates[0]['local_path'] == 'media/test.jpg'
+    finally:
+        thread = next(t for t in threading.enumerate() if t.name == 'job-timeline proxy')
+        finish.set()
+        thread.join(2)
+    assert jobs.get(jid)['state'] == 'done'
+    assert store.load(saved.id).slides[0].title == ''
+
+
 def test_job_save_leaves_snapshots_untouched(saved, monkeypatch):
     edit(saved, {'title': 'a'}, 'typing')
     edit(saved, {'title_hold': 2}, 'drag')

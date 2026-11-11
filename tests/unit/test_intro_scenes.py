@@ -90,7 +90,10 @@ def test_preview_sting_and_timeline_dispatch(project, tmp_path, monkeypatch):
 
     monkeypatch.setattr(scenes, 'render_card', card)
     monkeypatch.setattr(intro, 'mux_sting', lambda c, out, seconds, progress: calls.append(('sting', seconds)))
-    monkeypatch.setattr(main.jobs, 'start', lambda kind, cid, fn: fn(lambda msg: None))
+    def start(kind, cid, fn, *, writes):
+        assert writes is False
+        return fn(lambda msg: None)
+    monkeypatch.setattr(main.jobs, 'start', start)
     assert main.preview_intro(ch.id, {}) == {'job': {'path': 'cache/intro_preview.webm'}}
     assert calls == [('intro', 'intro_portrait'), ('sting', 5)]
     assert render._has_slate(project)

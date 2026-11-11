@@ -1442,3 +1442,21 @@ img.themed-pending { opacity:.45; }
 #clip-finder fieldset .row label { margin: 0; }
 #cf-in, #cf-out { width: 110px; }
 #cf-title { flex: 1; min-width: 200px; }
+
+/* Timeline ergonomics: persistent headers and compact, collapsible lanes. */
+.edit-workspace .tl-pictures { height: 92px; }
+.edit-workspace .tl-pic { background-size: auto 100%; background-repeat: repeat-x; }
+.tl-tag { right: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tl-para { text-overflow: ellipsis; }
+.edit-workspace .tl-lane em, .edit-workspace .tl-layer-label { box-sizing: border-box;
+  margin: 0; padding: 0; height: 100%; align-items: center; display: inline-flex;
+  pointer-events: auto; border-right: 1px solid var(--line); border-radius: 0; }
+.edit-workspace .tl-layer-label { font-size: 10px; }
+.edit-workspace .tl-layer-label button { width: 20px; flex-shrink: 0; }
+.edit-workspace .tl-lane .tl-collapse { width: 18px; min-width: 18px; padding: 0;
+  height: 100%; border: 0; background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.edit-workspace .tl-lane.collapsed { height: 24px; min-height: 24px; }
+.tl-lane.collapsed > :not(em):not(.tl-layer-label) { display: none; }
+.tl-marquee { position: absolute; z-index: 6; border: 1px solid var(--cool);
+  background: var(--cool-tint); opacity: .6; pointer-events: none; }
+#tl-hover { min-height: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

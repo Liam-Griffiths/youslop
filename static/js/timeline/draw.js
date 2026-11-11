@@ -42,7 +42,7 @@ function tlDraw() {
   const pics = d.segments.map((s) => {
     const img = s.type === 'picture' ? tlThumb(s) : '';
     const bad = s.problems.some((x) => x.startsWith('no picture'));
-    return `<button type="button" aria-label="${esc(tlName(s))}" class="tl-pic ${s.type !== 'picture' ? 'slate' : ''} ${s.ready ? 'ready' : s.have ? 'stale' : ''}
+    return `<button type="button" aria-label="${esc(tlName(s))}" title="${esc(tlName(s))}" class="tl-pic ${s.type !== 'picture' ? 'slate' : ''} ${s.ready ? 'ready' : s.have ? 'stale' : ''}
         ${bad ? 'bad' : ''}" data-seg="${s.index}"
         style="left:${s.start * z}px;width:${Math.max(2, s.duration * z - 2)}px;
         ${img ? `background-image:url('${esc(img)}')` : ''}">
@@ -58,11 +58,12 @@ function tlDraw() {
       </button>`).join('');
   track.innerHTML = `
     <div class="tl-ruler">${ticks}</div>
-    <div class="tl-lane"><em>pictures</em>${pics}</div>
+    <div class="tl-lane tl-pictures"><em>pictures</em>${pics}</div>
     <div class="tl-lane para"><em>voice</em>${paras}${tlGapItems()}</div>
     ${tlCameraRows()}
     ${tlLayerRows()}
     <div class="tl-head-line" id="tl-line"><b></b></div>`;
+  tlWireLaneCollapse();
   tlWireLayers();
   tlWireTiming();
   tlWireSponsorDrag();
@@ -236,7 +237,7 @@ function tlPaintHead() {
   tlSelectionPaint();
   // Keep the playhead on screen while it plays or is stepped.
   const sc = $('#tl-scroll'), x = 104 + TL.cur * TL.zoom;
-  if (sc && !TL.scrubbing && (x < sc.scrollLeft + 20 || x > sc.scrollLeft + sc.clientWidth - 40)) {
+  if (sc && !TL.scrubbing && !TL.zooming && (x < sc.scrollLeft + 124 || x > sc.scrollLeft + sc.clientWidth - 40)) {
     sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.3);
   }
 }
@@ -289,6 +290,14 @@ function tlShortcuts() {
       <dt>Overlay: 1 / 2 / 3</dt><dd>Cutaway / picture in picture / split</dd>
       <dt>Graphics: G</dt><dd>Add at playhead; arrows move, Shift + arrows resize, Delete removes</dd>
       <dt>Overlay: P / Delete</dt><dd>Change corner / remove overlay</dd>
+      <dt>Shift + Z</dt><dd>Fit timeline</dd>
+      <dt>+ / −</dt><dd>Zoom at playhead</dd>
+      <dt>Ctrl / Cmd + wheel</dt><dd>Zoom at pointer; plain wheel scrolls</dd>
+      <dt>Shift + click</dt><dd>Add or remove an item from selection</dd>
+      <dt>Drag empty lane</dt><dd>Marquee select; Shift adds items</dd>
+      <dt>Selection: ← / →</dt><dd>Nudge movable items one frame together</dd>
+      <dt>Drag selection / Delete</dt><dd>Move / delete editable items together</dd>
+      <dt>Lane arrow</dt><dd>Collapse or expand lane (also Enter / Space)</dd>
       <dt>?</dt><dd>Open this sheet</dd>
     </dl></section>`;
   const previous = document.activeElement;

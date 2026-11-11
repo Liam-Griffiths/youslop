@@ -20,14 +20,14 @@ class JobCancelled(Exception):
 
 
 def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any],
-          *, cancellable: bool = False) -> str:
-    """Run `fn(progress)` on a worker thread. Returns the job id immediately."""
+          *, cancellable: bool = False, writes: bool = True) -> str:
+    """Run `fn(progress)` on a worker thread; writers block project undo/redo."""
     jid = f"j{uuid.uuid4().hex[:10]}"
     job = {
         "id": jid, "kind": kind, "project_id": project_id, "state": "running",
         "log": [], "status": "", "error": "", "result": None,
         "started_at": time.time(), "finished_at": 0.0,
-        "cancellable": cancellable, "cancel_requested": False,
+        "cancellable": cancellable, "cancel_requested": False, "writes": writes,
     }
     with store.lock_for(project_id), _LOCK:
         _JOBS[jid] = job
@@ -110,10 +110,12 @@ def recent() -> list[dict]:
                  } for j in sorted(_JOBS.values(), key=lambda j: j["started_at"], reverse=True)]
 
 
-def active_for(project_id: str) -> list[dict]:
+def active_for(project_id: str, *, writing: bool = False) -> list[dict]:
+    """Running jobs for a project; optionally only those that can write it."""
     with _LOCK:
         return [dict(j) for j in _JOBS.values()
-                if j["project_id"] == project_id and j["state"] == "running"]
+                if j["project_id"] == project_id and j["state"] == "running"
+                and (not writing or j.get("writes", True))]
 
 
 def running() -> list[dict]:

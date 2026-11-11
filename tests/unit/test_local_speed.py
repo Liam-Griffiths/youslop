@@ -144,7 +144,8 @@ def test_unavailable_probe_sends_no_prompt(speed_stream, monkeypatch):
 def test_speed_endpoint_queues_app_job(monkeypatch):
     from app import main
 
-    def start(kind, pid, worker):
+    def start(kind, pid, worker, *, writes):
+        assert writes is False
         assert kind == 'local speed test' and pid == ''
         assert worker(lambda message: None) == {'synthetic': True}
         return 'jsynthetic'

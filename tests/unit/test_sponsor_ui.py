@@ -89,7 +89,10 @@ def test_preview_job_only_requests_one_read(sponsor_project, monkeypatch):
     p.sponsors = [SponsorSlot(id='read', enabled=False)]
     store.save(p)
     calls = []
-    monkeypatch.setattr(main.jobs, 'start', lambda kind, pid, fn: fn(lambda m: None))
+    def start(kind, pid, fn, *, writes):
+        assert writes is False
+        return fn(lambda m: None)
+    monkeypatch.setattr(main.jobs, 'start', start)
     monkeypatch.setattr(render, 'sponsor_proxy', lambda project, ident, progress, **kw:
                         calls.append((ident, kw)) or {'path': 'cache/preview.mp4'})
     assert main.preview_sponsor(p.id, 'read')['job']['path'] == 'cache/preview.mp4'
@@ -156,7 +159,10 @@ def test_timeline_proxy_accepts_sponsor_ref(sponsor_project, monkeypatch):
     p.sponsors = [SponsorSlot(id='read', after_slide_id='s0')]
     store.save(p)
     calls = []
-    monkeypatch.setattr(main.jobs, 'start', lambda kind, pid, fn, *, cancellable: fn(lambda m: None))
+    def start(kind, pid, fn, *, cancellable, writes):
+        assert cancellable is True and writes is False
+        return fn(lambda m: None)
+    monkeypatch.setattr(main.jobs, 'start', start)
     monkeypatch.setattr(render, 'proxy_ref', lambda project, ref, progress, **kw:
                         calls.append(ref) or {'ref': ref})
     result = main.timeline_proxy(p.id, {'refs': ['sponsor:read']})
