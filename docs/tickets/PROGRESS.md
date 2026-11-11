@@ -294,11 +294,11 @@ for "Short declarative sentences. One idea per sentence." See `18-script-voice/R
 Owner, 2026-11-11: light, friendly, minimal claims; features, screenshots, a
 WebM trailer, a download page with all releases. Next.js in `site/` only
 (owner-approved Node exception; the app keeps its no-Node rule). Static export,
-no Vercel image optimizer, media and binaries off Vercel (Bunny or GitHub). See
+no Vercel image optimizer; media from GitHub via jsDelivr (`site-media` branch), downloads from GitHub Releases. See
 `19-website/README.md`.
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
 | T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets | todo | custom next/image loader over pre-built AVIF/WebP widths |
 | T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | todo | captured from the bundled example; heavy capture/encode needs a heads-up |
-| T19.3 | Download and releases pages, deploy to Vercel or Bunny | S | T19.1 | todo | releases.json from GitHub Releases; no deploy without owner |
+| T19.3 | Download and releases pages from GitHub Releases, deploy to Vercel | S | T19.1 | todo | releases.json from GitHub Releases; no deploy without owner |

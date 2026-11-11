@@ -35,26 +35,36 @@ retired only once the new site is deployed and the owner says so.
 The owner wants the site to stay cheap if it gets popular. Every decision
 below follows from that.
 1. **Static export.** `output: 'export'`. No serverless functions,
-   middleware or ISR. The same `out/` folder deploys to Vercel or to a Bunny
-   storage zone with a pull zone in front.
+   middleware or ISR. Vercel serves only the small HTML, JS and fonts. The
+   same `out/` folder could move to any static host later.
 2. **No Vercel Image Optimization.** `next/image` uses a custom `loaderFile`.
    Image widths (AVIF and WebP) are generated ahead of time by a Python tool
-   using Pillow. The loader picks:
-   - by default, the nearest pre-built width from the site's own static
-     files;
-   - when `NEXT_PUBLIC_MEDIA_BASE` is set (Bunny pull zone), the same
-     pre-built file from that host;
-   - optionally, with `NEXT_PUBLIC_IMAGE_CDN=bunny`, Bunny Optimizer query
-     parameters (`?width=&quality=`) on the original, for owners who enable
-     that add-on.
-
-   No setting ever routes through `/_next/image`.
-3. **Video and downloads go to the media host.** The trailer (WebM) and
-   release binaries are never served from Vercel's bandwidth:
-   - the trailer comes from `NEXT_PUBLIC_MEDIA_BASE` when set;
-   - binaries link to GitHub Release assets, or to a Bunny storage URL when
-     configured.
-4. **Lazy media.** The trailer uses `preload="none"` with a small poster
+   using Pillow. The loader picks the nearest pre-built width. No setting
+   ever routes through `/_next/image`.
+3. **Media comes from GitHub** (owner, 2026-11-11: "let's actually have the
+   images come from github"). This covers screenshots, the trailer WebM and
+   its poster.
+   - **Storage:** an orphan branch `site-media` in this repo, so binary media
+     never enters `dev`'s history. `site/tools/publish_media.py` commits the
+     built files there and records the commit SHA in
+     `site/lib/media-manifest.json`.
+   - **Delivery:** through jsDelivr's GitHub endpoint, pinned to that commit:
+     `https://cdn.jsdelivr.net/gh/Liam-Griffiths/youslop@<sha>/media/<file>`.
+     - jsDelivr serves correct MIME types, a real CDN and immutable caching
+       for pinned URLs, at no cost.
+     - Don't use `raw.githubusercontent.com`. It isn't a CDN, is rate
+       limited, sends `nosniff` headers with generic types (which can block
+       images and video in browsers), and GitHub discourages hotlinking it.
+   - **Limits:** jsDelivr's GitHub endpoint caps each file at 20 MB, so
+     keep the trailer under 8 MB. Both routes need the repo to be
+     **public**. Until it is, `npm run dev` serves the same files from the
+     local `site/public/media/`.
+   - **One switch:** `NEXT_PUBLIC_MEDIA_BASE` holds the base URL. It
+     defaults to the pinned jsDelivr URL in production and `/media` in dev.
+     Moving to Bunny or anywhere else later only changes this value.
+4. **Downloads come from GitHub Releases** (owner, 2026-11-11). Binaries are
+   release assets; the site only links to them.
+5. **Lazy media.** The trailer uses `preload="none"` with a small poster
    until it scrolls into view. Below-the-fold screenshots load lazily.
 
 ## Design: true to the brand, in its light register
@@ -95,4 +105,4 @@ below follows from that.
 |---|---|
 | T19.1 | Site scaffold: Next.js static export, design, features and image pipeline |
 | T19.2 | Screenshots and a WebM trailer from the running app |
-| T19.3 | Download and releases pages, and deploy to Vercel or Bunny |
+| T19.3 | Download and releases pages from GitHub Releases, and deploy to Vercel |
