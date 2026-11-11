@@ -299,9 +299,9 @@ no Vercel image optimizer; small cached media on Vercel for now (one env var mov
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | todo | custom next/image loader over pre-built AVIF/WebP widths |
-| T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | todo | captured from the bundled example; heavy capture/encode needs a heads-up |
-| T19.3 | Download and releases pages from GitHub Releases, deploy to Vercel | S | T19.1 | todo | releases.json from GitHub Releases; no deploy without owner |
+| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | parked | owner 2026-11-11: Phase 19 paused; custom next/image loader over pre-built AVIF/WebP widths |
+| T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | parked | owner 2026-11-11: Phase 19 paused; captured from the bundled example; heavy capture/encode needs a heads-up |
+| T19.3 | Download and releases pages from GitHub Releases, deploy to Vercel | S | T19.1 | parked | owner 2026-11-11: Phase 19 paused; releases.json from GitHub Releases; no deploy without owner |
 
 ## Phase 20: UX self-review (Claude Opus 5.5; runs after Phases 17–18 and T15.2, before Phase 19)
 
