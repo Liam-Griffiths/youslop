@@ -5,12 +5,13 @@ import copy
 import concurrent.futures as cf
 from contextvars import copy_context
 import hashlib
+import json
 import re
 import string
 import threading
 from typing import Any, Callable
 
-from . import kinds, llm
+from . import kinds, llm, style_lint
 from . import research as script_research
 from .config import WORDS_PER_MINUTE
 from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
@@ -1101,6 +1102,136 @@ Return [] if there are no problems. Otherwise return a JSON list:
     return all_flags
 
 
+STYLE_AUTO_HITS = 3
+STYLE_BATCH_SIZE = 12
+_STYLE_WORDS = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
+_STYLE_NUMBERS = re.compile(r"[-−+]?\d+(?:[.,:/-]\d+)*(?:\s*[%％])?")
+_STYLE_NUMBER_WORDS = set(('zero one two three four five six seven eight nine ten '
+                          'eleven twelve thirteen fourteen fifteen sixteen seventeen '
+                          'eighteen nineteen twenty thirty forty fifty sixty seventy '
+                          'eighty ninety hundred thousand million billion trillion '
+                          'first second third fourth fifth sixth seventh eighth ninth tenth').split())
+_STYLE_STARTERS = set(('a an the this that these those it its he his she her they '
+                      'their we our you your i but and or so yet then when while '
+                      'if because although after before in on at by for from to '
+                      'with without there here what how why who as not no '
+                      'stranger weirder even spoiler buckle little unbeknownst '
+                      "let's let’s we'll we’ll here's here’s").split())
+
+
+def _style_targets(text: str) -> tuple[list[dict], list[dict]]:
+    hits = style_lint.lint(text)
+    indices = sorted({i for h in hits for i in h['sentence_indices']})
+    spans = []
+    for i in indices:
+        if spans and spans[-1]['sentence_indices'][-1] == i - 1:
+            spans[-1]['sentence_indices'].append(i)
+        else:
+            spans.append({'sentence_indices': [i]})
+    return spans, hits
+
+
+def _style_facts_safe(original: str, replaced: str, replacement: str) -> bool:
+    """Conservative token guard; semantic changes still need human review."""
+    words = lambda text: {w.casefold() for w in _STYLE_WORDS.findall(text)}
+    names = lambda text: {w.casefold() for w in _STYLE_WORDS.findall(text)
+                          if w[0].isupper() and w.casefold() not in _STYLE_STARTERS}
+    numbers = lambda text: {re.sub(r'\s', '', n) for n in _STYLE_NUMBERS.findall(text)}
+    old, new = words(original), words(replacement)
+    return (names(replacement) <= old
+            and names(replaced) <= new
+            and numbers(replacement) <= numbers(original)
+            and numbers(replaced) <= numbers(replacement)
+            and new & _STYLE_NUMBER_WORDS <= old
+            and words(replaced) & _STYLE_NUMBER_WORDS <= new)
+
+
+def style_revision(text: str, replacements: list) -> tuple[str, list[dict]]:
+    """Validate model/client spans and splice only flagged text, keeping whitespace."""
+    targets, _ = _style_targets(text)
+    allowed = [s['sentence_indices'] for s in targets]
+    parts = [s for p in re.split(r'\n\s*\n', text) for s in style_lint.sentences(p)]
+    offsets, pos = [], 0
+    for part in parts:
+        start = text.index(part, pos)
+        pos = start + len(part)
+        offsets.append((start, pos))
+    accepted, edits, seen = [], [], []
+    for item in replacements:
+        if not isinstance(item, dict):
+            continue
+        indices, replacement = item.get('sentence_indices'), item.get('text')
+        if (not isinstance(indices, list) or not indices
+                or any(type(i) is not int for i in indices)
+                or indices not in allowed or indices in seen
+                or not isinstance(replacement, str) or not replacement.strip()):
+            continue
+        seen.append(indices)
+        start, end = offsets[indices[0]][0], offsets[indices[-1]][1]
+        replacement = replacement.strip()
+        if replacement == text[start:end] or not _style_facts_safe(text, text[start:end], replacement):
+            continue
+        accepted.append({'sentence_indices': indices, 'text': replacement})
+        edits.append((start, end, replacement))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text, accepted
+
+
+def revise_style(project: Project, slide_ids=None,
+                 progress: Progress = lambda m: None) -> list[dict]:
+    """Propose one cheap pass over flagged spans; never change takes or the project."""
+    if project.has_source and project.fidelity == 'faithful':
+        return []
+    wanted = None if slide_ids is None else set(slide_ids)
+    paragraphs = []
+    for i, slide in enumerate(project.slides):
+        if wanted is not None and slide.id not in wanted:
+            continue
+        targets, hits = _style_targets(slide.narration)
+        if hits:
+            paragraphs.append({'slide_id': slide.id, 'text': slide.narration,
+                               'replacements': targets, 'hits': hits,
+                               'previous_context': project.slides[i - 1].narration if i else '',
+                               'next_context': project.slides[i + 1].narration
+                               if i + 1 < len(project.slides) else ''})
+    proposals = []
+    for start in range(0, len(paragraphs), STYLE_BATCH_SIZE):
+        batch = paragraphs[start:start + STYLE_BATCH_SIZE]
+        progress(f"Smoothing flagged lines: {start + 1}–{start + len(batch)} of {len(paragraphs)} paragraphs")
+        prompt = '''Smooth only the flagged narration spans in the JSON below.
+Return replacement spans only, using the exact slide_id and sentence_indices
+provided in replacements. Indices are zero-based; adjacent hits form one span.
+For short_rhythm and low_spread, vary the paragraph's rhythm by joining/extending
+sentences with existing detail, not single-sentence swaps. A span may become
+fewer sentences. Leave unflagged sentences and context unchanged.
+Keep every fact, name, date, number, opinion and their relationships unchanged.
+Add no facts, even from context or the system's example. If unsure, omit the span.
+Return a JSON list of {"slide_id": "...", "replacements": [
+{"sentence_indices": [0, 1], "text": "replacement text"}]}.
+
+''' + json.dumps(batch, ensure_ascii=False)
+        out = complete_json(prompt, system=NARRATOR_SYSTEM, model=MODEL_UTILITY,
+                            timeout=400, require=lambda v: isinstance(v, list))
+        by_id = {item['slide_id']: item for item in batch}
+        seen = set()
+        for item in out if isinstance(out, list) else []:
+            if not isinstance(item, dict) or not isinstance(item.get('slide_id'), str):
+                continue
+            sid = item['slide_id']
+            replacements = item.get('replacements')
+            if sid not in by_id or sid in seen or not isinstance(replacements, list):
+                continue
+            seen.add(sid)
+            original = by_id[sid]
+            after, accepted = style_revision(original['text'], replacements)
+            if accepted:
+                proposals.append({'slide_id': sid, 'before': original['text'], 'after': after,
+                                  'replacements': accepted,
+                                  'reasons': list(dict.fromkeys(h['reason'] for h in original['hits']))})
+    return proposals
+
+
 # ------------------------------------------------------------------ full build
 def brief(project: Project, progress: Progress = lambda m: None,
           checkpoint: Callable[[], None] = lambda: None, fresh: bool = False) -> dict:
@@ -1172,6 +1303,17 @@ def generate(project: Project, progress: Progress = lambda m: None,
         project.research.setdefault("flags", []).extend(consistency_check(project, progress))
     except LLMError as exc:
         progress(f"Consistency check skipped ({str(exc)[:100]})")
+
+    if (not (project.has_source and project.fidelity == 'faithful')
+            and sum(len(style_lint.lint(s.narration)) for s in slides) >= STYLE_AUTO_HITS):
+        try:
+            before = style_lint.rate(s.narration for s in slides)
+            for proposal in revise_style(project, progress=progress):
+                project.slide(proposal['slide_id']).narration = proposal['after']
+            progress(f"Style lint: {before:.1f} → "
+                     f"{style_lint.rate(s.narration for s in slides):.1f} hits per 100 sentences")
+        except LLMError as exc:
+            progress(f"Style smoothing skipped ({str(exc)[:100]})")
 
     words = sum(s.word_count for s in slides)
     progress(f"Script done: {len(slides)} paragraphs, {words} words, "

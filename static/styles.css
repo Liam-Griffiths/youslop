@@ -1060,6 +1060,10 @@ main:has(.plan-layout) { max-width: none; }
 .script-footer { gap: 4px 8px; font-size: 12px; color: var(--dim); }
 .script-footer .mono { font-size: 11px; }
 .script-voice { margin-left: auto; }
+.script-style-proposal:not(:empty) { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 12px; margin-top: 12px; }
+.script-style-proposal del, .script-style-proposal ins { display: block; white-space: pre-wrap; margin: 6px 0 12px; }
+.script-style-proposal del { color: var(--bad); }
+.script-style-proposal ins { color: var(--good); text-decoration: none; }
 .script-footer details { position: relative; }
 .script-footer details[open] { padding: 8px; border: 1px solid var(--line); }
 .script-footer input[type="checkbox"] { width: auto; }

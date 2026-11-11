@@ -287,7 +287,7 @@ for "Short declarative sentences. One idea per sentence." See `18-script-voice/R
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
 | T18.1 | Narration voice: rewrite the rules, add a style lint | M | — | done | 2026-11-11 Codex + review; Opus A/B: mean sentence 12.2 → 25.0 words; short_rhythm rule added after the first lint missed the staccato (before 15.8 hits/100, after 0); Granite A/B pending (LM Studio was off) |
-| T18.2 | Revise flagged lines: optional targeted rewrite pass | S | T18.1 | todo | batched, fact-guarded, accept/reject per change |
+| T18.2 | Revise flagged lines: optional targeted rewrite pass | S | T18.1 | done | 2026-11-11 Codex + review; live on Tube Mail: 12 paragraphs in one call, 15.9 → 0 hits/100, facts kept; runs as a job; button only on flagged paragraphs. UX note for T20.1: one paragraph can show 3 overlapping P3 rows |
 
 ## Phase 19: the public website (scheduled last; Claude Opus 5.5, not Codex)
 

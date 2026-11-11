@@ -45,6 +45,7 @@ function paintScript() {
     <div class="row script-tools">
     <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list for the shoot</a>
     <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
+    ${p.has_source && p.fidelity === 'faithful' ? '' : '<button class="btn sm" data-style-all disabled title="No style findings to smooth." onclick="smoothFlaggedLines(null,this)">Smooth flagged lines</button>'}
     ${research.facts?.length ? '<button class="btn sm ghost" onclick="runFactcheck()">Check facts</button>' : ''}
     ${p.has_source ? `<span class="pill">${esc(p.fidelity)} import</span>
       <button class="btn sm" onclick="reimport('${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}')">Re-split as ${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}</button>
@@ -79,13 +80,14 @@ function paintScript() {
         <div class="script-inline" data-findings="${s.id}"></div>
         <div class="script-footer"><span class="mono script-word-count">${s.word_count} words · ${fmtTime(s.word_count / 158 * 60)}</span>
           <button class="btn sm ghost" onclick="rewrite('${s.id}')">Rewrite</button>
+          ${p.has_source && p.fidelity === 'faithful' ? '' : `<button class="btn sm ghost" data-style-slide="${s.id}" hidden onclick="smoothFlaggedLines('${s.id}',this)">Smooth flagged lines</button>`}
           <button class="btn sm ghost" onclick="splitSlide('${s.id}')">Split</button>
           ${s.chapter ? '' : `<button class="btn sm ghost" onclick="startChapter('${s.id}')">Start a chapter</button>`}
-          <span class="script-voice">${s.on_camera ? 'On camera · ' : ''}${s.take ? (s.take.synthetic ? 'Draft voice' : 'Recorded') : 'Not voiced'}</span>
+          <span class="script-voice">${s.on_camera ? 'On camera · ' : ''}${s.take ? (s.take.synthetic ? 'Draft voice' : 'Recorded') + (s.take.narration !== s.narration ? ' · Text changed; take out of date' : '') : 'Not voiced'}</span>
           <details><summary>More</summary>
             <label><input type="checkbox" ${s.on_camera ? 'checked' : ''} onchange="scriptCamera('${s.id}',this.checked)"> On camera</label>
             <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button></details>
-        </div></div></article></div>`;
+        </div><div class="script-style-proposal" data-style-proposal="${s.id}" aria-live="polite"></div></div></article></div>`;
     seconds += s.take?.duration || s.word_count / 158 * 60;
   });
   html += `<details class="script-camera"><summary>On camera / presenter</summary>${presenterPanel(p)}</details>
@@ -218,6 +220,59 @@ async function rewrite(sid) {
   render();
 }
 
+let scriptStyleVersion = 0;
+async function smoothFlaggedLines(sid, button) {
+  const pid = state.project.id, version = ++scriptStyleVersion;
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = 'Smoothing flagged lines…';
+  try {
+    const r = await api(`/api/projects/${pid}/style/revise`, {
+      method: 'POST', body: JSON.stringify(sid ? {slides: [sid]} : {}),
+    });
+    if (state.project?.id !== pid || state.tab !== 'script' || version !== scriptStyleVersion) return;
+    watchJob(r.job, 'smooth flagged lines', job => {
+      if (job.state !== 'done' || state.project?.id !== pid || state.tab !== 'script' || version !== scriptStyleVersion) return;
+      scriptShowStyleProposals(pid, sid, job.result);
+    });
+  } catch (e) { toast(e.message, true); }
+  finally { button.disabled = false; button.textContent = label; }
+}
+
+function scriptShowStyleProposals(pid, sid, proposals) {
+  document.querySelectorAll('[data-style-proposal]').forEach(el => {
+    if (!sid || el.dataset.styleProposal === sid) el.replaceChildren();
+  });
+  if (!proposals.length) return toast('No safe changes proposed.');
+  proposals.forEach(p => {
+    const host = [...document.querySelectorAll('[data-style-proposal]')].find(el => el.dataset.styleProposal === p.slide_id);
+    if (!host) return;
+    host.innerHTML = `<p>${p.reasons.map(esc).join(' ')}</p>
+      <div class="mono"><span>Before</span><del>${esc(p.before)}</del>
+      <span>After</span><ins>${esc(p.after)}</ins></div>
+      <button class="btn sm">Apply</button> <button class="btn sm ghost">Reject</button>`;
+    const [apply, reject] = host.querySelectorAll('button');
+    reject.onclick = () => host.replaceChildren();
+    apply.onclick = async () => {
+      apply.disabled = true;
+      try {
+        const saved = await api(`/api/projects/${pid}/style/apply`, {method: 'POST', body: JSON.stringify(p)});
+        if (state.project?.id !== pid || state.tab !== 'script') return;
+        Object.assign(state.project.slides.find(s => s.id === saved.id), saved);
+        const card = host.closest('.script-card'), text = card.querySelector('textarea');
+        text.value = saved.narration;
+        scriptFit(text);
+        card.querySelector('.script-word-count').textContent = `${saved.word_count} words · ${fmtTime(saved.word_count / 158 * 60)}`;
+        if (saved.take) card.querySelector('.script-voice').textContent = `${saved.on_camera ? 'On camera · ' : ''}${saved.take.synthetic ? 'Draft voice' : 'Recorded'} · Text changed; take out of date`;
+        const words = state.project.slides.reduce((n, s) => n + s.word_count, 0);
+        $('.script-summary').textContent = `${words} words · ${state.project.slides.length} paragraphs · ~${fmtTime(words / 158 * 60)}`;
+        host.replaceChildren();
+        scriptLoadCheck();
+      } catch (e) { toast(e.message, true); apply.disabled = false; }
+    };
+  });
+}
+
 async function splitSlide(sid) {
   state.project = await api(`/api/projects/${state.project.id}/slides/${sid}/split`,
     { method: 'POST' });
@@ -301,6 +356,15 @@ async function scriptLoadCheck() {
       <span>${esc(f.msg)}</span><button class="btn sm" onclick="scriptFixFinding(${i})">Fix</button>
       <button class="btn sm ghost" onclick="scriptDismiss('${f.id}')">Dismiss</button></div>`;
     state.scriptFindings = findings;
+    const styleSlides = new Set(findings.filter(f => f.code === 'script.style').map(f => f.slide_id));
+    document.querySelectorAll('[data-style-slide]').forEach(button => {
+      button.hidden = !styleSlides.has(button.dataset.styleSlide);
+    });
+    const smoothAll = $('[data-style-all]');
+    if (smoothAll) {
+      smoothAll.disabled = !styleSlides.size;
+      smoothAll.title = styleSlides.size ? '' : 'No style findings to smooth.';
+    }
     const bySlide = new Map();
     findings.forEach((f, i) => {
       if (!bySlide.has(f.slide_id)) bySlide.set(f.slide_id, []);

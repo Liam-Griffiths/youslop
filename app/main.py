@@ -1612,6 +1612,38 @@ def regenerate_script(pid: str, payload: dict = Body(default={})) -> dict:
     return {"job": jobs.start("script", pid, lambda pr: ops.plan(pid, payload, pr))}
 
 
+@app.post("/api/projects/{pid}/style/revise")
+def propose_style_revision(pid: str, payload: dict = Body(default={})) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+    ids = payload.get('slides')
+    if ids is not None and (not isinstance(ids, list) or any(not isinstance(s, str) for s in ids)):
+        raise HTTPException(400, 'slides must be a list of paragraph IDs')
+    return {"job": jobs.start("smooth flagged lines", pid,
+                              lambda pr: script_gen.revise_style(p, ids, pr))}
+
+
+@app.post("/api/projects/{pid}/style/apply")
+def apply_style_revision(pid: str, payload: dict = Body(...)) -> dict:
+    with store.lock_for(pid):
+        p = _load(pid)
+        if p.has_source and p.fidelity == 'faithful':
+            raise HTTPException(400, 'Faithful imports keep the creator’s words.')
+        sid = payload.get('slide_id')
+        if not isinstance(sid, str) or not isinstance(payload.get('replacements'), list):
+            raise HTTPException(400, 'A paragraph ID and replacement spans are required')
+        s = _slide(p, sid)
+        if s.narration != payload.get('before'):
+            raise HTTPException(409, 'Paragraph changed; smooth its flagged lines again.')
+        after, accepted = script_gen.style_revision(s.narration, payload['replacements'])
+        if not accepted:
+            raise HTTPException(400, 'No safe flagged replacements to apply')
+        # Takes retain their original narration: the mismatch marks them stale.
+        edits.patch_slide_fields(s, {'narration': after})
+        store.save(p)
+        return s.to_dict()
+
+
 @app.post("/api/projects/{pid}/factcheck")
 def factcheck(pid: str) -> dict:
     """Re-check the paragraphs as they stand now against the research already
