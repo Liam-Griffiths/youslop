@@ -294,7 +294,7 @@ for "Short declarative sentences. One idea per sentence." See `18-script-voice/R
 Owner, 2026-11-11: light, friendly, minimal claims; features, screenshots, a
 WebM trailer, a download page with all releases. Next.js in `site/` only
 (owner-approved Node exception; the app keeps its no-Node rule). Static export,
-no Vercel image optimizer; media from GitHub via jsDelivr (`site-media` branch), downloads from GitHub Releases. See
+no Vercel image optimizer; small cached media on Vercel for now (one env var moves it to a CDN later), downloads from GitHub Releases. See
 `19-website/README.md`.
 
 | ID | Title | Size | Depends | Status | Notes |

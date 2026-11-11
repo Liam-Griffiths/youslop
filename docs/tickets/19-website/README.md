@@ -35,33 +35,25 @@ retired only once the new site is deployed and the owner says so.
 The owner wants the site to stay cheap if it gets popular. Every decision
 below follows from that.
 1. **Static export.** `output: 'export'`. No serverless functions,
-   middleware or ISR. Vercel serves only the small HTML, JS and fonts. The
-   same `out/` folder could move to any static host later.
+   middleware or ISR. The same `out/` folder could move to any static host
+   later.
 2. **No Vercel Image Optimization.** `next/image` uses a custom `loaderFile`.
    Image widths (AVIF and WebP) are generated ahead of time by a Python tool
    using Pillow. The loader picks the nearest pre-built width. No setting
    ever routes through `/_next/image`.
-3. **Media comes from GitHub** (owner, 2026-11-11: "let's actually have the
-   images come from github"). This covers screenshots, the trailer WebM and
-   its poster.
-   - **Storage:** an orphan branch `site-media` in this repo, so binary media
-     never enters `dev`'s history. `site/tools/publish_media.py` commits the
-     built files there and records the commit SHA in
-     `site/lib/media-manifest.json`.
-   - **Delivery:** through jsDelivr's GitHub endpoint, pinned to that commit:
-     `https://cdn.jsdelivr.net/gh/Liam-Griffiths/youslop@<sha>/media/<file>`.
-     - jsDelivr serves correct MIME types, a real CDN and immutable caching
-       for pinned URLs, at no cost.
-     - Don't use `raw.githubusercontent.com`. It isn't a CDN, is rate
-       limited, sends `nosniff` headers with generic types (which can block
-       images and video in browsers), and GitHub discourages hotlinking it.
-   - **Limits:** jsDelivr's GitHub endpoint caps each file at 20 MB, so
-     keep the trailer under 8 MB. Both routes need the repo to be
-     **public**. Until it is, `npm run dev` serves the same files from the
-     local `site/public/media/`.
-   - **One switch:** `NEXT_PUBLIC_MEDIA_BASE` holds the base URL. It
-     defaults to the pinned jsDelivr URL in production and `/media` in dev.
-     Moving to Bunny or anywhere else later only changes this value.
+3. **Media is served by Vercel with the site, for now** (owner,
+   2026-11-11: "let's just have the images on Vercel in the website, we'll
+   update this if things actually take off").
+   - Screenshots, the trailer WebM and its poster live in
+     `site/public/media/`, committed with the site.
+   - Keep them small: the pre-built widths, a trailer under 8 MB and a
+     mobile cut under 4 MB.
+   - Serve them with long immutable cache headers, and give each file a
+     content hash in its name so browsers and Vercel's edge cache keep it.
+   - **One switch for later:** every media URL is built from
+     `NEXT_PUBLIC_MEDIA_BASE`, which defaults to `/media`. Moving media to a
+     CDN (Bunny, jsDelivr or anything else) is a one-variable change plus
+     uploading the folder, with no code changes.
 4. **Downloads come from GitHub Releases** (owner, 2026-11-11). Binaries are
    release assets; the site only links to them.
 5. **Lazy media.** The trailer uses `preload="none"` with a small poster
