@@ -142,7 +142,7 @@ def test_http_edit_label_and_no_narration_routes(cut, monkeypatch):
     assert undo.read(store.project_dir(cut.id))['states'][-1]['label'] == 'Insert source range'
 
 
-def test_other_kinds_and_pending_script_integration(cut, monkeypatch, tmp_path):
+def test_other_kinds_and_rejected_insert_rewrite(cut, monkeypatch, tmp_path):
     from app import blocks, library
     path = tmp_path / 'picture.png'
     path.write_bytes(b'library fixture')
@@ -165,11 +165,8 @@ def test_other_kinds_and_pending_script_integration(cut, monkeypatch, tmp_path):
     inserts.place(cut, row, after)
     with pytest.raises(edits.EditError):
         edits.patch_slide_fields(row, {'narration': 'Cannot speak this'})
-    for operation in [lambda: script_gen.generate(cut),
-                      lambda: script_gen.import_script(cut, 'replacement'),
-                      lambda: script_gen.rewrite_slide(cut, row, 'rewrite')]:
-        with pytest.raises(ValueError):
-            operation()
+    with pytest.raises(ValueError):
+        script_gen.rewrite_slide(cut, row, 'rewrite')
 
 
 def test_insert_range_handles_and_missing_sources(cut, monkeypatch, tmp_path):

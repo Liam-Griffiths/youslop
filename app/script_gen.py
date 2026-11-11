@@ -11,7 +11,7 @@ import string
 import threading
 from typing import Any, Callable
 
-from . import kinds, llm, style_lint
+from . import inserts, kinds, llm, style_lint
 from . import research as script_research
 from .config import WORDS_PER_MINUTE
 from .llm import LLMError, MODEL_SCRIPT, MODEL_UTILITY, complete_json
@@ -642,6 +642,7 @@ _MAP_SCOPE_ZOOM = {"close": 16, "regional": 11, "wide": 6}
 
 def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lambda m: None) -> None:
     """Fill in search queries, media kind and on-screen titles, in place."""
+    slides = [s for s in slides if not s.insert]
     if not slides:
         return
     from .learning import resolve_choices
@@ -776,6 +777,7 @@ def plan_boards(project: Project, slides: list[Slide],
     slide this pass skips still gets a board, because `board.content` derives
     one from the narration. See app/board.py and app/diagram.py.
     """
+    slides = [s for s in slides if not s.insert]
     if not slides:
         return
     from . import board as board_mod
@@ -920,6 +922,7 @@ def plan_cues(project: Project, slides: list[Slide],
     Each cue names the words it lands `on`, which is how a fast cut stays on
     the voice without word timings. See app/cuts/.
     """
+    slides = [s for s in slides if not s.insert]
     from . import cuts
 
     for fmt in sorted({kinds.kind_for(project, s) for s in slides} & kinds.CUTS):
@@ -976,7 +979,7 @@ def verify_script(project: Project, progress: Progress = lambda m: None) -> list
     Hook promises are checked even when there is no research dossier.
     """
     facts = _facts_block(project.research)
-    slides = project.slides
+    slides = [s for s in project.slides if not s.insert]
     hook_flags = check_hook(project.outline)
     if not facts or not slides:
         return hook_flags
@@ -1032,7 +1035,7 @@ Return JSON: a list of objects, one per paragraph that has a problem:
 
 def consistency_check(project: Project, progress: Progress = lambda m: None) -> list[dict]:
     """Flag internal contradictions and impossible pictures without rewriting."""
-    slides = project.slides
+    slides = [s for s in project.slides if not s.insert]
     if not slides:
         return []
     chunks = [slides[i:i + 12] for i in range(0, len(slides), 12)]
@@ -1185,16 +1188,17 @@ def revise_style(project: Project, slide_ids=None,
         return []
     wanted = None if slide_ids is None else set(slide_ids)
     paragraphs = []
-    for i, slide in enumerate(project.slides):
+    slides = [s for s in project.slides if not s.insert]
+    for i, slide in enumerate(slides):
         if wanted is not None and slide.id not in wanted:
             continue
         targets, hits = _style_targets(slide.narration)
         if hits:
             paragraphs.append({'slide_id': slide.id, 'text': slide.narration,
                                'replacements': targets, 'hits': hits,
-                               'previous_context': project.slides[i - 1].narration if i else '',
-                               'next_context': project.slides[i + 1].narration
-                               if i + 1 < len(project.slides) else ''})
+                               'previous_context': slides[i - 1].narration if i else '',
+                               'next_context': slides[i + 1].narration
+                               if i + 1 < len(slides) else ''})
     proposals = []
     for start in range(0, len(paragraphs), STYLE_BATCH_SIZE):
         batch = paragraphs[start:start + STYLE_BATCH_SIZE]
@@ -1283,8 +1287,6 @@ def generate(project: Project, progress: Progress = lambda m: None,
     `checkpoint` persists the project mid-run; without one this still works, it
     just has nothing to come back to.
     """
-    if any(s.insert for s in project.slides):
-        raise ValueError('Preserving inserts during script regeneration is pending T17.2c.')
     outline = brief(project, progress, checkpoint, fresh)
     slides = write_script(project, outline, progress, checkpoint)
     if not slides:
@@ -1294,7 +1296,7 @@ def generate(project: Project, progress: Progress = lambda m: None,
     plan_boards(project, slides, progress)
     plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
-    project.slides = slides
+    inserts.replace_script(project, slides)
     project.status = "scripted"
     project.draft = {}          # the run finished; nothing left to come back to
 
@@ -1394,8 +1396,6 @@ fix errors. Stay recognisably in the author's voice and never add new claims."""
 def import_script(project: Project, raw_text: str, fidelity: str = "faithful",
                   progress: Progress = lambda m: None) -> Project:
     """Turn a pasted article into a narrated, illustrated video."""
-    if any(s.insert for s in project.slides):
-        raise ValueError('Preserving inserts during script replacement is pending T17.2c.')
     text = clean_pasted(raw_text)
     words = len(text.split())
     if words < 120:
@@ -1500,7 +1500,7 @@ example", a numeral stays a numeral only if you would say it that way.""",
     plan_boards(project, slides, progress)
     plan_cues(project, slides, progress)
     _plan_style_slides(project, slides, progress)
-    project.slides = slides
+    inserts.replace_script(project, slides)
     project.status = "scripted"
     kept = sum(s.word_count for s in slides)
     progress(f"Imported {len(slides)} paragraphs, {kept} words "
@@ -1604,6 +1604,7 @@ emphasis, so the style suits the channel it will be used in."""
 def _plan_style_slides(project: Project, slides: list[Slide],
                        progress: Progress = lambda m: None) -> None:
     """Fill the video's saved slide style, if it is staged in one."""
+    slides = [s for s in slides if not s.insert]
     from . import slide_styles
 
     for fmt in sorted({kinds.kind_for(project, s) for s in slides}):
@@ -1784,9 +1785,10 @@ def rewrite_slide(project: Project, slide: Slide, instruction: str) -> str:
     """Rewrite one paragraph against a creator instruction, keeping the flow."""
     if slide.insert:
         raise ValueError('Inserts are non-spoken; edit them through the inserts endpoint.')
-    idx = project.slides.index(slide)
-    prev = project.slides[idx - 1].narration if idx > 0 else "(start of video)"
-    nxt = project.slides[idx + 1].narration if idx + 1 < len(project.slides) else "(end of video)"
+    slides = [s for s in project.slides if not s.insert]
+    idx = slides.index(slide)
+    prev = slides[idx - 1].narration if idx > 0 else "(start of video)"
+    nxt = slides[idx + 1].narration if idx + 1 < len(slides) else "(end of video)"
     prompt = f"""Rewrite one paragraph of narration.
 
 VIDEO: {project.outline.get('title')} - {project.outline.get('thesis', '')}
@@ -1819,7 +1821,7 @@ def write_description(project: Project, chapters: list[dict]) -> dict:
     by the model; it only names what is unnamed.
     """
     outline = project.outline or {}
-    script = "\n\n".join(s.narration.strip() for s in project.slides if s.narration.strip())
+    script = "\n\n".join(s.narration.strip() for s in project.slides if not s.insert and s.narration.strip())
     if len(script) > 14000:
         script = script[:14000] + " …"
     marks = "\n".join(f'{i}. at {c["start"]}: title="{c["title"]}" — opens with: '

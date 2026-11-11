@@ -316,7 +316,7 @@ def gather(project: Project, progress: Progress = lambda m: None,
     from ..render import is_lead
 
     targets = [s for s in project.slides
-               if (only is None or s.id in only) and not s.locked_media
+               if not s.insert and (only is None or s.id in only) and not s.locked_media
                and is_lead(project, s)]
     if not targets:
         return
@@ -404,6 +404,8 @@ def _autopick(project: Project) -> None:
         s.chosen_id for s in project.slides if s.locked_media and s.chosen_id
     }
     for slide in project.slides:
+        if slide.insert:
+            continue
         if slide.locked_media and slide.chosen_id:
             continue
         if not slide.candidates:

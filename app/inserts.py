@@ -135,3 +135,34 @@ def chapter_hold(project, slide):
     default = frame.arrive_s + frame.title_hold_base_s + frame.title_hold_per_word_s * len(title.split())
     return min(slide.insert['seconds'], max(0, slide.chapter_hold
                if slide.chapter_hold is not None else default)) if title else 0
+
+
+def replace_script(project, slides):
+    """Keep insert boundaries by spoken ordinal, clamped to the new end.
+
+    Opening rows stay first; terminal rows follow the new last paragraph.
+    Collapsed boundaries retain their original order. Retire replaced takes
+    even when no undo session exists (including unsaved in-memory recordings).
+    """
+    from . import undo
+    old = project.to_dict()
+    count = sum(not s.insert for s in project.slides)
+    boundaries = {}
+    ordinal = 0
+    for row in project.slides:
+        if row.insert:
+            boundary = (len(slides) if ordinal and ordinal == count
+                        else min(ordinal, len(slides)))
+            boundaries.setdefault(boundary, []).append(row)
+        else:
+            ordinal += 1
+    rows = list(boundaries.get(0, []))
+    for index, slide in enumerate(slides, 1):
+        rows.append(slide)
+        rows.extend(boundaries.get(index, []))
+    target = dict(old, slides=[s.to_dict() for s in rows])
+    if undo.retain_recordings(target, old):
+        project.retired_takes = target.get('retired_takes', [])
+        for row, data in zip(rows, target['slides']):
+            row.history = data.get('history', [])
+    project.slides = rows

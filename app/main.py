@@ -3069,12 +3069,15 @@ def _take_read(take: dict) -> tuple:
 def _voice_one(p, s, root: Path, lexicon: dict | None = None) -> dict:
     """Synthesise one paragraph in the project's chosen engine, into that
     engine's own folder — never over a read in another voice."""
+    if s.insert:
+        raise ValueError('Inserts are non-spoken; they cannot be voiced.')
     engine = _engine(p)
     out = next_take_path(root, engine, s.id)
     out.parent.mkdir(parents=True, exist_ok=True)
-    at = next((i for i, x in enumerate(p.slides) if x.id == s.id), 0)
-    context = (p.slides[at - 1].narration if at > 0 else "",
-               p.slides[at + 1].narration if at + 1 < len(p.slides) else "")
+    slides = [row for row in p.slides if not row.insert]
+    at = next((i for i, row in enumerate(slides) if row.id == s.id), 0)
+    context = (slides[at - 1].narration if at > 0 else "",
+               slides[at + 1].narration if at + 1 < len(slides) else "")
     meta = tts_mod.speak_to_file(s.narration, out, p.narrator.voice,
                                  p.narrator.speed, p.voice,
                                  _lexicon(p) if lexicon is None else lexicon,
@@ -3210,6 +3213,8 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
         want = _wanted_read(p)
         todo = []
         for s in p.slides:
+            if s.insert:
+                continue
             take = s.takes.get(_engine(p)) or {}
             if (not redo and take.get("synthetic") and _take_read(take) == want
                     and (root / take.get("path", "")).is_file()):
@@ -3231,7 +3236,7 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
             p = store.load(pid)
             root = project_dir(pid)
             todo = pending(p)
-            kept = len(p.slides) - len(todo)
+            kept = sum(not s.insert for s in p.slides) - len(todo)
             if kept:
                 progress(f"{kept} paragraph(s) already read in this voice")
             engine = _engine(p)
@@ -3270,8 +3275,10 @@ def voice_over_one(pid: str, sid: str) -> dict:
     """Re-read one paragraph, after an edit or a change of mind."""
     with store.lock_for(pid):
         p = _load(pid)
-        _engine_ready(_engine(p))
         s = _slide(p, sid)
+        if s.insert:
+            raise HTTPException(400, "Inserts are non-spoken; they cannot be voiced.")
+        _engine_ready(_engine(p))
         if not (s.narration or "").strip():
             raise HTTPException(400, "That paragraph has no words in it.")
         try:

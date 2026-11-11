@@ -38,6 +38,8 @@ def render_signature(project: Project) -> str:
 
 def _has_visual(project, run):
     lead = run[0]
+    if lead.insert:
+        return True  # Validated explicit picture; availability is checked by check.run.
     fmt = kinds.kind_for(project, lead)
     if lead.on_camera:
         return bool((lead.take or {}).get('video'))
@@ -105,14 +107,15 @@ def stages(project: Project, check_result: dict) -> list[dict]:
             ('edit','Edit','ready','Source ranges; no narration takes','Review the cut'),
             ('publish','Publish','ready' if fresh else 'todo','Rendered' if fresh else 'Not rendered','Render the clip')]]
     slides = project.slides
-    total = len(slides)
-    written = sum(bool(s.narration.strip()) for s in slides)
-    voiced = sum(bool((s.take or {}).get('path')) for s in slides)
-    drafts = sum(bool((s.take or {}).get('path') and s.take.get('synthetic')) for s in slides)
+    paragraphs = [s for s in slides if not s.insert]
+    total = len(paragraphs)
+    written = sum(bool(s.narration.strip()) for s in paragraphs)
+    voiced = sum(bool((s.take or {}).get('path')) for s in paragraphs)
+    drafts = sum(bool((s.take or {}).get('path') and s.take.get('synthetic')) for s in paragraphs)
     runs = group_slides(slides, project.style.picture_every)
     pictured = sum(bool(_has_visual(project, run)) for run in runs)
-    script_ok = bool(total and written == total)
-    voice_ok = bool(total and voiced == total)
+    script_ok = bool(slides and written == total)
+    voice_ok = bool(slides and voiced == total)
     visuals_ok = bool(runs and pictured == len(runs))
     p0 = check_result.get('counts', {}).get('P0', sum(
         f.get('level') == 'P0' for f in check_result.get('findings', [])))
@@ -131,11 +134,11 @@ def stages(project: Project, check_result: dict) -> list[dict]:
             f'{beats} beat' + ('s' if beats != 1 else '') if beats
             else 'Outline ready' if outline else 'Needs a plan',
             'Plan the episode', 'Write the script'),
-        row('script', 'Script', progress(written, total),
+        row('script', 'Script', 'ready' if script_ok else progress(written, total),
             f'{total} paragraphs' if script_ok else f'{written} of {total} written',
             'Finish the script', 'Read the script'),
         row('voice', 'Camera' if project.delivery == 'on_camera' else 'Voice',
-            progress(voiced, total), f'{drafts} draft reads' if voice_ok and drafts
+            'ready' if voice_ok else progress(voiced, total), f'{drafts} draft reads' if voice_ok and drafts
             else f'{voiced} of {total} read' + (' · draft' if drafts else ''),
             'Read the rest', 'Choose pictures'),
         row('visuals', 'Visuals', progress(pictured, len(runs)),

@@ -68,7 +68,7 @@ def fill(project, *, overwrite=False, rerank=False):
             if c['id'] == s.chosen_id and c.get('provider') == 'footage'}
     count = 0
     for slide in project.slides:
-        if slide.on_camera or (slide.chosen_id and not overwrite) or slide.locked_media:
+        if slide.insert or slide.on_camera or (slide.chosen_id and not overwrite) or slide.locked_media:
             continue
         # Only clips that share a word with the paragraph: an unrelated clip is
         # worse than leaving the paragraph for archives or the user.

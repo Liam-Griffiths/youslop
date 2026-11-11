@@ -52,7 +52,7 @@ def _ctx(sb):
     paras = {p['id']: p for p in sb['paragraphs']}
     plan_project = Project(id='check', idea='', style=Style(**sb.get('style', {})), frame=frame)
     for p in sb['paragraphs']:
-        for w in p.get('take', {}).get('words', []):
+        for w in ([] if p.get('insert') else p.get('take', {}).get('words', [])):
             words.append((p['start'] + w['start'], w['w'], p['id'], w.get('src', 'est')))
         for c in p.get('cues', []):
             overlays.append((c['start'], c['kind'], p['id']))
@@ -370,6 +370,8 @@ def number_match(sb, frame, ctx):
     from . import blocks, core_data_blocks, data_numbers, number_blocks, place_blocks, screen_blocks
     out, library = [], None
     for p in sb['paragraphs']:
+        if p.get('insert'):
+            continue
         cues = p.get('block_cues', []) + [c for c in p.get('cues', []) if c.get('block')]
         if not cues:
             continue
@@ -551,7 +553,7 @@ def script_style(paragraphs):
                      f'{hit["reason"]} “{hit["sentence"]}”', 'style',
                      sentence_index=hit['sentence_index'],
                      sentence_indices=hit['sentence_indices'], reason=hit['kind'])
-            for p in paragraphs for hit in lint(p['narration'])]
+            for p in paragraphs if not p.get('insert') for hit in lint(p['narration'])]
 
 
 def script(project) -> dict:
@@ -566,13 +568,15 @@ def script(project) -> dict:
             findings.append(_finding('empty_narration', 'P0', 0, slide.id,
                                      'This paragraph has no narration.', 'words').to_dict())
     for flag in check_hook(project.outline) + (project.research or {}).get('flags', []):
+        if any(s.id == flag.get('slide_id') and s.insert for s in project.slides):
+            continue
         kind = flag.get('kind')
         code = 'script.' + kind if kind in ('contradiction', 'impossible_visual') else 'script_claim'
         findings.append(_finding(code, 'P1' if flag.get('severity') == 'high' else 'P2',
             0, flag.get('slide_id', ''),
             ': '.join(filter(None, [flag.get('claim'), flag.get('issue')])), 'words').to_dict())
     findings.extend(f.to_dict() for f in script_style(
-        [dict(id=s.id, narration=s.narration) for s in project.slides]))
+        [dict(id=s.id, narration=s.narration) for s in project.slides if not s.insert]))
     for finding in findings:
         finding['id'] = 'script-' + hashlib.sha256(json.dumps(finding, sort_keys=True).encode()).hexdigest()[:16]
     return dict(findings=findings, counts={level: sum(f['level'] == level for f in findings)
@@ -660,7 +664,7 @@ def run(project, measure=False) -> dict:
     for para in sb['paragraphs']:
         slide = next(s for s in project.slides if s.id == para['id'])
         fmt = kinds.kind_for(project, slide)
-        if cuts.is_cut(fmt) and not cuts.normalise(cuts.BY_KEY[fmt], slide.cues.get(fmt)):
+        if not slide.insert and cuts.is_cut(fmt) and not cuts.normalise(cuts.BY_KEY[fmt], slide.cues.get(fmt)):
             findings.append(_finding('no_cues', 'P1', para['start'], slide.id,
                                      'This paragraph has no planned cues for ' + fmt + '.', 'cues'))
     if project.aspect in {'portrait', 'square'}:
