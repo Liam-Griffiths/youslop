@@ -144,6 +144,7 @@ function tlFixButtons(row, note, finding = false, context = null) {
     button.textContent = label;
     button.disabled = action === 'fix' && !note.fix?.overlay_id && !['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind);
     button.onclick = async () => {
+      if (action === 'fix' && note.code === 'script.style') return go(`#/p/${context?.pid || TL.pid}/script`);
       if (action === 'fix' && note.fix?.overlay_id) return openGraphicEdit(note.fix.slide_id, note.fix.overlay_id);
       button.disabled = true;
       try {
@@ -188,14 +189,14 @@ function tlPaintProblems() {
   if (!box || !TL.data) return;
   const findings = TL.data.check?.findings || TL.data.segments.flatMap((s) => s.findings || []);
   const summary = $('#tl-check-summary');
-  if (summary) summary.textContent = 'Check · ' + ['P0', 'P1', 'P2'].map((level) =>
+  if (summary) summary.textContent = 'Check · ' + ['P0', 'P1', 'P2', 'P3'].map((level) =>
     `${level} ${findings.filter((f) => f.level === level && (f.state || 'open') === 'open').length}`).join(' · ');
   box.replaceChildren();
   if (!findings.length) {
     box.textContent = 'No check findings.';
     return;
   }
-  for (const level of ['P0', 'P1', 'P2']) {
+  for (const level of ['P0', 'P1', 'P2', 'P3']) {
     const rows = findings.filter((f) => f.level === level && (f.state || 'open') === 'open');
     if (!rows.length) continue;
     const group = document.createElement('section');

@@ -194,7 +194,7 @@ def test_run_fixture(project, monkeypatch):
     assert calls == [project.id]
     assert project.to_dict() == before
     assert result['ok'] is True
-    assert result['counts'] == {'P0': 0, 'P1': 5, 'P2': 2}
+    assert result['counts'] == {'P0': 0, 'P1': 5, 'P2': 2, 'P3': 0}
     assert [f['code'] for f in result['findings']] == [
         'hook_muted', 'last_line_short', 'timeline_problem', 'timeline_problem',
         'timeline_problem', 'overlay_budget', 'overlay_budget']

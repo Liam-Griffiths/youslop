@@ -3475,7 +3475,7 @@ def script_check(pid: str) -> dict:
                  if n.get('source') == 'script' and n.get('state') == 'dismissed'}
     result['findings'] = [f for f in result['findings'] if f['id'] not in dismissed]
     result['counts'] = {level: sum(f['level'] == level for f in result['findings'])
-                        for level in ('P0', 'P1', 'P2')}
+                        for level in ('P0', 'P1', 'P2', 'P3')}
     return result
 
 

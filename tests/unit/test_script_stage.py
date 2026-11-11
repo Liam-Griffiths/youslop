@@ -34,7 +34,7 @@ def test_words_only_counts_and_effective_rules(episode):
     episode.channel_id = channel.id
     episode.frame.rules = ['Use concrete nouns']
     result = check.script(episode)
-    assert result['counts'] == {'P0': 1, 'P1': 1, 'P2': 0}
+    assert result['counts'] == {'P0': 1, 'P1': 1, 'P2': 0, 'P3': 0}
     assert result['rules'] == ['British spelling', 'Use concrete nouns']
     assert [f['slide_id'] for f in result['findings']] == ['one', 'two']
     episode.outline = {'hook': {'open_loops': [{'question': 'Why?', 'payoff_beat': 'Missing'}]}}

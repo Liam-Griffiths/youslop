@@ -177,8 +177,8 @@ def cmd_check(args):
     if args.json:
         _print_json(result)
     else:
-        for level in ("P0", "P1", "P2"):
-            print(f"{level} ({result['counts'][level]})")
+        for level in ("P0", "P1", "P2", "P3"):
+            print(f"{level} ({result['counts'].get(level, 0)})")
             for finding in result["findings"]:
                 if finding["level"] == level:
                     print(f"  {finding['t']:.3f}s  {finding['msg']}")

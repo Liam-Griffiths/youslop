@@ -1072,6 +1072,7 @@ main:has(.plan-layout) { max-width: none; }
 .script-layout .P0 { color: var(--bad); }
 .script-layout .P1 { color: var(--accent); }
 .script-layout .P2 { color: var(--cool); }
+.script-layout .P3 { color: var(--dim); }
 .script-finding { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin: 8px 0; }
 .script-finding > span:nth-child(2) { flex: 1 1 160px; }
 .script-check-item { border-top: 1px solid var(--line); padding: 10px 0; }

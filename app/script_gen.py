@@ -26,17 +26,34 @@ def _context_map(pool, fn, items):
     return (future.result() for future in futures)
 
 
+VOICE_RULES = """- Sentence variety: mix lengths. Most sentences carry a full thought, often with a
+clause of detail. Use a short sentence rarely, only when earned; never two in a
+row for effect.
+- No reflexive triplets: group adjectives, clauses or fragments in threes only
+when the facts have exactly three. Never end a paragraph on a punchline fragment.
+- No teasers or hype: no foreshadowing ("it was only the beginning", "he had no
+idea"), "here's the thing", "the inside scoop", "but here's where it gets
+interesting", "spoiler", or exclamation marks. Transitions follow cause, time
+or contrast.
+- Register: a well-read person explaining to a smart friend. Wit comes from
+precise detail and understatement. Plain verbs; no "dive", "unpack", "journey",
+"game-changer", or "testament to".
+Bad: "He built it. He tested it. He failed."
+Good: "He spent most of 1891 building the thing in his brother's barn, and the
+first test, in front of two investors, ended with it on its side."
+The example illustrates rhythm only; never borrow its facts."""
+
 NARRATOR_SYSTEM = """You write narration for long-form informational YouTube videos \
 of the kind a single host reads over archival photographs: measured, specific, and \
 genuinely curious. You are a researcher first and a stylist second.
 
 Hard rules for every line you write:
-- Write for the ear. Short declarative sentences. One idea per sentence.
+""" + VOICE_RULES + """
 - Concrete over abstract: names, dates, places, numbers, physical detail.
 - No YouTube filler. Never write "buckle up", "little did they know", "what \
 happened next will", "in this video", "let's dive in", "stay tuned", "like and \
 subscribe", or rhetorical questions used as transitions.
-- No em-dashes. Use full stops.
+- No em-dashes. Use commas, semicolons or full stops as the thought needs.
 - Never invent facts, quotes, dates or statistics. Where a RESEARCHED FACTS \
 block is given, every specific claim must trace back to something in it — \
 treat it as what you are allowed to say, not a suggestion. A specific detail \
@@ -228,6 +245,7 @@ roughly that.
 - Headings are for the creator's outline AND may be reused as on-screen chapter \
 titles, so keep them 2-5 words, evocative but honest.
 - The intro must open on a concrete scene or fact, not a definition or a greeting.
+- The hook is an intriguing fact stated plainly, never a cliffhanger or teaser.
 - The first three seconds must work with the sound off: the first frame is a
   meaningful image, not a settling camera or a title alone.
 - The first spoken word is clear of any card, sting or cut.
@@ -399,8 +417,9 @@ def _normalise_outline(raw: Any, project: Project, n_beats: int,
 
 # ---------------------------------------------------------------------- script
 CAMERA_DELIVERY = """DELIVERY: ON CAMERA
-Speak directly to the viewer ("you"). Use sentences that can be said in one
-breath. Move figures that need a chart to cutaways instead of reading them out."""
+Speak directly to the viewer ("you"). Keep the shared narration voice and varied
+sentences, with natural pauses between clauses. Move figures that need a chart
+to cutaways instead of reading them out."""
 
 
 def _delivery_text(project: Project) -> str:
@@ -421,7 +440,9 @@ def _hook_for_section(hook: Any, sec: dict, opening: bool = False) -> str:
     heading = sec.get("heading")
     loops = [l for l in hook.get("open_loops") or [] if isinstance(l, dict)]
     if opening or sec.get("kind") == "intro":
-        return f"HOOK PLAN (open with this line and plant these questions): {hook}"
+        return (f"HOOK PLAN (open with this line and plant these questions): {hook}\n"
+                "State the intriguing fact plainly; if the saved line is a teaser, "
+                "rephrase it without foreshadowing or adding claims.")
     lines = []
     for l in loops:
         if l.get("plant_beat") == heading:
@@ -1222,7 +1243,7 @@ If a sentence is awkward but readable, leave it alone."""
 ADAPTED_RULES = """You are adapting the creator's article for the ear. Keep every \
 fact, every opinion and the running order exactly as they are, but you may \
 smooth written-only constructions into speakable ones: unpack parentheses, \
-break up long clauses, replace "as I wrote above" style cross-references, and \
+vary sentence lengths, replace "as I wrote above" style cross-references, and \
 fix errors. Stay recognisably in the author's voice and never add new claims."""
 
 
@@ -1297,7 +1318,9 @@ are already the video's title and are shown on screen, so reading them aloud is 
 duplicate. Begin at the first real body sentence.
 Expand anything that does not read aloud: "&" becomes "and", "e.g." becomes "for \
 example", a numeral stays a numeral only if you would say it that way.""",
-            system=NARRATOR_SYSTEM, model=MODEL_SCRIPT, timeout=900,
+            system=(NARRATOR_SYSTEM if fidelity == "adapted" else
+                    FAITHFUL_RULES + "\nReply with one raw JSON value and nothing else."),
+            model=MODEL_SCRIPT, timeout=900,
             require=lambda v: bool(find_records(v, "text")),
             require_hint='Each item needs a "text" field holding the spoken words.')
         return ci, find_records(out, "text")
@@ -1625,6 +1648,8 @@ VIDEO: {project.outline.get('title')} - {project.outline.get('thesis', '')}
 PARAGRAPH BEFORE: "{prev}"
 PARAGRAPH TO REWRITE: "{slide.narration}"
 PARAGRAPH AFTER: "{nxt}"
+
+{_delivery_text(project)}
 
 CREATOR'S INSTRUCTION: {instruction or "tighten it and make it more concrete"}
 

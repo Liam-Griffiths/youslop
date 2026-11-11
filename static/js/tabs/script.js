@@ -310,12 +310,12 @@ async function scriptLoadCheck() {
       el.innerHTML = (bySlide.get(el.dataset.findings) || []).join('');
       el.closest('.script-card').classList.toggle('has-finding', !!el.innerHTML);
     });
-    $('#script-check-results').innerHTML = `<div class="script-counts mono">${['P0','P1','P2'].map(l => `<span class="${l}">${l} ${result.counts[l]}</span>`).join('')}</div>
+    $('#script-check-results').innerHTML = `<div class="script-counts mono">${['P0','P1','P2','P3'].map(l => `<span class="${l}">${l} ${result.counts[l]}</span>`).join('')}</div>
       ${findings.map((f, i) => `<div class="script-check-item"><button class="btn sm ghost mono" onclick="scriptLocate('${f.slide_id}')">${f.level} · ${f.slide_id ? '¶' + (state.project.slides.findIndex(s => s.id === f.slide_id) + 1) : 'Script'}</button>${row(f, i)}</div>`).join('') || '<p>No open word findings.</p>'}
       <button class="btn sm ghost" onclick="scriptLoadCheck()">Refresh check</button>
       <h2 class="kicker">Channel rules applied</h2>
       <p>${result.rules.map(esc).join(' · ') || 'No channel rules set.'}</p>
-      <p class="sub">Rules guide writing. This check covers empty narration, open-loop payoffs and researched claim flags; it does not validate arbitrary prose rules.</p>
+      <p class="sub">Rules guide writing. This check covers empty narration, open-loop payoffs, researched claim flags and advisory narration style; it does not validate arbitrary prose rules.</p>
       <button class="btn sm ghost" onclick="scriptEditRules()">Edit rules</button>`;
   } catch (e) {
     if (version === scriptCheckVersion && $('#script-check-results'))

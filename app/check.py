@@ -543,6 +543,15 @@ def _scene_text(project, sb, ctx, groups, measure):
                                   slide_id=sid, metrics=row))
 
 
+def script_style(paragraphs):
+    from .style_lint import lint
+    return [_finding('script.style', 'P3', p.get('start', 0), p['id'],
+                     f'{hit["reason"]} “{hit["sentence"]}”', 'style',
+                     sentence_index=hit['sentence_index'],
+                     sentence_indices=hit['sentence_indices'], reason=hit['kind'])
+            for p in paragraphs for hit in lint(p['narration'])]
+
+
 def script(project) -> dict:
     """Words only: no storyboard, media probes, browser, or model calls."""
     import hashlib
@@ -560,10 +569,12 @@ def script(project) -> dict:
         findings.append(_finding(code, 'P1' if flag.get('severity') == 'high' else 'P2',
             0, flag.get('slide_id', ''),
             ': '.join(filter(None, [flag.get('claim'), flag.get('issue')])), 'words').to_dict())
+    findings.extend(f.to_dict() for f in script_style(
+        [dict(id=s.id, narration=s.narration) for s in project.slides]))
     for finding in findings:
         finding['id'] = 'script-' + hashlib.sha256(json.dumps(finding, sort_keys=True).encode()).hexdigest()[:16]
     return dict(findings=findings, counts={level: sum(f['level'] == level for f in findings)
-                                         for level in ('P0', 'P1', 'P2')},
+                                         for level in ('P0', 'P1', 'P2', 'P3')},
                 rules=effective_frame(project).rules)
 
 
@@ -579,7 +590,7 @@ def run(project, measure=False) -> dict:
                 raise ValueError('Clip graphics require T14.4c')
         except (ValueError, FileNotFoundError) as exc:
             findings.append(_finding('clip_source', 'P0', 0, '', str(exc)))
-        counts = {level: sum(f.level == level for f in findings) for level in ('P0','P1','P2')}
+        counts = {level: sum(f.level == level for f in findings) for level in ('P0','P1','P2','P3')}
         return dict(ok=not counts['P0'], counts=counts, findings=[f.to_dict() for f in findings])
     from .learning import effective_frame
     frame = effective_frame(project)
@@ -636,6 +647,7 @@ def run(project, measure=False) -> dict:
                     line['metrics'] = metrics
     _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
+    findings.extend(script_style(sb['paragraphs']))
     for para in sb['paragraphs']:
         slide = next(s for s in project.slides if s.id == para['id'])
         fmt = kinds.kind_for(project, slide)
@@ -686,6 +698,6 @@ def run(project, measure=False) -> dict:
         findings.append(_finding('missing_pack_item', 'P1', 0, '',
                                  f'Missing pack item: {ref}. Using a default or omitting it.'))
     findings.sort(key=lambda f: (int(f.level[1]), f.t))
-    counts = {level: sum(f.level == level for f in findings) for level in ('P0', 'P1', 'P2')}
+    counts = {level: sum(f.level == level for f in findings) for level in ('P0', 'P1', 'P2', 'P3')}
     return {'ok': counts['P0'] == 0, 'counts': counts,
             'findings': [f.to_dict() for f in findings]}

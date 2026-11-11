@@ -410,7 +410,10 @@ def normalize_fix(fix):
 
 def note_id(note):
     fix = normalize_fix(note['fix'])
-    return hashlib.sha1(f"{round(note['t'], 1)}|{fix['kind']}|{fix.get('slide_id', '')}".encode()).hexdigest()[:10]
+    key = f"{round(note['t'], 1)}|{fix['kind']}|{fix.get('slide_id', '')}"
+    if note.get('code') == 'script.style':
+        key += f"|script.style|{fix.get('sentence_index')}|{note['msg']}"
+    return hashlib.sha1(key.encode()).hexdigest()[:10]
 
 
 def read_notes(pid):

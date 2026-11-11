@@ -169,3 +169,55 @@ def test_only_the_opening_section_gets_the_first_line(project, monkeypatch):
     assert 'open with this line' not in prompts[1]
     assert 'Do not repeat or paraphrase' in prompts[1] and 'Why did it stop?' not in prompts[1]
     assert 'Answer this question the opening raised: Why did it stop?' in prompts[2]
+
+
+@pytest.mark.parametrize('mode', ['outline', 'section', 'camera', 'sponsor', 'adapted', 'rewrite', 'faithful'])
+def test_shared_narration_voice(project, monkeypatch, mode):
+    from app.schema import SponsorSlot
+    calls = []
+
+    def complete(prompt, **kwargs):
+        calls.append((prompt, kwargs.get('system', '')))
+        if prompt.startswith('Plan an informational'):
+            return hook_outline()
+        if prompt.startswith('Read the opening'):
+            return {'title': 'A synthetic article'}
+        if prompt.startswith('Write two sponsor'):
+            return {'short': 'A saved claim.', 'long': 'Another saved claim.'}
+        if prompt.startswith('Rewrite'):
+            return {'text': 'A rewritten paragraph.'}
+        return [{'text': 'A synthetic paragraph for a take.', 'visual': 'A workshop'}]
+
+    monkeypatch.setattr(script_gen, 'complete_json', complete)
+    monkeypatch.setattr(script_gen.llm, 'complete_json', complete)
+    for name in ('plan_visuals', 'plan_boards', 'plan_cues', '_plan_style_slides'):
+        monkeypatch.setattr(script_gen, name, lambda *a, **kw: None)
+    project.outline = hook_outline()
+    if mode == 'outline':
+        script_gen.build_outline(project)
+    elif mode in ('section', 'camera'):
+        project.delivery = 'on_camera' if mode == 'camera' else 'voiceover'
+        script_gen._write_section(project, project.outline, 0)
+    elif mode == 'sponsor':
+        script_gen.draft_sponsor(project, SponsorSlot())
+    elif mode == 'rewrite':
+        script_gen.rewrite_slide(project, project.slides[0], '')
+    else:
+        script_gen.import_script(project, 'The workshop stood beside the river. ' * 25, mode)
+    narration_calls = [(p, s) for p, s in calls if s]
+    assert narration_calls
+    for prompt, system in narration_calls:
+        assert 'Short declarative sentences' not in prompt + system
+        if mode == 'faithful':
+            assert script_gen.FAITHFUL_RULES in system
+            assert script_gen.VOICE_RULES not in system
+        else:
+            assert script_gen.VOICE_RULES in system
+            for rule in ('Sentence variety', 'No reflexive triplets', 'No teasers or hype',
+                         'smart friend', 'Bad:', 'Good:', 'Never invent facts', 'No YouTube filler'):
+                assert rule in system
+    if mode == 'camera':
+        assert script_gen.CAMERA_DELIVERY in narration_calls[0][0]
+        assert 'one\nbreath' not in narration_calls[0][0]
+    if mode in ('outline', 'section'):
+        assert 'intriguing fact' in narration_calls[0][0]
