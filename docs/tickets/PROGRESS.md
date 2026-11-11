@@ -238,12 +238,12 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | T14.2b | Aspect through the whole pipeline, native layouts | L | T14.2 | done | 2026-11-08 Codex + review; 9:16 preview correct; 1:1 letterboxes when an overlay block lacks a square layout (fix in T14.2c) |
 | T14.2c | Aspect previews and studio integration | L | T14.2b | done | 2026-11-09 Codex + review; previews follow the aspect; square overlay fallback per block (exact-ratio fix in review) |
 | T14.3 | Clip finder: transcript view, select by words, suggestions | M | T14.1, T11.5 | done | 2026-11-09 Codex + review; ranking runs as a job on any writing model; project handoff and long-recording polish in T14.3b |
-| T14.3b | Clip finder: project handoff and long-recording polish | M | T14.3, T14.4 | todo | Make clips → linked projects; virtual scrolling; auto-refine after STT; envelope as a job |
+| T14.3b | Clip finder: project handoff and long-recording polish | M | T14.3, T14.4 | parked | owner 2026-11-11: Phase 14 paused; Make clips → linked projects; virtual scrolling; auto-refine after STT; envelope as a job |
 | T14.4 | Clip projects: reframe, trim, hook title and graphics | L | T14.2, T14.3, T12.10a | done | 2026-11-09 Codex + review; foundations (source-linked projects, word trims, crop presets, section preview); studio and render in T14.4b |
 | T14.4b | Clip studio, hook graphics and full render | L | T14.4 | done | 2026-11-09 Codex + review (one follow-up run for snapshot findings); Clip/Edit/Publish, trims, crops, music, explicit render; graphics and reframing in T14.4c |
-| T14.4c | Clip graphics and reframing | M | T14.4b | todo | hook overlay, eased crop keyframes, two-speaker layout, complete publishing |
-| T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | todo | phrase / word highlight / big word; sidecars for every project |
-| T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | todo | timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
+| T14.4c | Clip graphics and reframing | M | T14.4b | parked | owner 2026-11-11: Phase 14 paused; hook overlay, eased crop keyframes, two-speaker layout, complete publishing |
+| T14.5 | Captions: burned-in styles plus SRT/VTT | M | T14.1, T14.4 | parked | owner 2026-11-11: Phase 14 paused; phrase / word highlight / big word; sidecars for every project |
+| T14.6 | Clip descriptions, full-recording links, batch render and upload | M | T14.4, T10.7 | parked | owner 2026-11-11: Phase 14 paused; timestamped youtu.be link; batch of cancellable jobs; Shorts tag for 9:16 ≤ 3 min |
 
 ## Phase 15: the bundled example, and what building it found
 
