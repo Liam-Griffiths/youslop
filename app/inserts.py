@@ -90,3 +90,48 @@ def place(project, row, after):
     index = 0 if after in {'', 'intro'} else next(i+1 for i, s in enumerate(rows) if s.id == after)
     rows.insert(index, row)
     project.slides = rows
+
+
+def source(meta, *, preview=False):
+    """Resolve a manifest-owned range, including sources without named clips.
+
+    Proxies retain the original clock and audio. Never copy or modify originals.
+    """
+    from . import footage
+    shoot = footage.load(meta['shoot_id'])
+    file = next((f for f in shoot.files if f.id == meta['source_id']), None)
+    if (file is None or file.kind != 'video' or
+            not 0 <= meta['in_s'] < meta['out_s'] <= file.duration):
+        raise ValueError('Insert source range is unavailable')
+    original = footage.source_path(shoot, file)
+    proxy = footage.shoot_dir(shoot.id) / 'proxies' / (file.id + '.mp4')
+    paths = (proxy, original) if preview else (original, proxy)
+    path = next((p for p in paths if p.is_file()), None)
+    if path is None:
+        raise FileNotFoundError('Insert original and proxy are unavailable')
+    if meta.get('source_audio') and not file.audio:
+        raise ValueError('Insert source has no audio')
+    return path
+
+
+def source_state(meta):
+    """Both resolutions matter to cached previews and their source sound."""
+    from .render import _stat
+    result = []
+    for preview in (False, True):
+        try:
+            path = source(meta, preview=preview)
+            result.append([str(path), _stat(path)])
+        except (OSError, ValueError):
+            result.append(None)
+    return result
+
+
+def chapter_hold(project, slide):
+    """An insert's opening card consumes its own explicit time budget."""
+    from .schema import chapter_title
+    title = chapter_title(project, slide)
+    frame = project.frame
+    default = frame.arrive_s + frame.title_hold_base_s + frame.title_hold_per_word_s * len(title.split())
+    return min(slide.insert['seconds'], max(0, slide.chapter_hold
+               if slide.chapter_hold is not None else default)) if title else 0

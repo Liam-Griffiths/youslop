@@ -544,8 +544,6 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
                   fill: dict[str, float] | None = None, extra_gaps=None) -> float:
     from .store import project_dir
 
-    if any(s.insert for s in slides):
-        raise ValueError('Insert audio assembly is pending T17.2b.')
     root = project_dir(project.id)
     wanted = {s.id for s in slides}
     fill = fill or {}
@@ -555,8 +553,8 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         # Legacy in-memory projects may not have been through sync_takes yet.
         if not slide.takes and not slide.on_camera:
             take = slide.take
-        if slide.id in wanted and ((take and take.get("path")) or slide.id in fill):
-            takes.append((slide, take if (take and take.get("path")) else None))
+        if slide.id in wanted and (slide.insert or (take and take.get("path")) or slide.id in fill):
+            takes.append((slide, take if not slide.insert and (take and take.get("path")) else None))
     if not takes:
         raise ValueError("Nothing recorded yet.")
 
@@ -567,10 +565,17 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
     gaps = {sid: gap + (extra_gaps or {}).get(sid, 0.0) for sid, gap in gaps.items()}
 
     for i, (slide, take) in enumerate(takes):
-        if take:
+        meta = slide.insert
+        if meta and meta.get('source_audio'):
+            from .inserts import source as insert_source
+            inputs += ['-ss', f"{meta['in_s']:.6f}", '-t', f"{meta['seconds']:.6f}",
+                       '-i', str(insert_source(meta))]
+        elif take:
             inputs += ["-i", str(root / take["path"])]
         else:
-            inputs += ["-f", "lavfi", "-t", f"{max(0.1, fill[slide.id]):.3f}",
+            seconds = meta['seconds'] if meta else max(0.1, fill[slide.id])
+            length = f'{seconds:.6f}' if meta else f'{seconds:.3f}'
+            inputs += ["-f", "lavfi", "-t", length,
                        "-i", "anullsrc=r=48000:cl=mono"]
         pad_before = head if i == 0 else 0.0
         # The pause after each take is the one the picture timing also uses; the
@@ -582,9 +587,11 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         if take and take.get("cuts"):
             pieces, source = audio_pieces(take, i)
             filters.extend(pieces)
+        exact = (f"asetpts=PTS-STARTPTS,apad=whole_dur={meta['seconds']:.6f},"
+                 f"atrim=duration={meta['seconds']:.6f}," if meta else '')
         filters.append(
             f"[{source}]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"
-            f"{pre}apad=pad_dur={pad_after}[a{i}]"
+            f"{exact}{pre}apad=pad_dur={pad_after}[a{i}]"
         )
         labels.append(f"[a{i}]")
 

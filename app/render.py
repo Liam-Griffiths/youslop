@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import audio as audio_mod
-from . import cuts, ffutil, kinds, media, scenes, sysinfo, titles
+from . import cuts, ffutil, inserts, kinds, media, scenes, sysinfo, titles
 from . import shots as shots_mod
 from .config import (
     FPS, HEAD_PAD, HEIGHT, MUSIC_DIR, PARAGRAPH_GAP, TAIL_PAD, WIDTH,
@@ -472,6 +472,8 @@ def chapter_card(project: Project, slide: Slide) -> tuple[str, str] | None:
     printed "Steam Changes The Deal" over the card announcing "The PC Bang
     Problem" — so there is nothing on a slide that honestly captions one.
     """
+    if slide.insert:
+        return None  # Its opening card lives inside its own explicit seconds.
     title = chapter_title(project, slide)
     return (title, "") if title else None
 
@@ -495,6 +497,18 @@ def _picture_source(project: Project, slide: Slide) -> Slide:
 def _chosen(project: Project, slide: Slide, *, preview: bool = False) -> tuple[Path | None, str, list[float]]:
     """The slide's downloaded asset, its kind, and its focal point if one is set."""
     slide = _picture_source(project, slide)
+    if slide.insert:
+        meta = slide.insert
+        if meta['kind'] == 'clip':
+            try:
+                return inserts.source(meta, preview=preview), 'video', []
+            except (OSError, ValueError):
+                return None, 'video', []
+        if meta['kind'] == 'picture':
+            from . import library
+            asset, path = library.get(meta['asset_id']), library.file_path(meta['asset_id'])
+            return (path if path and path.is_file() else None), (asset or {}).get('kind', 'image'), []
+        return None, 'image', []
     cand = next((c for c in slide.candidates if c["id"] == slide.chosen_id), None)
     if cand and cand.get("provider") == "footage":
         from .media.footage import resolve
@@ -731,6 +745,8 @@ def _chapter_override(project, group):
 def _tail_pad(project, groups):
     """Extend only the final picture when its last line needs more reading time."""
     member, dur = groups[-1][-1]
+    if member.insert:
+        return TAIL_PAD
     frame = project.frame
     fmt = kinds.kind_for(project, groups[-1][0][0]) if any(s.kind for s in project.slides) else project.style.format
     if fmt == "essay":
@@ -827,8 +843,10 @@ def _segment_graph(
     camera_captions = (group[0][0].kind or style.format) == "essay" and group[0][0].on_camera
     slide = group[0][0]
     # A full portrait/square graph must still read the original footage.
-    src, kind, focal = _chosen(
-        project, slide, preview=(size not in {frame_size(project), (WIDTH, HEIGHT)} if preview is None else preview))
+    source_preview = size not in {frame_size(project), (WIDTH, HEIGHT)} if preview is None else preview
+    src, kind, focal = _chosen(project, slide, preview=source_preview)
+    if slide.insert.get('kind') == 'picture' and src is None:
+        raise ValueError('Insert Library picture is unavailable')
     source_slide = _picture_source(project, slide)
     candidate = next((c for c in source_slide.candidates if c['id'] == source_slide.chosen_id), {})
     span = ((candidate['in_s'], candidate['out_s'])
@@ -853,11 +871,31 @@ def _segment_graph(
     if native:
         card_fit = "" if size == canvas else f",scale={w}:{h}"
 
+    if slide.insert.get('kind') == 'card':
+        src = project_dir(project.id) / 'titles' / f'{slide.id}_insert{suffix}.png'
+        titles.render_chapter(slide.insert['text'], accent=style.accent, out_path=src, **card_args)
+        grade = vig = ''
+
     inputs: list[str] = []
     chain: list[str] = []
     pre_graph = ""            # set by sources that need more than one input
 
-    if slide.on_camera:
+    if slide.insert.get('kind') == 'clip':
+        # Hold the range's endpoints in transition/head/tail handles. Playback
+        # inside the explicit insert stays at source speed, aligned to sound.
+        src = inserts.source(slide.insert, preview=source_preview)
+        crop, _ = _cover_crop(src, w, h, focal)
+        lead = _lead_overlap(project, slide) / 2 + cuts.head_pad_for(project, slide)
+        seconds = slide.insert['seconds']
+        inputs += ['-ss', f"{slide.insert['in_s']:.6f}", '-t', f'{seconds:.6f}', '-i', str(src)]
+        chain += [f'setpts=PTS-STARTPTS,{crop},fps={fps}',
+                  f'tpad=start_mode=clone:start_duration={lead:.6f}:'
+                  f'stop_mode=clone:stop_duration={max(0, seg_len-lead-seconds):.6f}',
+                  f'trim=duration={seg_len:.6f}']
+    elif slide.insert.get('kind') == 'card':
+        inputs += _still_input(src, fps)
+        chain.append(f'scale={w}:{h},{HOLD_STILL}')
+    elif slide.on_camera:
         inputs, camera_chain = _camera_source(project, slide, seg_len, size, fps)
         chain.append(camera_chain)
         grade = vig = ""  # The shared camera look already includes these.
@@ -974,7 +1012,7 @@ def _segment_graph(
 
     offset = 0.0
     for n, (member, dur) in enumerate(group):
-        if "titles" in hide or ((essay or camera_captions) and not native and style.captions_engine != "pillow"):
+        if member.insert or "titles" in hide or ((essay or camera_captions) and not native and style.captions_engine != "pillow"):
             offset += dur
             continue
         if essay or (camera_captions and native):
@@ -1049,7 +1087,8 @@ def _segment_graph(
                               out_path=card, **card_args)
         # Timed off the actual silence rather than a share of the segment, so
         # the card comes up as the voice stops instead of over its last words.
-        gap = audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP)
+        gap = (group[-1][0].insert.get('seconds') or
+               audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP))
         hold = max(frame.arrive_s, min(gap, frame.arrive_s + frame.title_hold_base_s
                                       + frame.title_hold_per_word_s * len(title.split())))
         override = _chapter_override(project, group)
@@ -1138,19 +1177,43 @@ def _render_segment(
     """
     size = size if size is not None else frame_size(project)
     preview = size != frame_size(project) if preview is None else preview
-    if any(s.insert for s, _ in group):
-        raise ValueError('Insert picture rendering is pending T17.2b.')
+    slide = group[0][0]
+    if slide.insert:
+        from copy import deepcopy
+        # Reuse the existing segment-block renderer, including vars validation
+        # and graphics composition, without persisting synthetic cues.
+        if slide.insert['kind'] == 'block' and not (slide.cues or {}).get('blocks'):
+            slide = deepcopy(slide)
+            slide.cues = dict(slide.cues, blocks=[dict(block=slide.insert['block'], vars=slide.insert['vars'])])
+            group = [(slide, group[0][1])]
+        hold = inserts.chapter_hold(project, slide) if 'chapters' not in hide else 0
+        if hold:
+            with tempfile.TemporaryDirectory(dir=out.parent, prefix='insert-chapter-') as work:
+                base, png = Path(work) / out.name, Path(work) / 'chapter.png'
+                bare = deepcopy(slide)
+                bare.chapter_hold = 0
+                _render_segment(project, [(bare, group[0][1])], seg_len, index, base,
+                    channel, chapter, threads, size, fps, crf, preset, frames, dip_out,
+                    op, camera_index, last_line, hide, preview)
+                titles.render_chapter(chapter_title(project, slide), accent=project.style.accent,
+                                      out_path=png, canvas=frame_size(project))
+                end = _lead_overlap(project, slide) / 2 + cuts.head_pad_for(project, slide) + hold
+                ffutil.run(['-i', str(base), *_still_input(png, fps), '-filter_complex',
+                    f"[1:v]scale={size[0]}:{size[1]}[card];[0:v][card]overlay=enable='lt(t,{end:.6f})'[v]",
+                    '-map', '[v]', '-t', f'{seg_len:.6f}', '-r', str(fps),
+                    *ffutil.video_args(out, crf=crf, preset=preset), '-pix_fmt', 'yuv420p', '-an', str(out)], threads=threads)
+            return out
     fmt = kinds.kind_for(project, group[0][0])
     if "chapters" in hide:
         chapter = None
     style = project.style
     lead_in = (_lead_overlap(project, group[0][0]) / 2
                + cuts.head_pad_for(project, group[0][0]))
-    hold = max(0.9, min(3.2, audio_mod.gap_map(project).get(
-        group[-1][0].id, PARAGRAPH_GAP) - 0.12))
+    budget = group[-1][0].insert.get('seconds') or audio_mod.gap_map(project).get(group[-1][0].id, PARAGRAPH_GAP)
+    hold = max(0.9, min(3.2, budget - 0.12))
     override = _chapter_override(project, group)
     if override is not None:
-        hold = min(audio_mod.gap_map(project)[group[-1][0].id], max(0.0, override))
+        hold = min(budget, max(0.0, override))
     if group[0][0].on_camera:
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
@@ -1859,6 +1922,8 @@ def _block_versions(slide):
     from . import block_library
     cues = (slide.cues or {}).get('blocks', [])
     refs = [cue['block'] for cue in cues] + [o['block_id'] for o in slide.overlays]
+    if slide.insert.get('kind') == 'block':
+        refs.append(slide.insert['block'])
     library = block_library.registry()
     missing = [ref for ref in refs if ref not in library]
     if missing:
@@ -1880,9 +1945,11 @@ def _segment_key(project, group, settings) -> str:
         row = dataclasses.asdict(slide)
         if not row['insert']:
             row.pop('insert')
+        elif slide.insert['kind'] == 'clip':
+            row['insert_source'] = inserts.source_state(slide.insert)
         if not row["kind"]:
             row.pop("kind")
-        if (slide.cues or {}).get('blocks') or slide.overlays:
+        if (slide.cues or {}).get('blocks') or slide.overlays or slide.insert.get('kind') == 'block':
             row['block_versions'] = _block_versions(slide)
             from .block_theme import values
             row['block_theme'] = values(project, settings.get('channel'))
@@ -1907,7 +1974,7 @@ def _segment_key(project, group, settings) -> str:
     picture = _chosen(project, group[0][0])[0]
     channel = settings.get("channel")
     graph = None
-    if not ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt) or cuts.is_cut(fmt)
+    if not (group[0][0].insert.get('kind') == 'block' or (group[0][0].cues or {}).get('blocks') or scenes.handles(fmt) or cuts.is_cut(fmt)
             or fmt == "board" or fmt.startswith("custom:")):
         graph = _segment_graph(project, group, settings["seg_len"], prepare_only=True,
                                **{k: settings[k] for k in (
@@ -1961,8 +2028,6 @@ def render(project: Project, progress: Progress = lambda m: None,
 
 def _render(project: Project, progress: Progress, preview: bool) -> dict:
     """Full render. `preview` uses estimated timings when nothing is recorded."""
-    if any(s.insert for s in project.slides):
-        raise ValueError('Insert rendering is pending T17.2b.')
     if project.kind == 'clip':
         from .clip_render import full_render
         return full_render(project, progress, preview)
@@ -2084,13 +2149,15 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # ------------------------------------------------------------ narration
     narration = root / "out" / "narration.wav"
     lead_in = T / 2 + pre_slides
-    if preview and not any(s.take for s in project.slides):
+    if preview and not any(s.take or s.insert for s in project.slides):
         ffutil.run(["-f", "lavfi", "-i",
                     f"anullsrc=r=48000:cl=mono:d={total:.3f}",
                     "-c:a", "pcm_s16le", str(narration)])
         progress("Preview: narration track is silent")
     else:
-        audio_mod.build_narration(project, narration, lead_in=lead_in)
+        fill = ({s.id: d - audio_mod.gap_map(project)[s.id] for s, d in plan if not s.take}
+                if preview and any(s.insert for s in project.slides) else None)
+        audio_mod.build_narration(project, narration, lead_in=lead_in, fill=fill)
         progress(f"Narration bed built ({ffutil.duration(narration) / 60:.1f} min)")
 
     # ------------------------------------------------------------- segments
@@ -2561,7 +2628,11 @@ def _layers(project, segs):
                 add('cues', f'{slide.id}:{i}', slide.id, span['start'], span['end'],
                     next((cue[k] for k in ('text', 'caption', 'headline', 'title') if cue.get(k)), ''),
                     'cue', span['src'], cue=i, cue_kind=cue.get('kind', ''))
-            if chapter_title(project, slide) and previous:
+            if slide.insert and chapter_title(project, slide):
+                add('chapters', slide.id, slide.id, q['start'],
+                    q['start'] + timing['chapter_hold']['value'], chapter_title(project, slide),
+                    'chapter', timing['chapter_hold']['src'])
+            elif chapter_title(project, slide) and previous:
                 end = previous['start'] + previous['duration']
                 add('chapters', slide.id, slide.id, end + previous.get('tail_skip', previous['skip']) - timing['chapter_hold']['value'],
                     end, chapter_title(project, slide), 'chapter', timing['chapter_hold']['src'])
@@ -2611,9 +2682,11 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         row = dataclasses.asdict(s)
         if not row['insert']:
             row.pop('insert')
+        elif s.insert['kind'] == 'clip':
+            row['insert_source'] = inserts.source_state(s.insert)
         if not row["kind"]:
             row.pop("kind")
-        if (s.cues or {}).get('blocks') or s.overlays:
+        if (s.cues or {}).get('blocks') or s.overlays or s.insert.get('kind') == 'block':
             row['block_versions'] = _block_versions(s)
             from .block_theme import values
             row['block_theme'] = values(project, channel)
@@ -2767,6 +2840,8 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
         audio_mod.build_slice(project, [s for s, _d in group], voice,
                               T / 2 + (HEAD_PAD if index == 0 else 0.0))
     except (ValueError, ffutil.FFError):
+        if lead.insert:
+            raise
         progress("Nothing recorded for this bit yet, so it plays silent")
         os.replace(mute, out)
     else:
@@ -3073,6 +3148,10 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     takes = [[s.id, (s.take or {}).get('cuts', []),
               _stat(root / s.take["path"]) if (s.take or {}).get("path") else None]
              for s in project.slides]
+    for row, slide in zip(takes, project.slides):
+        if slide.insert:
+            row.append([slide.insert, inserts.source_state(slide.insert)
+                        if slide.insert['kind'] == 'clip' else None])
     music = pick_music(project)
     stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     card = _slate_channel(project) if lay["outro"] else None
@@ -3094,7 +3173,7 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
 def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> dict:
     music = None if "music" in hide else pick_music(project)
     sting = {} if "stings" in hide else _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
-    audible = bool(music or sting or any(s.take for s in project.slides)
+    audible = bool(music or sting or any(s.take or s.insert.get('source_audio') for s in project.slides)
                    or any(slot.take for slot, _ in lay["sponsors"]))
     out, keyfile = _mix_paths(project, hide)
     key = _mix_key(project, lay, hide) if audible else ""
@@ -3244,8 +3323,11 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                 "chapter_hold": {"value": 0.0, "src": "user" if s.chapter_hold is not None else "auto"},
                 "cues": [],
             }
-            if chapter_title(project, s) and index_of[s.id] > 0:
-                gap = audio_mod.gap_map(project)[project.slides[index_of[s.id] - 1].id]
+            if s.insert:
+                timing['chapter_hold']['value'] = inserts.chapter_hold(project, s)
+            elif chapter_title(project, s) and index_of[s.id] > 0:
+                prev = project.slides[index_of[s.id] - 1]
+                gap = prev.insert.get('seconds') or audio_mod.gap_map(project)[prev.id]
                 card_fmt = kinds.kind_for(project, project.slides[index_of[s.id] - 1])
                 default = (max(0.9, min(3.2, gap - 0.12)) if scenes.handles(card_fmt)
                            or cuts.is_cut(card_fmt) or card_fmt == "board"
@@ -3284,6 +3366,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             paragraph_offset += d
         _path, kind, _focal = _chosen(project, lead)
         problems = []
+        if lead.insert.get('kind') in {'clip', 'picture'} and _path is None:
+            problems.append('insert source unavailable')
         if not lead.insert and kinds.kind_for(project, lead) in {"kenburns", "essay", "stage"} and not _picture_source(project, lead).chosen_id:
             problems.append("no picture chosen")
         missing = sum(1 for s, _d in group if not s.take and not s.insert)

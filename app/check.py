@@ -5,7 +5,7 @@ from typing import Callable
 from . import kinds
 from . import cuts, render, storyboard, titles
 from .cuts import kit
-from .schema import FrameSpec, Project, Slide, Style
+from .schema import FrameSpec, Project, Slide, Style, chapter_title
 from .take_edits import cut_ranges
 
 
@@ -275,6 +275,8 @@ def silent_film(sb, frame, ctx):
         return []
     spans = [(p['start'], p['start'] + p['take'].get('duration', 0))
              for p in sb['paragraphs'] if p.get('take', {}).get('path')]
+    spans += [(p['start'], p['end']) for p in sb['paragraphs']
+              if p.get('insert', {}).get('source_audio')]
     spans += sb.get('music_spans', [])
     out, end = [], 0
     for a, b in sorted(spans) + [(sb['project']['duration'], sb['project']['duration'])]:
@@ -609,12 +611,19 @@ def run(project, measure=False) -> dict:
             card = render.chapter_card(project, groups[i+1][0][0])
             if card:
                 from . import audio
-                gap = audio.gap_map(project)[groups[i][-1][0].id]
+                previous = groups[i][-1][0]
+                gap = previous.insert.get('seconds') or audio.gap_map(project)[previous.id]
                 hold = max(project.frame.arrive_s, min(gap, project.frame.arrive_s +
                            project.frame.title_hold_base_s + project.frame.title_hold_per_word_s * len(card[0].split())))
                 end = seg['start'] + seg['duration'] + seg.get('tail_skip', seg['skip'])
                 seg['cards'] = [dict(start=max(seg['start'] - seg['skip'] + .2, end - hold),
                                      end=end, text=card[0], slide_id=groups[i+1][0][0].id)]
+        slide = groups[i][0][0]
+        if slide.insert and chapter_title(project, slide):
+            start = seg['paragraphs'][0]['start']
+            seg.setdefault('cards', []).append(dict(start=start,
+                end=start + render.inserts.chapter_hold(project, slide),
+                text=chapter_title(project, slide), slide_id=slide.id))
     channel = render._slate_channel(project)
     for seg in sb['segments']:
         if seg['type'] == 'intro':

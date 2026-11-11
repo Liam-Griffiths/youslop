@@ -1284,7 +1284,7 @@ def generate(project: Project, progress: Progress = lambda m: None,
     just has nothing to come back to.
     """
     if any(s.insert for s in project.slides):
-        raise ValueError('Preserving inserts during script regeneration is pending T17.2b.')
+        raise ValueError('Preserving inserts during script regeneration is pending T17.2c.')
     outline = brief(project, progress, checkpoint, fresh)
     slides = write_script(project, outline, progress, checkpoint)
     if not slides:
@@ -1395,7 +1395,7 @@ def import_script(project: Project, raw_text: str, fidelity: str = "faithful",
                   progress: Progress = lambda m: None) -> Project:
     """Turn a pasted article into a narrated, illustrated video."""
     if any(s.insert for s in project.slides):
-        raise ValueError('Preserving inserts during script replacement is pending T17.2b.')
+        raise ValueError('Preserving inserts during script replacement is pending T17.2c.')
     text = clean_pasted(raw_text)
     words = len(text.split())
     if words < 120:
