@@ -270,7 +270,7 @@ adding blocks. See `17-timeline/README.md`.
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T17.1 | Undo and redo for project edits | M | — | todo | snapshots per edit; never touches audio |
+| T17.1 | Undo and redo for project edits | M | — | done | 2026-11-11 Codex + review (one storage redesign run); per-snapshot gz files: user save 610 → 34 ms, job save 2,124 → 27 ms, undo 395 → 37 ms on Tube Mail; takes kept; Chromium: button + Ctrl+Shift+Z work. UX note for T20.1: Undo/Redo stay enabled with nothing to undo |
 | T17.7 | Timeline ergonomics: fit zoom, wheel zoom, lanes, multi-select | M | — | todo | 11 s project opens 140 px wide today |
 | T17.2 | Inserts on the main track: model, timing and render | L | T17.1 | todo | clip/block/picture/card after any paragraph; ripple |
 | T17.4 | Select sections and move everything in them | L | T17.2, T17.1 | todo | owner priority; move/cut/copy/paste/duplicate/delete with ripple |

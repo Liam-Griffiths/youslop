@@ -8,6 +8,7 @@ import uuid
 from typing import Any, Callable
 
 from . import llm
+from . import store, undo
 
 _JOBS: dict[str, dict] = {}
 _LOCK = threading.Lock()
@@ -28,7 +29,7 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
         "started_at": time.time(), "finished_at": 0.0,
         "cancellable": cancellable, "cancel_requested": False,
     }
-    with _LOCK:
+    with store.lock_for(project_id), _LOCK:
         _JOBS[jid] = job
         if len(_JOBS) > MAX_JOBS:
             for old in sorted(_JOBS.values(), key=lambda j: j["started_at"])[:10]:
@@ -51,6 +52,7 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
             return job["log"][-1]["m"] if job["log"] else kind
 
     def runner() -> None:
+        edit_token = undo.edit_source.set(None)
         sink_token = llm.status_sink.set(status)
         label_token = llm.status_label.set(label)
         try:
@@ -68,6 +70,7 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
                 job["state"] = "error"
                 job["log"].append({"t": time.time(), "m": f"FAILED: {exc}"})
         finally:
+            undo.edit_source.reset(edit_token)
             llm.status_sink.reset(sink_token)
             llm.status_label.reset(label_token)
             with _LOCK:

@@ -882,6 +882,7 @@ class Project:
     # where what is known about the model (front, size, parts) lives.
     cast: list[dict] = field(default_factory=list)
     mic_test: dict = field(default_factory=dict)  # latest mic setup raw/processed paths
+    retired_takes: list[dict] = field(default_factory=list)  # undo: takes whose paragraph is absent
     render: dict = field(default_factory=dict)   # last render result
     review: dict = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
@@ -954,6 +955,7 @@ class Project:
             "yt_tags": self.yt_tags,
             "cast": self.cast,
             "mic_test": self.mic_test,
+            "retired_takes": deepcopy(self.retired_takes),
             "render": self.render,
             "review": self.review,
             "log": self.log[-200:],

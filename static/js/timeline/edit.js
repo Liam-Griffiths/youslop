@@ -35,7 +35,11 @@ function tlSaveTiming(sel, patch) {
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
     try {
-      if (!await saveSlide(sel.sid, typeof patch === 'function' ? patch() : patch)) throw new Error('Could not save timing.');
+      const fields = typeof patch === 'function' ? patch() : patch;
+      const action = Object.values(fields).every(v => v === null) ? 'reset'
+        : 'title_at' in fields || 'cues' in fields ? 'move' : 'resize';
+      const kind = 'gap_override' in fields ? 'gap' : sel.kind;
+      if (!await saveSlide(sel.sid, fields, {editLabel:`${action} ${kind}`, editGesture:`${Date.now()}-${Math.random()}`})) throw new Error('Could not save timing.');
       TL.mixFailed = false;
       await tlRefresh(true);
       if (TL.selection?.id === sel.id && TL.selection?.kind === sel.kind)

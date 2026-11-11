@@ -20,11 +20,23 @@ const state = {
 };
 
 // ------------------------------------------------------------------- plumbing
+const studioWrites = new Set();
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: opts.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  const {editLabel, editGesture, ...fetchOpts} = opts;
+  const headers = {...(opts.body instanceof FormData ? {} : {'Content-Type': 'application/json'}), ...opts.headers};
+  const editing = /^(POST|PATCH|PUT|DELETE)$/.test(opts.method || 'GET');
+  if (editing) {
+    let keys = [];
+    try { keys = Object.keys(JSON.parse(opts.body)); } catch { /* File upload. */ }
+    const action = keys.length ? keys.join(', ') : path.split('/').at(-1);
+    headers['X-Edit-Label'] = editLabel || `edit ${action.replaceAll('_', ' ')}`;
+    if (editGesture || opts.method === 'PATCH')
+      headers['X-Edit-Gesture'] = editGesture || `${path}|${keys.join(',')}`;
+  }
+  const pending = fetch(path, {...fetchOpts, headers});
+  if (editing) studioWrites.add(pending);
+  let res;
+  try { res = await pending; } finally { studioWrites.delete(pending); }
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }

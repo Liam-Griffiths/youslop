@@ -250,6 +250,24 @@ async def _require_token(request: Request, call_next):
 
 
 # --------------------------------------------------------------------- helpers
+@app.middleware('http')
+async def _studio_edit_history(request: Request, call_next):
+    from . import undo
+    # Context reaches FastAPI's sync endpoint workers, but not jobs' new threads.
+    source = None
+    if request.method in {'POST', 'PATCH', 'PUT', 'DELETE'}:
+        action = request.url.path.rsplit('/', 1)[-1].replace('_', ' ').replace('-', ' ')
+        if action not in {'undo', 'redo'}:
+            label = request.headers.get('x-edit-label', '').strip()[:80] or f'edit {action}'
+            gesture = request.headers.get('x-edit-gesture', '')[:160] or uuid.uuid4().hex
+            source = (label, gesture)
+    token = undo.edit_source.set(source)
+    try:
+        return await call_next(request)
+    finally:
+        undo.edit_source.reset(token)
+
+
 def _load(pid: str):
     try:
         return store.load(pid)
@@ -1201,6 +1219,29 @@ def get_stages(pid: str) -> list[dict]:
     from .stages import readiness_check, stages
     project = _load(pid)
     return stages(project, readiness_check(project))
+
+
+@app.post('/api/projects/{pid}/undo')
+def undo_project(pid: str) -> dict:
+    return _restore_project_edit(pid, 'undo')
+
+
+@app.post('/api/projects/{pid}/redo')
+def redo_project(pid: str) -> dict:
+    return _restore_project_edit(pid, 'redo')
+
+
+def _restore_project_edit(pid, direction):
+    from . import undo
+    with store.lock_for(pid):
+        _load(pid)
+        if jobs.active_for(pid):
+            raise HTTPException(409, 'Wait for this project’s running jobs to finish before undo or redo.')
+        try:
+            label = undo.restore(project_dir(pid), direction)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {**get_project(pid), 'edit_label': label}
 
 
 @app.post("/api/projects/{pid}/chapters/suggest")

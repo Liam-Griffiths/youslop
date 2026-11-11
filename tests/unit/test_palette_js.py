@@ -13,7 +13,9 @@ def test_command_registry_and_shortcuts(tmp_path):
     setup = r'''
 function check(ok, msg) { if (!ok) throw new Error(msg); }
 let keyboard, route, previews=0, jobs=0, starts=0, focused=0;
-const document={addEventListener:(name, fn)=>{keyboard=fn;}};
+const keyHandlers=[];
+const document={addEventListener:(name, fn)=>keyHandlers.push(fn)};
+keyboard=e=>keyHandlers.forEach(fn=>fn(e));
 const state={project:null}, TL={data:{},host:{isConnected:true}};
 const go=hash=>route=hash, openJobs=()=>jobs++, tlPreviewBit=()=>previews++;
 const location={hash:'#/'}, $=()=>({focus:()=>focused++});

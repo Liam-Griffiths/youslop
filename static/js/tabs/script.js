@@ -166,10 +166,10 @@ async function saveChapter(sid, text) {
   render();
 }
 
-async function saveSlide(sid, patch) {
+async function saveSlide(sid, patch, history = {}) {
   try {
     const s = await api(`/api/projects/${state.project.id}/slides/${sid}`,
-      { method: 'PATCH', body: JSON.stringify(patch) });
+      { method: 'PATCH', body: JSON.stringify(patch), ...history });
     Object.assign(state.project.slides.find((x) => x.id === sid), s);
     toast('saved');
     return s;

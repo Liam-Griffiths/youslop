@@ -76,6 +76,8 @@ function paintProjectShell() {
   const format = p.kind === 'clip' ? 'Clip' : FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
     <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</span>
+    <button type="button" class="btn sm" onclick="restoreProjectEdit('undo')" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl+Z)">Undo</button>
+    <button type="button" class="btn sm" onclick="restoreProjectEdit('redo')" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title="Redo (Ctrl+Shift+Z)">Redo</button>
     ${state.stage === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
     ${state.stage === 'voice' ? `<button type="button" class="btn sm" onclick="openMicPanel()">Microphone setup</button>
       <button type="button" class="btn sm" onclick="setNarrator({mode:'ai'})">Draft voice settings</button>` : ''}
@@ -83,6 +85,35 @@ function paintProjectShell() {
   $('#topbar-right').innerHTML = '';
   paintStageBar();
 }
+
+let projectHistoryBusy = false;
+async function restoreProjectEdit(direction) {
+  if (!state.project || projectHistoryBusy || state.rec.recording || TL.drag) return;
+  projectHistoryBusy = true;
+  const pid = state.project.id;
+  try {
+    await tlInspectorQueue;
+    await Promise.allSettled([...studioWrites]);
+    if (state.project?.id !== pid) return;
+    tlPause();
+    const project = await api(`/api/projects/${pid}/${direction}`, {method:'POST'});
+    if (state.project?.id !== pid) return;
+    state.project = project;
+    if (state.stage === 'edit') { await tlRefreshProject(); paintProjectShell(); }
+    else await render();
+    loadStageStates(state.project);
+    toast(`${direction === 'undo' ? 'Undid' : 'Redid'}: ${project.edit_label}`);
+  } catch (e) { toast(e.message, true); }
+  finally { projectHistoryBusy = false; }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.isComposing || e.repeat || !(e.ctrlKey || e.metaKey) || e.altKey
+      || e.key.toLowerCase() !== 'z' || !state.project
+      || e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+  e.preventDefault();
+  restoreProjectEdit(e.shiftKey ? 'redo' : 'undo');
+});
 
 function paintStageBar() {
   const p = state.project;

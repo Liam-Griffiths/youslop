@@ -28,20 +28,42 @@ def project_dir(pid: str) -> Path:
     return d
 
 
-def save(project: Project) -> Project:
-    project.updated_at = time.time()
-    project.sync_takes()
-    d = project_dir(project.id)
-    payload = json.dumps(project.to_dict(), indent=2, ensure_ascii=False)
-    # Atomic write so a crash mid-save can never truncate an existing project.
-    fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+def atomic_write(path: Path, payload: str | bytes) -> None:
+    """A crash mid-save cannot truncate an existing JSON file."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        options = {} if isinstance(payload, bytes) else {'encoding': 'utf-8'}
+        with os.fdopen(fd, 'wb' if isinstance(payload, bytes) else 'w', **options) as fh:
             fh.write(payload)
-        os.replace(tmp, d / "project.json")
+        os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+
+
+def save(project: Project) -> Project:
+    from . import undo
+    with lock_for(project.id):
+        d = project_dir(project.id)
+        path = d / 'project.json'
+        before = path.read_text(encoding='utf-8') if path.exists() else None
+        previous = json.loads(before) if before else None
+        project.sync_takes()
+        data = project.to_dict()
+        tracked = undo.edit_source.get() or (d / 'history/index.json').exists()
+        if previous and tracked and undo.retain_recordings(data, previous):
+            project.retired_takes = data.get('retired_takes', [])
+            for kind in ('slides', 'sponsors'):
+                for owner, raw in zip(getattr(project, kind), data[kind]):
+                    owner.history = raw.get('history', [])
+        # Don't turn no-op autosaves into history entries or job deltas.
+        if previous == data:
+            return project
+        project.updated_at = time.time()
+        data['updated_at'] = project.updated_at
+        payload = undo.encode(data)
+        undo.remember(d, before, payload, undo.edit_source.get())
+        atomic_write(path, payload)
     return project
 
 
