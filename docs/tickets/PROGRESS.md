@@ -288,3 +288,17 @@ for "Short declarative sentences. One idea per sentence." See `18-script-voice/R
 |---|---|---|---|---|---|
 | T18.1 | Narration voice: rewrite the rules, add a style lint | M | — | todo | owner priority; one shared voice constant; offline lint as P3 findings |
 | T18.2 | Revise flagged lines: optional targeted rewrite pass | S | T18.1 | todo | batched, fact-guarded, accept/reject per change |
+
+## Phase 19: the public website (scheduled last; Claude Opus 5.5, not Codex)
+
+Owner, 2026-11-11: light, friendly, minimal claims; features, screenshots, a
+WebM trailer, a download page with all releases. Next.js in `site/` only
+(owner-approved Node exception; the app keeps its no-Node rule). Static export,
+no Vercel image optimizer, media and binaries off Vercel (Bunny or GitHub). See
+`19-website/README.md`.
+
+| ID | Title | Size | Depends | Status | Notes |
+|---|---|---|---|---|---|
+| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets | todo | custom next/image loader over pre-built AVIF/WebP widths |
+| T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | todo | captured from the bundled example; heavy capture/encode needs a heads-up |
+| T19.3 | Download and releases pages, deploy to Vercel or Bunny | S | T19.1 | todo | releases.json from GitHub Releases; no deploy without owner |
