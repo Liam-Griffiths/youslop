@@ -26,6 +26,21 @@ def registry():
         return _REGISTRY[1]
 
 
+def _module_bytes(module) -> bytes:
+    """A module's source for cache keys. Packaged builds ship only compiled
+    code, so fall back to the code object the loader holds (still changes
+    whenever the module does)."""
+    try:
+        return Path(module.__file__).read_bytes()
+    except (OSError, TypeError):
+        import marshal
+        try:
+            code = module.__loader__.get_code(module.__name__)
+        except Exception:  # noqa: BLE001 - any loader without get_code
+            code = None
+        return marshal.dumps(code) if code is not None else module.__name__.encode()
+
+
 def signature(item, theme=None):
     digest = hashlib.sha256(b'block-posters-v1')
     # Include runtime/templates/fonts as well as authored defaults and assets.
@@ -36,10 +51,10 @@ def signature(item, theme=None):
     from . import place_blocks, screen_blocks
     if item['meta']['id'] in place_blocks.IDS and item['root'].is_relative_to(blocks.BUILTIN_DIR):
         roots += [blocks.BUILTIN_DIR / 'route_map', blocks.BUILTIN_DIR / '_geo']
-        digest.update(Path(place_blocks.__file__).read_bytes())
+        digest.update(_module_bytes(place_blocks))
     if item['meta']['id'] in screen_blocks.IDS and item['root'].is_relative_to(blocks.BUILTIN_DIR):
         roots += [blocks.BUILTIN_DIR / 'chat_thread']
-        digest.update(Path(screen_blocks.__file__).read_bytes())
+        digest.update(_module_bytes(screen_blocks))
     with _LOCK:
         for root in roots:
             files = [p for p in sorted(root.rglob('*')) if p.is_file()]
