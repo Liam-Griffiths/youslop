@@ -107,3 +107,7 @@ a { color: inherit; }
 .page { padding-block: 40px 24px; display: grid; gap: 20px; }
 .page h1 { font: 800 clamp(44px, 8vw, 80px)/.92 var(--display); text-transform: uppercase; margin: 0; }
 .page p { margin: 0; max-width: 60ch; color: var(--ink-2); }
+.trailer-video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #F4F2EE; }
+/* Rows below the fold skip layout until near the viewport, so their lazy
+   screenshots aren't prefetched before the trailer has a chance to play. */
+.feature { content-visibility: auto; contain-intrinsic-size: auto 520px; }

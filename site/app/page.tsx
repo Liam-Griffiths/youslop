@@ -1,5 +1,7 @@
 import Shot from '@/components/Shot';
 import DownloadButton from '@/components/DownloadButton';
+import Trailer from '@/components/Trailer';
+import { TRAILER } from '@/lib/media';
 import { NAME, BUILD_DOC_URL } from '@/lib/brand';
 import { PLATFORMS, platformHref } from '@/lib/releases';
 
@@ -44,12 +46,12 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Trailer slot: T19.2 swaps this still for the WebM trailer. */}
+      {/* The trailer, or the Visuals still until site/tools/trailer.py has run. */}
       <section className="wrap trailer" aria-label="The app">
-        <div className="frame">
-          <Shot name="visuals" priority sizes="(min-width: 1160px) 1108px, 96vw"
-            alt={`${NAME}'s Visuals stage with the bundled example, The Tube Mail: an 1880s envelope chosen for the first paragraph.`} />
-        </div>
+        {TRAILER
+          ? <Trailer label={`A silent tour of ${NAME}: the stages, archive film, blocks and 3D scenes.`} />
+          : <div className="frame"><Shot name="visuals" priority sizes="(min-width: 1160px) 1108px, 96vw"
+              alt={`${NAME}'s Visuals stage with the bundled example, The Tube Mail.`} /></div>}
       </section>
 
       <section id="features" className="wrap features" aria-labelledby="features-title">
