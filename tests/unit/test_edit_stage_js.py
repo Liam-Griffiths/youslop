@@ -11,6 +11,7 @@ def test_edit_lifecycle_and_shortcuts(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     scripts = ['static/js/palette.js', 'static/js/shell.js', 'static/js/timeline/draw.js', 'static/js/timeline/layers.js', 'static/js/timeline/graphics.js', 'static/js/timeline/sections.js', 'static/js/timeline/inserts.js']
+    scripts.append('static/js/timeline/trims.js')
     source = '\n'.join(Path(p).read_text() for p in scripts)
     # Exercise the actual global keyboard dispatcher with all its suppression guards.
     boot = Path('static/js/boot.js').read_text().split('\n\nroute();')[0]
@@ -74,6 +75,8 @@ function key(k, target={tagName:'DIV'}, extra={}) {
 }
 key('?',{tagName:'INPUT'}); check(!modal,'typing ? in input');
 key('?',{tagName:'DIV',isContentEditable:true}); check(!modal,'typing ? in editable');
+key('/',{tagName:'INPUT'}); key('?',{tagName:'SPAN',closest:()=>({})});
+check(!modal,'slash shortcuts stay out of fields and nested textboxes');
 key('?',undefined,{ctrlKey:true}); check(!modal,'modified ?');
 key('?'); check(modal,'? opens sheet');
 check(modal.innerHTML.includes('I / O') && modal.innerHTML.includes('Shift + C'),'camera and chapter help');

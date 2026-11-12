@@ -70,6 +70,7 @@ function tlDraw() {
   tlWireSponsorDrag();
   tlWireCamera();
   tlWireInserts();
+  tlWireTrims();
   tlSectionPaint();
   tlPaintProblems();
   tlPaintReview();
@@ -285,7 +286,10 @@ function tlShortcuts() {
       <dt>← / →</dt><dd>Step one frame</dd>
       <dt>Shift + ← / →</dt><dd>Previous / next paragraph</dd>
       <dt>Home / End</dt><dd>Start / end of timeline</dd>
-      <dt>[ / ]</dt><dd>Previous / next item of the selected kind</dd>
+      <dt>[ / ]</dt><dd>Trim selected main-track start / end to playhead; other lanes: previous / next item</dd>
+      <dt>Shift + [ / ]</dt><dd>Trim start in / extend end by one frame</dd>
+      <dt>Picture edge drag</dt><dd>Trim tail or insert; Shift rolls with neighbour</dd>
+      <dt>Alt + clip body drag</dt><dd>Slip source without changing length</dd>
       <dt>L</dt><dd>Loop picture</dd>
       <dt>S</dt><dd>Split paragraph at playhead</dd>
       <dt>C / Shift + C</dt><dd>Add / remove chapter</dd>

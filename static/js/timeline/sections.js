@@ -1,3 +1,22 @@
+// Drag feedback lives beside the edit, even when the player is off-screen.
+function tlTrackHint(track) {
+  const label = document.createElement('div'), sc = $('#tl-scroll');
+  label.className = 'tl-track-hint'; label.hidden = true; track.append(label);
+  let time = 0;
+  const position = () => {
+    if (!sc) return;
+    label.style.maxWidth = `${Math.max(0, sc.clientWidth-8)}px`;
+    const lo = sc.scrollLeft+4, hi = lo+sc.clientWidth-8-label.offsetWidth;
+    label.style.left = `${Math.max(lo, Math.min(104+time*TL.zoom+8, hi))}px`;
+    label.style.top = `${Math.max(0, track.querySelector('.tl-pictures').offsetTop-label.offsetHeight)}px`;
+  };
+  sc?.addEventListener('scroll', position);
+  return {
+    show(text, t) { label.textContent = text; label.hidden = false; time = t; position(); },
+    remove() { sc?.removeEventListener('scroll', position); label.remove(); }
+  };
+}
+
 let tlSectionClipboard = null; // Detached, project-local snapshot; survives selection and undo.
 
 // Sections are contiguous main-track rows, distinct from individual lane items.
@@ -157,7 +176,7 @@ function tlSectionPointer(e) {
   const anchor = TL.sectionAnchor || TL.selection?.sid;
   const range = e.shiftKey;
   if (!range && !TL.section?.ids.includes(itemId)) return false;
-  let moved = false, to = '', ghost, geometry;
+  let moved = false, to = '', ghost, geometry, hint;
   tlPause(); track.setPointerCapture(e.pointerId);
   TL.drag = {section:true};
   const move = ev => {
@@ -198,14 +217,14 @@ function tlSectionPointer(e) {
     }
     const band = track.querySelector('.tl-section');
     band.style.left = `${104+landing*TL.zoom}px`;
-    tlMsg(`Drop at ${tlClock(point.t)} · reorders the script. Escape cancels.`);
+    (hint ||= tlTrackHint(track)).show(`Drop at ${tlClock(point.t)} · reorders the script. Escape cancels.`, point.t);
   };
   const finish = cancel => {
     document.removeEventListener('keydown', key, true);
     track.removeEventListener('pointermove', move); track.removeEventListener('pointerup', up);
     track.removeEventListener('pointercancel', abort); track.removeEventListener('lostpointercapture', abort);
     if (track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
-    TL.drag = null; ghost?.remove();
+    TL.drag = null; ghost?.remove(); hint?.remove();
     geometry?.forEach(g => { g.n.style.left = g.left; g.n.style.opacity = g.opacity; });
     if (cancel) { TL.section = sectionBefore; TL.selection = before.selection; TL.selections = before.selections;
       TL.sectionAnchor = before.anchor; tlInspector(); tlSelectionPaint(); tlSectionPaint(); }

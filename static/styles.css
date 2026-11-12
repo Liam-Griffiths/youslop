@@ -1475,6 +1475,11 @@ img.themed-pending { opacity:.45; }
 #tl-hover { min-height: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* Small click targets inside Pictures, below the ruler and playhead handle. */
+.tl-pictures .tl-trim-edge { position: absolute; top: 0; bottom: 0; width: 6px;
+  cursor: ew-resize; z-index: 2; }
+.tl-trim-edge.start { left: 0; }
+.tl-trim-edge.end { right: 0; }
+.tl-trim-edge:hover { background: var(--cool-tint); border-inline: 1px solid var(--cool); }
 .tl-insert-plus { position: absolute; top: 30px; z-index: 5; width: 18px; height: 18px;
   padding: 0; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--panel);
   color: var(--ink); opacity: 0; pointer-events: none; cursor: pointer; }
@@ -1490,3 +1495,9 @@ img.themed-pending { opacity:.45; }
 .tl-insert-ghost, .tl-insert-ripple { position: absolute; top: 4px; bottom: 4px; z-index: 7;
   pointer-events: none; border: 2px dashed var(--cool); background: var(--panel); opacity: .65; }
 .tl-insert-ghost { z-index: 8; border-left-style: solid; color: var(--ink); font: 11px var(--mono); }
+
+/* Floating track feedback stays with the edit above the pictures lane. */
+.tl-track-hint { position: absolute; z-index: 10; pointer-events: none; box-sizing: border-box;
+  padding: 2px 6px; border: 1px solid var(--line-strong); border-radius: 3px;
+  background: var(--raised); color: var(--ink); font: 11px var(--mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

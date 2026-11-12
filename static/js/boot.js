@@ -22,9 +22,11 @@ document.addEventListener('keydown', (e) => {
   if (!TL.host || !document.body.contains(TL.host) || !TL.data) return;
   if (e.key === 'Escape' && !document.querySelector('.modal, dialog[open]')) { tlSelect(null); TL.host.focus(); return; }
   const tag = (e.target.tagName || '').toLowerCase();
-  if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
+  if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable
+      || e.target.closest?.('[contenteditable], [role="textbox"]')) return;
   if (document.querySelector('.modal, dialog[open]')) return;
   if (tlInsertKey(e)) { e.preventDefault(); return; }
+  if (tlTrimKey(e)) { e.preventDefault(); return; }
   if (tlSectionKey(e)) { e.preventDefault(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;

@@ -16,7 +16,7 @@ def test_section_gestures(tmp_path):
 const check=(v,m)=>{if(!v)throw Error(m);};
 class El {
  constructor(dataset={}){this.dataset=dataset;this.style={left:'0px'};this.handlers={};this.classList={toggle(){},add(){}};}
- append(n){if(n?.className==='tl-section-ghost')this.ghost=n;} remove(){this.removed=true;}
+ append(n){if(n?.className==='tl-section-ghost')this.ghost=n;if(n?.className==='tl-track-hint')this.hint=n;} remove(){this.removed=true;}
  cloneNode(){const clone=new El();clone.labels=[new El(),new El()];this.clone=clone;return clone;}
  querySelectorAll(s){return s==='.tl-layer-label, em' ? this.labels||[] : [];}
  setPointerCapture(){} hasPointerCapture(){return false;} setAttribute(){}
@@ -47,10 +47,13 @@ check(TL.section.ids.join()==='s0,s1,s2','Shift extends clicked paragraph');
 tlSectionPointer(event('s1',50));track.handlers.pointermove(event('s1',55));
 check(!track.ghost&&calls.length===0,'six pixel threshold');
 track.handlers.pointermove(event('s1',0));check(track.ghost,'whole-section ghost');
-check(lane.clone.labels.every(n=>n.removed),'ghost strips lane headers and controls');cancel();
+check(lane.clone.labels.every(n=>n.removed),'ghost strips lane headers and controls');
+check(track.hint?.textContent.includes('Drop at')&&!track.hint.hidden,'section drop hint on track');cancel();
+check(track.hint.removed,'section Escape removes hint');
 check(TL.section.ids.join()==='s0,s1,s2'&&calls.length===0&&!TL.drag,'Escape restores selection without save');
 tlSectionSet('s1','s2');tlSectionPointer(event('s1',50));track.handlers.pointermove(event('s1',0));
 check(calls.length===0,'drag never saves while moving');finish(0);
+check(track.hint.removed,'section drop removes hint');
 tlInspectorQueue.then(async()=>{
  check(calls.length===1&&JSON.parse(calls[0].body).to==='s0','one move on drop');
  check(JSON.parse(calls[0].body).version===123&&calls[0].editGesture==='section-gesture','version and undo gesture');

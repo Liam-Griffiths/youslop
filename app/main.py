@@ -1482,6 +1482,28 @@ def edit_section(pid: str, payload: dict = Body(...)) -> dict:
         return {**p.to_dict(), 'section_hint': hint, 'section_clipboard': clipboard}
 
 
+@app.patch('/api/projects/{pid}/trim')
+def trim_timeline(pid: str, payload: dict = Body(...)) -> dict:
+    from . import timeline_trims, undo
+    with store.lock_for(pid):
+        p = _load(pid)
+        if jobs.active_for(pid, writing=True):
+            raise HTTPException(409, 'Wait for jobs that update this project before trimming.')
+        try:
+            p, delta = timeline_trims.apply(p, payload)
+        except edits.EditError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
+        except (ValueError, FileNotFoundError, StopIteration) as exc:
+            raise HTTPException(400, 'Trim source unavailable: ' + str(exc)) from exc
+        token = undo.edit_source.set(undo.edit_source.get() or ('trim main track', ''))
+        try:
+            if abs(delta) > .000001:
+                store.save(p)
+        finally:
+            undo.edit_source.reset(token)
+        return p.to_dict()
+
+
 @app.post('/api/projects/{pid}/inserts')
 def add_insert(pid: str, payload: dict = Body(...)) -> dict:
     return _edit_insert(pid, payload)

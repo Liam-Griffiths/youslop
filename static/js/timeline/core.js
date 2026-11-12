@@ -95,6 +95,8 @@ async function tlMount() {
       <button type="button" class="btn sm ghost" id="tl-all"
         title="draw every picture's proxy now instead of as you reach it">draw all</button>
       <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>
+      <button type="button" class="btn sm" id="tl-trim-mode" aria-pressed="${!!TL.trimRoll}"
+        title="Trim mode · Shift while dragging also rolls">${TL.trimRoll ? 'Roll' : 'Ripple'}</button>
     </div>
     <div class="tl-main">
       <section class="tl-player" aria-label="Player">
@@ -131,6 +133,10 @@ async function tlMount() {
   $('#tl-loop').onchange = (e) => { TL.loop = e.target.checked; };
   $('#tl-all').onclick = tlDrawAll;
   $('#tl-shortcuts').onclick = tlShortcuts;
+  $('#tl-trim-mode').onclick = e => {
+    TL.trimRoll = !TL.trimRoll; e.currentTarget.textContent = TL.trimRoll ? 'Roll' : 'Ripple';
+    e.currentTarget.setAttribute('aria-pressed', String(TL.trimRoll));
+  };
   $('#tl-play').onclick = tlToggle;
   $('#tl-back').onclick = () => tlStep(-1);
   $('#tl-fwd').onclick = () => tlStep(1);
