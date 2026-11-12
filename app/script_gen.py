@@ -650,6 +650,8 @@ def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lam
     from .overlay_plan import apply
     for slide in slides:
         apply(project, slide)
+    from .media.relevance import concrete_queries, subject_terms
+    terms = subject_terms(project)
     outline = project.outline
     chunks = [slides[i : i + 12] for i in range(0, len(slides), 12)]
     progress(f"Planning visuals for {len(slides)} slides")
@@ -666,6 +668,7 @@ def plan_visuals(project: Project, slides: list[Slide], progress: Progress = lam
 VIDEO: {outline.get('title')} - {outline.get('thesis', '')}
 SUBJECT: {outline.get('subject')} ({outline.get('era', '')})
 AVAILABLE VISUAL WORLD: {outline.get('visual_world', '')}
+SUBJECT TERMS (including native names): {', '.join(terms)}
 
 {_frame_text(project)}
 
@@ -688,7 +691,12 @@ Write them the way a picture researcher would: proper nouns, places, years, obje
 names. "Ernest Shackleton Endurance 1915" not "polar exploration hardship".
 - The first query should be the most specific thing that could plausibly have a \
 photograph. Later queries should widen out as fallbacks (a place, an era, an object).
-- No quotes, no boolean operators, 2-6 words each.
+- Search for things a camera, painter or mapmaker could record: people, places,
+objects, documents, maps. Good: "Bourse Paris poste pneumatique", "Tunguska fallen
+forest 1927". Bad: "Paris Berlin", "airburst explosion energy release megatons TNT",
+"scientific theories Tunguska meteoroid comet fragment".
+- Pair paragraph specifics with a SUBJECT TERM first; widen to concrete fallbacks.
+- No quotes, no boolean operators, 2-8 words each.
 - Fill "queries" even when "kind" is "map" — a real photo is still allowed to win \
 the slot if one turns out to exist.
 
@@ -748,7 +756,7 @@ of these {len(chunk)} paragraphs should get one. Everything else gets "".
             for n, slide in enumerate(chunk, 1):
                 item = by_n.get(n, {})
                 queries = [q for q in (item.get("queries") or []) if isinstance(q, str) and q.strip()]
-                slide.queries = queries[:3] or [outline.get("subject", project.idea)[:60]]
+                slide.queries = concrete_queries(queries)[:3] or [outline.get("subject", project.idea)[:60]]
                 kind = item.get("kind")
                 place = (item.get("place") or "").strip()[:80]
                 if kind == "map" and place:

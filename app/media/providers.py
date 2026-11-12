@@ -4,6 +4,7 @@ from __future__ import annotations
 import concurrent.futures as cf
 import hashlib
 import hmac
+import html
 import os
 import re
 import time
@@ -20,7 +21,17 @@ def _get(url: str, provider: str, **kw) -> dict | list | None:
 
 
 def _strip_html(text: str) -> str:
-    return re.sub(r"<[^>]+>", "", text or "").strip()
+    return html.unescape(re.sub(r"<[^>]+>", "", text or "")).strip()
+
+
+def _metadata(value) -> list[str]:
+    if isinstance(value, str):
+        return [_strip_html(value)]
+    if isinstance(value, list):
+        return [text for item in value for text in _metadata(item)]
+    if isinstance(value, dict):
+        return _metadata(value.get('name') or value.get('term') or value.get('text') or [])
+    return []
 
 
 # --------------------------------------------------------------- wikimedia
@@ -115,6 +126,8 @@ class Wikimedia:
                 source_page=info.get("descriptionurl", ""),
                 author=_strip_html((meta.get("Artist") or {}).get("value", ""))[:80],
                 license=_strip_html((meta.get("LicenseShortName") or {}).get("value", "")),
+                description=_strip_html((meta.get("ImageDescription") or {}).get("value", "")),
+                categories=(meta.get("Categories") or {}).get("value", "").split("|"),
                 width=w, height=h, query=query,
             ))
         return out
@@ -143,6 +156,8 @@ class Openverse:
             out.append(MediaCandidate(
                 id=f"ov{r.get('id', '')[:12]}", provider=self.name, kind="image",
                 title=title, url=url, thumb=r.get("thumbnail") or url,
+                description=_strip_html(r.get("description") or ""),
+                categories=[t["name"] for t in r.get("tags", []) if t.get("name")],
                 source_page=r.get("foreign_landing_url", ""),
                 author=r.get("creator") or "",
                 license=f"CC {(r.get('license') or '').upper()} {r.get('license_version', '')}".strip(),
@@ -194,6 +209,8 @@ class LibraryOfCongress:
             out.append(MediaCandidate(
                 id=f"loc{abs(hash(best)) % 10**10}", provider=self.name, kind="image",
                 title=title, url=best, thumb=small or best,
+                description=" ".join(_metadata(r.get("description"))),
+                categories=_metadata(r.get("subject")),
                 source_page=r.get("url") or r.get("id") or "",
                 author=", ".join(r.get("contributor") or [])[:80],
                 license="Library of Congress; rights vary, check the item page",
@@ -228,6 +245,9 @@ class MetMuseum:
                 id=f"met{oid}", provider=self.name, kind="image", title=title,
                 url=o["primaryImage"], thumb=o.get("primaryImageSmall") or o["primaryImage"],
                 source_page=o.get("objectURL", ""),
+                description=" ".join(str(o.get(k) or "") for k in
+                                     ("objectName", "culture", "period", "medium")),
+                categories=[t["term"] for t in (o.get("tags") or []) if t.get("term")],
                 author=o.get("artistDisplayName") or "The Metropolitan Museum of Art",
                 license="Public domain (Met OA)" if o.get("isPublicDomain") else "Met, rights vary",
                 width=0, height=0, query=query,   # Met omits dimensions; stay neutral
@@ -269,6 +289,8 @@ class NYPL:
                 url=url, thumb=f"https://images.nypl.org/index.php?id={img}&t=w",
                 source_page=f"https://digitalcollections.nypl.org/items/{uuid}",
                 author="The New York Public Library",
+                description=" ".join(_metadata(it.get("description"))),
+                categories=_metadata(it.get("subject")),
                 license="NYPL Digital Collections; rights vary",
                 width=1600, height=1200, query=query,
             ))

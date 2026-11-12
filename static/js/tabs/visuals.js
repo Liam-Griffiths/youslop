@@ -71,7 +71,7 @@ function visualFinding(s) {
   const k = pictureKind(s);
   if (isCut(k) && !s.cues?.[k]?.length) return 'P1 · No cues yet. Plan cues or edit this paragraph’s cues.';
   if (k === 'board' && !s.board_lead && !s.board_points?.length) return 'P1 · No board text yet. Plan boards or edit this board.';
-  if (['kenburns','essay'].includes(k) && !s.candidates?.some(c => c.id === s.chosen_id && c.local_path)) return 'P1 · Choose a picture.';
+  if (['kenburns','essay'].includes(k) && !s.candidates?.some(c => c.id === s.chosen_id && c.local_path)) return 'P1 · Needs a picture.';
   return '';
 }
 function visualKindSettings(groups) {
@@ -165,6 +165,8 @@ function paintMedia() {
         <label class="field"><span>Picture every</span><select onchange="savePictureEvery(+this.value)">
           ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
         ${state.visualHasFootage ? '<button type="button" class="btn sm" onclick="fillVisualFootage()">Fill the rest from footage</button>' : ''}
+        <label class="field"><span>Archive licences</span><span><input type="checkbox"
+          ${p.prefer_public_domain ? 'checked' : ''} onchange="saveProject({prefer_public_domain:this.checked})"> Prefer public domain / CC0 at equal relevance</span></label>
         <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
         ${groups.some(g => pictureKind(g.s) === 'board') ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
         ${groups.some(g => isCut(pictureKind(g.s))) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
@@ -251,7 +253,7 @@ function visualSourcePanel(s, source) {
     <button type="button" class="btn sm ghost" onclick="openMediaSearch('${s.id}')">Full search picker</button>
     <button type="button" class="btn sm ghost" onclick="openMapPicker('${s.id}')">Get a map</button>
     <div id="visual-search-status" role="status"></div><div class="visual-results">${candidates.map(c => `<button type="button" class="btn ghost" aria-pressed="${c.id === s.chosen_id}" onclick="choose('${s.id}','${c.id}')">
-      <img src="${thumbUrl(c)}" loading="lazy" alt=""><span>${esc(c.title || c.provider)}</span><small class="mono">${esc(c.provider)} · ${c.kind === 'video' ? 'clip' : 'photo'}</small></button>`).join('') || '<p>No gathered matches. Search to find options.</p>'}</div>`;
+      <img src="${thumbUrl(c)}" loading="lazy" alt=""><span>${esc(c.title || c.provider)}</span><small class="mono">${esc(c.provider)} · ${c.kind === 'video' ? 'clip' : 'photo'}${c.weak_match ? ' · Weak match' : ''}</small></button>`).join('') || '<p>No gathered matches. Search to find options.</p>'}</div>`;
 }
 
 async function searchVisual(sid, source) {

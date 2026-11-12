@@ -664,6 +664,11 @@ def run(project, measure=False) -> dict:
     for para in sb['paragraphs']:
         slide = next(s for s in project.slides if s.id == para['id'])
         fmt = kinds.kind_for(project, slide)
+        if (not slide.insert and fmt in {'kenburns', 'essay'}
+                and render.is_lead(project, slide)
+                and not any(c['id'] == slide.chosen_id for c in slide.candidates)):
+            findings.append(_finding('needs_picture', 'P1', para['start'], slide.id,
+                                     'Needs a picture', 'picture'))
         if not slide.insert and cuts.is_cut(fmt) and not cuts.normalise(cuts.BY_KEY[fmt], slide.cues.get(fmt)):
             findings.append(_finding('no_cues', 'P1', para['start'], slide.id,
                                      'This paragraph has no planned cues for ' + fmt + '.', 'cues'))

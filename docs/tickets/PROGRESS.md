@@ -250,7 +250,7 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 | Ticket | Title | Size | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | T15.1 | Bundled example channel and video | S | T9.13, example content | parked | owner 2026-11-11: paused; content built (isolated data dir): "The Tube Mail", 37 paragraphs, 14 blocks + 9 lower thirds + board, 23 PD/CC0 pictures, Kokoro narration; bundle 66.9 MB; owner: where to keep the binary (git LFS, plain git, or download) |
-| T15.2 | Picture search relevance: subject-aware queries and a relevance gate | M | — | doing | auto-gather picked a car race and business-school campuses for every paragraph; good PD material was one query away |
+| T15.2 | Picture search relevance: subject-aware queries and a relevance gate | M | — | done | auto-gather picked a car race and business-school campuses for every paragraph; good PD material was one query away |; 2026-11-12 Codex + 2 review rounds: subject anchors (phrases, proper nouns, rare words, stems; places never alone), weak matches manual-only, Needs a picture P1, PD preference |
 
 ## Phase 16: local models, first class
 

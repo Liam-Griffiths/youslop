@@ -331,7 +331,7 @@ function openMediaSearch(sid, query = null, onPick = null, onClose = null) {
         ${c.kind === 'video' ? '<span class="kindtag">clip</span>' : ''}
         ${playBtn(sid, c)}
         <div class="pick-meta">
-          <span>${esc(c.provider)}</span>
+          <span>${esc(c.provider)}${c.weak_match ? " · Weak match" : ""}</span>
           <span>${c.width || '?'}×${c.height || '?'}</span>
         </div>
       </div>`).join('') || '<div class="empty-note">No pictures found. Try a broader search.</div>';

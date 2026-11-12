@@ -75,6 +75,9 @@ def test_visual_picker_js(tmp_path):
       assert(calls.at(-2)[1].source === 'library' && calls.at(-2)[1].asset_id === '1','exact Library asset, no archive');
       assert(calls.at(-1)[1].chosen_id === 'lib1','selected local candidate applied');
       p.slides[0].chosen_id = 'c0';
+      p.slides[0].candidates.push({id:'weak',provider:'wikimedia',kind:'image',title:'Paris',weak_match:true});
+      assert(visualSourcePanel(p.slides[0], 'Archive').includes('Weak match'), 'visible weak-match text');
+      p.slides[0].candidates.pop();
 
       state.visualHasFootage = true;
       await suggestVisualFootage(p, p.slides[0]);

@@ -8,6 +8,7 @@ import re
 import shutil
 import threading
 import time
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
@@ -16,6 +17,7 @@ from ..schema import MediaCandidate, Project, Slide
 from ..store import project_dir
 from .base import client, dedupe, relax, relevant, score, throttle
 from .providers import ALL_PROVIDERS
+from .relevance import gate, identity, paragraph_queries, rank, subject_terms
 
 Progress = Callable[[str], None]
 
@@ -83,7 +85,7 @@ def _cached_search(provider, query: str, kind: str) -> list[MediaCandidate]:
     return out
 
 
-def _run(jobs: list[tuple], kind: str) -> list[MediaCandidate]:
+def _run(jobs: list[tuple], kind: str, retain_weak: bool = False) -> list[MediaCandidate]:
     """Execute (provider, query, kind) jobs in parallel, keeping only relevant hits."""
     if not jobs:
         return []
@@ -97,7 +99,7 @@ def _run(jobs: list[tuple], kind: str) -> list[MediaCandidate]:
                 continue
     # Candidates are shared objects when cached, so hand back copies the caller
     # can score and mutate freely.
-    return [replace(c) for c in found if relevant(c, c.query)]
+    return [replace(c) for c in found if retain_weak or relevant(c, c.query)]
 
 
 def _jobs_for(queries: list[str], kind: str, providers=None,
@@ -112,7 +114,7 @@ def _jobs_for(queries: list[str], kind: str, providers=None,
     return jobs
 
 
-def _ladder(queries: list[str]) -> list[str]:
+def _ladder(queries: list[str], terms: list[str] | None = None) -> list[str]:
     """Round-robin the rewrites, so the best variant of *each* query is tried
     before the second-best variant of the first one."""
     ladders = [relax(q) for q in queries[:2]]
@@ -121,7 +123,7 @@ def _ladder(queries: list[str]) -> list[str]:
         for ladder in ladders:
             if rank < len(ladder) and ladder[rank] not in out and ladder[rank] not in queries:
                 out.append(ladder[rank])
-    return out
+    return list(dict.fromkeys(paragraph_queries([q], terms)[0] for q in out)) if terms else out
 
 
 # Which providers get tried first, before anyone else is even asked — see
@@ -142,7 +144,9 @@ LEAD_PROVIDERS = {
 
 
 def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
-           fallback: str = "", allow_stock: bool = True) -> list[MediaCandidate]:
+           fallback: str = "", allow_stock: bool = True, *,
+           terms: list[str] | None = None, paragraph: str = "",
+           prefer_public_domain: bool = False) -> list[MediaCandidate]:
     """Find visuals for one slide, spending as few archive requests as possible.
 
     A picture-research query like "Endurance Grytviken whaling station 1914" is
@@ -151,6 +155,7 @@ def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
     a 24-slide project from firing hundreds of requests at Wikimedia and getting
     itself rate limited into returning nothing at all.
     """
+    queries = paragraph_queries(queries, terms or [])
     pool = _active(kind, allow_stock)
     lead_names = LEAD_PROVIDERS.get(kind, LEAD_PROVIDERS["image"])
     lead = [p for p in pool if p.name in lead_names]
@@ -158,27 +163,36 @@ def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
     found: list[MediaCandidate] = []
 
     def enough(n: int) -> bool:
-        return len({c.url for c in found}) >= n
+        return len({c.url for c in found if not c.weak_match}) >= n
+
+    def run(jobs):
+        hits = _run(jobs, kind, retain_weak=bool(terms))
+        for c in hits:
+            metadata = c.to_dict()
+            gate(metadata, terms, paragraph)
+            c.weak_match = metadata["weak_match"]
+            c.relevance_score = metadata["relevance_score"]
+        return hits
 
     # 1. the best source for this kind, on the exact queries
     if lead:
-        found += _run(_jobs_for(queries[:3], kind, lead), kind)
+        found += run(_jobs_for(queries[:6 if terms and not paragraph else 3], kind, lead))
     # 2. same source, looser phrasing
     if not enough(ENOUGH):
-        widened = _ladder(queries)
+        widened = _ladder(queries, terms)
         if widened and lead:
-            found += _run(_jobs_for(widened[:4], kind, lead), kind)
+            found += run(_jobs_for(widened[:4], kind, lead))
     # 3. everyone else, exact queries
     if not enough(ENOUGH) and rest:
-        found += _run(_jobs_for(queries[:2], kind, rest), kind)
+        found += run(_jobs_for(queries[:2], kind, rest))
     # 4. everyone else, looser phrasing
     if not enough(4) and rest:
-        widened = _ladder(queries)
+        widened = _ladder(queries, terms)
         if widened:
-            found += _run(_jobs_for(widened[:2], kind, rest), kind)
-    # 5. last resort: the video's own subject, so no slide is left blank
+            found += run(_jobs_for(widened[:2], kind, rest))
+    # 5. last resort: the video's own subject; weak hits remain manual-only
     if fallback and not enough(3):
-        found += _run(_jobs_for([fallback], kind), kind)
+        found += run(_jobs_for([fallback], kind))
 
     for c in found:
         # The library provider already scored its own hits with tags folded
@@ -187,7 +201,7 @@ def search(queries: list[str], kind: str, limit: int = MAX_CANDIDATES,
         if c.provider not in {"library", "footage"}:
             c.score = score(c, c.query, kind)
     found = dedupe(found)
-    found.sort(key=lambda c: c.score, reverse=True)
+    found.sort(key=lambda c: rank(c.to_dict(), prefer_public_domain), reverse=True)
 
     # Diversity cap: one chatty provider must not crowd the picker. Openverse
     # will happily return forty Flickr snapshots for a historical query. The cap
@@ -287,21 +301,8 @@ def _slide_custom(project: Project, slide: Slide) -> dict | None:
 
 
 def subject_query(project: Project) -> str:
-    """A short, searchable stand-in for the whole video.
-
-    The outline's "subject" is a descriptive sentence ("Ernest Shackleton and the
-    crew of the Endurance, Imperial Trans-Antarctic Expedition"), and ANDing all
-    of that finds nothing. The proper nouns alone find the subject.
-    """
-    subject = project.outline.get("subject") or project.title or ""
-    proper = [w.strip(",.") for w in subject.split()
-              if w[:1].isupper() and len(w) > 2]
-    seen, keep = set(), []
-    for w in proper:
-        if w.lower() not in seen:
-            seen.add(w.lower())
-            keep.append(w)
-    return " ".join(keep[:3]) or subject[:40]
+    """A subject phrase, preserving the topic instead of only its place names."""
+    return next(iter(subject_terms(project)), "")
 
 
 def gather(project: Project, progress: Progress = lambda m: None,
@@ -324,12 +325,14 @@ def gather(project: Project, progress: Progress = lambda m: None,
              f"{len(_active('video'))} video sources for {len(targets)} slides")
 
     done = 0
-    fallback = subject_query(project)
+    terms = subject_terms(project)
+    fallback = terms[0] if terms else ""
 
     # Fetch the subject pool once, up front. Every slide can draw on it, so a
-    # slide whose specific shot does not exist is never left with a blank frame,
+    # slide whose specific shot does not exist can use another subject image,
     # and we spend exactly one set of requests on it instead of one per slide.
-    subject_pool = search([fallback], "image", limit=24, allow_stock=False) if fallback else []
+    subject_pool = search(terms[:6], "image", limit=24, allow_stock=False,
+                          terms=terms, prefer_public_domain=project.prefer_public_domain) if terms else []
     progress(f"Subject pool: {len(subject_pool)} general images for “{fallback}”")
 
     def work(slide: Slide) -> tuple[Slide, list[MediaCandidate], dict | None]:
@@ -337,7 +340,9 @@ def gather(project: Project, progress: Progress = lambda m: None,
         # archive search too — a real photograph, if one turns out to exist,
         # is allowed to win the slot on its own merits.
         kind = slide.prefer_kind if slide.prefer_kind == "video" else "image"
-        cands = search(slide.queries or [project.title], kind, allow_stock=kind != "image")
+        cands = search(slide.queries or [project.title], kind, allow_stock=kind != "image",
+                       terms=terms, paragraph=slide.narration + " " + slide.visual_note,
+                       prefer_public_domain=project.prefer_public_domain)
         if slide.prefer_kind == "map":
             drawn = _slide_map(project, slide)
         elif slide.prefer_kind == "diagram":
@@ -362,8 +367,8 @@ def gather(project: Project, progress: Progress = lambda m: None,
             progress(f"Media {done}/{len(targets)}: {len(cands)} option(s){note} for "
                      f"“{(slide.title or slide.narration)[:42]}…”")
 
-    _top_up(targets, subject_pool, progress)
-    _autopick(project)
+    _top_up(targets, subject_pool, progress, terms=terms)
+    _autopick(project, only={s.id for s in targets}, terms=terms)
     from ..overlay_plan import apply
     for slide in targets:
         apply(project, slide)
@@ -371,7 +376,7 @@ def gather(project: Project, progress: Progress = lambda m: None,
 
 
 def _top_up(slides: list[Slide], pool: list[MediaCandidate],
-            progress: Progress = lambda m: None) -> None:
+            progress: Progress = lambda m: None, *, terms=None) -> None:
     """Backfill thin slides from the subject pool, spreading the images around.
 
     Handing every thin slide the same top-ranked photo would put one portrait on
@@ -379,7 +384,7 @@ def _top_up(slides: list[Slide], pool: list[MediaCandidate],
     """
     if not pool:
         return
-    thin = [s for s in slides if len(s.candidates) < 3]
+    thin = [s for s in slides if sum(not c.get("weak_match") for c in s.candidates) < ENOUGH]
     if not thin:
         return
     for n, slide in enumerate(thin):
@@ -390,37 +395,35 @@ def _top_up(slides: list[Slide], pool: list[MediaCandidate],
             if c.id in have:
                 continue
             d = c.to_dict()
+            gate(d, terms, slide.narration + " " + slide.visual_note)
+            if d.get("weak_match"):
+                continue
             d["score"] = round(c.score - 0.6, 4)   # a stand-in, not a real match
             extra.append(d)
-            if len(slide.candidates) + len(extra) >= 8:
+            if sum(not c.get("weak_match") for c in slide.candidates) + len(extra) >= 8:
                 break
         slide.candidates = slide.candidates + extra
     progress(f"Topped up {len(thin)} thin slides from the subject pool")
 
 
-def _autopick(project: Project) -> None:
-    """Choose the best candidate per slide, avoiding repeats across the video."""
-    used: set[str] = {
-        s.chosen_id for s in project.slides if s.locked_media and s.chosen_id
-    }
-    for slide in project.slides:
-        if slide.insert:
-            continue
-        if slide.locked_media and slide.chosen_id:
-            continue
-        if not slide.candidates:
-            slide.chosen_id = ""
-            continue
-        best, best_score = None, -1e9
+def _autopick(project: Project, only=None, terms=None) -> None:
+    """Choose gated hits, using a picture at most twice across automatic slots."""
+    from ..render import is_lead
+    terms = subject_terms(project) if terms is None else terms
+    targets = [s for s in project.slides if not s.insert and not s.locked_media
+               and (only is None or s.id in only) and is_lead(project, s)]
+    used = Counter(identity(c) for s in project.slides if s not in targets
+                   for c in s.candidates if c['id'] == s.chosen_id)
+    for slide in targets:
         for c in slide.candidates:
-            # Reuse is a last resort. Seeing the same portrait five times reads
-            # as a broken edit, so any unused option beats any used one.
-            adj = c.get("score", 0) - (100.0 if c["id"] in used else 0)
-            if adj > best_score:
-                best, best_score = c, adj
-        slide.chosen_id = best["id"] if best else ""
-        if slide.chosen_id:
-            used.add(slide.chosen_id)
+            gate(c, terms, slide.narration + " " + slide.visual_note)
+        eligible = [c for c in slide.candidates
+                    if not c.get('weak_match') and used[identity(c)] < 2]
+        best = max(eligible, key=lambda c: (used[identity(c)] == 0,
+                   *rank(c, project.prefer_public_domain)), default=None)
+        slide.chosen_id = best['id'] if best else ''
+        if best:
+            used[identity(best)] += 1
 
 
 # ------------------------------------------------------------------- download
@@ -554,16 +557,30 @@ def download_chosen(project: Project, progress: Progress = lambda m: None,
     if not todo:
         return []
 
+    terms = subject_terms(project)
+    reuse_lock = threading.Lock()
+    used = Counter(identity(c) for s in project.slides for c in s.candidates
+                   if c['id'] == s.chosen_id)
     progress(f"Downloading {len(todo)} asset(s)")
     failed: list[str] = []
     done = 0
 
     def work(slide: Slide):
         chosen = next(c for c in slide.candidates if c["id"] == slide.chosen_id)
-        rest = sorted((c for c in slide.candidates if c["id"] != slide.chosen_id),
-                      key=lambda c: c.get("score", 0), reverse=True)
+        for c in slide.candidates:
+            gate(c, terms, slide.narration + " " + slide.visual_note)
+        rest = sorted((c for c in slide.candidates if c["id"] != slide.chosen_id
+                       and not c.get("weak_match")),
+                      key=lambda c: rank(c, project.prefer_public_domain), reverse=True)
         errors = []
         for cand in [chosen, *rest]:
+            alternative = cand is not chosen
+            key = identity(cand)
+            with reuse_lock:
+                if alternative and used[key] >= 2:
+                    continue
+                if alternative:
+                    used[key] += 1
             if cand.get("local_path"):
                 return slide, cand, None
             try:
@@ -571,6 +588,9 @@ def download_chosen(project: Project, progress: Progress = lambda m: None,
                 cand["local_path"] = download(project, cand)
                 return slide, cand, None
             except Exception as exc:
+                with reuse_lock:
+                    if alternative:
+                        used[key] -= 1
                 errors.append(f"{cand['provider']}: {str(exc)[:60]}")
         return slide, None, errors
 

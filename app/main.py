@@ -1393,6 +1393,8 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
             p.description = str(payload["description"])[:5000]
         if isinstance(payload.get("yt_tags"), list):
             p.yt_tags = [str(t).strip()[:60] for t in payload["yt_tags"] if str(t).strip()][:30]
+        if "prefer_public_domain" in payload:
+            p.prefer_public_domain = payload["prefer_public_domain"] is True
         if "use_intro" in payload:
             p.use_intro = bool(payload["use_intro"])
         if "use_outro" in payload:
@@ -2166,6 +2168,8 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     query = (payload.get("query") or "").strip()
     if not query:
         raise HTTPException(400, "Give me something to search for.")
+    p = _load(pid)
+    slide = _slide(p, sid)
     kind = payload.get("kind") if payload.get("kind") in ("video", "reaction") else "image"
     if kind == "reaction" and not reactions.available():
         raise HTTPException(400, "No Giphy key configured — add one in Settings "
@@ -2178,7 +2182,10 @@ def slide_search(pid: str, sid: str, payload: dict = Body(...)) -> dict:
             found = (library.search('', kind, asset_id=payload['asset_id']) if payload.get('asset_id')
                      else library.search(query, kind))
         else:
-            found = reactions.search(query) if kind == 'reaction' else media.search([query], kind)
+            found = reactions.search(query) if kind == 'reaction' else media.search(
+                [query], kind, terms=media.subject_terms(p),
+                paragraph=slide.narration + ' ' + slide.visual_note,
+                prefer_public_domain=p.prefer_public_domain)
     with store.lock_for(pid):
         p = _load(pid)
         s = _slide(p, sid)

@@ -26,6 +26,10 @@ class MediaCandidate:
     provider: str                 # wikimedia | openverse | pexels | ...
     kind: str                     # image | video
     title: str = ""
+    description: str = ""
+    categories: list[str] = field(default_factory=list)
+    weak_match: bool = False
+    relevance_score: float = 0.0
     url: str = ""                 # full-resolution download URL
     thumb: str = ""               # preview URL for the picker grid
     source_page: str = ""         # human-facing attribution page
@@ -855,6 +859,7 @@ class Project:
     # CORKBORED_RESEARCH_MODE setting decides — every video made before this
     # existed, and any made without the choice.
     research_mode: str = ""
+    prefer_public_domain: bool = False  # archive licence tie-break; old projects stay off
     # A test run: a one-minute video with quick research, for trying the
     # pipeline end to end without paying for a full one. Shown as "test" in
     # the video list.
@@ -946,6 +951,7 @@ class Project:
             "outline": self.outline,
             "research": self.research,
             "research_mode": self.research_mode,
+            "prefer_public_domain": self.prefer_public_domain,
             "test": self.test,
             "draft": self.draft,
             "slides": [s.to_dict() for s in self.slides],
@@ -1055,6 +1061,7 @@ class Project:
                  - {"clip", "style_kit", "blocks", "block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
+        base["prefer_public_domain"] = d.get("prefer_public_domain", d.get("example", False)) is True
         p = cls(
             **base,
             clip=deepcopy(d.get("clip") or {}),
