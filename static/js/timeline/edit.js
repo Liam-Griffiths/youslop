@@ -23,7 +23,7 @@ function tlTimingKind(s) {
 
 function tlGapItems() {
   if (state.project?.kind === 'clip') return ''; // Original ranges have no paragraph gaps.
-  return tlParas().map((q) => `<button type="button" class="tl-gap ${q.timing.gap.src === 'user' ? 'user' : ''}"
+  return tlParas().filter(q => !q.insert).map((q) => `<button type="button" class="tl-gap ${q.timing.gap.src === 'user' ? 'user' : ''}"
     data-gap="${esc(q.id)}" style="left:${(q.start + q.duration) * TL.zoom}px"
     aria-label="Gap after paragraph ${q.index + 1}: ${q.timing.gap.value.toFixed(2)} seconds"
     title="Drag gap · Alt disables snapping">↔</button>`).join('');

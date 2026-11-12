@@ -58,7 +58,7 @@ function tlDraw() {
       </button>`).join('');
   track.innerHTML = `
     <div class="tl-ruler" title="Drag to scrub · Shift+drag to select a section">${ticks}</div>
-    <div class="tl-lane tl-pictures"><em>pictures</em>${pics}</div>
+    <div class="tl-lane tl-pictures"><em>pictures</em>${pics}${tlInsertButtons()}</div>
     <div class="tl-lane para"><em>voice</em>${paras}${tlGapItems()}</div>
     ${tlCameraRows()}
     ${tlLayerRows()}
@@ -69,6 +69,7 @@ function tlDraw() {
   tlWireTiming();
   tlWireSponsorDrag();
   tlWireCamera();
+  tlWireInserts();
   tlSectionPaint();
   tlPaintProblems();
   tlPaintReview();
@@ -237,6 +238,7 @@ function tlPaintHead() {
     `${tlClock(TL.cur)} / ${tlClock(d.total)}  ·  frame ${Math.round(TL.cur * d.fps)}`;
   $('#tl-play').textContent = TL.playing ? '❚❚' : '▶';
   tlSelectionPaint();
+  tlInsertPaint();
   // Keep the playhead on screen while it plays or is stepped.
   const sc = $('#tl-scroll'), x = 104 + TL.cur * TL.zoom;
   if (sc && !TL.scrubbing && !TL.zooming && (x < sc.scrollLeft + 124 || x > sc.scrollLeft + sc.clientWidth - 40)) {
@@ -278,6 +280,7 @@ function tlShortcuts() {
     <div class="row"><h2 id="tl-shortcut-title">Edit shortcuts</h2><div class="spacer"></div>
       <button type="button" class="btn sm ghost" id="tl-shortcut-close">Close</button></div>
     <dl>
+      <dt>. / Insert</dt><dd>Insert at the nearest edit point; Delete removes a selected insert</dd>
       <dt>Space</dt><dd>Play / pause</dd>
       <dt>← / →</dt><dd>Step one frame</dd>
       <dt>Shift + ← / →</dt><dd>Previous / next paragraph</dd>

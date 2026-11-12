@@ -73,6 +73,7 @@ function tlInspector() {
     body.innerHTML = `<p>Original source range · ${tlClock(sel.t0)}–${tlClock(sel.t1)}</p><a class="btn" href="#/p/${p.id}/clip">Trim or reframe in Clip</a>`; return;
   }
   if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
+  if (typeof tlInsertInspector === 'function' && tlInsertInspector(sel, body)) return;
   if (sel.kind === 'overlay') { tlGraphicInspector(sel, body); return; }
   if (sel.kind === 'sponsor') {
     const slot = p.sponsors.find((s) => s.id === sel.id);
@@ -160,7 +161,6 @@ function tlInspector() {
   const remove = body.querySelector('[data-remove]');
   if (remove) remove.onclick = () => tlInspectorSave({...sel}, 'remove', '', remove);
 }
-
 // Serialize requests so a slow response cannot overwrite a later edit.
 let tlInspectorQueue = Promise.resolve();
 function tlInspectorSave(sel, key, raw, el) {

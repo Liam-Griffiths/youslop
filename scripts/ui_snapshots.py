@@ -39,6 +39,7 @@ def routes():
     result.extend(f'#/p/{pid}/{tab}' for pid in ('psnapclip','psnapmanual')
                   for tab in ('clip','edit','publish','plan','script','voice'))
     result.append('#/p/psnaplong/edit')
+    result.extend(['#/p/psnapinserts/edit', '#/p/psnapinserts/script'])
     return result
 
 
@@ -208,7 +209,17 @@ def seed():
         for i in range(20)]
     shutil.copytree(source, store.project_dir(long.id), dirs_exist_ok=True)
     store.save(long)
-    library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
+    asset = library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
+    inserts = store.load('psnapkenburns')
+    inserts.id, inserts.title = 'psnapinserts', 'Snapshot · main-track inserts'
+    inserts.slides[1:1] = [
+        Slide(id='insertclip', insert=dict(kind='clip', seconds=2, shoot_id='ssnapshot',
+            source_id='f1', in_s=0, out_s=2, source_audio=False)),
+        Slide(id='insertblock', insert=dict(kind='block', seconds=4, block='title_card', vars={'title':'A pause'})),
+        Slide(id='insertpicture', insert=dict(kind='picture', seconds=4, asset_id=asset['id'])),
+        Slide(id='insertcard', insert=dict(kind='card', seconds=4, text='The next chapter'))]
+    shutil.copytree(source, store.project_dir(inserts.id), dirs_exist_ok=True)
+    store.save(inserts)
 
 
 @contextmanager
@@ -503,6 +514,18 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route == '#/p/psnapinserts/edit':
+                for phase, expression in [
+                    ('insert-panel', "(async () => { const panel=document.querySelector('#tl-insert-add'); panel.open=true; await panel.ontoggle(); return true; })()"),
+                    ('insert-inspector', "tlInsertSelect('insertclip'); true"),
+                    ('insert-drop', "tlInsertGhost(tlInsertNearest(), 4); true"),
+                    ('insert-menu', "tlInsertClearGhost(); tlInsertMenu(); true")]:
+                    _evaluate(cdp, session, expression)
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    extra = out / f'p--psnapinserts--{phase}.png'
+                    extra.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(extra), 't':0, 'why':phase})
+                _evaluate(cdp, session, "document.querySelector('dialog.tl-insert-dialog [data-close]').click(); true")
             if route == '#/p/psnapkenburns/edit':
                 point = _evaluate(cdp, session, """(() => {
                   const rows=tlParas(); tlSectionSet(rows[1].id, rows[2].id);

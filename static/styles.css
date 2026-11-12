@@ -1473,3 +1473,20 @@ img.themed-pending { opacity:.45; }
 .tl-section-ghost { position: absolute; top: 22px; bottom: 0; overflow: hidden; z-index: 7;
   pointer-events: none; opacity: .7; border: 2px dashed var(--cool); background: var(--panel); }
 #tl-hover { min-height: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Small click targets inside Pictures, below the ruler and playhead handle. */
+.tl-insert-plus { position: absolute; top: 30px; z-index: 5; width: 18px; height: 18px;
+  padding: 0; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--panel);
+  color: var(--ink); opacity: 0; pointer-events: none; cursor: pointer; }
+.tl-pictures:hover .tl-insert-plus, .tl-insert-plus.nearest, .tl-insert-plus:focus-visible { opacity: 1; pointer-events: auto; }
+.tl-insert-options { display: flex; flex-direction: column; gap: 4px; }
+.tl-insert-options .btn { text-align: left; white-space: normal; }
+.tl-insert-dialog { width: min(480px, 90vw); }
+.tl-insert-dialog [data-sources] { max-height: 50vh; overflow: auto; }
+.tl-insert-add { padding: 12px; border-top: 1px solid var(--line); }
+.tl-insert-add summary { cursor: pointer; }
+.tl-insert-add [data-add-sources] { max-height: 320px; overflow: auto; }
+.tl-insert-options [draggable=true] { cursor: grab; }
+.tl-insert-ghost, .tl-insert-ripple { position: absolute; top: 4px; bottom: 4px; z-index: 7;
+  pointer-events: none; border: 2px dashed var(--cool); background: var(--panel); opacity: .65; }
+.tl-insert-ghost { z-index: 8; border-left-style: solid; color: var(--ink); font: 11px var(--mono); }

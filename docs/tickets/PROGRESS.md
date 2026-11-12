@@ -277,7 +277,7 @@ adding blocks. See `17-timeline/README.md`.
 | T17.2c | Inserts: keep them through script generation and import | M | T17.2b | done | 2026-11-11 Codex + review; inserts survive whole-script generation/import (kept by spoken-paragraph position); narration passes skip them; replaced paragraphs retire their takes instead of orphaning them |
 | T17.4 | Select sections and move everything in them | L | T17.2, T17.1 | done | select (ruler/Shift drag, Shift-click, I/O+X, Ctrl+A), drag-move with ghost, Alt-arrows, ripple delete, one undo step; Ctrl/Cmd-click toggles; fixed explicit cue lead clock |
 | T17.4b | Section copy, cut, paste and duplicate | M | T17.4 | done | toolbar + Ctrl/Cmd+X/C/V/D; duplicates share the take file; shared-take safeguards; playhead scrubbing restored (ruler drag scrubs, Shift+drag selects, playhead handle); owner Q: archive deleted projects instead of removing? (reverted) |
-| T17.3 | Insert from the timeline: +, smart insert, drop from panels | M | T17.2 | todo | |
+| T17.3 | Insert from the timeline: +, smart insert, drop from panels | M | T17.2 | done | + at edit points (hover, nearest always), . / Insert key, Add panel drag, insert inspector, Delete + undo; inserts listed in Script |
 | T17.5 | Extend and shrink: picture tails, insert lengths, clip trims | M | T17.2, T17.1 | todo | ripple default, roll on Shift |
 | T17.6 | Blocks and graphics on the timeline | M | T17.3 | todo | drag from panel, duplicate, copy, nudge |
 

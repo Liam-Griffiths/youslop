@@ -10,7 +10,7 @@ def test_edit_lifecycle_and_shortcuts(tmp_path):
     gjs = shutil.which('gjs')
     if not gjs:
         pytest.skip('GJS unavailable')
-    scripts = ['static/js/palette.js', 'static/js/shell.js', 'static/js/timeline/draw.js', 'static/js/timeline/layers.js', 'static/js/timeline/graphics.js', 'static/js/timeline/sections.js']
+    scripts = ['static/js/palette.js', 'static/js/shell.js', 'static/js/timeline/draw.js', 'static/js/timeline/layers.js', 'static/js/timeline/graphics.js', 'static/js/timeline/sections.js', 'static/js/timeline/inserts.js']
     source = '\n'.join(Path(p).read_text() for p in scripts)
     # Exercise the actual global keyboard dispatcher with all its suppression guards.
     boot = Path('static/js/boot.js').read_text().split('\n\nroute();')[0]
@@ -19,12 +19,12 @@ function check(ok, msg) { if (!ok) throw new Error(msg); }
 const shell = {append(el){el.parent=this;}, classList:{remove(){}}};
 const inspector = {replaceChildren(){this.empty=true;}};
 const host = {isConnected:true,focus(){}};
-let modal=null, focused={isConnected:true,focus(){restored++;}}, restored=0, dialog, button;
+let nativeDialog=false, modal=null, focused={isConnected:true,focus(){restored++;}}, restored=0, dialog, button;
 const handlers=[];
 const document={
  activeElement:focused, documentElement:{dataset:{}},
  body:{contains:el=>el.isConnected, append(w){modal=w;}},
- querySelector:s=>s==='.modal'?modal:null,
+ querySelector:s=>s.includes('.modal') && modal || s.includes('dialog[open]') && nativeDialog || null,
  addEventListener:(kind,fn,capture)=>handlers.push({fn,capture}),
  removeEventListener:(kind,fn)=>handlers.splice(handlers.findIndex(h=>h.fn===fn),1),
  createElement:()=>{
@@ -38,7 +38,7 @@ const window={addEventListener(){}};
 const localStorage={getItem:()=>''};
 const route=()=>{};
 const TL={data:{total:100},host,cur:12,selection:null};
-const state={tab:'edit',project:{}};
+const state={tab:'edit',project:{slides:[]}};
 let pauses=0, seeks=[], splits=0, selection=1;
 const tlPause=()=>pauses++;
 const tlSeek=(t,opts)=>seeks.push({t,opts});
@@ -83,6 +83,20 @@ key('Escape'); check(!modal && restored===1 && selection===1,'Escape closes shee
 key('s'); check(splits===1,'split shortcut retained');
 key('s',{tagName:'TEXTAREA'}); check(splits===1,'typing s does not split');
 key('Escape'); check(selection===null,'Escape still clears selection');
+let insertMenus=0, deletes=0;
+tlInsertMenu=()=>insertMenus++;
+tlInsertSave=()=>deletes++;
+key('.'); key('Insert'); check(insertMenus===2,'both smart-insert shortcuts dispatched');
+key('.',{tagName:'INPUT'}); key('Insert',{tagName:'TEXTAREA'});
+key('.',{tagName:'SPAN',isContentEditable:true});
+key('.',{tagName:'SPAN',closest:()=>({})});
+check(insertMenus===2,'fields and nested textboxes suppress insert keys');
+nativeDialog=true; key('.'); key('s'); key('Escape');
+check(insertMenus===2 && splits===1,'native picker suppresses timeline keys');nativeDialog=false;
+state.project.slides=[{id:'insert',insert:{kind:'card'}}];
+TL.selection={kind:'picture',sid:'insert'}; TL.selections=[TL.selection];
+key('Delete'); check(deletes===1,'insert deletion dispatched before generic selection deletion');
+
 // Compile every classic script too: catches syntax errors without executing app startup.
 '''
     checks += '\n'.join('new Function(' + __import__('json').dumps(p.read_text()) + ');'

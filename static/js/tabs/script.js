@@ -37,7 +37,7 @@ function paintScript() {
   const research = p.research || {};
   let html = `<div class="script-layout"><section class="script-main" aria-label="Script paragraphs">
     <div class="script-heading"><h1>Script</h1>
-    <span class="mono script-summary">${words} words · ${p.slides.length} paragraphs · ~${fmtTime(p.est_seconds)}</span>
+    <span class="mono script-summary">${words} words · ${p.slides.filter(s => !s.insert?.kind).length} paragraphs · ~${fmtTime(p.est_seconds)}</span>
     <button class="btn sm" onclick="$('#script-find').hidden=false; $('#script-find input').focus()">Find</button></div>
     <div id="script-find" hidden><label>Find in script <input type="search" oninput="scriptFind(this.value)"></label>
       <button class="btn sm ghost" onclick="scriptFind(''); this.previousElementSibling.querySelector('input').value=''; this.parentElement.hidden=true">Close find</button>
@@ -65,8 +65,14 @@ function paintScript() {
         onkeydown="scriptChapterKey(event,${i})" aria-label="Move chapter ${esc(s.chapter)}" title="Drag chapter; Alt + arrows to move">⠿</button>
       <span class="mono">Chapter ${++chapter} · ${fmtTime(seconds)}</span>
       <input type="text" value="${esc(s.chapter)}" aria-label="Chapter title" onblur="saveChapter('${s.id}',this.value)">
-      <button class="btn sm ghost" onclick="saveChapter('${s.id}','')">Remove</button></div>` : ''}
-    <article class="script-card" data-sid="${s.id}" tabindex="0" aria-label="Paragraph ${i + 1}"
+      <button class="btn sm ghost" onclick="saveChapter('${s.id}','')">Remove</button></div>` : ''}`;
+    if (s.insert?.kind) {
+      html += `<article class="script-card" data-sid="${s.id}" tabindex="0" onkeydown="scriptKey(event,${i})"><div class="script-content"><strong>Insert · ${esc(s.insert.kind)} · ${s.insert.seconds.toFixed(1)} s</strong>
+        <p>${esc(s.insert.text || s.insert.block || s.insert.asset_id || s.insert.source_id || '')}</p>
+        <a class="btn sm" href="#/p/${p.id}/edit">Edit in timeline</a></div></article></div>`;
+      seconds += s.insert.seconds; return;
+    }
+    html += `<article class="script-card" data-sid="${s.id}" tabindex="0" aria-label="Paragraph ${i + 1}"
       onkeydown="scriptKey(event,${i})" ondragover="event.preventDefault()"
       ondrop="event.preventDefault(); scriptMoveChapter(event.dataTransfer.getData('text/plain'),'${s.id}')">
       <div class="script-number"><span>${String(i + 1).padStart(2, '0')}</span><span class="script-dot" aria-hidden="true"></span></div>
@@ -357,17 +363,17 @@ function scriptFind(value) {
   let count = 0;
   document.querySelectorAll('.script-unit').forEach(el => {
     const s = state.project.slides[Number(el.dataset.index)];
-    el.hidden = ![s.narration, s.title, s.visual_note, s.chapter].some(t => (t || '').toLocaleLowerCase().includes(query));
+    el.hidden = ![s.narration, s.title, s.visual_note, s.chapter, s.insert?.text, s.insert?.kind].some(t => (t || '').toLocaleLowerCase().includes(query));
     if (!el.hidden) count++;
   });
-  $('#script-find-count').textContent = `${count} paragraphs`;
+  $('#script-find-count').textContent = `${count} items`;
 }
 function scriptKey(e, i) {
   if (e.key === 'Escape') {
     e.preventDefault(); e.target.blur(); e.currentTarget.focus(); return;
   }
   if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.querySelector('textarea').focus(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.querySelector('textarea, a').focus(); return; }
   if (!['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
   e.preventDefault();
   const cards = [...document.querySelectorAll('.script-unit:not([hidden]) .script-card')];
