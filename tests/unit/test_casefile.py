@@ -36,12 +36,12 @@ def test_casefile_dispatch_clocks_and_kinds(project,tmp_path,monkeypatch,look,gr
     data,kw=calls[0];screens=data['screens']
     assert kw['frames']==(4,20) and kw['seconds']==cuts.frame_count(19.13,30)/30
     assert screens[0]['start']==0 and screens[-1]['start']+screens[-1]['duration']==18.13
-    assert data['card_at']==18.13 and screens[0]['delay']==0  # Explicit at is file time.
+    assert data['card_at']==18.13 and screens[0]['delay']==.6  # Explicit at includes the voice lead.
     for _,cues,times in expected:
         for cue,(a,z) in zip(cues,times):
             if z<=a or a>=18.13:continue
-            screen=next(s for s in screens if s['start']==a)
-            assert screen['cue']==cue and screen['duration']==pytest.approx(min(z,18.13)-a)
+            screen=next(s for s in screens if s['start']==(0 if a==.6 else a))
+            assert screen['cue']==cue and screen['duration']==pytest.approx(min(z,18.13)-screen['start'])
             assert len(screen['camera'])<=48
     assert json.loads(out.with_suffix('.mp4.stats.json').read_text())['captured_frames']==0
     project.style.cut_engine='pillow'

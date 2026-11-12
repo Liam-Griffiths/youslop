@@ -18,6 +18,9 @@ function tlItems(kind) {
 }
 
 function tlSelect(sel, additive = false) {
+  TL.section = null;
+  if (!additive) TL.sectionAnchor = ['paragraph','picture'].includes(sel?.kind) ? sel.sid : null;
+  if (typeof tlSectionPaint === 'function') tlSectionPaint();
   const old = TL.selections || (TL.selection ? [TL.selection] : []);
   TL.selections = !sel ? [] : additive
     ? old.some(s => tlSameItem(s, sel)) ? old.filter(s => !tlSameItem(s, sel)) : [...old, sel]
@@ -57,6 +60,7 @@ function tlSelectNext(dir) {
 function tlInspector() {
   const box = $('#tl-inspector');
   if (!box) return;
+  if (TL.section) { box.innerHTML = `<h3>Section · ${TL.section.ids.length} main-track items</h3><p>Drag on the main track or use Alt + arrows to change script order. Titles, graphics, cues, chapters, inserts and sponsor reads travel with it.</p>`; return; }
   if (TL.selections?.length > 1) { tlMultiInspector(box); return; }
   const sel = TL.selection, p = state.project;
   const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay'];

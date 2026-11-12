@@ -1943,6 +1943,8 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
+        if any('at' in cue for key, cues in slide.cues.items() if key in cuts.KEYS for cue in cues):
+            row['cue_clock'] = 'paragraph-v2'
         if not row['insert']:
             row.pop('insert')
         elif slide.insert['kind'] == 'clip':
@@ -2680,6 +2682,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
+        if any('at' in cue for key, cues in s.cues.items() if key in cuts.KEYS for cue in cues):
+            row['cue_clock'] = 'paragraph-v2'
         if not row['insert']:
             row.pop('insert')
         elif s.insert['kind'] == 'clip':

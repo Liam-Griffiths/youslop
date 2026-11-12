@@ -1459,4 +1459,14 @@ img.themed-pending { opacity:.45; }
 .tl-lane.collapsed > :not(em):not(.tl-layer-label) { display: none; }
 .tl-marquee { position: absolute; z-index: 6; border: 1px solid var(--cool);
   background: var(--cool-tint); opacity: .6; pointer-events: none; }
+.tl-section { position: absolute; top: 0; bottom: 0; z-index: 4; pointer-events: none;
+  border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tl-ruler:has(.tl-section-tools) { height: 44px; }
+.tl-section-tools { position: absolute; top: 2px; z-index: 8; display: flex; align-items: center;
+  box-sizing: border-box; height: 40px; overflow-x: auto; gap: 6px; white-space: nowrap;
+  padding: 2px; background: var(--panel); border: 1px solid var(--accent); cursor: default; }
+.tl-section-tools span { font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; }
+.tl-section-tools .btn { flex: none; min-height: 34px; }
+.tl-section-ghost { position: absolute; top: 22px; bottom: 0; overflow: hidden; z-index: 7;
+  pointer-events: none; opacity: .7; border: 2px dashed var(--cool); background: var(--panel); }
 #tl-hover { min-height: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -41,9 +41,9 @@ def test_ticker_dispatch_kinds_and_timing(project,tmp_path,monkeypatch,look):
     for _,cues,times in expected:
         for cue,(a,z) in zip(cues,times):
             if z<=a or a>=11.13:continue
-            s=next(s for s in ctx['screens'] if s['start']==a)
+            s=next(s for s in ctx['screens'] if s['start']==(0 if a==.6 else a))
             assert s['cue']['kind']==cue['kind']
-            assert s['duration']==pytest.approx(min(z,11.13)-a)
+            assert s['duration']==pytest.approx(min(z,11.13)-s['start'])
     assert kw['seconds']==cuts.frame_count(12.13,30)/30 and kw['frames']==(4,20)
     assert ctx['card_at']==11.13
     assert json.loads(out.with_suffix('.mp4.stats.json').read_text())['captured_frames']==0

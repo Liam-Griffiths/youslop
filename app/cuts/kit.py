@@ -442,7 +442,7 @@ def place(narration: str, cues: list[dict], spoken: float, length: float,
     The voice runs from `lead` to `lead + spoken`; the rest of `length` is
     the pause after it. The first automatic cue opens the paragraph, so there is
     never a frame with nothing on it unless explicitly retimed. Explicit
-    starts use paragraph seconds without adding lead. Returns one span per cue.
+    starts use paragraph seconds plus the voice's lead. Returns one span per cue.
     """
     if not cues:
         return []
@@ -489,7 +489,7 @@ def place(narration: str, cues: list[dict], spoken: float, length: float,
         squeeze = limit / starts[-1] if starts[-1] > 0 else 0
         starts = [s * squeeze for s in starts]
     # Explicit starts stay fixed; automatic neighbours fit between them.
-    fixed = {i: min(max(0.0, float(c["at"])), spoken, limit)
+    fixed = {i: min(lead + min(max(0.0, float(c["at"])), spoken), limit)
              for i, c in enumerate(cues) if isinstance(c.get("at"), (int, float))}
     for i, at in fixed.items():
         starts[i] = at

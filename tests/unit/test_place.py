@@ -42,11 +42,11 @@ def test_explicit_start_and_neighbours():
     cues = [{"on": "Finally"}, {"at": 2.0}, {}, {"at": 6.0}, {}]
     spans = place(TEXT, cues, spoken=8, length=10, lead=1)
     starts = [a for a, _ in spans]
-    assert starts[1] == 2.0
-    assert starts[3] == 6.0
+    assert starts[1] == 3.0  # Paragraph-relative starts include the voice lead.
+    assert starts[3] == 7.0
     assert starts == sorted(starts)
 
 
-@pytest.mark.parametrize("at, expected", [(-1, 0), (30, 8), (1, 1)])
+@pytest.mark.parametrize("at, expected", [(-1, 1), (30, 9), (1, 2)])
 def test_explicit_first_cue(at, expected):
     assert place(TEXT, [{"at": at}], spoken=8, length=10, lead=1)[0][0] == expected

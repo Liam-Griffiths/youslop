@@ -68,6 +68,7 @@ function tlDraw() {
   tlWireTiming();
   tlWireSponsorDrag();
   tlWireCamera();
+  tlSectionPaint();
   tlPaintProblems();
   tlPaintReview();
   TL.lastPara = '';
@@ -293,7 +294,10 @@ function tlShortcuts() {
       <dt>Shift + Z</dt><dd>Fit timeline</dd>
       <dt>+ / −</dt><dd>Zoom at playhead</dd>
       <dt>Ctrl / Cmd + wheel</dt><dd>Zoom at pointer; plain wheel scrolls</dd>
-      <dt>Shift + click</dt><dd>Add or remove an item from selection</dd>
+      <dt>Shift / Ctrl / Cmd + click</dt><dd>Toggle lane items; Shift on the main track extends a section</dd>
+      <dt>Ruler drag / Shift + picture drag</dt><dd>Select a section across all lanes</dd>
+      <dt>I / O, then X / Ctrl or Cmd + A</dt><dd>Select marked section / whole main track</dd>
+      <dt>Section: drag / Alt + arrows / Delete</dt><dd>Reorder script / move one place / ripple delete</dd>
       <dt>Drag empty lane</dt><dd>Marquee select; Shift adds items</dd>
       <dt>Selection: ← / →</dt><dd>Nudge movable items one frame together</dd>
       <dt>Drag selection / Delete</dt><dd>Move / delete editable items together</dd>

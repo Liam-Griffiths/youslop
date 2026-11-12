@@ -40,10 +40,10 @@ def test_groupchat_dispatch_clocks(project, tmp_path, monkeypatch, look):
     for _,cues,times in expected:
         for cue,(a,z) in zip(cues,times):
             if z<=a or a>=13.13:continue
-            s=next(s for s in screens if s['start']==a)
+            s=next(s for s in screens if s['start']==(0 if a==.6 else a))
             assert s['cue']==cue
     typing,arrival,hold=screens[:3]
-    assert typing['duration']==pytest.approx(.6) and typing['typing']
+    assert typing['duration']==pytest.approx(1.2) and typing['typing']  # Voice lead + typing.
     assert arrival['duration']==pytest.approx(.28) and hold['phase']=='hold'
     assert len(typing['items'])==0 and arrival['items'][-1]['name']=='Mom'
     assert json.loads(out.with_suffix('.mp4.stats.json').read_text())['captured_frames']==0

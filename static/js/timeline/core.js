@@ -20,7 +20,7 @@
 // its media elements live out here and are re-attached on every mount.
 const TL = {
   hidden: {titles: false, cues: false, chapters: false, music: false, stings: false, notes: false},
-  pid: '', data: null, host: null, selection: null, selections: [], collapsed: {}, zoomReady: false,
+  pid: '', data: null, host: null, selection: null, selections: [], section: null, collapsed: {}, zoomReady: false,
   inspectorTemplates: [], inspectorEndTemplates: [], inspectorMusic: [], inspectorChannel: null,
   cur: 0, playing: false, speed: 1, loop: false, zoom: 10,
   vids: null, active: 0, seg: -1,
@@ -71,7 +71,8 @@ async function tlMount() {
   if (TL.pid !== p.id) {
     tlPause();
     Object.assign(TL, { pid: p.id, hidden: {}, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
-                        pending: new Set(), selections: [], collapsed: {}, zoomReady: false, wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
+                        pending: new Set(), selections: [], section: null, sectionAnchor: null, sectionMarks: null,
+                        collapsed: {}, zoomReady: false, wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
     TL.vids.forEach((v) => { v.removeAttribute('src'); v.dataset.seg = ''; v.load(); });
     TL.audio.removeAttribute('src'); TL.audio.load();
   }

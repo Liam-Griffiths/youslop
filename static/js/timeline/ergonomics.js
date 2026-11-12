@@ -83,6 +83,9 @@ function tlItemForNode(el) {
 }
 
 function tlReconcileSelection() {
+  if (TL.sectionAnchor && !tlParas().some(q => q.id === TL.sectionAnchor)) TL.sectionAnchor = null;
+  if (TL.section && (TL.section.version !== state.project.updated_at
+      || TL.section.ids.some(id => !tlParas().some(q => q.id === id)))) TL.section = null;
   TL.selections = (TL.selections || []).flatMap(s => {
     const next = tlItems(s.kind).find(n => tlSameItem(n, s));
     return next ? [next] : [];
@@ -94,6 +97,8 @@ function tlMarquee(e) {
   const track = $('#tl-track'), rect = track.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const before = [...(TL.selections || [])], base = e.shiftKey ? before : [];
+  const section = TL.section; TL.section = null;
+  if (typeof tlSectionPaint === 'function') tlSectionPaint();
   const box = document.createElement('div'); box.className = 'tl-marquee'; track.append(box);
   track.setPointerCapture(e.pointerId);
   tlPause();
@@ -115,7 +120,8 @@ function tlMarquee(e) {
     track.removeEventListener('pointercancel', abort); track.removeEventListener('lostpointercapture', abort);
     if (track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
     box.remove(); TL.drag = null;
-    if (cancel) { TL.selections = before; TL.selection = before.at(-1) || null; }
+    if (cancel) { TL.selections = before; TL.selection = before.at(-1) || null; TL.section = section; }
+    if (typeof tlSectionPaint === 'function') tlSectionPaint();
     tlInspector(); tlSelectionPaint();
   };
   const key = ev => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopImmediatePropagation(); finish(true); } };

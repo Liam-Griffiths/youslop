@@ -503,6 +503,27 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route == '#/p/psnapkenburns/edit':
+                point = _evaluate(cdp, session, """(() => {
+                  const rows=tlParas(); tlSectionSet(rows[1].id, rows[2].id);
+                  const node=document.querySelector(`[data-para="${rows[1].id}"]`);
+                  node.scrollIntoView({block:'center'}); const r=node.getBoundingClientRect();
+                  return {x:r.left+8,y:r.top+8};
+                })()""")['result']['value']
+                for phase in ('section', 'section-ghost'):
+                    if phase == 'section-ghost':
+                        cdp.send('Input.dispatchMouseEvent', {'type':'mousePressed', **point,
+                                 'button':'left', 'buttons':1, 'clickCount':1}, session)
+                        cdp.send('Input.dispatchMouseEvent', {'type':'mouseMoved',
+                                 'x':point['x']-60, 'y':point['y'], 'buttons':1}, session)
+                        _evaluate(cdp, session, "if (!document.querySelector('.tl-section-ghost')) throw Error('Section ghost missing'); true")
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    path = out / f'p--psnapkenburns--{phase}.png'
+                    path.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(path), 't':0, 'why':phase})
+                cdp.send('Input.dispatchKeyEvent', {'type':'keyDown', 'key':'Escape', 'windowsVirtualKeyCode':27}, session)
+                cdp.send('Input.dispatchMouseEvent', {'type':'mouseReleased', **point, 'button':'left'}, session)
+                _evaluate(cdp, session, "if (TL.drag || document.querySelector('.tl-section-ghost')) throw Error('Section cancel failed'); tlSelect(null); true")
             if route == '#/':
                 _evaluate(cdp, session, """(async () => {
                   if (document.querySelector('#home-format,#saved-format')) throw Error('Duplicate Home picker');

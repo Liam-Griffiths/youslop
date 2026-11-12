@@ -310,17 +310,22 @@ function tlWireScrub() {
   track.onpointerdown = (e) => {
     if (e.button !== 0) return;
     if (e.target.closest('.tl-layer-label, em')) return;
+    if (tlSectionPointer(e)) return;
     if (!e.target.closest('[data-para], [data-seg], .tl-ruler')) { tlMarquee(e); return; }
     track.setPointerCapture(e.pointerId);
     TL.scrubbing = true;
     if (TL.playing) tlPause();
     tlSeek(at(e), { ensure: false });
-    tlSelectTarget(e.target, e.shiftKey);
+    tlSelectTarget(e.target, e.shiftKey || e.ctrlKey || e.metaKey);
   };
   // Keyboard activation of lane buttons selects and seeks without a pointer.
   track.onclick = (e) => {
     if (e.detail !== 0) return;
-    tlSelectTarget(e.target, e.shiftKey);
+    const node = e.target.closest('[data-para], [data-seg]'), item = node && tlItemForNode(node);
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey && TL.sectionAnchor && ['paragraph','picture'].includes(item?.kind)) {
+      tlSectionSet(TL.sectionAnchor, item.sid); return;
+    }
+    tlSelectTarget(e.target, e.shiftKey || e.ctrlKey || e.metaKey);
     if (TL.selection) { tlPause(); tlSeek(TL.selection.t0, {ensure: false}); }
   };
   track.onpointermove = (e) => { if (TL.scrubbing) tlSeek(at(e), { ensure: false }); };

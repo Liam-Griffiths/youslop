@@ -23,7 +23,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !document.querySelector('.modal')) { tlSelect(null); TL.host.focus(); return; }
   const tag = (e.target.tagName || '').toLowerCase();
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
-  if (document.querySelector('.modal') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector('.modal')) return;
+  if (tlSectionKey(e)) { e.preventDefault(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
   if (typeof tlErgonomicsKey === 'function' && tlErgonomicsKey(e)) { e.preventDefault(); return; }
   if (tlGraphicKey(e)) { e.preventDefault(); return; }

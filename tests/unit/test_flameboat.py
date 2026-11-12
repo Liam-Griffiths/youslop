@@ -50,9 +50,9 @@ def test_flameboat_dispatch_timing_and_all_kinds(project, tmp_path, monkeypatch,
         for c,(a,z) in zip(cues,times):
             if a>=10.13 or z<=a:
                 continue
-            s=next(s for s in ctx['screens'] if s['start']==a)
+            s=next(s for s in ctx['screens'] if s['start']==(0 if a==.6 else a))
             assert s['cue']['kind']==c['kind']
-            assert s['duration']==pytest.approx(min(z,10.13)-a)
+            assert s['duration']==pytest.approx(min(z,10.13)-s['start'])
     assert kw['seconds']==cuts.frame_count(11.13,30)/30 and kw['frames']==(4,20)
     assert ctx['card_at']==10.13
     assert json.loads(out.with_suffix('.webm.stats.json').read_text())['captured_frames']==0

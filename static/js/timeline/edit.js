@@ -91,7 +91,7 @@ function tlWireTiming() {
       e.stopPropagation();
       if (e.button !== 0 || TL.drag) return;
       suppressClick = false;
-      if (e.shiftKey) return; // The click toggles membership.
+      if (e.shiftKey || e.ctrlKey || e.metaKey) return; // The click toggles membership.
       if (typeof tlGroupDrag === 'function' && tlGroupDrag(e, el, sel)) { suppressClick = true; return; }
       const mode = kind === 'gap' ? 'gap' : e.target.closest('.tl-resize') ? 'resize' : 'move';
       if (kind === 'chapter' && mode !== 'resize') return;

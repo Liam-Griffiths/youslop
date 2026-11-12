@@ -1458,6 +1458,27 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
     return p.to_dict()
 
 
+@app.post('/api/projects/{pid}/sections')
+def edit_section(pid: str, payload: dict = Body(...)) -> dict:
+    from . import sections, undo
+    with store.lock_for(pid):
+        p = _load(pid)
+        if jobs.active_for(pid, writing=True):
+            raise HTTPException(409, 'Wait for jobs that update this project before editing sections.')
+        try:
+            label, hint = sections.apply(p, payload)
+        except edits.EditError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
+        if label:
+            source = undo.edit_source.get()
+            token = undo.edit_source.set((label, source[1] if source else uuid.uuid4().hex))
+            try:
+                store.save(p)
+            finally:
+                undo.edit_source.reset(token)
+        return {**p.to_dict(), 'section_hint': hint}
+
+
 @app.post('/api/projects/{pid}/inserts')
 def add_insert(pid: str, payload: dict = Body(...)) -> dict:
     return _edit_insert(pid, payload)
