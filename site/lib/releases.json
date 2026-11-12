@@ -1,0 +1,9 @@
+{
+  "note": "Filled from GitHub Releases by T19.3. Until then every build links to the releases page.",
+  "latest": null,
+  "platforms": [
+    { "id": "mac", "label": "macOS", "detail": "Apple silicon", "asset": null },
+    { "id": "linux", "label": "Linux", "detail": "x86_64 and arm64", "asset": null },
+    { "id": "windows", "label": "Windows", "detail": "Not tested yet", "asset": null }
+  ]
+}

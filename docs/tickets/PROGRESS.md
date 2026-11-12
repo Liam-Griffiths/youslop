@@ -302,7 +302,7 @@ no Vercel image optimizer; small cached media on Vercel for now (one env var mov
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | doing | owner 2026-11-11 (later): "create tickets then work on the landing page" — unparked ahead of the T20 fixes; Claude Opus 5.5; custom next/image loader over pre-built AVIF/WebP widths |
+| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | doing | owner 2026-11-11 (later): "create tickets then work on the landing page" — unparked ahead of the T20 fixes; Claude Opus 5.5; custom next/image loader over pre-built AVIF/WebP widths |; built 2026-11-11: Lighthouse mobile 100/100/100/100, 300 KB; awaiting owner review |
 | T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | parked | owner 2026-11-11: Phase 19 paused; captured from the bundled example; heavy capture/encode needs a heads-up |
 | T19.3 | Download and releases pages from GitHub Releases, deploy to Vercel | S | T19.1 | parked | owner 2026-11-11: Phase 19 paused; releases.json from GitHub Releases; no deploy without owner |
 

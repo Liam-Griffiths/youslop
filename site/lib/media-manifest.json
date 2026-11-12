@@ -1,0 +1,96 @@
+{
+  "blocks": {
+    "hash": "02325940",
+    "width": 960,
+    "height": 708,
+    "widths": [
+      480,
+      768,
+      960
+    ],
+    "blur": "data:image/webp;base64,UklGRmoAAABXRUJQVlA4IF4AAABQBACdASoYABIAPu1orlCppaQiqAqpMB2JZwAALnRqa8kgGZwWnG7Ht4dAAP7ulQRwtXCvQKmq7RPStOREsEyXAEc7VHcVadNFRFKSK09clpPkqHLv5iweU2VAEAAA"
+  },
+  "channels": {
+    "hash": "b47356e4",
+    "width": 1160,
+    "height": 710,
+    "widths": [
+      480,
+      768,
+      1080,
+      1160
+    ],
+    "blur": "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAADQAwCdASoYAA8APu1iqU2ppaQiMAgBMB2JaQAAYf+ggAzIWWbOwAAA/ulWEhgVWYAv8Wc/SRXSKiXWPHzESBl7LRPmXqg3CxBCfergjAwAAA=="
+  },
+  "models": {
+    "hash": "979292c2",
+    "width": 780,
+    "height": 778,
+    "widths": [
+      480,
+      768,
+      780
+    ],
+    "blur": "data:image/webp;base64,UklGRl4AAABXRUJQVlA4IFIAAADQAwCdASoYABgAPu1srFEppaQiqAqpMB2JaWVuXAyJ81iKsHYGcAAA/u/IFrdEc+d+ReJo7GaHu1SyxvvGcwMMFBcnjmS80BmlDKwiU/GUfAAA"
+  },
+  "research": {
+    "hash": "74cfa547",
+    "width": 1440,
+    "height": 816,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440
+    ],
+    "blur": "data:image/webp;base64,UklGRkoAAABXRUJQVlA4ID4AAAAQAwCdASoYAA4APu1iqU2ppaOiMAgBMB2JaQAAetGFReAA/vAii7JZwU3PAzSA7rVaOvS8B9hTAIizP8AAAA=="
+  },
+  "script": {
+    "hash": "5def9d82",
+    "width": 1170,
+    "height": 816,
+    "widths": [
+      480,
+      768,
+      1080,
+      1170
+    ],
+    "blur": "data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAACwAwCdASoYABEAPu1wsFKppiSiqAgBMB2JaQDOdBZm4TM1vUVBUAD+7+Xb9CQh1oAeTA2nGqc9zsObQU5ofdJVTeFuq2/cveK9MM1ewAA="
+  },
+  "timeline": {
+    "hash": "f4bad5ed",
+    "width": 1440,
+    "height": 448,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440
+    ],
+    "blur": "data:image/webp;base64,UklGRk4AAABXRUJQVlA4IEIAAABQAwCdASoYAAcAPu1kqU2ppaOiMAgBMB2JaQAAW+i4urAXkAD+7NJcyzVh8NdjsbsOhqlx5vX7x8uPHlGexIYAAAA="
+  },
+  "visuals": {
+    "hash": "8d0acf3c",
+    "width": 1160,
+    "height": 816,
+    "widths": [
+      480,
+      768,
+      1080,
+      1160
+    ],
+    "blur": "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAABQBACdASoYABEAPu1urlIppiQiqAgBMB2JaQAALnUnZAOK0todLJkyiA8AAP7uhiYCOkatjvLp6DnPECoEdmd2d0CzeNoFTo+9y0gwvO8/toRg2MceRDIt1Uw6Ny2c/eTyQHbLNr95uAAA"
+  },
+  "voice": {
+    "hash": "cda78977",
+    "width": 1440,
+    "height": 816,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440
+    ],
+    "blur": "data:image/webp;base64,UklGRk4AAABXRUJQVlA4IEIAAACQAwCdASoYAA4APu1kqU2ppaQiMAgBMB2JaQAAW+ucgsa+JZGAAP7ulOnXwwBjfFddRgZLI/okIwNfVThRSBLwAAA="
+  }
+}
