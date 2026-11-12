@@ -302,7 +302,7 @@ no Vercel image optimizer; small cached media on Vercel for now (one env var mov
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | parked | owner 2026-11-11: Phase 19 paused; custom next/image loader over pre-built AVIF/WebP widths |
+| T19.1 | Site scaffold: static export, design, features, image pipeline | M | all other tickets incl. T20.1 and its fixes | doing | owner 2026-11-11 (later): "create tickets then work on the landing page" — unparked ahead of the T20 fixes; Claude Opus 5.5; custom next/image loader over pre-built AVIF/WebP widths |
 | T19.2 | Screenshots and a WebM trailer from the running app | M | T19.1, T15.1 | parked | owner 2026-11-11: Phase 19 paused; captured from the bundled example; heavy capture/encode needs a heads-up |
 | T19.3 | Download and releases pages from GitHub Releases, deploy to Vercel | S | T19.1 | parked | owner 2026-11-11: Phase 19 paused; releases.json from GitHub Releases; no deploy without owner |
 
@@ -314,4 +314,18 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T20.1 | UX self-review of the whole app | M | Phase 17, Phase 18, T15.2 | doing | review only, no code; report artifact + owner-triaged fix tickets (T20.2+) for Codex; heads-up before starting; review done 2026-11-11 (2 P1, 18 P2, 10 P3): awaiting owner triage before fix tickets |
+| T20.1 | UX self-review of the whole app | M | Phase 17, Phase 18, T15.2 | done | 2026-11-11: report docs/ux-review/2026-11-11/README.md + artifact; 2 P1, 18 P2, 10 P3, 4 guide questions; owner asked for fix tickets (T20.2–T20.14) |
+| T20.2 | Missing recordings: find them, name them, keep mixing | M | — | todo | P1 UX-01 |
+| T20.3 | One app dialog, and a theme pick you can cancel | M | — | todo | P1 UX-02, UX-07 |
+| T20.3b | Replace the remaining native prompt and confirm dialogs | M | T20.3 | todo | UX-07 |
+| T20.4 | Edit: the timeline in view at 1280×720 | M | — | todo | UX-03, UX-23; guide question G1 |
+| T20.5 | Plain errors with a next step, and quieter jobs | M | — | todo | UX-06, UX-18 |
+| T20.6 | Project bar at small sizes, one accent on Review & publish | S | — | todo | UX-04, UX-05, UX-22 |
+| T20.7 | Block previews: no seek race, no broken images | S | — | todo | UX-08, UX-09 |
+| T20.8 | Settings: sections in order, only the fields that apply | M | — | todo | UX-11, UX-28 |
+| T20.9 | Focus ring everywhere, and a label on every field | S | — | todo | UX-13, UX-14 |
+| T20.10 | Plan board fit, readable Check findings | M | — | todo | UX-16, UX-17, UX-19, UX-29; G3 stays an owner question |
+| T20.11 | Timeline polish from the Phase 17 reviews | M | T20.4 | todo | UX-20, UX-30 |
+| T20.12 | Copy pass: sentence case and wrong empty states | S | — | todo | UX-10, UX-12, UX-15, UX-21, UX-25, UX-27; G2 asked in log |
+| T20.13 | Visuals list and sources, Channels index cards | S | — | todo | UX-24, UX-26 |
+| T20.14 | A period faces pack (mid-century and other eras) | S | — | todo | G4; owner approves the font list before download |
