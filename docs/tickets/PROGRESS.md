@@ -314,4 +314,4 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
-| T20.1 | UX self-review of the whole app | M | Phase 17, Phase 18, T15.2 | todo | review only, no code; report artifact + owner-triaged fix tickets (T20.2+) for Codex; heads-up before starting |
+| T20.1 | UX self-review of the whole app | M | Phase 17, Phase 18, T15.2 | doing | review only, no code; report artifact + owner-triaged fix tickets (T20.2+) for Codex; heads-up before starting |; review done 2026-11-11 (2 P1, 18 P2, 10 P3): awaiting owner triage before fix tickets

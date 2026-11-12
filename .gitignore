@@ -30,3 +30,7 @@ dist/
 .idea/
 packs/*/.check/
 *.corkboredpack
+
+# UX review screenshots stay local; only the report is tracked.
+docs/ux-review/*/*
+!docs/ux-review/*/README.md
