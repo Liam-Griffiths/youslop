@@ -153,3 +153,21 @@ dialog.expanded .close:focus-visible { outline: 2px solid var(--accent); outline
   dialog.expanded .sheet .frame img { max-height: calc(94vh - 16px); width: auto; max-width: 100%; object-fit: contain; }
   dialog.expanded .text { align-content: center; padding: 32px 28px; }
 }
+
+/* Phones: logo and theme switch on one row, the links on a second, evenly spaced. */
+@media (max-width: 640px) {
+  .nav { display: grid; grid-template-columns: 1fr auto; row-gap: 14px; padding-block: 16px 6px; }
+  .nav-end { display: contents; }
+  .nav .theme-switch { grid-column: 2; grid-row: 1; }
+  .nav nav { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--rule); padding-top: 12px; }
+  .nav ul { justify-content: space-between; gap: 6px; }
+  .hero { padding-block: 32px 28px; gap: 18px; }
+  .features { padding-block: 48px 16px; }
+  .feature .copy { gap: 6px; }
+  .start { padding-block: 40px; }
+}
+/* The "View larger" hint as a chip on the picture, not a second label under it. */
+.zoom { position: relative; }
+.zoom .zoom-hint { position: absolute; right: 14px; bottom: 14px; margin: 0; padding: 7px 10px; border-radius: 8px;
+  background: rgba(11, 11, 11, .78); color: #F4F2EE; font: 400 11.5px/1 var(--mono); opacity: .92; }
+.zoom:hover .zoom-hint, .zoom:focus-visible .zoom-hint { opacity: 1; background: var(--accent); color: var(--accent-ink); }

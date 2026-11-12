@@ -20,9 +20,9 @@ export default function Zoom({ label, title, text, more, thumb, large }: Props) 
   const close = () => dialog.current?.close();
   return (
     <>
-      <button type="button" className="zoom" onClick={open} aria-haspopup="dialog" aria-label={`Click to expand: ${title}`}>
+      <button type="button" className="zoom" onClick={open} aria-haspopup="dialog" aria-label={`View larger: ${title}`}>
         {thumb}
-        <span className="zoom-hint">Click to expand</span>
+        <span className="zoom-hint">View larger</span>
       </button>
       <dialog ref={dialog} className="expanded" aria-label={title}
         onClick={(e) => { if (e.target === e.currentTarget) close(); }}>

@@ -1,0 +1,51 @@
+{
+  "_note": "Phone crops, as fractions of each source image (x0, y0, x1, y1). build_images.py writes them as <name>--m.",
+  "research": [
+    0.2,
+    0.16,
+    0.66,
+    0.66
+  ],
+  "script": [
+    0.01,
+    0.12,
+    0.53,
+    0.7
+  ],
+  "voice": [
+    0.21,
+    0.24,
+    0.76,
+    0.97
+  ],
+  "visuals": [
+    0.24,
+    0.32,
+    0.69,
+    0.96
+  ],
+  "blocks": [
+    0.0,
+    0.14,
+    0.49,
+    0.62
+  ],
+  "timeline": [
+    0.0,
+    0.0,
+    0.5,
+    1.0
+  ],
+  "channels": [
+    0.02,
+    0.34,
+    0.49,
+    0.82
+  ],
+  "models": [
+    0.0,
+    0.0,
+    1.0,
+    0.62
+  ]
+}

@@ -59,7 +59,7 @@ export default function Home() {
       <section className="wrap trailer" aria-label="The app">
         {TRAILER
           ? <Trailer label={`A silent tour of ${NAME}: the stages, archive film, blocks and 3D scenes.`} />
-          : <div className="frame"><Shot name="visuals" priority sizes="(min-width: 1160px) 1108px, 96vw"
+          : <div className="frame"><Shot name="visuals" mobile="visuals--m" priority sizes="(min-width: 1160px) 1108px, 96vw"
               alt={`${NAME}'s Visuals stage with the bundled example, The Tube Mail.`} /></div>}
       </section>
 
@@ -71,7 +71,7 @@ export default function Home() {
         {FEATURES.map((f) => (
           <article className="feature" key={f.shot}>
             <Zoom label={f.label} title={f.title} text={f.text} more={f.more}
-              thumb={<div className="frame"><Shot name={f.shot} alt={f.alt} /></div>}
+              thumb={<div className="frame"><Shot name={f.shot} mobile={`${f.shot}--m`} alt={f.alt} /></div>}
               large={<Shot name={f.shot} alt={f.alt} sizes="(min-width: 1300px) 1224px, 96vw" />} />
             <div className="copy">
               <span className="label">{f.label}</span>

@@ -1,6 +1,6 @@
 {
   "blocks": {
-    "hash": "6cfc7960",
+    "hash": "50910cb1",
     "width": 1920,
     "height": 1416,
     "widths": [
@@ -13,7 +13,7 @@
     "blur": "data:image/webp;base64,UklGRmwAAABXRUJQVlA4IGAAAAAwBACdASoYABIAPu1qrlEppaQiqAqpMB2JZwAALnRaumq1w1GaAmn9ugAA/u6UeEKI1iVeal4sE2eOEIHoMAy/El34zkCrJrv0vz/JThkbZulYcFsBHP8HP8MC0ogpIAA="
   },
   "channels": {
-    "hash": "b47356e4",
+    "hash": "6fa22cd8",
     "width": 1160,
     "height": 710,
     "widths": [
@@ -25,7 +25,7 @@
     "blur": "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAADQAwCdASoYAA8APu1iqU2ppaQiMAgBMB2JaQAAYf+ggAzIWWbOwAAA/ulWEhgVWYAv8Wc/SRXSKiXWPHzESBl7LRPmXqg3CxBCfergjAwAAA=="
   },
   "models": {
-    "hash": "33ecb26c",
+    "hash": "2f5fdd68",
     "width": 1560,
     "height": 1556,
     "widths": [
@@ -38,7 +38,7 @@
     "blur": "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAABQBACdASoYABgAPu1srVEppiQiqAqpMB2JaQDNSBEdwSPn8Mt3m/T+WEAAAP7pUxnG01OM1jrGaV0/iyGFGGRRxlKZ+DcqI2X3lXoOMAAAAA=="
   },
   "research": {
-    "hash": "a84000e6",
+    "hash": "771da89d",
     "width": 2880,
     "height": 1632,
     "widths": [
@@ -51,7 +51,7 @@
     "blur": "data:image/webp;base64,UklGRkgAAABXRUJQVlA4IDwAAAAQAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JaQAAetGFReAA/vAii7JZwU12EYBQk9aMgBQSwYRUKLM/wAA="
   },
   "script": {
-    "hash": "0647bca4",
+    "hash": "b87b2266",
     "width": 2340,
     "height": 1632,
     "widths": [
@@ -64,7 +64,7 @@
     "blur": "data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAACQAwCdASoYABEAPu1wsVKppiSiqAgBMB2JaScAFNICVwZTK/hAAP7v5dv3fyEOtSbLmT5XUFgUcFwnpThqWdFn0p+NY6SbCjGO4VGYAAA="
   },
   "timeline": {
-    "hash": "5a794ba8",
+    "hash": "20167e66",
     "width": 2880,
     "height": 896,
     "widths": [
@@ -77,7 +77,7 @@
     "blur": "data:image/webp;base64,UklGRk4AAABXRUJQVlA4IEIAAABQAwCdASoYAAcAPu1kqU2ppaOiMAgBMB2JaQAAW+n8A2twAAD+7NJcyzViPluyOVGHQ1S483r94+XHjy+NNYVgAAA="
   },
   "visuals": {
-    "hash": "9c55ec58",
+    "hash": "9e623515",
     "width": 2320,
     "height": 1632,
     "widths": [
@@ -90,7 +90,7 @@
     "blur": "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAABwBACdASoYABEAPu1urlIppiQiqAgBMB2JaQAALnUKewv1FdW1lJ5CrL4PQAD+7oYmAjpGrY7y6eg5zaS0QGtaoDDgabqGFVjyDmOPSrtXX4snuN2O10kuomhtdMTg3dBJ8ckw/RmzAAAA"
   },
   "voice": {
-    "hash": "bf3569d0",
+    "hash": "f78cb20e",
     "width": 2880,
     "height": 1632,
     "widths": [
@@ -101,6 +101,100 @@
       1920
     ],
     "blur": "data:image/webp;base64,UklGRkwAAABXRUJQVlA4IEAAAACQAwCdASoYAA4APu1iqU2ppaOiMAgBMB2JaQAAW+ucgsa+JZGAAP7ulOnXwwBjfFddRgZLI/okIohxeooLJeAA"
+  },
+  "research--m": {
+    "hash": "7f6ca035",
+    "width": 1325,
+    "height": 816,
+    "widths": [
+      480,
+      768,
+      1080,
+      1325
+    ],
+    "blur": "data:image/webp;base64,UklGRmAAAABXRUJQVlA4IFQAAADQAwCdASoYAA8APu1iqU2ppaOiMAgBMB2JaQAAUrfRA1IrU+aotuAA/un8YnAsTufrAjqJZ8QRF1T6EHOlrESlttepyCJ1cSRco81GpTK5hDDyAAA="
+  },
+  "script--m": {
+    "hash": "e5cd5e81",
+    "width": 1217,
+    "height": 946,
+    "widths": [
+      480,
+      768,
+      1080,
+      1217
+    ],
+    "blur": "data:image/webp;base64,UklGRmQAAABXRUJQVlA4IFgAAADwAwCdASoYABMAPu1wsFIppiSiqAgBMB2JaQDOdA+48rDKC1ZLlwQAAP7jiRhuz30w4Mj3UtmJMbUs+Q0b14hikPne39xcSmCr/1wg2v4MJmz+vsT6jgAA"
+  },
+  "voice--m": {
+    "hash": "ebc76fb1",
+    "width": 1584,
+    "height": 1191,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440,
+      1584
+    ],
+    "blur": "data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAADwAwCdASoYABIAPu1ur1KppiQiqAgBMB2JZwDNhBEd0+B64CQVnEIoAP7pUKxm7VIPcqT62xMfGP/T1qd4/RUpVGc8FkrKfXfpzRi4AAA="
+  },
+  "visuals--m": {
+    "hash": "4efcfe98",
+    "width": 1044,
+    "height": 1045,
+    "widths": [
+      480,
+      768,
+      1044
+    ],
+    "blur": "data:image/webp;base64,UklGRoQAAABXRUJQVlA4IHgAAADQBACdASoYABgAPu1gqU2ppSQiMAgBMB2JYwDLpCIjeQhABre+DTUy9A/gRQtXAAD+7E0rYgvR5szK1pz1IsNu2x81nOTwiIxwq6TfYAMJB91wrADVcm5bL9FipMxS0dNS4iqJOQGctPo0znU6B5Lq5dLiOaGJwAA="
+  },
+  "blocks--m": {
+    "hash": "1de219c3",
+    "width": 941,
+    "height": 680,
+    "widths": [
+      480,
+      768,
+      941
+    ],
+    "blur": "data:image/webp;base64,UklGRlYAAABXRUJQVlA4IEoAAAAwBACdASoYABEAPu1mrE+ppSQiMBgIATAdiWkAAC51pEDFS1YroWohJ6AA/vC63VmK7SOqYmVoBpihP3nvE1iQmBnOVl6XTYAAAA=="
+  },
+  "timeline--m": {
+    "hash": "c5e0c13a",
+    "width": 1440,
+    "height": 896,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440
+    ],
+    "blur": "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAACQAwCdASoYAA8APu1krU6ppaSiMAgBMB2JZwAAUqs5YOQyfvbAAP7wzpFkfl5K9WyN2VIND/2n0XcUv+b8sy7BP0pLZSdndCDYOCJ5PhG+AA=="
+  },
+  "channels--m": {
+    "hash": "f79c7b0d",
+    "width": 545,
+    "height": 341,
+    "widths": [
+      480,
+      545
+    ],
+    "blur": "data:image/webp;base64,UklGRoIAAABXRUJQVlA4IHYAAACwAwCdASoYAA8APu1iqU2ppaOiMAgBMB2JZQAAXe5miFcVXpDl8AD+72UQigL6PCXMC1MTeh/Qqz/XgahT8Ti1oNlq0+iqU2DjEsUNZ3kf49G0qjJyo6dLSQ7Z9W2JRDkpkNIhe8L27Q5uor1JQyb/Cb4qAAAA"
+  },
+  "models--m": {
+    "hash": "6467b54b",
+    "width": 1560,
+    "height": 965,
+    "widths": [
+      480,
+      768,
+      1080,
+      1440,
+      1560
+    ],
+    "blur": "data:image/webp;base64,UklGRlAAAABXRUJQVlA4IEQAAACwAwCdASoYAA8APu1iqU2ppaQiMAgBMB2JaQAAW/AhcOFJyZXJwAD+6VMZxtNTjNY7FxLUzJT2f/d0dF/h+Fwwf7rcAA=="
   },
   "_trailer": {
     "src": "trailer-f10a3a38.webm",
