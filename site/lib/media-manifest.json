@@ -57,6 +57,71 @@
     ],
     "blur": "data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAACwAwCdASoYABEAPu1wsFKppiSiqAgBMB2JaQDOdBZm4TM1vUVBUAD+7+Xb9CQh1oAeTA2nGqc9zsObQU5ofdJVTeFuq2/cveK9MM1ewAA="
   },
+  "shot-archive": {
+    "hash": "d65cec59",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAACwAwCdASoYAA4APu1iqU2ppaOiMAgBMB2JZwAAUe9kyzjpeTfh3AD9HxV3a1mGar5KIUrWplbH7Vtv/qD6LYw2vT9sNJ0tyoVHoKAA"
+  },
+  "shot-board": {
+    "hash": "cf2622dd",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRkwAAABXRUJQVlA4IEAAAACwAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JZwCw7CHw2EAlVhuAAAD+v8NKzI55KPKI6dskV1l8TllVshwfGAAA"
+  },
+  "shot-chat": {
+    "hash": "fe8ff735",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRkIAAABXRUJQVlA4IDYAAABQAwCdASoYAA4APu1iqU2ppaOiMAgBMB2JaQAAetGuWoSTAAD+8D5k0BysI7Tg6IxgguCXgAA="
+  },
+  "shot-html-scene": {
+    "hash": "76ef1cc6",
+    "width": 960,
+    "height": 540,
+    "widths": [
+      480,
+      768,
+      960
+    ],
+    "blur": "data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAABwAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JZwAAW+ztpyyGNQAA/vGAaOjeOli2kmblUqKLmkDoXXJdnosdOEy5G6rpJDAA"
+  },
+  "shot-number": {
+    "hash": "337c2bb7",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRkwAAABXRUJQVlA4IEAAAABQAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JaQAAW/EjwEnKGAD+8ysWASFaTI84NcbymyMgEFwBoaF4BJhWAAAA"
+  },
+  "shot-route": {
+    "hash": "53749156",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRkoAAABXRUJQVlA4ID4AAACwAwCdASoYAA4APu1iqk2ppaQiMAgBMB2JaQAAW4UXi1DirX64AAD+8XQzbAMG696Mw8u7BLDuuOkEvAAAAA=="
+  },
+  "shot-timeline-block": {
+    "hash": "6ce2db5e",
+    "width": 480,
+    "height": 270,
+    "widths": [
+      480
+    ],
+    "blur": "data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAABwAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JaQAAW+j49l8vpVAA/vGCIVzc1UocoA+yc0yXe8JOLo3dc32l6XLqoyzBIYAA"
+  },
   "timeline": {
     "hash": "f4bad5ed",
     "width": 1440,

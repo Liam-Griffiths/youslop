@@ -107,3 +107,20 @@ a { color: inherit; }
 .page { padding-block: 40px 24px; display: grid; gap: 20px; }
 .page h1 { font: 800 clamp(44px, 8vw, 80px)/.92 var(--display); text-transform: uppercase; margin: 0; }
 .page p { margin: 0; max-width: 60ch; color: var(--ink-2); }
+
+/* Kinds of shot: a grid of real frames. */
+.hero p.sub { margin: 0; max-width: 52ch; color: var(--dim); font-size: 18px; text-wrap: pretty; }
+.kinds { padding-block: 72px 8px; display: grid; gap: 28px; }
+.kinds > header { display: grid; gap: 10px; max-width: 60ch; }
+.kinds h2 { font: 800 clamp(36px, 5vw, 56px)/.95 var(--display); text-transform: uppercase; margin: 0; letter-spacing: -.01em; }
+.kinds > header p { margin: 0; color: var(--ink-2); }
+.kind-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 22px; }
+@media (max-width: 1000px) { .kind-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .kind-grid { grid-template-columns: minmax(0, 1fr); } }
+.kind { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.kind h3 { font: 700 18px/1.25 var(--ui); margin: 6px 0 0; }
+.kind p { margin: 0; color: var(--ink-2); font-size: 15.5px; line-height: 1.5; }
+.frame.small { padding: 4px; border-radius: 10px; }
+.frame.small picture, .frame.small img { border-radius: 6px; }
+.frame.blank { aspect-ratio: 16 / 9; display: grid; place-items: center; background: linear-gradient(135deg, #16181C, #0E0F11); }
+.frame.blank span { font: 800 26px/1 var(--display); text-transform: uppercase; color: #6B6862; letter-spacing: .01em; }
