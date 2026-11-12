@@ -50,8 +50,7 @@ def save(project: Project) -> Project:
         previous = json.loads(before) if before else None
         project.sync_takes()
         data = project.to_dict()
-        tracked = undo.edit_source.get() or (d / 'history/index.json').exists()
-        if previous and tracked and undo.retain_recordings(data, previous):
+        if previous and undo.retain_recordings(data, previous):
             project.retired_takes = data.get('retired_takes', [])
             for kind in ('slides', 'sponsors'):
                 for owner, raw in zip(getattr(project, kind), data[kind]):

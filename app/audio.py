@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import time
 from pathlib import Path
@@ -345,6 +346,8 @@ def process_take(raw_path: Path, out_path: Path, voice: Voice | None = None) -> 
     blob — must not take the previous take down with it, which is how a project
     ends up with metadata claiming twenty seconds over an empty file.
     """
+    if out_path.exists():
+        raise ValueError("Take output must be a fresh path")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     span = speech_span(_levels(raw_path))
     if span is None:
@@ -361,7 +364,7 @@ def process_take(raw_path: Path, out_path: Path, voice: Voice | None = None) -> 
         dur = ffutil.duration(tmp)
         if dur < 0.25:
             raise ValueError("That take is silent or too short. Check your microphone.")
-        tmp.replace(out_path)
+        os.link(tmp, out_path)  # exclusive publication; a shared take can never be replaced
     finally:
         tmp.unlink(missing_ok=True)
     return {"duration": round(dur, 3), "recorded_at": time.time(),

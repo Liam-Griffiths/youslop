@@ -812,8 +812,11 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-para.chap { border-color: var(--line-strong); }
 .tl-para.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
 .tl-flag { color: var(--cool); margin-right: 4px; }
-.tl-head-line { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); z-index: 5; pointer-events: none; }
-.tl-head-line b { position: absolute; top: 0; left: -7px; width: 12px; height: 10px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.tl-head-line { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); z-index: 9; pointer-events: none; }
+.tl-playhead-handle { position: absolute; top: 0; left: -7px; width: 12px; height: 22px;
+  padding: 0; border: 0; background: transparent; cursor: ew-resize; pointer-events: auto; }
+.tl-playhead-handle::before { content: ""; position: absolute; top: 0; left: 1px; width: 10px; height: 10px;
+  background: var(--accent); clip-path: polygon(0 0, 100% 0, 50% 100%); }
 .tl-problems { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .tl-chip { background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim); border-radius: 999px;
   padding: 2px 10px; font-size: 12px; cursor: pointer; }

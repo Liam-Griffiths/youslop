@@ -57,12 +57,13 @@ function tlDraw() {
         ${q.chapter ? '<span class="tl-flag">⚑</span>' : ''}<span>${esc(q.text)}</span>
       </button>`).join('');
   track.innerHTML = `
-    <div class="tl-ruler">${ticks}</div>
+    <div class="tl-ruler" title="Drag to scrub · Shift+drag to select a section">${ticks}</div>
     <div class="tl-lane tl-pictures"><em>pictures</em>${pics}</div>
     <div class="tl-lane para"><em>voice</em>${paras}${tlGapItems()}</div>
     ${tlCameraRows()}
     ${tlLayerRows()}
-    <div class="tl-head-line" id="tl-line"><b></b></div>`;
+    <div class="tl-head-line" id="tl-line"><button type="button" class="tl-playhead-handle"
+      aria-label="Playhead" title="Drag to scrub · Arrow keys to seek"></button></div>`;
   tlWireLaneCollapse();
   tlWireLayers();
   tlWireTiming();
@@ -295,9 +296,11 @@ function tlShortcuts() {
       <dt>+ / −</dt><dd>Zoom at playhead</dd>
       <dt>Ctrl / Cmd + wheel</dt><dd>Zoom at pointer; plain wheel scrolls</dd>
       <dt>Shift / Ctrl / Cmd + click</dt><dd>Toggle lane items; Shift on the main track extends a section</dd>
-      <dt>Ruler drag / Shift + picture drag</dt><dd>Select a section across all lanes</dd>
+      <dt>Ruler / playhead drag</dt><dd>Scrub the playhead</dd>
+      <dt>Shift + ruler / picture drag</dt><dd>Select a section across all lanes</dd>
       <dt>I / O, then X / Ctrl or Cmd + A</dt><dd>Select marked section / whole main track</dd>
       <dt>Section: drag / Alt + arrows / Delete</dt><dd>Reorder script / move one place / ripple delete</dd>
+      <dt>Section: Ctrl / Cmd + X / C / V / D</dt><dd>Cut / copy / paste at playhead / duplicate after source</dd>
       <dt>Drag empty lane</dt><dd>Marquee select; Shift adds items</dd>
       <dt>Selection: ← / →</dt><dd>Nudge movable items one frame together</dd>
       <dt>Drag selection / Delete</dt><dd>Move / delete editable items together</dd>

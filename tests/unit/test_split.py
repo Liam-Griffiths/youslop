@@ -202,3 +202,30 @@ def test_spoken_number_timings_group_onto_narration_words():
     grouped = razor._group_spoken(items, 'In 2017 Bridle wrote.'.split())
     assert [g['w'] for g in grouped] == ['In', '2017', 'Bridle', 'wrote.']
     assert grouped[1]['start'] == 1 and grouped[1]['end'] == 2.9
+
+
+def test_splitting_duplicate_keeps_shared_source(saved):
+    original = record(saved)
+    before, stamp = original.read_bytes(), original.stat().st_mtime_ns
+    source_id = saved.slides[0].id
+    main.edit_section(saved.id, dict(op='duplicate', ids=[source_id], version=saved.updated_at))
+    duplicate = store.load(saved.id).slides[1]
+    main.split_slide(saved.id, duplicate.id, {})
+    p = store.load(saved.id)
+    assert p.slides[0].take == saved.slides[0].take and not p.slides[0].history
+    assert p.slides[1].history[0]['path'] == saved.slides[0].take['path']
+    assert original.read_bytes() == before and original.stat().st_mtime_ns == stamp
+
+
+def test_late_save_failure_keeps_referenced_halves(saved, monkeypatch):
+    record(saved)
+    real_save = store.save
+    def fail_after_save(project):
+        real_save(project)
+        raise OSError('failure after publication')
+    monkeypatch.setattr(store, 'save', fail_after_save)
+    with pytest.raises(HTTPException):
+        main.split_slide(saved.id, saved.slides[0].id, {})
+    root = store.project_dir(saved.id)
+    for slide in store.load(saved.id).slides:
+        assert (root/slide.take['path']).exists()

@@ -9,7 +9,9 @@ from app.schema import Project, Slide, SponsorSlot
 
 
 @pytest.fixture
-def cut():
+def cut(tmp_path, monkeypatch):
+    from app import store
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
     p = Project(id="sponsor-test", idea="test", use_intro=False, use_outro=False)
     p.style.picture_every = 1
     p.slides = [Slide(id=f"s{i}", narration=f"Paragraph {i}", chapter=f"Chapter {i}",

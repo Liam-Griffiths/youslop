@@ -72,7 +72,9 @@ def test_two_uploads_restore_and_reprocess(saved, fake_audio, monkeypatch):
     assert res['slide']['take']['path'] == first['path']
     assert res['slide']['history'][0]['path'] == second
     main.reprocess_takes(p.id)
-    assert len(store.load(p.id).slides[0].history) == 1
+    # Reprocessing creates a new file and retires the previous read.
+    assert len(store.load(p.id).slides[0].history) == 2
+    assert store.load(p.id).slides[0].history[-1]["reason"] == "reprocess"
     assert (root / first['path']).read_bytes() == original
 
 

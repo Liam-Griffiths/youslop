@@ -74,3 +74,19 @@ def test_style_import_accepts_either_key(monkeypatch, key):
     assert slide_styles.import_bundle({
         key: 1, "name": "Portable", "spec": {"elements": []},
     }) == ("Portable", {"elements": []})
+
+
+def test_replace_restores_bundle_contents(tmp_path):
+    project = store.save(Project(id='preplace', idea='Synthetic replacement'))
+    root = store.project_dir(project.id)
+    recording = root/'takes/shared.wav'
+    recording.write_bytes(b'Original shared recording')
+    bundle = tmp_path/'replace.corkbored'
+    transfer.export(project.id, bundle)
+    recording.write_bytes(b'Newer local recording')
+    project.title = 'Newer local title'
+    store.save(project)
+    transfer.import_(bundle, on_conflict='replace')
+    assert recording.read_bytes() == b'Original shared recording'
+    assert store.load(project.id).title == ''
+    assert not (root.parent/'.retired').exists()

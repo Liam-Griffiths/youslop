@@ -150,14 +150,37 @@ def recordings(data):
         yield 'mic_test', '', dict(data['mic_test'], track='mic')
 
 
+def referenced_files(root):
+    """Recording paths protected by the live project or any undo checkpoint."""
+    documents = [json.loads((root / 'project.json').read_text())]
+    for state in read(root)['states']:
+        documents.extend(json.loads(value) for value in snapshot(root, state).values())
+    paths = set()
+    def collect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in ('path', 'raw_path', 'video', 'video_path') and isinstance(child, str):
+                    paths.add(child)
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+    for document in documents:
+        for _, _, take in recordings(document):
+            collect(take)
+    return paths
+
+
 def retain_recordings(target, current):
     def identity(kind, sid, take):
-        return kind, sid, take.get('path'), take.get('raw_path'), take.get('video_path')
+        return kind, sid, take.get('path'), take.get('raw_path'), take.get('video'), take.get('video_path')
     known = {identity(k, sid, t) for k, sid, t in recordings(target)}
+    files = {key[2:] for key in known}
     changed = False
     for kind, sid, take in recordings(current):
         key = identity(kind, sid, take)
-        if key in known or not take.get('path'):
+        # Undoing a copy need not retire a second reference to the same files.
+        if key in known or key[2:] in files or not take.get('path'):
             continue
         retired = dict(deepcopy(take), reason='undo', retired_at=take.get('retired_at') or time.time())
         owner = next((s for s in target.get(kind, []) if s['id'] == sid), None) if kind != 'mic_test' else None
@@ -166,6 +189,7 @@ def retain_recordings(target, current):
         else:
             target.setdefault('retired_takes', []).append(dict(retired, owner_kind=kind, owner_id=sid))
         known.add(key)
+        files.add(key[2:])
         changed = True
     return changed
 

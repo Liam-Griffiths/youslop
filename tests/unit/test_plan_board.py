@@ -7,6 +7,11 @@ from app import plan_board, script_gen, store
 from app.schema import Project, Slide
 
 
+@pytest.fixture(autouse=True)
+def isolated_storage(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
+
+
 def fixture():
     sections = [{'heading': name, 'summary': name, 'words': 100, 'kind': 'main'}
                 for name in ('Door', 'Street')]

@@ -1466,7 +1466,10 @@ def edit_section(pid: str, payload: dict = Body(...)) -> dict:
         if jobs.active_for(pid, writing=True):
             raise HTTPException(409, 'Wait for jobs that update this project before editing sections.')
         try:
-            label, hint = sections.apply(p, payload)
+            label, hint = sections.apply(p, payload if payload.get('op') != 'cut' else {**payload, 'op': 'copy'})
+            clipboard = sections.capture(p, payload['ids']) if payload['op'] in ('copy', 'cut') else None
+            if payload['op'] == 'cut':
+                label, hint = sections.apply(p, payload)
         except edits.EditError as exc:
             raise HTTPException(exc.status, str(exc)) from exc
         if label:
@@ -1476,7 +1479,7 @@ def edit_section(pid: str, payload: dict = Body(...)) -> dict:
                 store.save(p)
             finally:
                 undo.edit_source.reset(token)
-        return {**p.to_dict(), 'section_hint': hint}
+        return {**p.to_dict(), 'section_hint': hint, 'section_clipboard': clipboard}
 
 
 @app.post('/api/projects/{pid}/inserts')
@@ -1997,8 +2000,15 @@ def split_slide(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
                     p.set_take(dest_slide, track, take)
                 store.save(p)
         except (ValueError, TypeError, KeyError, OSError, ffutil.FFError) as exc:
-            for path in published:
-                path.unlink()  # only new derived halves from this failed operation
+            from . import undo
+            with store.lock_for(pid):
+                try:
+                    protected = undo.referenced_files(root)
+                except (OSError, ValueError, KeyError):
+                    protected = None  # Preserve files if reference metadata cannot be read.
+                for path in published:
+                    if protected is not None and path.relative_to(root).as_posix() not in protected:
+                        path.unlink()  # only unpublished, unreferenced derived halves
             raise HTTPException(409, str(exc)) from exc
     return {**p.to_dict(), "approximate": approximate}
 
@@ -3345,11 +3355,13 @@ def reprocess_takes(pid: str) -> dict:
                 continue
             try:
                 raw = _safe_join(root, take["raw_path"])
-                meta = audio_mod.process_take(raw, root / take["path"], p.voice)
+                out = next_take_path(root, MIC_TRACK, s.id)
+                meta = audio_mod.process_take(raw, out, p.voice)
             except Exception as exc:
                 failed.append(f"paragraph {n}: {exc}")
                 continue
-            p.set_take(s, MIC_TRACK, {**take, **meta})
+            p.set_take(s, MIC_TRACK, {**take, **meta, "path": out.relative_to(root).as_posix()},
+                       reason="reprocess")
             done += 1
         store.save(p)
     return {"reprocessed": done, "skipped": len(failed), "failed": failed,
@@ -3511,9 +3523,7 @@ async def upload_presenter(pid: str, file: UploadFile) -> dict:
             raise HTTPException(400, "That is not a video file I can read.")
         d = project_dir(pid) / "presenter"
         d.mkdir(exist_ok=True)
-        for old in d.glob("clip.*"):
-            old.unlink()
-        dest = d / f"clip{suffix}"
+        dest = d / f"clip-{uuid.uuid4().hex}{suffix}"
         dest.write_bytes(await file.read())
         if dest.stat().st_size < 4096:
             dest.unlink()
@@ -3543,9 +3553,6 @@ async def upload_presenter(pid: str, file: UploadFile) -> dict:
 def delete_presenter(pid: str) -> dict:
     with store.lock_for(pid):
         p = _load(pid)
-        d = project_dir(pid) / "presenter"
-        for old in d.glob("clip.*"):
-            old.unlink()
         p.presenter = Presenter()
         store.save(p)
     return {"presenter": p.presenter.to_dict()}

@@ -47,7 +47,7 @@ def test_text_proposal_apply_and_history(saved, monkeypatch):
     assert current.subtitle == 'Concurrent edit'
     assert current.slides[0].narration == 'Proposed narration'
     assert current.slides[0].take is None and current.slides[0].takes == {}
-    assert current.slides[0].history[0]['path'] == 'takes/old.wav'
+    assert current.slides[0].history[-1]['path'] == 'takes/old.wav'
     with pytest.raises(ValueError, match='changed'):
         review.route_fix(original, fix, apply=True, proposal=proposal['proposal'])
 

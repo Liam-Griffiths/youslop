@@ -1,3 +1,5 @@
+let tlSectionClipboard = null; // Detached, project-local snapshot; survives selection and undo.
+
 // Sections are contiguous main-track rows, distinct from individual lane items.
 function tlSectionSet(a, b = a) {
   const rows = tlParas(), x = rows.findIndex(q => q.id === a), y = rows.findIndex(q => q.id === b);
@@ -26,16 +28,23 @@ function tlSectionPaint() {
   if (sc) sc.onscroll = tlSectionPositionTools;
   track.querySelectorAll('.tl-section, .tl-section-tools').forEach(n => n.remove());
   const bounds = tlSectionBounds();
-  if (!bounds) return;
+  if (!bounds && (!tlSectionClipboard || tlSectionClipboard.project_id !== TL.pid)) return;
   const band = document.createElement('div'); band.className = 'tl-section';
-  Object.assign(band.style, {left:`${104+bounds.a*TL.zoom}px`, width:`${(bounds.b-bounds.a)*TL.zoom}px`});
-  track.append(band);
+  if (bounds) Object.assign(band.style, {left:`${104+bounds.a*TL.zoom}px`, width:`${(bounds.b-bounds.a)*TL.zoom}px`});
+  if (bounds) track.append(band);
   const tools = document.createElement('div'); tools.className = 'tl-section-tools';
   tools.setAttribute('role', 'toolbar'); tools.setAttribute('aria-label', 'Section commands');
-  tools.innerHTML = `<span>${TL.section.ids.length} main-track items · script order</span>
+  const copied = tlSectionClipboard?.slides?.length || 0;
+  tools.innerHTML = `<span>${bounds ? `${TL.section.ids.length} selected · script order`
+    : `${copied} copied · Paste goes at the playhead`}</span>
     <button type="button" class="btn sm" data-section-dir="-1" aria-label="Move section left">←</button>
     <button type="button" class="btn sm" data-section-dir="1" aria-label="Move section right">→</button>
-    <button type="button" class="btn sm" data-section-delete>Delete section</button>`;
+    <button type="button" class="btn sm" data-section-delete>Delete section</button>
+    ${['cut','copy','paste','duplicate'].map(op => `<button type="button" class="btn sm" data-section-op="${op}">${op[0].toUpperCase()+op.slice(1)}</button>`).join('')}`;
+  tools.querySelectorAll('button').forEach(n => {
+    n.disabled = n.dataset.sectionOp === 'paste' ? tlSectionClipboard?.project_id !== TL.pid : !bounds;
+  });
+  tools.querySelectorAll('[data-section-op]').forEach(n => n.onclick = () => tlSectionSave(n.dataset.sectionOp));
   tools.onpointerdown = e => e.stopPropagation();
   tools.querySelectorAll('[data-section-dir]').forEach(n => n.onclick = () => tlSectionNudge(+n.dataset.sectionDir));
   tools.querySelector('[data-section-delete]').onclick = () => tlSectionSave('delete');
@@ -46,11 +55,11 @@ function tlSectionPaint() {
 function tlSectionPositionTools() {
   const sc = $('#tl-scroll'), tools = $('#tl-track')?.querySelector('.tl-section-tools');
   const bounds = tlSectionBounds();
-  if (!sc || !tools || !bounds) return;
+  if (!sc || !tools) return;
   tools.style.maxWidth = `${Math.max(0, sc.clientWidth-8)}px`;
   // The ruler starts after the 104px lane headers; scrollLeft is track-relative.
   const lo = sc.scrollLeft-104+4, hi = lo+sc.clientWidth-8-tools.offsetWidth;
-  tools.style.left = `${Math.max(lo, Math.min(bounds.a*TL.zoom, hi))}px`;
+  tools.style.left = `${Math.max(lo, Math.min((bounds?.a ?? TL.cur)*TL.zoom, hi))}px`;
 }
 
 function tlSectionNudge(dir) {
@@ -61,16 +70,22 @@ function tlSectionNudge(dir) {
 }
 
 function tlSectionSave(op, to = '') {
-  const pid = TL.pid, section = TL.section;
-  if (!section) return;
+  const pid = TL.pid, section = TL.section && JSON.parse(JSON.stringify(TL.section));
+  if (op === 'paste' ? tlSectionClipboard?.project_id !== pid : !section) return;
+  const clipboard = op === 'paste' ? JSON.parse(JSON.stringify(tlSectionClipboard)) : null;
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
     try {
       tlPause();
+      const destination = op === 'paste' ? tlSectionPoint(TL.cur)?.id || '' : to;
+      const payload = op === 'paste' ? {version:state.project.updated_at, clipboard} : section;
       const project = await api(`/api/projects/${pid}/sections`, {method:'POST',
-        body:JSON.stringify({op, ...section, to}), editLabel:`${op} section`, editGesture:crypto.randomUUID()});
+        body:JSON.stringify({op, ...payload, to:destination}), editLabel:`${op} section`, editGesture:crypto.randomUUID()});
       if (TL.pid !== pid || state.project?.id !== pid) return;
       const hint = project.section_hint; delete project.section_hint;
+      const copied = project.section_clipboard; delete project.section_clipboard;
+      if (copied) tlSectionClipboard = JSON.parse(JSON.stringify(copied));
+      if (op === 'copy') { tlSectionPaint(); tlMsg('Section copied. Paste at the playhead.'); return; }
       state.project = project; TL.section = null; TL.sectionAnchor = null;
       await tlRefresh();
       if (op === 'move') tlSectionSet(section.ids[0], section.ids.at(-1));
@@ -89,8 +104,14 @@ function tlSectionSave(op, to = '') {
 }
 
 function tlSectionKey(e) {
-  if (state.project.kind === 'clip') return false;
+  if (state.project.kind === 'clip' || e.target?.isContentEditable
+      || e.target?.closest?.('input, textarea, select, [contenteditable]')) return false;
   const key = e.key.toLowerCase(), rows = tlParas();
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && ['x','c','v','d'].includes(key)) {
+    const op = {x:'cut', c:'copy', v:'paste', d:'duplicate'}[key];
+    if (op === 'paste' ? tlSectionClipboard?.project_id !== TL.pid : !TL.section) return false;
+    tlSectionSave(op); return true;
+  }
   if (!rows.length) return false;
   if ((e.ctrlKey || e.metaKey) && key === 'a') tlSectionSet(rows[0].id, rows.at(-1).id);
   else if (e.ctrlKey || e.metaKey) return false;
@@ -118,10 +139,12 @@ function tlSectionPoint(t, exclude = []) {
   return points.filter(p => !exclude.includes(p.id)).reduce((a,b) => Math.abs(a.t-t) <= Math.abs(b.t-t) ? a : b);
 }
 
-// Intercept only the ruler and main-track items; other lane gestures stay local.
+// Shift makes ranges; only an already-selected section can be moved.
 function tlSectionPointer(e) {
   if (state.project.kind === 'clip' || e.button !== 0 || TL.drag || e.ctrlKey || e.metaKey) return false;
+  if (e.target.closest('.tl-playhead-handle')) return false;
   const track = $('#tl-track'), ruler = e.target.closest('.tl-ruler');
+  if (ruler && !e.shiftKey) return false; // Plain ruler drags scrub live.
   const node = e.target.closest('[data-para], [data-seg]');
   const item = node && tlItemForNode(node);
   if (!ruler && !['paragraph','picture'].includes(item?.kind)) return false;
@@ -132,10 +155,8 @@ function tlSectionPointer(e) {
   const itemId = item?.kind === 'picture' ? (rows.find(q => initialTime >= q.start
     && initialTime < q.start+q.duration)?.id || item.sid) : item?.sid;
   const anchor = TL.sectionAnchor || TL.selection?.sid;
-  const range = !!ruler || e.shiftKey;
-  if (!range && (!TL.section || !TL.section.ids.includes(itemId))) {
-    tlSelect(item); TL.sectionAnchor = itemId;
-  }
+  const range = e.shiftKey;
+  if (!range && !TL.section?.ids.includes(itemId)) return false;
   let moved = false, to = '', ghost, geometry;
   tlPause(); track.setPointerCapture(e.pointerId);
   TL.drag = {section:true};
@@ -148,10 +169,6 @@ function tlSectionPointer(e) {
       const lo = Math.min(a,b,rows.length-1), hi = Math.min(rows.length-1, Math.max(lo, Math.max(a,b)-(ruler ? 1 : 0)));
       tlSectionSet(rows[lo].id, rows[hi].id);
       return;
-    }
-    if (!TL.section) {
-      const ids = item.kind === 'picture' ? tlSegs().find(s => s.ref === item.id).paragraphs.map(q => q.id) : [itemId];
-      tlSectionSet(ids[0], ids.at(-1));
     }
     const bounds = tlSectionBounds(), length = bounds.b-bounds.a;
     if (!ghost) {

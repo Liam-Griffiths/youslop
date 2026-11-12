@@ -311,7 +311,7 @@ function tlWireScrub() {
     if (e.button !== 0) return;
     if (e.target.closest('.tl-layer-label, em')) return;
     if (tlSectionPointer(e)) return;
-    if (!e.target.closest('[data-para], [data-seg], .tl-ruler')) { tlMarquee(e); return; }
+    if (!e.target.closest('[data-para], [data-seg], .tl-ruler, .tl-playhead-handle')) { tlMarquee(e); return; }
     track.setPointerCapture(e.pointerId);
     TL.scrubbing = true;
     if (TL.playing) tlPause();

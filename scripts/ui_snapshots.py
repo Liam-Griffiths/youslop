@@ -524,6 +524,27 @@ def capture(base, out):
                 cdp.send('Input.dispatchKeyEvent', {'type':'keyDown', 'key':'Escape', 'windowsVirtualKeyCode':27}, session)
                 cdp.send('Input.dispatchMouseEvent', {'type':'mouseReleased', **point, 'button':'left'}, session)
                 _evaluate(cdp, session, "if (TL.drag || document.querySelector('.tl-section-ghost')) throw Error('Section cancel failed'); tlSelect(null); true")
+                for phase in ('section-copy', 'section-paste'):
+                    _evaluate(cdp, session, """(async () => {
+                      const rows=tlParas();
+                      if (!tlSectionClipboard) {
+                        window.__sectionBefore=JSON.stringify(state.project.slides);
+                        tlSectionSet(rows[1].id,rows[2].id); tlSectionSave('copy');
+                      } else { TL.cur=rows.at(-1).start; tlSectionSave('paste'); }
+                      await tlInspectorQueue;
+                      if (!tlSectionClipboard) throw Error('Clipboard missing');
+                      return true;
+                    })()""")
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    path = out / f'p--psnapkenburns--{phase}.png'
+                    path.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(path), 't':0, 'why':phase})
+                _evaluate(cdp, session, """(async () => {
+                  if (!state.project.slides.some(s=>s.duplicate_of)) throw Error('Paste missing');
+                  await restoreProjectEdit('undo');
+                  if (JSON.stringify(state.project.slides)!==window.__sectionBefore) throw Error('Paste undo changed source');
+                  tlSectionClipboard=null; tlSelect(null); return true;
+                })()""")
             if route == '#/':
                 _evaluate(cdp, session, """(async () => {
                   if (document.querySelector('#home-format,#saved-format')) throw Error('Duplicate Home picker');

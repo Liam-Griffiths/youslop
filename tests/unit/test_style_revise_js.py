@@ -10,7 +10,7 @@ def test_proposal_review(tmp_path):
     runtime = shutil.which('gjs')
     if not runtime:
         pytest.skip('GJS required')
-    source = Path('static/js/tabs/script.js').read_text()
+    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
     script = tmp_path / 'style.mjs'
     script.write_text('''
 const check = (ok, msg) => { if (!ok) throw Error(msg); };
@@ -83,7 +83,7 @@ def test_style_actions_refresh_with_findings(tmp_path):
     runtime = shutil.which('gjs')
     if not runtime:
         pytest.skip('GJS required')
-    source = Path('static/js/tabs/script.js').read_text()
+    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
     script = tmp_path / 'findings.mjs'
     script.write_text('''
 const check = (ok, msg) => { if (!ok) throw Error(msg); };
