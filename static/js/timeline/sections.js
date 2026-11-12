@@ -44,7 +44,7 @@ function tlSectionPaint() {
   const track = $('#tl-track');
   if (!track) return;
   const sc = $('#tl-scroll');
-  if (sc) sc.onscroll = tlSectionPositionTools;
+  if (sc) sc.onscroll = () => { tlSectionPositionTools(); if (typeof tlGraphicTools === 'function') tlGraphicTools(); };
   track.querySelectorAll('.tl-section, .tl-section-tools').forEach(n => n.remove());
   const bounds = tlSectionBounds();
   if (!bounds && (!tlSectionClipboard || tlSectionClipboard.project_id !== TL.pid)) return;

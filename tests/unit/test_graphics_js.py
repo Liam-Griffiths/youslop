@@ -11,11 +11,14 @@ def test_graphics_runtime(tmp_path):
     if not runtime:
         pytest.skip('GJS required')
     source = '\n'.join(Path(p).read_text() for p in [
-        'static/js/timeline/edit.js', 'static/js/timeline/graphics.js'])
+        'static/js/timeline/edit.js', 'static/js/timeline/graphics.js',
+        'static/js/timeline/graphic_actions.js', 'static/js/timeline/graphic_gestures.js',
+        'static/js/timeline/sections.js'])
     source = Path('static/js/tabs/visuals.js').read_text().split('function pictureKindLabel')[0] + source
     harness = r'''
 const assert = (v,m) => {if (!v) throw Error(m);};
 const near = (a,b) => Math.abs(a-b) < .00001;
+const structuredClone = v => JSON.parse(JSON.stringify(v));
 const hand = {id:'g1',block_id:'lower_third_panel',vars:{title:'Name'},at:1,dur:2,on:'Name',by:'auto'};
 const other = {id:'g2',block_id:'lower_third_panel',at:7,dur:2,by:'hand'};
 const state = {project:{id:'p',style:{format:'kenburns'},slides:[{id:'s',overlays:[hand,other]}]}};
@@ -25,22 +28,27 @@ const q = {id:'s',start:10,duration:8,spoken:7,word_times:[
   timing:{gap:{value:1},title_hold:{value:2},chapter_hold:{value:1}}};
 const TL = {pid:'p',cur:12,zoom:100,data:{total:25,layers:{graphics:[sel]}},host:{focus(){}}};
 const tlParas = () => [q], tlFps = () => 10, tlPause = () => {};
-const tlSelect = s => {TL.selection=s;}, tlItems = () => [sel], tlDraw = () => {};
+const tlSelect = s => {TL.selection=s;TL.selections=s?[s]:[];}, tlDraw = () => {};
+const tlItems = () => state.project.slides[0].overlays.map(o=>({...sel,id:o.id,t0:q.start+o.at,t1:Math.min(q.start+o.at+o.dur,q.start+q.duration)}));
+const tlItemForNode=()=>sel, tlGroupDrag=()=>false, tlClock=t=>String(t);
 const tlMsg = message => {throw Error(message);};
 const tlRefresh = async () => {};
 let tlInspectorQueue = Promise.resolve(), calls=[];
 const saveSlide = async (sid,patch) => {calls.push(patch); Object.assign(state.project.slides[0],patch);return {};};
 class El {
- constructor(dataset={}) {this.dataset=dataset;this.style={left:'1100px',width:'198px'};this.classList={add(){}};this.onclick=()=>{};}
- append() {} remove() {} setPointerCapture() {} hasPointerCapture() {return false;}
+ constructor(dataset={}) {this.dataset=dataset;this.style={left:'1100px',width:'198px'};this.classList={add(){}};this.onclick=()=>{};
+  this.children=[];this.clientWidth=500;this.scrollLeft=0;this.offsetWidth=100;this.offsetHeight=20;this.offsetTop=22;}
+ append(n) {this.children.push(n);n.parent=this;} remove() {this.parent.children=this.parent.children.filter(n=>n!==this);}
+ addEventListener() {} removeEventListener() {} setPointerCapture() {} hasPointerCapture() {return false;}
  getBoundingClientRect() {return {left:0};}
 }
 const bar = new El({layer:'graphics',item:'0'}), track = new El();
 track.querySelectorAll = () => [bar];
+track.querySelector = s=>s.includes('data-eye')?{closest:()=>track}:track;
 const $ = () => track;
 const document = {createElement:() => new El(), addEventListener(k,fn){this.key=fn;},removeEventListener(){this.key=null;}};
 function event(t,resize=false,alt=true) {return {button:0,pointerId:1,clientX:104+t*100,altKey:alt,
- stopPropagation(){},target:{closest:()=>resize?{}:null}};}
+ preventDefault(){},stopPropagation(){},target:{closest:()=>resize?{dataset:{graphicEdge:'end'}}:null}};}
 const isCut = () => false;
 let focusSid;
 const openVisualEdit = sid => {focusSid=sid;};
@@ -50,18 +58,21 @@ let blocksBrowser = {items:[{ref:'lower_third_panel',overlay:{position:['bottom_
 const renderBlocks = async (path,o) => {options=o;};
 const crypto = {randomUUID:() => 'new'};
 const api = async (url,opts) => {
- if (opts) {calls.push(JSON.parse(opts.body));return {};}
+ if (opts) {
+  const body=JSON.parse(opts.body),patch=body.edits?.[0].patch || body;calls.push(patch);
+  if(body.edits){Object.assign(state.project.slides[0],patch);return state.project;}return {};
+ }
  return state.project;
 };
 async function run() {
  tlGraphicBlocks = [{ref:'lower_third_panel',overlay:{max_dur:30}}];
- tlWireTiming();
+ tlWireTiming();tlWireGraphics();
  bar.onpointerdown(event(11));bar.onpointermove(event(12));
  assert(calls.length === 0,'no PATCH during drag');
  bar.onpointerup(event(12));await tlInspectorQueue;
  assert(calls.length === 1 && near(calls[0].overlays[0].at,2),'paragraph-relative drop');
  assert(calls[0].overlays[0].on === '' && calls[0].overlays[0].by === 'hand','move clears anchor and becomes hand');
- assert(calls[0].overlays[1] === other,'other graphic preserved');
+ assert(JSON.stringify(calls[0].overlays[1]) === JSON.stringify(other),'other graphic preserved');
  bar.onpointerdown(event(11,true));bar.onpointerup(event(12,true));await tlInspectorQueue;
  assert(near(calls.at(-1).overlays[0].dur,3),'resize duration');
  const before = calls.length;
@@ -75,13 +86,13 @@ async function run() {
  TL.selection = sel;
  assert(tlGraphicKey({key:'ArrowRight'}),'keyboard move handled');await tlInspectorQueue;
  assert(near(calls.at(-1).overlays[0].at,2.32),'keyboard paragraph-relative move');
- assert(tlGraphicKey({key:'ArrowRight',shiftKey:true}),'keyboard resize handled');await tlInspectorQueue;
- assert(near(calls.at(-1).overlays[0].dur,3.1),'keyboard resize duration');
+ assert(tlGraphicKey({key:'ArrowRight',shiftKey:true}),'ten frame keyboard move handled');await tlInspectorQueue;
+ assert(near(calls.at(-1).overlays[0].at,3.32) && calls.at(-1).overlays[0].dur===3,'Shift moves ten frames and keeps duration');
  tlGraphicKey({key:'ArrowRight'}); tlGraphicKey({key:'ArrowRight'}); await tlInspectorQueue;
- assert(near(calls.at(-1).overlays[0].at,2.52),'rapid keys accumulate in save queue');
+ assert(near(calls.at(-1).overlays[0].at,3.52),'rapid keys accumulate in save queue');
  assert(!tlGraphicKey({key:'j'}),'other shortcuts untouched');
  tlGraphicKey({key:'Delete'});await tlInspectorQueue;
- assert(state.project.slides[0].overlays.length === 1 && state.project.slides[0].overlays[0] === other,'Delete selected only');
+ assert(state.project.slides[0].overlays.length === 1 && state.project.slides[0].overlays[0].id === other.id,'Delete selected only');
  tlGraphicAdd();await Promise.resolve();
  assert(options.overlay && options.mode === 'pick','G uses filtered picker');
  await options.onUse({block:'lower_third_panel',vars:{title:'New'}});

@@ -14,7 +14,7 @@ function tlGraphicSave(sel, changes) {
 async function tlGraphicInspector(sel, body) {
   try {
     tlGraphicBlocks ||= await api('/api/blocks?overlay=1');
-    if (!body.isConnected || TL.selection?.id !== sel.id) return;
+    if (!body.isConnected || (TL.selection?.sid !== sel.sid || TL.selection?.id !== sel.id)) return;
     const item = tlGraphic(sel), b = tlGraphicBlocks.find(b => b.ref === item?.block_id);
     if (!b) { body.textContent = 'Overlay block unavailable.'; return; }
     body.innerHTML = `<h3>${esc(b.name)}</h3><form id="graphic-form">
@@ -64,9 +64,9 @@ async function openGraphicPicker(sid, at = 0) {
 function openGraphicEdit(sid, id) {
   // Already in Edit (a check's Fix button): the hash would not change, so no
   // route runs; select the graphic directly instead.
-  const graphic = TL.host?.isConnected && TL.pid === state.project.id && tlItems('overlay').find(g => g.id === id);
+  const graphic = TL.host?.isConnected && TL.pid === state.project.id && tlItems('overlay').find(g => g.sid === sid && g.id === id);
   if (graphic) { tlSelect(graphic); tlSeek(graphic.t0, {ensure:false}); return; }
-  state.graphicFocus = {pid:state.project.id, id};
+  state.graphicFocus = {pid:state.project.id, sid, id};
   openVisualEdit(sid);
 }
 
@@ -82,10 +82,9 @@ function tlGraphicKey(e) {
   if (!item) return false;
   if (e.key === 'Delete' || e.key === 'Backspace') tlGraphicSave(sel, null);
   else if (['ArrowLeft','ArrowRight'].includes(e.key)) {
-    const delta = (e.key === 'ArrowLeft' ? -1 : 1) / tlFps();
-    const q = tlParas().find(q => q.id === sel.sid);
-    tlGraphicSave(sel, o => e.shiftKey ? {dur:Math.max(.05, Math.min(tlGraphicMax(sel), o.dur + delta))}
-      : {at:Math.max(0, (o.on ? sel.t0 - q.start : o.at) + delta), on:''});
-  } else return false;
+    const delta = (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) / tlFps();
+    tlGraphicCommand('move', [sel], live => ({time:Math.max(tlParas()[0].start, live.t0 + delta)}));
+  } else if (e.key.toLowerCase() === 's') tlGraphicCommand('split', [sel], TL.cur);
+  else return false;
   return true;
 }

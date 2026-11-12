@@ -40,8 +40,8 @@ function tlSelectionPaint() {
         id:seg.sponsor || seg.ref, sid:seg.type === 'sponsor' ? '' : seg.lead};
     el.classList.toggle('sel', (TL.selections || []).some(s => tlSameItem(s, item)));
   });
+  if (typeof tlGraphicTools === 'function') tlGraphicTools();
 }
-
 function tlSelectKind(kind) {
   const seg = tlSegAt(TL.cur);
   const para = [...(seg?.paragraphs || [])].reverse().find((q) => q.start <= TL.cur) || seg?.paragraphs[0];
@@ -52,7 +52,7 @@ function tlSelectKind(kind) {
 function tlSelectNext(dir) {
   if (!TL.selection) return;
   const items = tlItems(TL.selection.kind);
-  const index = items.findIndex((s) => s.id === TL.selection.id);
+  const index = items.findIndex((s) => tlSameItem(s, TL.selection));
   const item = items[Math.max(0, Math.min(items.length - 1, index + dir))];
   if (item) { tlPause(); tlSeek(item.t0, {ensure: false}); tlSelect(item); }
 }

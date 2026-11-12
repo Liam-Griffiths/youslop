@@ -156,6 +156,7 @@ function paintBlockDetails(aspect) {
   if (!b.aspects.includes(aspect)) aspect = b.aspects[0];
   const saved = blocksBrowser.presets.filter(p => p.block === b.ref && (p.scope === 'project' && p.owner === blocksBrowser.options.project || p.scope === 'channel' && p.owner === blocksBrowser.options.channel));
   const scratch = {...saved.find(p => p.scope === 'channel')?.values, ...saved.find(p => p.scope === 'project')?.values,
+    ...blocksBrowser.options.initialValues?.(b),
     ...(blocksBrowser.trial?.ref === b.ref ? blocksBrowser.trial.values : {})};
   panel.innerHTML = `<div class="block-detail"><h2>${esc(b.name)}</h2><p>${esc(b.description)}</p><button type="button" id="block-trial-image" aria-label="Expand ${esc(b.name)} preview">${blockPoster(b,aspect)}</button>
     <div class="row"><button type="button" class="btn sm" id="block-play">Play · ¼ size</button><button type="button" class="btn sm" id="block-expand">Expand</button>

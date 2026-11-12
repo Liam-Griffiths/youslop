@@ -261,7 +261,7 @@ function tlErgonomicsKey(e) {
     if (TL.selections.every(tlDeletable)) tlGroupSave([...TL.selections], 'delete');
     else tlMsg('This selection includes items that cannot be deleted here.');
   } else if (TL.selections?.length > 1 && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
-    if (TL.selections.every(tlMovable)) tlGroupSave([...TL.selections], 'move', (e.key === 'ArrowLeft' ? -1 : 1)/tlFps());
+    if (TL.selections.every(tlMovable)) tlGroupSave([...TL.selections], 'move', (e.key === 'ArrowLeft' ? -1 : 1)*(e.shiftKey ? 10 : 1)/tlFps());
     else return false;
   } else return false;
   return true;

@@ -151,7 +151,7 @@ async function tlMount() {
   if (!TL.data) $('#tl-note').textContent = 'laying out the cut…';
   await tlRefresh();
   if (state.graphicFocus?.pid === TL.pid) {
-    const graphic = tlItems('overlay').find(g => g.id === state.graphicFocus.id);
+    const graphic = tlItems('overlay').find(g => g.sid === state.graphicFocus.sid && g.id === state.graphicFocus.id);
     state.graphicFocus = null;
     if (graphic) { tlSelect(graphic); tlSeek(graphic.t0, {ensure:false}); }
   }

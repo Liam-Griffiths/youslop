@@ -71,6 +71,7 @@ function tlDraw() {
   tlWireCamera();
   tlWireInserts();
   tlWireTrims();
+  tlWireGraphics();
   tlSectionPaint();
   tlPaintProblems();
   tlPaintReview();
@@ -297,7 +298,8 @@ function tlShortcuts() {
       <dt>Alt + drag</dt><dd>Retiming without snapping</dd>
       <dt>Camera: I / O</dt><dd>Mark source range; Delete cuts it</dd>
       <dt>Overlay: 1 / 2 / 3</dt><dd>Cutaway / picture in picture / split</dd>
-      <dt>Graphics: G</dt><dd>Add at playhead; arrows move, Shift + arrows resize, Delete removes</dd>
+      <dt>Graphics: G</dt><dd>Add at playhead; arrows move one frame, Shift + arrows ten; Delete removes; S splits</dd>
+      <dt>Graphics: Ctrl / Cmd + C / V / D</dt><dd>Copy / paste at playhead / duplicate after selection; section commands win when a section is selected</dd>
       <dt>Overlay: P / Delete</dt><dd>Change corner / remove overlay</dd>
       <dt>Shift + Z</dt><dd>Fit timeline</dd>
       <dt>+ / −</dt><dd>Zoom at playhead</dd>

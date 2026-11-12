@@ -27,6 +27,7 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('.modal, dialog[open]')) return;
   if (tlInsertKey(e)) { e.preventDefault(); return; }
   if (tlTrimKey(e)) { e.preventDefault(); return; }
+  if (tlGraphicClipboardKey(e)) { e.preventDefault(); return; }
   if (tlSectionKey(e)) { e.preventDefault(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
