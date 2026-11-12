@@ -5,7 +5,10 @@ export type MediaName = keyof typeof manifest;
 export const MEDIA = manifest as unknown as Record<string, MediaEntry>;
 export type TrailerEntry = { src: string; mobile: string; poster: string; hash: string; seconds: number };
 // Written by site/tools/trailer.py; absent until the trailer has been cut.
-export const TRAILER = (manifest as Record<string, unknown>)['_trailer'] as TrailerEntry | undefined;
+const CUT = (manifest as Record<string, unknown>)['_trailer'] as TrailerEntry | undefined;
+// Owner, 2026-11-12: hide the trailer for now; it needs more work. Flip to show it again.
+export const SHOW_TRAILER = false;
+export const TRAILER = SHOW_TRAILER ? CUT : undefined;
 // One switch moves media to a CDN later: set NEXT_PUBLIC_MEDIA_BASE at build time.
 export const MEDIA_BASE = (process.env.NEXT_PUBLIC_MEDIA_BASE || '/media').replace(/\/$/, '');
 
