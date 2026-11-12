@@ -22,8 +22,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Set the saved theme before first paint, so there's no flash of the other one. */}
+        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}" }} />
         <link rel="preload" href="/fonts/archivo-condensed-800.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/inter-500.woff2" as="font" type="font/woff2" crossOrigin="" />
       </head>

@@ -22,13 +22,20 @@
   --radius: 12px;
   color-scheme: light;
 }
+/* Theme: system by default; the nav switch sets data-theme to light or dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper: #121214; --card: #19191C; --ink: #F2F0EC; --ink-2: #D8D4CD; --dim: #A29E97;
     --rule: #2D2C2A; --accent: #FF5A1F; --accent-ink: #120A06; --frame: #0A0A0B;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 40px -16px rgba(0, 0, 0, .7);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --paper: #121214; --card: #19191C; --ink: #F2F0EC; --ink-2: #D8D4CD; --dim: #A29E97;
+  --rule: #2D2C2A; --accent: #FF5A1F; --accent-ink: #120A06; --frame: #0A0A0B;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 40px -16px rgba(0, 0, 0, .7);
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -76,14 +83,14 @@ a { color: inherit; }
 .features h2, .start h2 { font: 800 clamp(36px, 5vw, 56px)/.95 var(--display); text-transform: uppercase; margin: 0; letter-spacing: -.01em; }
 .feature { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: 48px; align-items: center; }
 .feature:nth-of-type(even) { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
-.feature:nth-of-type(even) .frame { order: 2; }
+.feature:nth-of-type(even) .zoom { order: 2; }
 .feature .copy { display: grid; gap: 10px; min-width: 0; }
 .feature h3 { font: 700 26px/1.2 var(--ui); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
 .feature p { margin: 0; color: var(--ink-2); max-width: 38ch; }
 @media (max-width: 820px) {
   .features { gap: 64px; }
   .feature, .feature:nth-of-type(even) { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .feature:nth-of-type(even) .frame { order: 0; }
+  .feature:nth-of-type(even) .zoom { order: 0; }
 }
 
 /* Get started */
@@ -111,3 +118,38 @@ a { color: inherit; }
 /* Rows below the fold skip layout until near the viewport, so their lazy
    screenshots aren't prefetched before the trailer has a chance to play. */
 .feature { content-visibility: auto; contain-intrinsic-size: auto 520px; }
+
+/* Theme switch: three small segments in the nav. */
+.theme-switch { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 2px; gap: 2px; background: var(--card); }
+.theme-switch button { all: unset; cursor: pointer; display: inline-grid; place-items: center; width: 30px; height: 26px; border-radius: 999px; color: var(--dim); }
+.theme-switch button:hover { color: var(--ink); }
+.theme-switch button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); }
+.theme-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-switch svg { width: 15px; height: 15px; }
+.nav-end { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+
+/* Expandable screenshots */
+.zoom { all: unset; display: block; cursor: zoom-in; border-radius: var(--radius); }
+.zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.zoom .frame { transition: transform .2s cubic-bezier(.16, 1, .3, 1); }
+.zoom:hover .frame { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .zoom .frame { transition: none; } .zoom:hover .frame { transform: none; } }
+.zoom-hint { font: 400 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin-top: 10px; display: block; }
+dialog.expanded { border: 0; padding: 0; background: transparent; max-width: min(1240px, 96vw); width: 100%; max-height: 94vh; color: var(--ink); }
+dialog.expanded::backdrop { background: rgba(11, 11, 11, .72); }
+dialog.expanded .sheet { background: var(--paper); border-radius: 16px; overflow: auto; max-height: 94vh; display: grid; }
+dialog.expanded .sheet .frame { border-radius: 16px 16px 0 0; box-shadow: none; padding: 8px; }
+dialog.expanded .text { display: grid; gap: 10px; padding: 22px clamp(18px, 3vw, 32px) 28px; }
+dialog.expanded h3 { font: 700 26px/1.2 var(--ui); margin: 0; letter-spacing: -.01em; }
+dialog.expanded p { margin: 0; max-width: 70ch; color: var(--ink-2); }
+dialog.expanded .close { all: unset; cursor: pointer; position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; display: grid; place-items: center;
+  border-radius: 999px; background: rgba(11, 11, 11, .78); color: #F4F2EE; font: 600 22px/1 var(--ui); }
+dialog.expanded .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Wide screens: the picture and its text side by side, all in view. */
+@media (min-width: 1000px) {
+  dialog.expanded { max-width: min(1500px, 96vw); }
+  dialog.expanded .sheet { grid-template-columns: minmax(0, 1fr) 340px; align-items: center; overflow: hidden; }
+  dialog.expanded .sheet .frame { border-radius: 16px 0 0 16px; height: 100%; display: grid; place-items: center; }
+  dialog.expanded .sheet .frame img { max-height: calc(94vh - 16px); width: auto; max-width: 100%; object-fit: contain; }
+  dialog.expanded .text { align-content: center; padding: 32px 28px; }
+}

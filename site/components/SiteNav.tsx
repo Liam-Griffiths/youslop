@@ -1,4 +1,5 @@
 import { NAME, GITHUB_URL, RELEASES_URL } from '@/lib/brand';
+import ThemeSwitch from './ThemeSwitch';
 
 export default function SiteNav() {
   return (
@@ -7,6 +8,7 @@ export default function SiteNav() {
         <img src="/mark.svg" alt="" width={28} height={28} />
         {NAME}
       </a>
+      <div className="nav-end">
       <nav aria-label="Site">
         <ul>
           <li><a href="/#features">Features</a></li>
@@ -15,6 +17,8 @@ export default function SiteNav() {
           <li><a href={GITHUB_URL}>GitHub</a></li>
         </ul>
       </nav>
+      <ThemeSwitch />
+      </div>
     </header>
   );
 }
