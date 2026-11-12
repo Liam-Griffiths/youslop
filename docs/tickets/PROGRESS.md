@@ -329,3 +329,4 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 | T20.12 | Copy pass: sentence case and wrong empty states | S | — | todo | UX-10, UX-12, UX-15, UX-21, UX-25, UX-27; G2 asked in log |
 | T20.13 | Visuals list and sources, Channels index cards | S | — | todo | UX-24, UX-26 |
 | T20.14 | A period faces pack (mid-century and other eras) | S | — | todo | G4; owner approves the font list before download |
+| T20.15 | 3D models with oversized textures render untextured | S | — | todo | found building the site 3D examples: 4096² JPEG atlas fails silently; 2048² works; render copy, never touch the original |
