@@ -20,7 +20,9 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[1]
 FORMATS = ('kenburns', 'essay', 'loudmouth', 'stage')
-PROJECT_STAGES = ('plan', 'script', 'voice', 'visuals', 'edit', 'publish')
+PROJECT_STAGES = ('dashboard', 'script', 'voice', 'edit', 'publish')
+DASHBOARD_PROJECTS = ('psnapnew', 'psnaphalf', 'psnapdone')
+DASHBOARD_SIZES = ((1280, 720), (1920, 1080))
 PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 
 
@@ -33,13 +35,14 @@ def routes():
     for fmt in FORMATS:
         tabs = tuple(dict.fromkeys(PROJECT_STAGES + PROJECT_TABS)) + (
             ('cast', 'stage', 'visuals/cast', 'visuals/stage') if fmt == 'stage' else ())
-        tabs += ('visuals/media', 'publish/render', 'publish/thumb')
+        tabs += ('plan', 'visuals', 'script/outline', 'edit/pictures', 'visuals/media', 'publish/render', 'publish/thumb')
         result.extend(f'#/p/psnap{fmt}/{tab}' for tab in tabs)
     result.extend(['#/p/psnapmixed/visuals', '#/p/psnapmixed/edit'])
     result.extend(f'#/p/{pid}/{tab}' for pid in ('psnapclip','psnapmanual')
                   for tab in ('clip','edit','publish','plan','script','voice'))
     result.append('#/p/psnaplong/edit')
     result.extend(['#/p/psnapinserts/edit', '#/p/psnapinserts/script'])
+    result.extend(f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS)
     return result
 
 
@@ -150,6 +153,27 @@ def seed():
             draw.rectangle((24,24,size[0]-24,28), fill=theme['accent'])
             draw.text((24,50), ref.replace('_',' ').upper(), fill=theme['ink'])
             image.save(path)
+    # Dashboard-only fixtures reference synthetic takes; no media/render is needed.
+    from app.schema import Slide
+    from app.stages import render_signature
+    for pid in DASHBOARD_PROJECTS:
+        p = Project(id=pid, idea='Explore how a city wakes up.', title=pid,
+                    channel_id='csnapshot', target_minutes=2)
+        if pid != 'psnapnew':
+            p.style.format = 'board'
+            p.outline = {'hook': {'first_line': 'Watch this door.'},
+                         'sections': [{'heading': 'Morning'}]}
+            p.slides = [Slide(id=f'd{i}', narration='The first commuters arrive before sunrise.') for i in range(4)]
+            if pid == 'psnaphalf':
+                p.outline['hook']['first_line'] = p.slides[0].narration
+            for slide in p.slides[:2 if pid == 'psnaphalf' else 4]:
+                p.set_take(slide, 'mic', {'path': f'takes/{slide.id}.wav', 'duration': 4})
+            p.research = {'facts': [{'claim': 'Synthetic fact'}], 'sources': [{'title': 'Fixture archive'}],
+                          'open_questions': ['When did the station open?']}
+            p.log = [f'Fixture activity {i + 1}' for i in range(10)]
+        if pid == 'psnapdone':
+            p.render = {'output': 'out/fixture.mp4', 'stage_signature': render_signature(p)}
+        store.save(p)
     source = REPO / 'tests/fixtures/project_min'
     for fmt in FORMATS:
         pid = f'psnap{fmt}'
@@ -514,6 +538,17 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route in [f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS]:
+                for width, height in DASHBOARD_SIZES:
+                    cdp.send('Emulation.setDeviceMetricsOverride', {
+                        'width': width, 'height': height, 'deviceScaleFactor': 1, 'mobile': False}, session)
+                    _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    extra = path.with_stem(f'{path.stem}--{width}x{height}')
+                    extra.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(extra), 't':0, 'why':f'{route} at {width}×{height}'})
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route == '#/p/psnapinserts/edit':
                 for phase, expression in [
                     ('insert-panel', "(async () => { const panel=document.querySelector('#tl-insert-add'); panel.open=true; await panel.ontoggle(); return true; })()"),

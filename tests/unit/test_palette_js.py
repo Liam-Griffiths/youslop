@@ -30,8 +30,14 @@ for(const [id, hash] of [['home','#/'],['library','#/library'],['channels','#/ch
  commands.get('route-'+id).run(); check(route===hash,'screen route '+id);
 }
 state.project={id:'p-test'};
-check(visible().filter(c=>c.group==='Project stages').length===6,'all six stages');
+check(visible().filter(c=>c.group==='Project stages').length===5,'all five stages');
 for(const [id] of STAGES) {commands.get('stage-'+id).run(); check(route==='#/p/p-test/'+id,'stage '+id);}
+for (const [old, target] of Object.entries({plan:'script/outline', visuals:'edit/pictures', media:'edit/pictures', cast:'edit/cast', stage:'edit/stage', record:'voice', render:'edit', thumb:'publish/thumb', 'visuals/media':'edit/pictures', 'visuals/cast':'edit/cast', 'visuals/stage':'edit/stage', '':'dashboard', dashboard:'dashboard'})) {
+ check(canonicalHash('#/p/p-test'+(old?'/'+old:''))==='#/p/p-test/'+target,'legacy route '+old);
+}
+for (const [stage, subtab, tab] of [['dashboard','','dashboard'],['script','outline','plan'],['script','','script'],['edit','pictures','media'],['edit','cast','cast'],['edit','stage','stage'],['edit','','edit'],['clip','','clip']]) {
+ check(stageTab(stage,subtab)===tab,'content reachable '+tab);
+}
 check(!visible().some(c=>c.id==='preview-section'),'preview hidden outside Edit');
 state.stage='edit'; check(visible().some(c=>c.id==='preview-section'),'preview available in Edit');
 commands.get('preview-section').run(); check(previews===1,'one existing section preview action');

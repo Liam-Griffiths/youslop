@@ -108,7 +108,7 @@ async function renderHome() {
       ? (a, b) => (a.title || a.idea || '').localeCompare(b.title || b.idea || '')
       : (a, b) => b.updated_at - a.updated_at);
     $('#home-videos').innerHTML = matches.map(p => `<tr>
-      <td><a href="#/p/${p.id}/${p.stage.id}">${esc(p.title || p.idea.slice(0, 70))}</a>${p.test ? ' <span class="pill">test</span>' : ''}</td>
+      <td><a href="#/p/${p.id}/${p.kind === 'clip' ? p.stage.id : 'dashboard'}">${esc(p.title || p.idea.slice(0, 70))}</a>${p.test ? ' <span class="pill">test</span>' : ''}</td>
       <td>${esc(names.get(p.channel_id) || 'Standalone')}</td>
       <td><span class="pill ${p.stage.status === 'ready' ? 'on' : ''}">${esc(p.stage.label)}</span>
         <span class="home-stage-detail">${esc(p.stage.reason)}</span></td>
@@ -286,7 +286,7 @@ async function createProject(btn) {
     const r = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
     state.project = r.project;
     const stage = isStage(body.format);
-    go(`#/p/${r.project.id}${stage ? '/cast' : ''}`);
+    go(`#/p/${r.project.id}`);
     await route();
     watchJob(r.job, stage ? 'brief' : scripting ? 'import' : 'script');
   } catch (e) { toast(e.message, true); btn.disabled = false; }

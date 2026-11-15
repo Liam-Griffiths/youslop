@@ -46,7 +46,7 @@ async function openPictureKind(sid) {
   wrap.onkeydown = e => { if (e.key === 'Escape') wrap.remove(); };
   wrap.querySelectorAll('[data-picture-kind]').forEach(b => b.onclick = async () => {
     try {
-      const range = state.stage !== 'edit' && state.visualRange?.pid === p.id && state.visualRange.ids.includes(sid) ? state.visualRange.ids : [sid];
+      const range = state.tab !== 'edit' && state.visualRange?.pid === p.id && state.visualRange.ids.includes(sid) ? state.visualRange.ids : [sid];
       const ids = [...new Set(range.flatMap(id => (p.picture_runs || []).find(r => r.includes(id)) || [id]))];
       if (b.dataset.pictureKind === 'block') {
         wrap.remove();
@@ -61,7 +61,7 @@ async function openPictureKind(sid) {
       wrap.remove();
       state.project = await api(`/api/projects/${p.id}`);
       delete state.visualSource;
-      if (state.stage === 'edit') await tlRefreshProject();
+      if (state.tab === 'edit') await tlRefreshProject();
       else await render();
     } catch(e) { wrap.querySelector('[role=status]').textContent = e.message; }
   });
@@ -139,7 +139,7 @@ function paintMedia() {
     : p.aspect === 'portrait' ? 'Draw numbers with blocks; keep text clear of the Shorts UI.'
     : p.style.format === 'kenburns' ? 'Footage for what you shot, archive for context, scenes for numbers.'
     : 'Use the format’s drawing; archive for context, scenes for numbers.';
-  const rule = state.stageStates?.pid === p.id ? state.stageStates.items.find(s => s.id === 'visuals')?.rule || fallbackRule : fallbackRule;
+  const rule = state.stageStates?.pid === p.id ? state.stageStates.items.find(s => s.id === 'edit')?.rule || fallbackRule : fallbackRule;
   $('#tabbody').innerHTML = `<div class="visuals-workspace">
     <div class="row style-heading"><strong>Style: ${esc(styleName(p.style.format,p))}</strong>
       <button type="button" class="btn sm ghost" onclick="openStylePicker('project')">Change</button>

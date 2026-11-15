@@ -8,14 +8,14 @@ from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 92
+    assert len(paths) == len(set(paths)) == 107
     assert paths[:5] == ['#/', '#/setup', '#/library', '#/settings', '#/guide']
     assert '#/footage/ssnapshot' in paths and '#/footage/saudio' in paths
     assert '#/footage/saudio/clips/a1' in paths  # T14.3 adds the clip-finder route.
     assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
     for fmt in FORMATS:
         expected = set(PROJECT_STAGES) | {'media', 'record', 'thumb', 'render',
-            'visuals/media', 'publish/render', 'publish/thumb'}
+            'plan', 'visuals', 'script/outline', 'edit/pictures', 'visuals/media', 'publish/render', 'publish/thumb'}
         if fmt == 'stage':
             expected |= {'cast', 'stage', 'visuals/cast', 'visuals/stage'}
         assert {p.removeprefix(f'#/p/psnap{fmt}/') for p in paths
@@ -24,7 +24,7 @@ def test_routes_match_current_tabs_and_families():
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 92
+    assert len(set(paths)) == 107
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)
@@ -65,6 +65,9 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     monkeypatch.setattr(library, '_THUMBS', tmp_path / 'library')
     monkeypatch.setattr(library, 'LIBRARY_DIR', tmp_path / 'library')
     seed()
+    summaries = {p['id']: p for p in store.list_projects(include_stage=True)}
+    assert summaries['psnapclip']['kind'] == 'clip'
+    assert summaries['psnapnew']['kind'] == 'video'
     assert len(footage.load('ssnapshot').clips) == 2
     assert footage.status('ssnapshot')['ready'] == 1
     audio = footage.load('saudio')
@@ -93,6 +96,14 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     inserts = store.load('psnapinserts')
     assert [s.insert['kind'] for s in inserts.slides if s.insert] == ['clip','block','picture','card']
     assert not any(s.take for s in inserts.slides)
+    from app.stages import stages, readiness_check
+    for pid, todo in [('psnapnew', '4 to do'), ('psnaphalf', '3 to do'), ('psnapdone', '0 to do')]:
+        project = store.load(pid)
+        assert stages(project, readiness_check(project))[0]['reason'] == todo
+        assert f'#/p/{pid}/dashboard' in routes()
+        if pid == 'psnaphalf':
+            assert project.outline['hook']['first_line'] == project.slides[0].narration
+            assert len(project.to_dict()['log']) == 10
     assets = library.list_all()
     assert len(assets) == 1 and assets[0]['title'] == 'Fixture picture'
 

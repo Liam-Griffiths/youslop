@@ -5,7 +5,7 @@ let planSelectedSource = null;
 async function paintPlan() {
   const pid = state.project.id;
   const outline = await api(`/api/projects/${pid}/plan`);
-  if (state.project?.id !== pid || state.stage !== 'plan') return;
+  if (state.project?.id !== pid || state.tab !== 'plan') return;
   planOutline = outline;
   planSelectedSource = null;
   planDraw();

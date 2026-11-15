@@ -142,8 +142,8 @@ Fonts ship in `resources/fonts` and load with `@font-face` (no network).
 ├ project bar (inside a project only) ─────────────────────────────────────┤
 │ / Project title   channel · format · aspect                [secondary] [NEXT: …] │
 ├ stage bar ───────────────────────────────────────────────────────────────┤
-│ 1 · PLAN    2 · SCRIPT   3 · VOICE   4 · VISUALS   5 · EDIT   6 · REVIEW & PUBLISH │
-│ 19 beats    34 ¶         34 of 34    14 of 21      not started  —                  │
+│ DASHBOARD      SCRIPT          VOICE          EDIT               PUBLISH │
+│ 3 to do        34 paragraphs   14 of 34 read   14 of 21 pictures   Not rendered │
 ├──────────────┬──────────────────────────────────────┬───────────────────┤
 │ list column  │ work area                            │ source / inspector│
 │ (260–300 px) │ (flex)                               │ (320–360 px)      │
@@ -158,7 +158,7 @@ Fonts ship in `resources/fonts` and load with `@font-face` (no network).
 - **Project bar:** title, one line of mono metadata, at most two secondary
   buttons and **one** accent "Next: …" button that goes to the next stage
   (or runs the stage's main action when it is not done).
-- **Stage bar:** six stages, each with number · name and a one-line mono
+- **Stage bar:** five stages, each with number · name and a one-line mono
   state from `GET /api/projects/{pid}/stages` (T9.4). Current stage: 2 px
   accent underline. Done: state in `--good`. Current: state in `--accent`.
   Future: `--dim`. Stages are always clickable; nothing is locked.
@@ -224,15 +224,16 @@ meaning.
 
 | # | Stage | Route | Replaces today's | Main button |
 |---|---|---|---|---|
-| 1 | Plan | `#/p/<id>/plan` | outline part of Script | Write the script |
-| 2 | Script | `#/p/<id>/script` | Script | Next: voice |
-| 3 | Voice (Camera for piece-to-camera) | `#/p/<id>/voice` | Record | Draft the rest / Next: pictures |
-| 4 | Visuals | `#/p/<id>/visuals` | Media, Cast, Stage | Fill the rest / Plan all shots / Auto-edit cutaways |
-| 5 | Edit | `#/p/<id>/edit` | Render tab's Timeline | Next: review & publish |
-| 6 | Review & publish | `#/p/<id>/publish` | Thumbnail, Render, publish panel | Publish when ready |
+| 1 | Dashboard | `#/p/<id>/dashboard` (also `#/p/<id>`) | project overview | Next: Script |
+| 2 | Script | `#/p/<id>/script` | Script + Plan (Outline toggle) | Next: Voice |
+| 3 | Voice (Camera for piece-to-camera) | `#/p/<id>/voice` | Record | Next: Edit |
+| 4 | Edit | `#/p/<id>/edit` | Timeline + Visuals (Pictures toggle) | Next: Publish |
+| 5 | Publish | `#/p/<id>/publish` | Review & publish | Publish when ready |
 
-Old routes redirect: `script→script`, `media|cast|stage→visuals`,
-`record→voice`, `render→edit`, `thumb→publish`.
+Phase 21 (2026-11-15): Plan folded into Script, Visuals into Edit; see docs/tickets/21-workspace/README.md.
+
+Old routes redirect: `plan→script/outline`, `visuals|media→edit/pictures`,
+`cast|stage→edit/cast|stage`, `record→voice`, `render→edit`, `thumb→publish/thumb`.
 
 **Why Voice before Visuals:** picture lengths come from real takes, and cuts,
 titles and cues land on spoken words (word timings, T0.6/T0.10). Choosing
@@ -262,6 +263,13 @@ Each entry: purpose · layout · data · states · ticket. Mockup names in brack
 - Projects table (title, channel, stage chip + detail, length, updated) and a
   shoots list with state.
 - Ticket T9.5.
+
+### Dashboard
+- Project entry point: Script, Voice, Edit and Publish cards with progress and
+  secondary actions in one row (2×2 below 1100 px). Below: a wide bin frame
+  and project facts with editable idea, research counts, script snippet and
+  the last eight activity lines when present; stacked below 1100 px.
+  Bin actions stay disabled until T21.2. Ticket T21.1.
 
 ### 02 Plan [Plan]
 - Sources column (research results with how each is used) · outline as

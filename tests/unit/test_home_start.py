@@ -50,7 +50,7 @@ def test_script_and_saved_format_keep_options(monkeypatch, tmp_path):
 def test_home_stage_summary_and_list(monkeypatch, tmp_path):
     monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
     p = Project(id='phome', idea='An empty episode')
-    assert home_summary(p)['id'] == 'plan'
+    assert home_summary(p)['id'] == 'script'
     p.slides = [Slide(id='s1', narration='An imported paragraph')]
     before = deepcopy(p)
     row = home_summary(p)

@@ -1,25 +1,28 @@
 /* Studio shell; stage contents remain the existing tab implementations. */
 const STAGES = [
-  ['plan', 'Plan'], ['script', 'Script'], ['voice', 'Voice'],
-  ['visuals', 'Visuals'], ['edit', 'Edit'], ['publish', 'Review & publish'],
+  ['dashboard', 'Dashboard'], ['script', 'Script'], ['voice', 'Voice'],
+  ['edit', 'Edit'], ['publish', 'Publish'],
 ];
 const projectStages = p => p?.kind === 'clip' ? [['clip','Clip'],['edit','Edit'],['publish','Publish']] : STAGES;
-const LEGACY_STAGES = {media: 'visuals/media', cast: 'visuals/cast', stage: 'visuals/stage',
+const LEGACY_STAGES = {plan: 'script/outline', visuals: 'edit/pictures',
+  media: 'edit/pictures', cast: 'edit/cast', stage: 'edit/stage',
   record: 'voice', render: 'edit', thumb: 'publish/thumb'};
 
 function canonicalHash(hash) {
   if (hash === '#/projects') return '#/';
   if (hash.startsWith('#/c/')) return hash.replace('#/c/', '#/channels/');
-  const p = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?$/);
+  const p = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(\w+))?$/);
   if (!p) return hash;
-  const stage = LEGACY_STAGES[p[2]] || ([...STAGES, ['clip']].some(([id]) => id === p[2]) ? p[2] : 'plan');
+  const stage = p[2] === 'visuals' && ['cast', 'stage'].includes(p[3]) ? `edit/${p[3]}`
+    : LEGACY_STAGES[p[2]] || ([...STAGES, ['clip']].some(([id]) => id === p[2])
+      ? [p[2], p[3]].filter(Boolean).join('/') : 'dashboard');
   return `#/p/${p[1]}/${stage}`;
 }
 
 function stageTab(stage, subtab) {
-  return {clip: 'clip', plan: 'plan', script: 'script', voice: 'record',
-    visuals: ['media', 'cast', 'stage'].includes(subtab) ? subtab : 'media',
-    edit: 'edit', publish: 'render'}[stage] || 'script';
+  return {clip: 'clip', dashboard: 'dashboard', script: subtab === 'outline' ? 'plan' : 'script',
+    voice: 'record', edit: {pictures: 'media', cast: 'cast', stage: 'stage'}[subtab] || 'edit',
+    publish: 'render'}[stage] || 'dashboard';
 }
 
 function paintAppNav() {
@@ -71,14 +74,17 @@ function paintProjectShell() {
   bar.hidden = false;
   const stages = projectStages(p);
   const i = stages.findIndex(([id]) => id === state.stage);
-  const next = stages[i + 1];
+  const rows = state.stageStates?.pid === p.id ? state.stageStates.items : [];
+  const next = state.stage === 'dashboard'
+    ? stages.find(([id]) => id !== 'dashboard' && rows.some(r => r.id === id && r.status !== 'ready'))
+    : stages[i + 1];
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
   const format = p.kind === 'clip' ? 'Clip' : FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
     <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</span>
     <button type="button" class="btn sm" onclick="restoreProjectEdit('undo')" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl+Z)">Undo</button>
     <button type="button" class="btn sm" onclick="restoreProjectEdit('redo')" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title="Redo (Ctrl+Shift+Z)">Redo</button>
-    ${state.stage === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
+    ${state.tab === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
     ${state.stage === 'voice' ? `<button type="button" class="btn sm" onclick="openMicPanel()">Microphone setup</button>
       <button type="button" class="btn sm" onclick="setNarrator({mode:'ai'})">Draft voice settings</button>` : ''}
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;
@@ -99,7 +105,7 @@ async function restoreProjectEdit(direction) {
     const project = await api(`/api/projects/${pid}/${direction}`, {method:'POST'});
     if (state.project?.id !== pid) return;
     state.project = project;
-    if (state.stage === 'edit') { await tlRefreshProject(); paintProjectShell(); }
+    if (state.tab === 'edit') { await tlRefreshProject(); paintProjectShell(); }
     else await render();
     loadStageStates(state.project);
     toast(`${direction === 'undo' ? 'Undid' : 'Redid'}: ${project.edit_label}`);
@@ -140,7 +146,10 @@ async function loadStageStates(project) {
     const result = await api(`/api/projects/${project.id}/stages`);
     if (state.project !== project) return;
     state.stageStates = {pid: project.id, items: Array.isArray(result) ? result : result.stages || []};
-    paintStageBar();
+    if (state.stage === 'dashboard') {
+      paintProjectShell();
+      if ($('#tabbody')) paintDashboard();
+    } else paintStageBar();
   } catch { /* Plain stage names are also supported on older servers. */ }
 }
 

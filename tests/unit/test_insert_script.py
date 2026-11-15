@@ -207,13 +207,13 @@ def test_auto_media_and_counts_ignore_insert_narration(monkeypatch):
         rows = {r['id']: r for r in stages.stages(p, {})}
         assert rows['script']['reason'] == '0 paragraphs'
         assert rows['voice']['reason'] == '0 of 0 read'
-        assert all(rows[k]['status'] == 'ready' for k in ('script', 'voice', 'visuals'))
-        assert rows['visuals']['reason'] == '1 pictures'
+        assert all(rows[k]['status'] == 'ready' for k in ('script', 'voice', 'edit'))
+        assert rows['edit']['reason'] == '1 of 1 pictures'
     p.slides.append(Slide(narration='Spoken words.'))
     rows = {r['id']: r for r in stages.stages(p, {})}
     assert rows['script']['reason'] == '1 paragraphs'
     assert rows['voice']['reason'] == '0 of 1 read'
-    assert rows['visuals']['reason'] == '1 need a picture'
+    assert rows['edit']['reason'] == '1 of 2 pictures'
 
 
 def test_model_numbering_and_rewrite_context_skip_inserts(monkeypatch):

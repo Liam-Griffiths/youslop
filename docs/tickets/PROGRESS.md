@@ -343,8 +343,8 @@ layered editing in Edit, project-defined layers, Library like Bridge, no
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
 | T21.0 | No "coming soon" copy: unfinished features are just disabled | S | — | done | 2026-11-15 Codex + review; apologetic copy removed (render, clip, home, timeline, 4 server messages); unsupported fixes and camera splits disabled quietly; grep test guards it |
-| T21.1 | Project dashboard as the first stage; Plan leaves the stage bar | M | — | doing | 2026-11-15 Codex |
-| T21.2 | Project bin: drop notes, pictures, clips; label them | L | T21.1 | todo | |
+| T21.1 | Project dashboard as the first stage; Plan leaves the stage bar | M | — | done | 2026-11-15 Codex + review (one follow-up); five stages, dashboard default, all legacy routes redirect (checked on Tube Mail); stage cards row, bin frame, project facts; Next goes to the first unfinished stage |
+| T21.2 | Project bin: drop notes, pictures, clips; label them | L | T21.1 | doing | 2026-11-15 Codex |
 | T21.3 | Script as a writing app: binder, editor, inspector | L | T21.1 | todo | |
 | T21.3b | Corkboard view: the outline as cards inside Script | M | T21.3 | todo | supersedes T20.10 |
 | T21.5 | Project layers: model, derivation, timeline lanes | L | T21.1 | todo | |

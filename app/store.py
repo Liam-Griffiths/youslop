@@ -95,6 +95,7 @@ def list_projects(*, include_stage: bool = False) -> list[dict]:
         out.append(
             {
                 "id": raw.get("id", d.name),
+                "kind": raw.get("kind", "video"),
                 "title": raw.get("title") or raw.get("idea", "")[:70],
                 "idea": raw.get("idea", ""),
                 "channel_id": raw.get("channel_id", ""),

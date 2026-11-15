@@ -229,7 +229,7 @@ async function route() {
     await renderLibrary();
   } else if (proj) {
     state.channel = null;
-    state.stage = proj[2] || 'plan';
+    state.stage = proj[2] || 'dashboard';
     state.subtab = proj[3] || '';
     state.tab = stageTab(state.stage, state.subtab);
     if (!state.thumbStyles) {
@@ -258,6 +258,7 @@ async function route() {
     }
     if ([state.project.style.format,...state.project.slides.map(s => s.kind || '')].some(k => k.startsWith('custom:')))
       await ensureSlideStyles();
+    await ensureChannelsLoaded();
     await loadStageStates(state.project);
     await render();
   } else if (chan) {
@@ -448,15 +449,15 @@ async function deleteSlideStyle(id) {
 async function render() {
   const p = state.project;
   if (!p) return;
-  state.stage = state.stage || 'plan';
+  state.stage = state.stage || 'dashboard';
   if (p.kind === 'clip' && !['clip','edit','publish'].includes(state.stage)) {
     location.replace(`#/p/${p.id}/clip`); return;
   }
   state.tab = stageTab(state.stage, state.subtab);
-  const tabs = state.stage === 'visuals'
-    ? [['media', 'Picture picker'], ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])]
-    : [];
-  if (tabs.length && !tabs.some(([id]) => id === state.tab)) state.tab = tabs[0][0];
+  const tabs = p.kind === 'clip' ? [] : state.stage === 'script'
+    ? [['script', 'Script'], ['outline', 'Outline']]
+    : state.stage === 'edit' ? [['pictures', 'Pictures'], ['timeline', 'Timeline'],
+      ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])] : [];
   // Stage contents are replaced below; give back any slot the last stage borrowed.
   restoreShellInspector();
   paintProjectShell();
@@ -467,16 +468,16 @@ async function render() {
       <button class="btn ghost sm" onclick="saveProjectFile()"
         title="everything in this video as one file, to open on another computer">save project file…</button>
     </div>` : ''}
-    ${tabs.length > 1 && (state.stage !== 'visuals' || state.tab !== 'media') ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
-      ${tabs.map(([id, label]) => `<a class="tab ${state.tab === id ? 'active' : ''}"
-        ${state.tab === id ? 'aria-current="page"' : ''}
+    ${tabs.length > 1 ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
+      ${tabs.map(([id, label]) => `<a class="tab ${(state.subtab || (state.stage === 'edit' ? 'timeline' : 'script')) === id ? 'active' : ''}"
+        ${(state.subtab || (state.stage === 'edit' ? 'timeline' : 'script')) === id ? 'aria-current="page"' : ''}
         href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}
     </nav>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ clip: paintClip, plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
-  if (state.stage !== 'edit' && typeof tlPause === 'function') tlPause();
+  if (state.tab !== 'edit' && typeof tlPause === 'function') tlPause();
   focusPendingSlide();
 }
 

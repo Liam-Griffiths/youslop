@@ -95,7 +95,7 @@ def readiness_check(project: Project) -> dict:
 
 
 def stages(project: Project, check_result: dict) -> list[dict]:
-    """Return the six stage-bar states and short, actionable reasons.
+    """Return the five stage-bar states and short, actionable reasons.
 
     Uses active `slide.take` (including legacy takes), never retired or
     inactive voices. No filesystem access, mutation or expensive operations.
@@ -130,38 +130,35 @@ def stages(project: Project, check_result: dict) -> list[dict]:
                     next=onward if status == 'ready' else action)
 
     result = [
-        row('plan', 'Plan', 'ready' if outline else 'todo',
-            f'{beats} beat' + ('s' if beats != 1 else '') if beats
-            else 'Outline ready' if outline else 'Needs a plan',
-            'Plan the episode', 'Write the script'),
-        row('script', 'Script', 'ready' if script_ok else progress(written, total),
-            f'{total} paragraphs' if script_ok else f'{written} of {total} written',
+        row('script', 'Script', 'ready' if script_ok else 'in_progress' if outline else progress(written, total),
+            f'{total} paragraphs' if script_ok else f'{written} of {total} written' +
+            (f' · {beats} beat' + ('s' if beats != 1 else '') if beats else ''),
             'Finish the script', 'Read the script'),
         row('voice', 'Camera' if project.delivery == 'on_camera' else 'Voice',
             'ready' if voice_ok else progress(voiced, total), f'{drafts} draft reads' if voice_ok and drafts
             else f'{voiced} of {total} read' + (' · draft' if drafts else ''),
             'Read the rest', 'Choose pictures'),
-        row('visuals', 'Visuals', progress(pictured, len(runs)),
-            f'{len(runs)} pictures' if visuals_ok else f'{len(runs) - pictured} need a picture',
-            'Fill the pictures', 'Edit the cut'),
     ]
-    if runs:
-        result[-1]['kinds'] = {k: sum(kinds.kind_for(project, r[0]) == k for r in runs)
-                               for k in sorted(kinds.kinds_in(project))}
-    result[-1].update(visual_rules(project))
     edit_ok = script_ok and voice_ok and visuals_ok and not p0
     result.append(row('edit', 'Edit', 'warn' if p0 else 'ready' if edit_ok
                       else 'in_progress' if total else 'todo',
-                      f'{p0} P0' if p0 else 'No P0 findings' if edit_ok else 'Finish earlier stages',
-                      'Fix P0 findings' if p0 else 'Finish earlier stages', 'Review the cut'))
+                      f'{pictured} of {len(runs)} pictures' + (f' · {p0} P0' if p0 else ''),
+                      'Fix P0 findings' if p0 else 'Fill the pictures', 'Review the cut'))
+    result[-1].update(visual_rules(project), pictures_done=pictured, pictures_total=len(runs))
+    if runs:
+        result[-1]['kinds'] = {k: sum(kinds.kind_for(project, r[0]) == k for r in runs)
+                               for k in sorted(kinds.kinds_in(project))}
     rendered = project.render or {}
     fresh = bool(rendered.get('output') and not rendered.get('preview')
                  and rendered.get('stage_signature') == render_signature(project))
-    result.append(row('publish', 'Review & publish',
+    result.append(row('publish', 'Publish',
                       'ready' if fresh and edit_ok else 'warn' if rendered.get('output') else 'todo',
                       'Ready to publish' if fresh and edit_ok else 'Fix earlier stages' if fresh
                       else 'Render again' if rendered.get('output') else 'Not rendered',
                       'Fix earlier stages' if fresh else 'Render the cut', 'Publish the episode'))
+    todo = sum(r['status'] != 'ready' for r in result)
+    result.insert(0, row('dashboard', 'Dashboard', 'ready' if not todo else 'todo',
+                         f'{todo} to do', 'Open script', 'Open script'))
     return result
 
 
@@ -173,5 +170,5 @@ def home_summary(project: Project) -> dict:
     # Imported scripts can be complete without an outline.
     if project.render.get('output'):
         return rows[-1]
-    candidates = rows[1:4] if project.slides else rows[:4]
-    return next((r for r in candidates if r['status'] != 'ready'), rows[4])
+    candidates = rows[1:4]
+    return next((r for r in candidates if r['status'] != 'ready'), rows[3])

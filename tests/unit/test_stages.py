@@ -33,20 +33,21 @@ def test_empty_project_and_contract():
     p = Project(id='empty', idea='Empty')
     before = deepcopy(p)
     rows = stages(p, readiness_check(p))
-    assert [r['id'] for r in rows] == ['plan', 'script', 'voice', 'visuals', 'edit', 'publish']
+    assert [r['id'] for r in rows] == ['dashboard', 'script', 'voice', 'edit', 'publish']
     assert all(r['status'] == 'todo' for r in rows)
     fields = {'id', 'label', 'status', 'reason', 'next'}
-    assert all(set(r) == fields | ({'rules', 'rule'} if r['id'] == 'visuals' else set()) for r in rows)
+    assert all(set(r) == fields | ({'rules', 'rule', 'pictures_done', 'pictures_total'} if r['id'] == 'edit' else set()) for r in rows)
     assert all(len(r['reason']) < 28 and r['next'] for r in rows)
     assert p == before
 
 
 def test_complete_and_publish_freshness(episode):
     p = episode
-    assert all(r['status'] == 'ready' for k, r in states(p).items() if k != 'publish')
+    assert all(r['status'] == 'ready' for k, r in states(p).items() if k not in {'dashboard', 'publish'})
     assert states(p)['publish']['status'] == 'todo'
     p.render = {'output': 'out/video.mp4', 'stage_signature': render_signature(p)}
     assert states(p)['publish']['status'] == 'ready'
+    assert states(p)['dashboard']['reason'] == '0 to do'
     store.save(p)
     assert states(store.load(p.id))['publish']['status'] == 'ready'
     p.updated_at += 50
@@ -80,9 +81,10 @@ def test_legacy_and_preview_outputs_need_render(episode, extra):
 def test_plan_draft_and_partial_script(episode):
     p = episode
     p.outline = {}
-    assert states(p)['plan']['status'] == 'todo'
+    assert states(p)['script']['status'] == 'ready'  # Imported scripts need no outline.
     p.draft = {'outline': {'sections': [{'heading': 'Draft'}]}}
-    assert states(p)['plan']['reason'] == '1 beat'
+    p.slides[0].narration = ''
+    assert states(p)['script']['reason'] == '3 of 4 written · 1 beat'
     p.slides[0].narration = '  '
     assert states(p)['script']['status'] == 'in_progress'
     assert states(p)['edit']['status'] != 'ready'
@@ -108,15 +110,15 @@ def test_shared_picture_runs(episode):
     p = episode
     for s in p.slides[1::2]:
         s.chosen_id = ''
-    assert states(p)['visuals']['reason'] == '2 pictures'
+    assert states(p)['edit']['reason'] == '2 of 2 pictures'
     p.slides[1].picture_mode = 'new'
-    assert states(p)['visuals']['reason'] == '2 need a picture'
+    assert states(p)['edit']['reason'] == '1 of 3 pictures'
     p.slides[1].picture_mode = 'hold'
-    assert states(p)['visuals']['status'] == 'ready'
+    assert states(p)['edit']['status'] == 'ready'
     p.slides[1].chapter = 'New chapter'
-    assert states(p)['visuals']['status'] == 'in_progress'
+    assert states(p)['edit']['pictures_done'] < states(p)['edit']['pictures_total']
     p.slides[0].chosen_id = 'not-in-candidates'
-    assert states(p)['edit']['reason'] == '1 P0'
+    assert states(p)['edit']['reason'].endswith(' · 1 P0')
 
 
 @pytest.mark.parametrize('fmt', ['board', 'loudmouth', 'casefile', 'flameboat', 'groupchat', 'ticker'])
@@ -124,24 +126,24 @@ def test_generated_visuals(episode, fmt):
     episode.style.format = fmt
     for s in episode.slides:
         s.candidates = []
-    assert states(episode)['visuals']['status'] == 'ready'
+    assert states(episode)['edit']['status'] == 'ready'
     assert not readiness_check(episode)['findings']
 
 
 def test_custom_and_3d_layouts(episode):
     p = episode
     p.style.format = 'custom:fixture'
-    assert states(p)['visuals']['status'] == 'todo'
+    assert states(p)['edit']['pictures_done'] == 0
     for s in p.slides:
         s.custom_html = '<p>Fixture scene</p>'
-    assert states(p)['visuals']['status'] == 'ready'
+    assert states(p)['edit']['status'] == 'ready'
     p.style.format = 'stage'
     for s in p.slides:
         s.visual_note = '3D: fixture'
-    assert states(p)['visuals']['status'] == 'todo'
+    assert states(p)['edit']['pictures_done'] == 0
     for s in p.slides:
         s.shot = {'solved': {'shot': {'camera': 'fixture'}}}
-    assert states(p)['visuals']['status'] == 'ready'
+    assert states(p)['edit']['status'] == 'ready'
 
 
 def test_camera_layout_and_p0(episode):
@@ -151,17 +153,17 @@ def test_camera_layout_and_p0(episode):
         s.on_camera = True
         p.set_take(s, 'camera', {'path': 'camera.wav', 'video': 'camera.mp4'})
     assert states(p)['voice']['label'] == 'Camera'
-    assert states(p)['visuals']['reason'] == '4 pictures'
+    assert states(p)['edit']['reason'] == '4 of 4 pictures'
     p.slides[0].take['av_offset'] = .1
-    assert states(p)['edit']['reason'] == '1 P0'
+    assert states(p)['edit']['reason'].endswith(' · 1 P0')
     p.slides[0].take['sync_corrected'] = True
     assert states(p)['edit']['status'] == 'ready'
     del p.slides[0].take['video']
-    assert states(p)['visuals']['status'] == 'in_progress'
+    assert states(p)['edit']['pictures_done'] < states(p)['edit']['pictures_total']
 
 
 def test_supplied_full_check_findings(episode):
-    assert states(episode, {'counts': {'P0': 2}})['edit']['reason'] == '2 P0'
+    assert states(episode, {'counts': {'P0': 2}})['edit']['reason'].endswith(' · 2 P0')
     assert states(episode, {'findings': [{'level': 'P0', 'code': 'future_timing'}]})['edit']['status'] == 'warn'
     assert states(episode, {'findings': [{'level': 'P1'}]})['edit']['status'] == 'ready'
 
@@ -196,3 +198,14 @@ def test_cli_and_http_agree(episode, monkeypatch, capsys):
             assert response.json() == expected
             assert (await client.get('/api/projects/missing/stages')).status_code == 404
     asyncio.run(exercise())
+
+
+def test_half_done_dashboard(episode):
+    episode.slides[2].take = {}
+    episode.slides[3].take = {}
+    episode.slides[2].chosen_id = ''
+    rows = states(episode)
+    assert rows['dashboard']['reason'] == '3 to do'
+    assert rows['voice']['reason'] == '2 of 4 read'
+    assert rows['edit']['pictures_done'] == 1
+    assert rows['edit']['pictures_total'] == 2
