@@ -14,7 +14,7 @@ def spans(project, slide=None):
 
 def graph(project, slide=None, *, size=None, fps=None, sound_only=False, hide=frozenset()):
     if any(s.overlays for s in project.slides):
-        raise ValueError('Clip graphics require T14.4c')
+        raise ValueError('Remove graphics from this clip before rendering.')
     file, path = clips.source(project)
     kept = spans(project, slide)
     if not kept:

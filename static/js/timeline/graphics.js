@@ -45,6 +45,7 @@ async function tlGraphicInspector(sel, body) {
 
 async function openGraphicPicker(sid, at = 0) {
   const p = state.project;
+  if (p.kind === 'clip') return;
   const slide = p.slides.find(s => s.id === sid);
   if (!slide || slide.on_camera || isCut(pictureKind(slide))) return toast('Graphics are available on picture paragraphs.', true);
   tlPause();

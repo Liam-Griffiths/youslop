@@ -106,7 +106,7 @@ def prepare(project, slide, root: Path, temp: Path, at):
     for track, take in slide.takes.items():
         # TODO T7.1: split camera picture and voice together when camera takes land.
         if take.get('video'):
-            raise ValueError('Camera take splitting is not supported yet.')
+            raise ValueError('Use voice-only takes to split this paragraph.')
         items = timings(root, take, original)
         a, b = gap(items, index)
         target = (a + b) / 2

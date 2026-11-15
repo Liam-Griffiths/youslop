@@ -821,5 +821,5 @@ function paintPublishProgress() {
   box.innerHTML = `<p class="mono">${esc(j.lines?.at(-1) || 'Starting render…')} · ${esc(j.done || `${j.elapsed || 0}s`)}</p>
     <progress aria-label="Render progress" ${total ? `value="${done}" max="${total}"` : ''}></progress>
     <div class="render-segments">${Array.from({length: total}, (_, i) => `<span class="${i < done ? 'done' : ''}" title="Segment ${i+1}"></span>`).join('')}</div>
-    <p class="sub">Finished segments are kept for the next render. Pause is not available yet.</p>`;
+    <p class="sub">Finished segments are kept for the next render.</p>`;
 }

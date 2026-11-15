@@ -14,14 +14,13 @@ async function renderHome() {
       <div class="row home-start-modes" role="group" aria-label="Start from">
         <button class="btn" data-start="idea" onclick="homeStart('idea')">An idea</button>
         <button class="btn" data-start="script" onclick="homeStart('script')">My own script</button>
-        <button class="btn" disabled aria-describedby="footage-note">A footage shoot</button>
+        <button class="btn" disabled>A footage shoot</button>
         <button class="btn" data-start="format" onclick="homeStart('format')">A saved style</button>
         <button class="btn ghost" onclick="$('#projfile').click()">Open a .corkbored file</button>
         <input type="file" id="projfile" accept=".corkbored,.youslop" hidden
           onchange="openProjectFile(this.files[0]);this.value=''">
       </div>
-      <p id="footage-note" class="sub">Starting a video from a shoot is coming with footage integration.
-        <a href="#/guide">See how it works</a></p>
+      <p class="sub"><a href="#/guide">See how it works</a></p>
       <label class="field" id="idea-field"><span>What is the video about?</span>
         <textarea id="idea" rows="2" placeholder="Describe the story you want to tell."></textarea></label>
       <div id="script-fields" hidden>
@@ -48,7 +47,7 @@ async function renderHome() {
         </select></label>
         <button class="btn primary" onclick="createProject(this)">Start video</button>
       </div>
-      <p id="shape-note" class="sub" hidden>Short targets at most 60 seconds. Rendering is landscape only for now.
+      <p id="shape-note" class="sub" hidden>Short targets at most 60 seconds.
         Pasted scripts keep their full length; keep yours under 60 seconds for a Short.</p>
       <p id="script-length-note" class="sub" hidden>Length comes from your script, measured after import.</p>
       <form id="home-new-channel" hidden onsubmit="createHomeChannel(event)">

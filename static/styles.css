@@ -43,6 +43,7 @@
   --good-tint: #12261C;
   --warn: #F2B134;
   --bad: #E8776A;
+  --disabled-opacity: .42;
   /* Compatibility names used by the current tabs. */
   --panel-2: var(--raised);
   --line-soft: var(--line);
@@ -186,16 +187,16 @@ label.field > span b { font-family: var(--mono); font-variant-numeric: tabular-n
   padding: 8px 15px; border-radius: var(--radius); cursor: pointer;
   transition: background .13s, border-color .13s, transform .06s;
 }
-.btn:hover:not(:disabled) { background: #232733; border-color: #343a49; }
-.btn:active:not(:disabled) { transform: translateY(1px); }
-.btn:disabled { opacity: .42; cursor: not-allowed; }
+.btn:hover:not(:disabled):not([aria-disabled=true]) { background: #232733; border-color: #343a49; }
+.btn:active:not(:disabled):not([aria-disabled=true]) { transform: translateY(1px); }
+.btn:disabled, [aria-disabled=true] { opacity: var(--disabled-opacity); cursor: default; }
 .btn.primary {
   background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600;
 }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.primary:hover:not(:disabled):not([aria-disabled=true]) { filter: brightness(1.1); }
 .btn.selected { border-color: var(--cool); background: var(--cool-tint); color: var(--cool); }
 .btn.ghost { background: transparent; }
-.btn.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+.btn.danger:hover:not(:disabled):not([aria-disabled=true]) { border-color: var(--bad); color: var(--bad); }
 .btn.sm { padding: 4px 10px; font-size: 13px; border-radius: var(--radius); }
 .btn.rec { background: var(--rec); border-color: var(--rec); color: #fff; font-weight: 600; }
 .btn.rec.armed { animation: pulse 1.4s infinite; }
@@ -1089,7 +1090,7 @@ main:has(.plan-layout) { max-width: none; }
 
 .script-text { resize: none; overflow: hidden; }
 .script-footer .btn.ghost { border-color: transparent; color: var(--dim); }
-.script-footer .btn.ghost:hover, .script-footer .btn.ghost:focus-visible { color: var(--ink); border-color: var(--line); }
+.script-footer .btn.ghost:hover:not(:disabled):not([aria-disabled=true]), .script-footer .btn.ghost:focus-visible:not(:disabled):not([aria-disabled=true]) { color: var(--ink); border-color: var(--line); }
 
 /* Voice: paragraph list, focused prompter, and the selected paragraph's takes. */
 main:has(.voice-studio) { max-width: none; padding: 0 0 40px; }

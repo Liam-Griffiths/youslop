@@ -22,7 +22,7 @@ async function paintClip() {
     ${words.length ? '<button class="btn" id="clip-cut">Remove range</button>' : ''}
     <p class="mono">Removed: ${c.cuts.map(([a,b]) => `${a}–${b} s`).join(', ') || 'none'}</p>
     <button class="btn ghost" id="clip-restore">Restore removed ranges</button>
-    <p>Stored hook: ${esc(c.hook || 'none')}. Hook graphics are not available yet.</p>
+    <p>Stored hook: ${esc(c.hook || 'none')}.</p>
     <p><a href="#/footage/${c.shoot_id}/clips/${c.source_id}">Back to source</a></p></section>
     ${p.slides.map((s,i) => `<section class="panel" data-clip-paragraph="${s.id}"><h3>Paragraph ${i+1}</h3><p>${esc(s.narration || 'No words in this range')}</p>
       <label for="clip-crop-${i}">Crop position</label><select id="clip-crop-${i}" data-crop="${s.id}">
@@ -44,7 +44,7 @@ async function paintClipPublish() {
   const p = state.project;
   $('#tabbody').innerHTML = `<section class="panel" id="clip-publish"><h2>Publish clip</h2>
     <p class="mono">Source range: ${p.clip.in_s.toFixed(2)}–${p.clip.out_s.toFixed(2)} s · ${esc(p.clip.aspect)}</p>
-    <p>Renders the original sound and current static crop. Hook and other graphics are not available yet.</p>
+    <p>Renders the original sound and current static crop.</p>
     <button type="button" class="btn primary" id="clip-render" onclick="doRender(false)">Render the clip</button>
     <p><a href="#/p/${p.id}/edit">Review the cut</a></p></section>${finishedVideo(p, {segments:[]})}`;
 }

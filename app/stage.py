@@ -594,7 +594,7 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
     Event callbacks run on the reader thread and must not send CDP commands.
     """
     if sys.platform == "win32":
-        raise StageError("scene rendering needs Linux or macOS for now")
+        raise StageError("Scene rendering requires Linux or macOS.")
     import fcntl
 
     exe = browser()

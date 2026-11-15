@@ -95,7 +95,7 @@ function tlInspector() {
   if (slide && ['paragraph','picture'].includes(sel.kind)) html += kindControl(slide);
   if (sel.kind === 'paragraph' && slide) html += `<div class="tl-text">${esc(slide.narration)}</div>
     <button class="btn sm" id="tl-edit-text">Edit the words</button>
-    <button class="btn sm" id="tl-split-here">Split here (S)</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
+    <button class="btn sm" id="tl-split-here" ${tlCanSplit(slide) ? '' : 'disabled'}>Split here (S)</button>` + timing('gap_override', 'Gap after paragraph', para.timing.gap.value);
   if (sel.kind === 'paragraph' && slide?.on_camera) html += `<button class="btn sm" onclick="tlCameraAdd('${esc(slide.id)}')">Add cutaway here</button>
     <button class="btn sm" onclick="tlCameraAuto('${esc(slide.id)}',false,true)">Suggest cutaways</button>
     <button class="btn sm" onclick="tlCameraAuto('${esc(slide.id)}')">Auto-edit · this paragraph</button>
@@ -430,11 +430,16 @@ function tlRazorTarget() {
 }
 
 let tlSplitting = false;
+function tlCanSplit(slide) {
+  return !Object.values(slide?.takes || {}).some(take => take.video);
+}
+
 async function tlSplitHere() {
   if (state.project?.kind === 'clip') { location.hash = `#/p/${state.project.id}/clip`; return; }
   if (tlSplitting) return;
   const {t, para} = tlRazorTarget();
   if (!para) { tlMsg('Place the playhead inside a paragraph.'); return; }
+  if (!tlCanSplit(state.project.slides.find(s => s.id === para.id))) return;
   tlPause();
   tlSplitting = true;
   try {

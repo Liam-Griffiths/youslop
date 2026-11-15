@@ -24,8 +24,7 @@ function tlPaintNote() {
     : (mix.music ? `with the “${mix.music.replace(/\.[^.]+$/, '')}” bed` : 'narration only, no music bed')
       + (mix.sting ? (mix.stings && mix.stings.length > 1 ? ' and both stings' : ' and the ' + ((mix.stings || [''])[0] === 'outro' ? 'end card' : 'slate') + ' sting') : '');
   note.textContent = `${fmtTime(d.total)} · ${pics} pictures · ${d.width}×${d.height} at ${d.fps}fps · ${sound}`
-    + (d.estimated ? ' · some lengths estimated' : '')
-    + (d.camera_clip ? ' · the camera clip is not shown here' : '');
+    + (d.estimated ? ' · some lengths estimated' : '');
 }
 
 function tlDraw() {
@@ -144,11 +143,16 @@ function tlPaintReview() {
 
 function tlFixButtons(row, note, finding = false, context = null) {
   const kind = note.fix?.kind;
+  const project = state.project;
+  const slide = project?.slides.find(s => s.id === note.fix?.slide_id);
+  const cueSupported = !['cue', 'cues'].includes(kind) || (slide && isCut(pictureKind(slide)));
+  const canFix = !note.fix?.unsupported && !note.unsupported && !note.proposal?.unsupported
+    && (note.fix?.overlay_id || (cueSupported && ['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind)));
   for (const [action, label] of [['fix', 'Fix'], ['dismiss', 'Dismiss'], ['keep', 'Keep']]) {
     const button = document.createElement('button');
     button.className = 'btn sm';
     button.textContent = label;
-    button.disabled = action === 'fix' && !note.fix?.overlay_id && !['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind);
+    button.disabled = action === 'fix' && !canFix;
     button.onclick = async () => {
       if (action === 'fix' && note.code === 'script.style') return go(`#/p/${context?.pid || TL.pid}/script`);
       if (action === 'fix' && note.fix?.overlay_id) return openGraphicEdit(note.fix.slide_id, note.fix.overlay_id);
@@ -158,7 +162,7 @@ function tlFixButtons(row, note, finding = false, context = null) {
           method: 'POST', body: JSON.stringify({ action, ...(finding ? { finding: true } : {}) }) });
         const result = await send(action);
         if (action !== 'fix') return await (context ? context.refresh() : tlRefresh());
-        if (result.unsupported) return toast('This fix is not available yet.');
+        if (result.unsupported) { note.unsupported = result.unsupported; return; }
         const proposal = result.proposal;
         if (proposal.search !== undefined) {
           if (context) openMediaSearch(proposal.slide_id, proposal.search,
@@ -184,7 +188,7 @@ function tlFixButtons(row, note, finding = false, context = null) {
         panel.append(diff, apply);
         row.append(panel);
       } catch (e) { toast(e.message, true); }
-      finally { button.disabled = false; }
+      finally { button.disabled = action === 'fix' && !!note.unsupported; }
     };
     row.append(button);
   }

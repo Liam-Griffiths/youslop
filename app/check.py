@@ -593,7 +593,7 @@ def run(project, measure=False) -> dict:
             if not ranges(project):
                 raise ValueError('No remaining source range')
             if any(s.overlays for s in project.slides):
-                raise ValueError('Clip graphics require T14.4c')
+                raise ValueError('Remove graphics from this clip before rendering.')
         except (ValueError, FileNotFoundError) as exc:
             findings.append(_finding('clip_source', 'P0', 0, '', str(exc)))
         counts = {level: sum(f.level == level for f in findings) for level in ('P0','P1','P2','P3')}
