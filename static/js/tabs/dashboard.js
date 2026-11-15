@@ -27,9 +27,9 @@ function paintDashboard() {
         <progress value="${value}" max="${max || 1}" aria-label="${esc(name)} progress"></progress>
         <a class="btn sm" href="#/p/${p.id}/${target}">${esc(label)}</a></article>`;
     }).join('')}</section>
-    <section class="dashboard-bin" aria-labelledby="dashboard-bin-title"><h2 id="dashboard-bin-title">Bin</h2>
-      <button type="button" class="btn dashboard-drop" disabled>Drop notes, pictures or clips here</button>
-      <p class="sub">No items in this project bin.</p>
+    <section class="dashboard-bin" aria-labelledby="dashboard-bin-title"><div class="bin-heading"><h2 id="dashboard-bin-title">Bin</h2>
+      <div class="bin-actions"><button class="btn sm dashboard-drop" id="bin-add">Add files</button><button class="btn sm" id="bin-new">New note</button></div></div>
+      <div id="project-bin"><p class="sub">Loading project bin…</p></div>
       <a class="dashboard-snippet" href="#/p/${p.id}/script"><span class="kicker">Script</span>
         ${hook && hook !== firstParagraph.trim() ? `<h3>${esc(hook)}</h3>` : ''}
         <p>${esc(firstParagraph || 'Write the first paragraph in Script.')}</p></a>
@@ -45,6 +45,7 @@ function paintDashboard() {
       <a href="#/p/${p.id}/script/outline">Open research in Script</a>
       ${activity.length ? `<h2>Recent activity</h2><ol class="dashboard-activity mono">${activity.map(line => `<li>${esc(line)}</li>`).join('')}</ol>` : ''}
     </aside></div>`;
+  paintBin();
 }
 
 async function dashboardSaveIdea(input) {

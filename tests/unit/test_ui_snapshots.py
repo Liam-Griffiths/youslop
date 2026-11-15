@@ -102,6 +102,7 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
         assert stages(project, readiness_check(project))[0]['reason'] == todo
         assert f'#/p/{pid}/dashboard' in routes()
         if pid == 'psnaphalf':
+            assert len(project.bin) == 12 and project.labels == ['Street', 'Research', 'Morning']
             assert project.outline['hook']['first_line'] == project.slides[0].narration
             assert len(project.to_dict()['log']) == 10
     assets = library.list_all()

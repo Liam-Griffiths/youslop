@@ -208,9 +208,9 @@ def thumb_path(asset_id: str) -> Path | None:
     return None
 
 
-def _make_thumb(src: Path, kind: str, stem: str) -> str:
+def _make_thumb(src: Path, kind: str, stem: str, *, directory: Path | None = None) -> str:
     """A small JPEG preview for the picker grid. Empty string on failure."""
-    out = _THUMBS / f"{stem}.jpg"
+    out = (directory if directory is not None else _THUMBS) / f"{stem}.jpg"
     try:
         if kind == "video":
             dur = ffutil.duration(src)

@@ -809,6 +809,29 @@ class PlannedShot:
 
 
 @dataclass
+class BinItem:
+    id: str
+    kind: str = "note"
+    title: str = ""
+    labels: list[str] = field(default_factory=list)
+    note: str = ""
+    file: str = ""
+    url: str = ""
+    source: str = "dropped"
+    duration: float = 0.0
+    width: int = 0
+    height: int = 0
+    added_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        return asdict(self)  # used_in is derived only in bin listings.
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "BinItem":
+        return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class Project:
     id: str
     idea: str
@@ -818,6 +841,8 @@ class Project:
     format_look: dict = field(default_factory=dict)
     style_kit: dict = field(default_factory=dict)
     block_presets: list[dict] = field(default_factory=list)
+    bin: list[BinItem] = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
     channel_id: str = ""
     use_intro: bool = True
     use_outro: bool = True
@@ -929,6 +954,8 @@ class Project:
             "clip": deepcopy(self.clip),
             "style_kit": deepcopy(self.style_kit),
             "block_presets": deepcopy(self.block_presets),
+            "bin": [item.to_dict() for item in self.bin],
+            "labels": list(self.labels),
             "id": self.id,
             "idea": self.idea,
             "title": self.title,
@@ -1058,7 +1085,7 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"clip", "style_kit", "blocks", "block_presets", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"clip", "style_kit", "blocks", "block_presets", "bin", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         base["prefer_public_domain"] = d.get("prefer_public_domain", d.get("example", False)) is True
@@ -1068,6 +1095,7 @@ class Project:
             style_kit=deepcopy(d.get("style_kit") or {}),
             blocks=deepcopy(d.get("blocks") or []),
             block_presets=deepcopy(d.get("block_presets") or []),
+            bin=[BinItem.from_dict(item) for item in (d.get("bin") or [])],
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
             sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],

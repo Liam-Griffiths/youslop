@@ -154,7 +154,7 @@ def seed():
             draw.text((24,50), ref.replace('_',' ').upper(), fill=theme['ink'])
             image.save(path)
     # Dashboard-only fixtures reference synthetic takes; no media/render is needed.
-    from app.schema import Slide
+    from app.schema import BinItem, Slide
     from app.stages import render_signature
     for pid in DASHBOARD_PROJECTS:
         p = Project(id=pid, idea='Explore how a city wakes up.', title=pid,
@@ -173,6 +173,20 @@ def seed():
             p.log = [f'Fixture activity {i + 1}' for i in range(10)]
         if pid == 'psnapdone':
             p.render = {'output': 'out/fixture.mp4', 'stage_signature': render_signature(p)}
+        if pid != 'psnapnew':
+            p.labels = ['Street', 'Research', 'Morning']
+            p.bin = [BinItem(id=f'bin{i}', kind=('note','image','clip','audio','link')[i % 5],
+                title=f'Morning reference {i+1}', note='A synthetic research note about the station.',
+                labels=[p.labels[i % 3]], url='https://example.test/source' if i % 5 == 4 else '',
+                duration=4 if i % 5 in (2,3) else 0) for i in range(12)]
+            p.bin[1].title = 'Pneumatic tube entrance at the central station before sunrise'
+            p.bin[1].labels = ['Street', 'Morning']
+            for item in p.bin:
+                if item.kind in {'image','clip'}:
+                    thumb = store.project_dir(pid) / 'bin' / 'thumbs' / f'{item.id}.jpg'
+                    thumb.parent.mkdir(parents=True, exist_ok=True)
+                    item.file = f'bin/{item.id}.jpg'
+                    Image.new('RGB', (320,180), '#46505C').save(thumb)
         store.save(p)
     source = REPO / 'tests/fixtures/project_min'
     for fmt in FORMATS:
@@ -533,6 +547,8 @@ def capture(base, out):
                 _evaluate(cdp, session, "tlSelectKind('sponsor'); true")
             if route == '#/p/psnapkenburns/edit':
                 _evaluate(cdp, session, "(async () => { tlGraphicBlocks = await api('/api/blocks?overlay=1'); tlSelectKind('overlay'); return true; })()")
+            if route == '#/p/psnapdone/dashboard':
+                _evaluate(cdp, session, "binView.selected='bin0'; binPanel(); true")
             png = cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
             path = output_path(out, route)
             path.write_bytes(base64.b64decode(png['data']))

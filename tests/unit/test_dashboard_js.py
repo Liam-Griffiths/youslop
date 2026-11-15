@@ -17,13 +17,14 @@ const state = {project:{id:'p',idea:'A fixture',style:{format:'essay'},slides:[]
 const body = {}, $ = () => body, FORMAT_INFO = [], fmtTime = s => s+'s';
 const esc = s => String(s).replaceAll('<','&lt;').replaceAll('>','&gt;');
 function check(ok, message) { if (!ok) throw Error(message); }
+function paintBin() {}
 '''
     checks = r'''
 paintDashboard();
 check(!body.innerHTML.includes('Recent activity'),'hide empty activity');
 check((body.innerHTML.match(/class="dashboard-card"/g) || []).length === 4,'four work stages');
 check(!body.innerHTML.includes('View progress'),'no dashboard self card');
-check(body.innerHTML.includes('disabled>Drop notes, pictures or clips here'),'bin disabled');
+check(body.innerHTML.includes('id="project-bin"'),'bin region');
 const p = state.project;
 p.slides = [{narration:'<first>',take:{path:'take.wav'}},{narration:'Second'}];
 p.outline = {hook:{first_line:'The hook'}};
@@ -105,5 +106,57 @@ run().catch(e => { printerr(e.stack); imports.system.exit(1); });
     path = tmp_path / 'dashboard-entry.js'
     path.write_text(setup + source + 'async function ensureChannelsLoaded() {' + loader
                     + 'async function projectEntry(proj) {' + project_route + '}' + checks)
+    result = subprocess.run([gjs, str(path)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_bin_filters_labels_paste_and_drop(tmp_path):
+    gjs = shutil.which('gjs')
+    if not gjs:
+        pytest.skip('GJS unavailable')
+    setup = r'''
+const events={}, nodes={}, writes=[];
+const document={addEventListener:(name, fn)=>events[name]=fn};
+const $=id=>nodes[id] ||= {querySelectorAll:()=>[], setAttribute(){}};
+const state={project:{id:'p'}, stage:'dashboard'}, esc=String, fmtTime=String;
+const crypto={randomUUID:()=>String(writes.length)}, toast=message=>{throw Error(message)};
+class FormData { constructor(){this.files=[];} append(key, file){this.files.push(file);} }
+async function api(path, opts) {
+ writes.push([path,opts]);
+ const patch=opts.body instanceof FormData?{}:JSON.parse(opts.body || '{}');
+ return {items:binView.items.map(i=>({...i, ...patch})), labels:binView.labels};
+}
+function check(ok, message){if(!ok) throw Error(message);}
+'''
+    checks = r'''
+(async()=>{
+ binView={pid:'p',items:[{id:'n',kind:'note',title:'Station',note:'Research text',labels:[],used_in:[]}],labels:['Street'],selected:'n',query:'',kind:'',label:'',list:false};
+ binShell();
+ check(nodes['#bin-grid'].innerHTML.includes('Station'),'grid title');
+ $('#bin-view-list').onclick();
+ check(binView.list && nodes['#bin-grid'].className.includes('bin-list'),'switch to list');
+ $('#bin-view-grid').onclick();
+ check(!binView.list && nodes['#bin-grid'].className==='bin-grid','switch to grid');
+ $('#bin-title').value='Station'; $('#bin-note').value='Edited note';
+ await binToggleLabel(0);
+ check(JSON.parse(writes[0][1].body).labels[0]==='Street','number label');
+ check(binView.items[0].labels[0]==='Street','saved label');
+ binView.query='no match'; binGrid();
+ check(!nodes['#bin-grid'].innerHTML.includes('Station'),'search filters');
+ binView.query=''; binView.kind='clip'; binGrid();
+ check(!nodes['#bin-grid'].innerHTML.includes('Station'),'kind filters');
+ let prevented=0;
+ const event={target:{closest:()=>null},preventDefault:()=>prevented++};
+ events.paste({...event,clipboardData:{getData:()=> 'https://example.test/source'}});
+ check(writes.at(-1)[0].endsWith('/link'),'URL paste');
+ events.paste({...event,clipboardData:{getData:()=> 'Research pasted'}});
+ check(writes.at(-1)[0].endsWith('/note'),'text paste');
+ const dashboard={classList:{toggle(){}}};
+ events.drop({...event,target:{closest:()=>dashboard},dataTransfer:{types:['Files'],files:['a','b']}});
+ check(writes.at(-1)[1].body.files.length===2 && prevented===3,'batch drop');
+})().catch(e=>{printerr(e.message+"\n"+e.stack);imports.system.exit(1);});
+'''
+    path = tmp_path/'bin.js'
+    path.write_text(setup + Path('static/js/tabs/bin.js').read_text() + checks)
     result = subprocess.run([gjs, str(path)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
