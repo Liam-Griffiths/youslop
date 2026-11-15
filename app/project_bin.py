@@ -183,16 +183,47 @@ def register(app):
             return listing(p)
 
     @app.patch(base + '/labels')
-    def rename_label(pid: str, payload: dict = Body(...)):
+    def edit_labels(pid: str, payload: dict = Body(...)):
         with store.lock_for(pid):
             p = load(pid)
+            action = payload.get('action', 'rename')
             old, new = payload.get('old'), payload.get('new')
-            if old not in p.labels or not isinstance(new, str) or not new.strip():
+            if action == 'reorder':
+                order = payload.get('labels')
+                if (not isinstance(order, list) or any(not isinstance(l, str) for l in order)
+                        or len(order) != len(p.labels) or set(order) != set(p.labels)):
+                    raise HTTPException(400, 'Supply every label exactly once')
+                p.labels = order
+            elif action == 'delete' and old in p.labels:
+                p.labels.remove(old)
+                for item in p.bin:
+                    item.labels = [l for l in item.labels if l != old]
+            elif action == 'rename' and old in p.labels and isinstance(new, str) and new.strip():
+                new = new.strip()
+                p.labels = list(dict.fromkeys(new if l == old else l for l in p.labels))
+                for item in p.bin:
+                    item.labels = list(dict.fromkeys(new if l == old else l for l in item.labels))
+            else:
                 raise HTTPException(400, 'Choose an existing label and a nonempty name')
-            new = new.strip()
-            p.labels = list(dict.fromkeys(new if l == old else l for l in p.labels))
-            for item in p.bin:
-                item.labels = list(dict.fromkeys(new if l == old else l for l in item.labels))
+            store.save(p)
+            return listing(p)
+
+    @app.patch(base + '/selection')
+    def label_selection(pid: str, payload: dict = Body(...)):
+        with store.lock_for(pid):
+            p = load(pid)
+            ids, label, action = payload.get('ids'), payload.get('label'), payload.get('action')
+            if (not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids)
+                    or not isinstance(label, str) or not label.strip()
+                    or not isinstance(action, str) or action not in {'add', 'remove', 'toggle'}):
+                raise HTTPException(400, 'Choose items, a nonempty label and add, remove or toggle')
+            selected = [item_for(p, ident) for ident in dict.fromkeys(ids)]
+            label = label.strip()
+            if action == 'toggle':
+                action = 'remove' if all(label in item.labels for item in selected) else 'add'
+            for item in selected:
+                patch(item, {'labels': list(dict.fromkeys(item.labels + [label])) if action == 'add'
+                      else [l for l in item.labels if l != label]}, p)
             store.save(p)
             return listing(p)
 

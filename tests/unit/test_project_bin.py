@@ -108,3 +108,67 @@ def test_routes_labels_undo_and_preservation(tmp_path, monkeypatch):
     asyncio.run(run())
     assert recording.read_bytes() == b'Keep this recording'
     assert 'used_in' not in json.loads((root/'project.json').read_text())['bin'][0]
+
+
+def test_vocabulary_and_bulk_labels_are_atomic_and_undoable(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
+    async def direct(fn, *args, **kwargs):
+        kwargs.pop('limiter', None)
+        return fn(*args, **kwargs)
+    monkeypatch.setattr('fastapi.routing.run_in_threadpool', direct)
+    p = Project(id='labels', idea='Synthetic', labels=['Street', 'Morning', 'Research'],
+                bin=[BinItem(id='a', labels=['Street', 'Morning']),
+                     BinItem(id='b', labels=['Street']), BinItem(id='c', labels=['Research'])])
+    store.save(p)
+    root = store.project_dir(p.id)
+    original = root / 'raw' / 'recording.webm'
+    original.write_bytes(b'unchanged')
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://127.0.0.1') as client:
+            base = '/api/projects/labels/bin'
+            async def mutate(path, payload):
+                before = len(undo.read(root)['states'])
+                response = await client.patch(base + path, json=payload)
+                assert response.status_code == 200, response.text
+                after = len(undo.read(root)['states'])
+                assert after == before + (2 if not before else 1)
+                saved = store.load(p.id).to_dict()
+                await client.post('/api/projects/labels/undo')
+                await client.post('/api/projects/labels/redo')
+                assert store.load(p.id).to_dict() == saved
+                return response.json()
+
+            data = await mutate('/labels', {'old':'Street', 'new':'Morning'})
+            assert data['labels'] == ['Morning', 'Research']
+            assert [i['labels'] for i in data['items']] == [['Morning'], ['Morning'], ['Research']]
+            data = await mutate('/labels', {'action':'reorder', 'labels':['Research', 'Morning']})
+            assert data['labels'] == ['Research', 'Morning']
+            for order in [['Research'], ['Morning', 'Morning'], ['Research', 'Other'], [[], 'Morning']]:
+                assert (await client.patch(base+'/labels', json={'action':'reorder', 'labels':order})).status_code == 400
+            data = await mutate('/selection', {'ids':['a', 'b', 'a'], 'label':' New ', 'action':'add'})
+            assert data['labels'] == ['Research', 'Morning', 'New']
+            assert [i['labels'] for i in data['items']] == [['Morning','New'], ['Morning','New'], ['Research']]
+            await client.post('/api/projects/labels/undo')
+            assert [i.labels for i in store.load(p.id).bin] == [['Morning'], ['Morning'], ['Research']]
+            await client.post('/api/projects/labels/redo')
+            data = await mutate('/selection', {'ids':['a', 'b'], 'label':'Morning', 'action':'remove'})
+            assert [i['labels'] for i in data['items']] == [['New'], ['New'], ['Research']]
+            data = await mutate('/labels', {'action':'delete', 'old':'New'})
+            assert data['labels'] == ['Research', 'Morning']
+            assert [i['labels'] for i in data['items']] == [[], [], ['Research']]
+            data = await mutate('/selection', {'ids':['a', 'b'], 'label':'Morning', 'action':'toggle'})
+            assert [i['labels'] for i in data['items']] == [['Morning'], ['Morning'], ['Research']]
+            data = await mutate('/selection', {'ids':['a', 'b'], 'label':'Morning', 'action':'toggle'})
+            assert [i['labels'] for i in data['items']] == [[], [], ['Research']]
+            before = store.load(p.id).to_dict()
+            for payload, status in [({'ids':['a', 'missing'], 'label':'Bad', 'action':'add'}, 404),
+                                    ({'ids':[], 'label':'Bad', 'action':'add'}, 400),
+                                    ({'ids':['a'], 'label':' ', 'action':'add'}, 400),
+                                    ({'ids':['a'], 'label':'Bad', 'action':[]}, 400)]:
+                assert (await client.patch(base+'/selection', json=payload)).status_code == status
+                assert store.load(p.id).to_dict() == before
+            assert (await client.patch(base+'/labels', json={'action':'delete', 'old':'missing'})).status_code == 400
+            assert (await client.patch(base+'/labels', json={'old':'Research', 'new':' '})).status_code == 400
+    asyncio.run(run())
+    assert original.read_bytes() == b'unchanged'

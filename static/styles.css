@@ -1558,3 +1558,11 @@ img.themed-pending { opacity:.45; }
 #bin-panel { border-left:1px solid var(--line); padding-left:12px; overflow-wrap:anywhere; }
 #bin-panel input, #bin-panel textarea, #bin-compose input, #bin-compose textarea { display:block; width:100%; box-sizing:border-box; margin:4px 0 10px; background:var(--bg); border:1px solid var(--line); color:var(--ink); }
 @media (max-width:700px) { .bin-work { grid-template-columns:1fr; } #bin-panel { border-left:0; padding-left:0; } }
+
+/* Shared vocabulary editor (project bin and Library). */
+.labels-editor { width:min(680px, 90vw); }
+.label-editor-row { display:flex; align-items:center; gap:6px; margin:8px 0; }
+.label-editor-row input { flex:1; min-width:60px; background:var(--bg); color:var(--ink); border:1px solid var(--line); padding:7px 8px; border-radius:4px; }
+.label-editor-row .btn { flex:none; }
+#bin-label-buttons [aria-pressed=mixed] { border-color:var(--cool); }
+@media (max-width:700px) { .label-editor-row { flex-wrap:wrap; } }

@@ -548,7 +548,7 @@ def capture(base, out):
             if route == '#/p/psnapkenburns/edit':
                 _evaluate(cdp, session, "(async () => { tlGraphicBlocks = await api('/api/blocks?overlay=1'); tlSelectKind('overlay'); return true; })()")
             if route == '#/p/psnapdone/dashboard':
-                _evaluate(cdp, session, "binView.selected='bin0'; binPanel(); true")
+                _evaluate(cdp, session, "binView.selected=['bin0']; binPanel(); true")
             png = cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
             path = output_path(out, route)
             path.write_bytes(base64.b64decode(png['data']))
@@ -565,6 +565,16 @@ def capture(base, out):
                     rows.append({'path':str(extra), 't':0, 'why':f'{route} at {width}×{height}'})
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
+            if route == '#/p/psnapdone/dashboard':
+                for phase, expression in [
+                    ('bin-multi-select', "binSelect('bin0', {}, binView.items.map(i=>i.id)); binSelect('bin3', {shiftKey:true}, binView.items.map(i=>i.id)); true"),
+                    ('bin-vocabulary', "document.querySelector('#bin-edit-labels').click(); true")]:
+                    _evaluate(cdp, session, expression)
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    extra = path.with_stem(f'{path.stem}--{phase}')
+                    extra.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(extra), 't':0, 'why':phase})
+                _evaluate(cdp, session, "document.querySelector('dialog[open]').close(); true")
             if route == '#/p/psnapinserts/edit':
                 for phase, expression in [
                     ('insert-panel', "(async () => { const panel=document.querySelector('#tl-insert-add'); panel.open=true; await panel.ontoggle(); return true; })()"),
