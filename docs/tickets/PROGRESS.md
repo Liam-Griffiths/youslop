@@ -25,6 +25,8 @@ Last updated: 2026-10-31 (Codex gpt-6.1-sol implementing, Claude Opus 5.5 review
 > **2026-11-08 (night):** owner asked for first-class local models (no frontier model needed). LM Studio backend landed in f2cef05; live runs on Granite 4.1 8B and Qwen 3.5 9B produced Phase 16 (T16.1–T16.5) and a step in T15.2. T16.3 done. Queue: T16.1, T16.2, T16.4, T16.5, then T12.13 C–E, Phase 14, T15.1/T15.2. Codex 5-hour reset, weekly 33%.
 > **2026-11-09 (paused by the owner):** since the last note: T14.2c (+ timeline follow-up), T14.3, T14.4, T14.4b done. New: Phase 17 (timeline editing, owner priority T17.4 section select-and-move) and Phase 18 (natural script voice). Resume order: T14.4c, T14.5, T14.6, T15.1/T15.2, then T18.1 (small, high value), T17.1, T17.7, T17.2, T17.4, T17.3, T17.5, T17.6, T18.2. Workflow: Claude manages and reviews; Codex implements and does review fixes (follow-up runs). Codex at about 40% of its 5-hour window, ~52% weekly.
 
+> **2026-11-15 (owner, restart with Codex):** new Phase 21 (workspace rethink: dashboard first, Script as a writing app, project bin with labels, Visuals folded into Edit, project layers, Bridge-style Library, agent-made HTML scenes, no "coming soon" copy). Phase 21 goes first in the order below; T20.10/T20.13 superseded, T20.4 folded into T21.6; rest of Phase 20 after Phase 21.
+
 > **2026-11-08 (late night):** since the Phase 16 note: T16.1–T16.5, T12.13 batches C–E (block set v2 complete, 40 blocks), speech-to-text T14.1–T14.1e, T14.2 and T14.2b (portrait/square render; 9:16 checked, 1:1 overlay fallback in T14.2c). Codex 5-hour window 86% (weekly 46%): paused until it resets (~2¼ h), then T14.2c, T14.3–T14.6, T15.1/T15.2. Reviewer still owes: a real speech-to-text engine run (none installed), block motion in the player.
 > Owner checks collected per row below.
 
@@ -318,15 +320,38 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 | T20.2 | Missing recordings: find them, name them, keep mixing | M | — | todo | P1 UX-01 |
 | T20.3 | One app dialog, and a theme pick you can cancel | M | — | todo | P1 UX-02, UX-07 |
 | T20.3b | Replace the remaining native prompt and confirm dialogs | M | T20.3 | todo | UX-07 |
-| T20.4 | Edit: the timeline in view at 1280×720 | M | — | todo | UX-03, UX-23; guide question G1 |
+| T20.4 | Edit: the timeline in view at 1280×720 | M | — | dropped | folded into T21.6 acceptance | UX-03, UX-23; guide question G1 |
 | T20.5 | Plain errors with a next step, and quieter jobs | M | — | todo | UX-06, UX-18 |
 | T20.6 | Project bar at small sizes, one accent on Review & publish | S | — | todo | UX-04, UX-05, UX-22 |
 | T20.7 | Block previews: no seek race, no broken images | S | — | todo | UX-08, UX-09 |
 | T20.8 | Settings: sections in order, only the fields that apply | M | — | todo | UX-11, UX-28 |
 | T20.9 | Focus ring everywhere, and a label on every field | S | — | todo | UX-13, UX-14 |
-| T20.10 | Plan board fit, readable Check findings | M | — | todo | UX-16, UX-17, UX-19, UX-29; G3 stays an owner question |
+| T20.10 | Plan board fit, readable Check findings | M | — | dropped | superseded by T21.3b | UX-16, UX-17, UX-19, UX-29; G3 stays an owner question |
 | T20.11 | Timeline polish from the Phase 17 reviews | M | T20.4 | todo | UX-20, UX-30 |
 | T20.12 | Copy pass: sentence case and wrong empty states | S | — | todo | UX-10, UX-12, UX-15, UX-21, UX-25, UX-27; G2 asked in log |
-| T20.13 | Visuals list and sources, Channels index cards | S | — | todo | UX-24, UX-26 |
+| T20.13 | Visuals list and sources, Channels index cards | S | — | todo | Visuals part superseded by T21.6; Channels cards remain | UX-24, UX-26 |
 | T20.14 | A period faces pack (mid-century and other eras) | S | — | todo | G4; owner approves the font list before download |
 | T20.15 | 3D models with oversized textures render untextured | S | — | todo | found building the site 3D examples: 4096² JPEG atlas fails silently; 2048² works; render copy, never touch the original |
+
+## Phase 21: a workspace that feels like real creative software (owner priority, 2026-11-15)
+
+Owner, 2026-11-15: dashboard first, Script like Scrivener (facts and shot
+description at hand), drop notes/pictures/clips with labels, Visuals becomes
+layered editing in Edit, project-defined layers, Library like Bridge, no
+"coming soon" text. Order = row order. See `21-workspace/README.md`.
+
+| ID | Title | Size | Depends | Status | Notes |
+|---|---|---|---|---|---|
+| T21.0 | No "coming soon" copy: unfinished features are just disabled | S | — | todo | |
+| T21.1 | Project dashboard as the first stage; Plan leaves the stage bar | M | — | todo | |
+| T21.2 | Project bin: drop notes, pictures, clips; label them | L | T21.1 | todo | |
+| T21.3 | Script as a writing app: binder, editor, inspector | L | T21.1 | todo | |
+| T21.3b | Corkboard view: the outline as cards inside Script | M | T21.3 | todo | supersedes T20.10 |
+| T21.5 | Project layers: model, derivation, timeline lanes | L | T21.1 | todo | |
+| T21.5b | Layer manager and agent-proposed layers | M | T21.5 | todo | |
+| T21.6 | Edit becomes the composing stage: sources panel, Visuals folds in | L | T21.5, T21.2 | todo | supersedes T20.13, folds in T20.4 |
+| T21.4 | Library as an explorer: tree, grid, preview pane | L | — | todo | |
+| T21.4b | Library: ratings, colour labels, filters, batch labels, collections | M | T21.4 | todo | |
+| T21.2b | Bin notes and media feed research, script writing and picture fill | M | T21.2, T21.3 | todo | |
+| T21.6b | Pictures, clips and 3D on upper layers (picture-in-picture) | L | T21.6 | todo | |
+| T21.7 | Ask the agent for a custom HTML scene, placed on a layer | M | T21.6, T21.5b | todo | |
