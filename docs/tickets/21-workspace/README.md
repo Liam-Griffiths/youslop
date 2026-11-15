@@ -60,6 +60,7 @@ ignored, missing keys defaulted").
 | 1 | T21.1 | Project dashboard as the first stage; Plan leaves the stage bar |
 | 2 | T21.2 | Project bin: drop notes, pictures, clips; label them |
 | 3 | T21.3 | Script as a writing app: binder, editor, inspector |
+| 3a | T21.8 | Light mode for the whole app, with a toggle |
 | 4 | T21.3b | Corkboard view: the outline as cards inside Script |
 | 5 | T21.5 | Project layers: model, derivation for old projects, timeline lanes |
 | 6 | T21.5b | Layer manager and agent-proposed layers |
