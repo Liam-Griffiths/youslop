@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -137,3 +138,89 @@ def test_scene_exceptions_and_windows_guard(monkeypatch):
     monkeypatch.setattr(stage.sys, "platform", "win32")
     with pytest.raises(StageError, match="Linux or macOS"):
         stage._run_cdp({}, lambda m: None)
+
+
+@pytest.mark.parametrize('ready_after', [3, None])
+def test_scene_waits_for_late_seek_with_a_deadline(monkeypatch, ready_after):
+    from app import stage
+
+    clock = [0.0]
+    monkeypatch.setattr(stage.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(stage.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+
+    class Cdp:
+        polls = 0
+
+        def send(self, method, params, session, *, timeout):
+            assert method == 'Runtime.evaluate' and session == 'scene'
+            assert params['expression'] == "typeof window.__seek === 'function'"
+            assert 0 < timeout <= 5
+            self.polls += 1
+            ready = ready_after is not None and self.polls >= ready_after
+            return {'result': {'value': ready}}
+
+    cdp = Cdp()
+    if ready_after is None:
+        with pytest.raises(StageError, match='runtime did not become ready'):
+            stage._wait_for_seek(cdp, 'scene')
+        assert clock[0] == pytest.approx(5)
+    else:
+        stage._wait_for_seek(cdp, 'scene')
+        assert cdp.polls == ready_after and 0 < clock[0] < 5
+
+
+def test_capture_waits_before_seeking_on_every_navigation(monkeypatch):
+    """Exercise the runner's ordering without Chromium, sockets or rendering."""
+    from app import stage
+
+    class Cdp:
+        seeks = 0
+        polls = 0
+
+        def __init__(self, write_fd, read_fd):
+            self.fds = write_fd, read_fd
+
+        def send(self, method, params=None, session=None, **kwargs):
+            if method == 'Target.getTargets':
+                return {'targetInfos': [{'type': 'page', 'targetId': 'target'}]}
+            if method == 'Target.attachToTarget':
+                return {'sessionId': 'scene'}
+            if method == 'Page.navigate':
+                self.polls = 0  # Each new document installs its own runtime late.
+            if method == 'Runtime.evaluate':
+                expression = params['expression']
+                if expression == "typeof window.__seek === 'function'":
+                    self.polls += 1
+                    return {'result': {'value': self.polls >= 3}}
+                assert self.polls >= 3, 'runtime used before __seek exists'
+                if expression.startswith('window.__seek('):
+                    self.seeks += 1
+                return {'result': {'value': True}}
+            if method == 'Page.captureScreenshot':
+                assert self.polls >= 3
+                return {'data': 'cG5n'}
+            return {}
+
+        def clear_events(self):
+            pass
+
+        def wait_event(self, method):
+            pass
+
+        def close(self):
+            for fd in self.fds:
+                os.close(fd)
+
+    cdp = []
+    monkeypatch.setattr(stage, '_Cdp', lambda *args: cdp.append(Cdp(*args)) or cdp[-1])
+    monkeypatch.setattr(stage, 'browser', lambda: 'fake-chromium')
+    monkeypatch.setattr(stage.time, 'sleep', lambda seconds: None)
+    monkeypatch.setattr(stage.subprocess, 'Popen', lambda *a, **kw:
+                        SimpleNamespace(terminate=lambda: None, wait=lambda **kw: None))
+    monkeypatch.setattr(stage.http.server, 'ThreadingHTTPServer', lambda *a:
+                        SimpleNamespace(server_address=('127.0.0.1', 1), serve_forever=lambda: None,
+                                        shutdown=lambda: None, server_close=lambda: None))
+    items = [dict(clip=str(i), W=1920, H=1080, size=(480, 270),
+                  t=1, url_path='/static/fake.html') for i in range(20)]
+    assert stage.capture_stills(items) == {str(i): b'png' for i in range(20)}
+    assert cdp[0].seeks == 20

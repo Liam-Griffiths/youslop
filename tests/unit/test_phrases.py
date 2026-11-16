@@ -197,7 +197,7 @@ def test_cdp_alpha_after_navigation_and_reset(tmp_path, monkeypatch):
     class CDP:
         def __init__(self, w, r):
             self.fds = (w, r)
-        def send(self, method, params=None, session=None):
+        def send(self, method, params=None, session=None, **kwargs):
             calls.append((method, params))
             if method == 'Target.getTargets':
                 return {'targetInfos': [{'type': 'page', 'targetId': 'target'}]}
@@ -207,6 +207,8 @@ def test_cdp_alpha_after_navigation_and_reset(tmp_path, monkeypatch):
                 return {'data': base64.b64encode(b'png').decode()}
             if method == 'Runtime.evaluate' and 'const rows = []' in params['expression']:
                 return {'result': {'value': [dict(id='caption', px=62, overflow=False)]}}
+            if method == 'Runtime.evaluate' and params['expression'] == "typeof window.__seek === 'function'":
+                return {'result': {'value': True}}
             return {}
         def clear_events(self):
             pass

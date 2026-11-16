@@ -109,3 +109,58 @@ def test_square_sheet_fits_each_available_source(owners, monkeypatch):
     with Image.open(library.preview_file(key, 'trial')) as image:
         assert image.size == (270, 270)
         assert image.getpixel((0, 0)) != image.getpixel((135, 135))
+
+
+def test_sheet_retries_capture_then_returns_clean_503(owners, monkeypatch):
+    channel, _ = owners
+    calls = []
+
+    def capture(items, root, *, on_still):
+        calls.append(items)
+        if len(calls) == 1:
+            # A partial batch may already have published a poster.
+            on_still(items[0]['clip'], b'first poster')
+            raise library.stage.StageError('window.__seek is not a function')
+        for item in items:
+            on_still(item['clip'], b'poster')
+
+    monkeypatch.setattr(library.stage, 'capture_stills', capture)
+    payload = dict(scope='channel', id=channel.id, session='sheet-retry', sequence=0)
+    result = main.block_theme_sheet(payload)
+    assert len(result['posters']) == 6 and len(calls) == 2
+
+    failed = Mock(side_effect=library.stage.StageError('private capture diagnostics'))
+    monkeypatch.setattr(library.stage, 'capture_stills', failed)
+    with pytest.raises(main.HTTPException) as error:
+        main.block_theme_sheet({**payload, 'sequence': 1, 'overrides': {'accent': '#FF3366'}})
+    assert error.value.status_code == 503
+    assert error.value.detail == 'Preview failed. Try again.'
+    assert failed.call_count == 2
+
+
+@pytest.mark.parametrize('kind', ['trial', 'motion'])
+def test_preview_retries_capture_then_returns_clean_503(owners, monkeypatch, kind):
+    channel, _ = owners
+    calls = []
+
+    def capture(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            raise library.stage.StageError('seek failed')
+        if kind == 'motion':
+            args[4].write_bytes(b'movie')
+        return b'poster'
+
+    target, name = (library.scenes, 'capture') if kind == 'trial' else (library, 'render_motion')
+    monkeypatch.setattr(target, name, capture)
+    payload = dict(kind=kind, session='retry-' + kind, sequence=0,
+                   theme_context=dict(scope='channel', owner=channel.id))
+    assert main.block_preview('title_card', payload)['url']
+    assert len(calls) == 2
+    failed = Mock(side_effect=library.stage.StageError('private capture diagnostics'))
+    monkeypatch.setattr(target, name, failed)
+    with pytest.raises(main.HTTPException) as error:
+        main.block_preview('title_card', {**payload, 'sequence': 1, 'values': {'title': 'Changed'}})
+    assert error.value.status_code == 503
+    assert error.value.detail == 'Preview failed. Try again.'
+    assert failed.call_count == 2

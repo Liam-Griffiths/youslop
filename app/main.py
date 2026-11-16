@@ -154,16 +154,18 @@ def save_block_theme(payload: dict = Body(...)) -> dict:
 
 @app.post('/api/blocks/theme-sheet')
 def block_theme_sheet(payload: dict = Body(...)) -> dict:
-    from .block_library import theme_sheet
+    from .block_library import PreviewError, theme_sheet
     try:
         return theme_sheet(payload)
+    except PreviewError as exc:
+        raise HTTPException(503, str(exc)) from exc
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @app.post('/api/blocks/{ref:path}/preview')
 def block_preview(ref: str, payload: dict = Body(...)) -> dict:
-    from .block_library import preview, theme_context
+    from .block_library import PreviewError, preview, theme_context
     try:
         selection = payload.get('theme_context')
         if selection is not None and not isinstance(selection, dict):
@@ -175,6 +177,8 @@ def block_preview(ref: str, payload: dict = Body(...)) -> dict:
                        scale=payload.get('scale', 4), background=payload.get('background', 'checker'),
                        project=payload.get('project'), slide=payload.get('slide'),
                        theme=theme)
+    except PreviewError as exc:
+        raise HTTPException(503, str(exc)) from exc
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

@@ -139,9 +139,10 @@ function paintBlocksGrid() {
 function blockPoster(block, aspect) {
   if (blockPreviewAs) {
     const url = themedPosterCache.get(`${blockPreviewAs}/${block.ref}/${aspect}`);
-    // Until the themed poster arrives, show the default one dimmed rather than an empty image.
-    const src = url || block.posters[aspect];
-    return `<img ${src ? `src="${esc(src)}"` : ''} ${url ? '' : 'class="themed-pending"'} data-themed-ref="${esc(block.ref)}" data-themed-aspect="${esc(aspect)}" alt="${esc(block.name)}, ${esc(aspect)} themed preview">`;
+    return `<span class="themed-poster themed-pending" data-themed-ref="${esc(block.ref)}" data-themed-aspect="${esc(aspect)}">
+      <span class="block-placeholder" role="status">${esc(block.name)}<small>Poster pending</small></span>
+      <img hidden onload="themedPosterState(this.parentElement,'loaded')" onerror="themedPosterState(this.parentElement,'failed')"
+        ${url ? `src="${esc(url)}"` : ''} alt="${esc(block.name)}, ${esc(aspect)} themed preview"></span>`;
   }
   return block.posters[aspect] ? `<img src="${esc(block.posters[aspect])}" alt="${esc(block.name)}, ${esc(aspect)} preview">`
     : `<span class="block-placeholder" role="img" aria-label="${esc(block.name)}, ${esc(aspect)} preview pending">${esc(block.name)}<small>Poster pending</small></span>`;
@@ -460,6 +461,7 @@ async function openBlockPicker(pid, sid, selection = null, targets = null) {
 // The poster poll must not repaint the detail panel: that would drop a playing
 // loop, a pending trial and focus. Only a still-pending poster is swapped in.
 function blockPosterArrived() {
+  if (blockPreviewAs) return;  // Default-poster jobs must not replace themed placeholders.
   document.querySelectorAll('#blocks-grid .block-card').forEach(card => {
     const b = bForCard(card), aspect = aForCard(card);
     const pending = card.querySelector('.block-placeholder');
@@ -635,6 +637,33 @@ function browserThemeContext() {
   return {scope,owner};
 }
 
+function themedPosterState(target, status) {
+  const image = target.querySelector('img'), placeholder = target.querySelector('.block-placeholder');
+  image.hidden = status !== 'loaded';
+  placeholder.hidden = status === 'loaded';
+  target.classList.toggle('themed-pending', status === 'pending');
+  target._retryButton?.remove();
+  target._retryButton = null;
+  placeholder.querySelector('small').textContent = status === 'failed' ? 'Preview failed' : 'Poster pending';
+  if (status !== 'failed') return;
+  const browser = blocksBrowser, choice = blockPreviewAs;
+  const retry = document.createElement('button');
+  retry.type = 'button'; retry.className = 'btn sm themed-poster-retry';
+  retry.textContent = 'Retry'; retry.setAttribute('aria-label', 'Retry block preview');
+  retry.onclick = event => {
+    event.stopPropagation();
+    if (!target.isConnected || blocksBrowser !== browser || blockPreviewAs !== choice) return;
+    themedPosterCache.delete(`${choice}/${target.dataset.themedRef}/${target.dataset.themedAspect}`);
+    themedPosterState(target, 'pending');
+    image.removeAttribute('src');
+    themedPosterQueue.push({target,browser,choice});
+    drainThemedPosters();
+  };
+  // Cards and the detail poster are buttons: keep Retry outside them.
+  (target.closest('button') || target).insertAdjacentElement('afterend', retry);
+  target._retryButton = retry;
+}
+
 function observeThemedPosters() {
   themedPosterObserver?.disconnect();
   if (!blockPreviewAs) return;
@@ -642,7 +671,7 @@ function observeThemedPosters() {
   themedPosterObserver = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) {
       themedPosterObserver.unobserve(entry.target);
-      if (entry.target.classList.contains('themed-pending') || !entry.target.getAttribute('src')) themedPosterQueue.push({target:entry.target,browser,choice});
+      if (entry.target.classList.contains('themed-pending') && !entry.target.querySelector('img').getAttribute('src')) themedPosterQueue.push({target:entry.target,browser,choice});
     }
     drainThemedPosters();
   });
@@ -665,8 +694,12 @@ async function drainThemedPosters() {
         url = result.posters?.[0]?.url;
         if (url && blocksBrowser === browser) themedPosterCache.set(key,url);
       }
-      if (url && target.isConnected && blockPreviewAs === choice) { target.src = url; target.classList.remove('themed-pending'); }
-    } catch (e) { if (target.isConnected) target.alt = `Preview unavailable: ${e.message}`; }
+      if (!target.isConnected || blocksBrowser !== browser || blockPreviewAs !== choice) continue;
+      if (url) target.querySelector('img').src = url;
+      else themedPosterState(target, 'failed');
+    } catch (e) {
+      if (target.isConnected && blocksBrowser === browser && blockPreviewAs === choice) themedPosterState(target, 'failed');
+    }
   }
   themedPosterBusy = false;
 }

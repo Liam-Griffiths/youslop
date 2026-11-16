@@ -231,6 +231,20 @@ _REQUESTS = {}
 _PREVIEW_RENDERS = 0
 
 
+class PreviewError(RuntimeError):
+    pass
+
+
+def _preview_capture(capture, *args, **kwargs):
+    """Retry once in a fresh capture session; keep diagnostics in the cause."""
+    for attempt in range(2):
+        try:
+            return capture(*args, **kwargs)
+        except stage.StageError as exc:
+            if attempt:
+                raise PreviewError('Preview failed. Try again.') from exc
+
+
 def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background='checker', project=None, slide=None, theme=None):
     """Explicit scratch preview. Superseded queued requests never capture."""
     global _PREVIEW_RENDERS
@@ -269,12 +283,12 @@ def preview(ref, values, aspect, kind, session, sequence, *, scale=4, background
             size = (ctx['width']//scale, ctx['height']//scale)
             owner = paths.data_root() / '.cache/blocks'
             if kind == 'motion':
-                render_motion(ref, values, aspect, ctx, out, size, ground)
+                _preview_capture(render_motion, ref, values, aspect, ctx, out, size, ground)
                 data = out.read_bytes()
             else:
                 ctx['library_signature'] = signature(item)
                 t = ctx['duration']/2 if item['meta']['kind'] == 'chapter' else max(0, ctx['duration']-.1)
-                data = scenes.capture(owner, template, ctx, t=t, size=size)
+                data = _preview_capture(scenes.capture, owner, template, ctx, t=t, size=size)
             temporary = out.with_suffix('.part')
             temporary.write_bytes(data)
             os.replace(temporary, out)
@@ -458,7 +472,7 @@ def theme_sheet(payload):
         # Another session may have filled the same cache while this waited.
         items = [item for item in items if not outputs[item['clip']].exists()]
         if items:
-            stage.capture_stills(items, owner / 'scenes', on_still=publish)
+            _preview_capture(stage.capture_stills, items, owner / 'scenes', on_still=publish)
         if _REQUESTS.get(session) != sequence:
             return {'stale': True}
     return dict(**context, posters=rows, disabled=disabled)

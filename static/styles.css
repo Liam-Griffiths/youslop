@@ -1859,7 +1859,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .block-theme-sheet { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .block-theme-sheet button { display:flex; flex-direction:column; padding:6px; gap:6px; }
 .block-theme-sheet img { width:100%; max-height:200px; object-fit:contain; }
-img.themed-pending { opacity:.45; }
+.themed-poster { display:block; width:100%; }
+.themed-poster [hidden] { display:none; }
+.block-card-wrap > .themed-poster-retry { position:absolute; top:112px; left:24px; }
 
 /* One colour family per kind group, from existing tokens: photos dim, drawn cool,
    blocks good, 3D accent, your styles warn. */

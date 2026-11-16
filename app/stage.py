@@ -585,6 +585,19 @@ def _evaluate(cdp, session, expression):
     return result
 
 
+def _wait_for_seek(cdp, session, timeout=5):
+    """Navigation may finish before the scene runtime has installed its API."""
+    end = time.monotonic() + timeout
+    while (remaining := end - time.monotonic()) > 0:
+        result = cdp.send('Runtime.evaluate', {
+            'expression': "typeof window.__seek === 'function'",
+            'returnByValue': True}, session, timeout=remaining)
+        if result.get('result', {}).get('value') is True:
+            return
+        time.sleep(min(.05, max(0, end - time.monotonic())))
+    raise StageError('Scene runtime did not become ready within 5 seconds')
+
+
 def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
              frames=1, seek_js="window.__seek({t})", deterministic=True,
              session_action=None, scene_probe=None, on_still=None):
@@ -665,6 +678,7 @@ def _run_cdp(job, progress, *, out_dir=None, size=(480, 270), fps=30,
             cdp.wait_event("Page.loadEventFired")
             cdp.send("Emulation.setDefaultBackgroundColorOverride",
                      {"color": {"r": 0, "g": 0, "b": 0, "a": 0}} if item.get("alpha") else {}, session)
+            _wait_for_seek(cdp, session)
             _evaluate(cdp, session, "window.__ready")
             if deterministic:
                 _evaluate(cdp, session, """(() => {

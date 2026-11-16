@@ -115,14 +115,45 @@ for (const kind of ['trial','motion']) {
   assert(calls.at(-1)[1].theme_context.owner === 'ctheme','trial and hover inherit Preview as');
   resolve({disabled:true}); await themed;
 }
-const visible = {isConnected:true,dataset:{themedRef:'title_card',themedAspect:'16:9'}};
+const markup = blockPoster({ref:'title_card',name:'Title',posters:{}},'16:9');
+assert(markup.includes('<img hidden onload=') && markup.includes('onerror=') && markup.includes('Poster pending'),'hidden image and pending placeholder');
+const queryAll = document.querySelectorAll;
+document.querySelectorAll = () => { throw Error('default poster poll touched themed cards'); };
+blockPosterArrived();
+document.querySelectorAll = queryAll;
+const image = {hidden:true,removeAttribute(key) { delete this[key]; }};
+const caption = {}, placeholder = {querySelector:() => caption};
+let retry;
+document.createElement = () => ({setAttribute() {},remove() { this.removed = true; }});
+const posterButton = {insertAdjacentElement:(_,button) => { retry = button; }};
+const visible = {isConnected:true,dataset:{themedRef:'title_card',themedAspect:'16:9'},
+  querySelector:key => key === 'img' ? image : placeholder,
+  classList:{toggle() {}},closest:() => posterButton};
 const hidden = {...visible,isConnected:false};
 themedPosterQueue = [{target:visible,browser:blocksBrowser,choice:blockPreviewAs},
                      {target:hidden,browser:blocksBrowser,choice:blockPreviewAs}];
 const beforePosters = calls.length, posters = drainThemedPosters();
 assert(calls.length === beforePosters+1 && calls.at(-1)[1].ref === 'title_card','one visible poster at a time');
 resolve({posters:[{url:'/fixture.png'}]}); await posters;
-assert(visible.src === '/fixture.png' && calls.length === beforePosters+1,'removed cards never render');
+assert(image.src === '/fixture.png' && image.hidden && calls.length === beforePosters+1,'removed cards never render; pending until load');
+themedPosterState(visible,'loaded');
+assert(!image.hidden && placeholder.hidden,'load swaps in image');
+themedPosterState(visible,'failed');
+assert(image.hidden && !placeholder.hidden && caption.textContent === 'Preview failed','broken image stays hidden');
+assert(retry.type === 'button' && retry.textContent === 'Retry','keyboard accessible retry outside card button');
+retry.onclick({stopPropagation() {}});
+assert(image.hidden && caption.textContent === 'Poster pending' && calls.length === beforePosters+2,'retry requests fresh poster');
+assert(!themedPosterCache.has(`${blockPreviewAs}/title_card/16:9`),'failed image evicted');
+resolve({posters:[{url:'/retry.png'}]});
+await Promise.resolve(); await Promise.resolve();
+assert(image.src === '/retry.png' && image.hidden,'retry waits for image load');
+themedPosterState(visible,'loaded');
+assert(!image.hidden && placeholder.hidden,'retry image loaded');
+themedPosterCache.clear();
+themedPosterQueue.push({target:visible,browser:blocksBrowser,choice:blockPreviewAs});
+const failedPoster = drainThemedPosters();
+resolve({}); await failedPoster;
+assert(image.hidden && caption.textContent === 'Preview failed','missing poster gets retry state');
 blockPreviewAs = '';
 const defaults = requestBlockPreview(b,'16:9','trial',{},target);
 assert(!calls.at(-1)[1].theme_context,'Default restores authored block theme');
