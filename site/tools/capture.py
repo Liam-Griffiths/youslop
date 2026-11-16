@@ -30,16 +30,48 @@ FIT_TRACK = "(()=>{tlFit&&tlFit();document.querySelector('#tl-track').scrollInto
 SETUP_MODELS = ("(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Writing model'));"
                 "b&&b.click();return !!b})()")
 
+OPEN_SHOT = ("(()=>{const r=scriptRuns(state.project);scriptOpenShot(r[1][0].id);"
+             "location.hash='#/p/%s/script/shots';return 1})()" % PID)
+# The Create row shows one example graphic, written by hand into the example
+# project (model calls are disabled while capturing; nothing is generated).
+EXAMPLE_GRAPHIC = ('<section class="cb-slide"><figure class="cb-row">'
+                   '<figure class="cb-card" data-layer="paris" data-start="0.3" data-motion="fly-left">'
+                   '<p class="cb-label">Paris · 1934</p><h1 class="cb-number cb-accent">427 km</h1></figure>'
+                   '<figure class="cb-card" data-layer="berlin" data-start="1.6" data-motion="fly-right">'
+                   '<p class="cb-label">Berlin · 1940</p><h1 class="cb-number">400 km</h1></figure></figure></section>')
+
 # name, route, seconds to settle, optional script, crop box in CSS pixels (x0, y0, x1, y1).
 SHOTS = [
-    ('research', f'#/p/{PID}/plan', 3, None, (0, 52, 1440, 868)),
-    ('script', f'#/p/{PID}/script', 3, None, (130, 52, 1300, 868)),
+    ('home', f'#/p/{PID}/dashboard', 5, None, (0, 112, 1440, 868)),
+    ('script', f'#/p/{PID}/script', 3, None, (0, 112, 1440, 868)),
+    ('shots', f'#/p/{PID}/script', 3, OPEN_SHOT, (0, 112, 1440, 868)),
+    ('create', f'#/p/{PID}/create', 8, None, (0, 112, 1440, 868)),
     ('voice', f'#/p/{PID}/voice', 3, None, (0, 52, 1440, 868)),
-    ('visuals', f'#/p/{PID}/visuals', 4, None, (140, 52, 1300, 868)),
     ('blocks', '#/blocks', 25, None, (340, 160, 1300, 868)),
     ('timeline', f'#/p/{PID}/edit', 4, FIT_TRACK, (0, 420, 1440, 868)),
     ('models', '#/setup', 2, SETUP_MODELS, (470, 90, 1250, 868)),
 ]
+
+
+def prepare():
+    """What the example lacks for these rows: a graphic and a saved source page."""
+    import time as clock
+    from app import research_docs, store
+    with store.lock_for(PID):
+        p = store.load(PID)
+        p.graphics = [dict(id='gexample', title='Paris and Berlin, side by side', seconds=6.0,
+                           brief='The two networks at their peak, Paris landing first.',
+                           versions=[dict(html=EXAMPLE_GRAPHIC, note='Example', at=clock.time())],
+                           current=0, used_in=[], created_at=clock.time())]
+        store.save(p)
+    try:  # a real page, saved the way Home saves any link; skipped when offline
+        doc = research_docs.fetch_document(PID, 'https://en.wikipedia.org/wiki/Pneumatic_post')
+        with store.lock_for(PID):
+            p = store.load(PID)
+            p.research = dict(p.research or {}, documents=research_docs.documents(p) + [doc])
+            store.save(p)
+    except Exception as exc:
+        print('no source page:', exc)
 
 
 def main(bundle: str) -> None:
@@ -48,6 +80,7 @@ def main(bundle: str) -> None:
     import io
     U.seed()
     transfer.import_(Path(bundle))
+    prepare()
 
     def visit(cdp, session, run):
         cdp.send('Emulation.setDeviceMetricsOverride', {'width': WIDTH, 'height': HEIGHT,
@@ -63,7 +96,7 @@ def main(bundle: str) -> None:
             time.sleep(settle)
             if script:
                 _evaluate(cdp, session, script)
-                time.sleep(2)
+                time.sleep(3)
             png = base64.b64decode(cdp.send('Page.captureScreenshot', {'format': 'png'}, session)['data'])
             im = Image.open(io.BytesIO(png)).convert('RGB')
             im.crop(tuple(v * SCALE for v in box)).save(OUT / f'{name}.png', optimize=True)

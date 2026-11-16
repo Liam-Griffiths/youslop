@@ -26,7 +26,7 @@ function paintDashboard() {
         </section>
         <section class="home-card" aria-labelledby="home-research">
           <div class="home-card-head"><h2 id="home-research">Research documents</h2>
-            <span class="mono sub">${(research.documents || []).length} documents · ${research.facts?.length || 0} facts · ${questions.length} open questions</span>
+            <span class="mono sub">${(research.documents || []).length} document${(research.documents || []).length === 1 ? '' : 's'} · ${research.facts?.length || 0} facts · ${questions.length} open questions</span>
             <span class="spacer"></span><a class="btn sm" href="#/p/${p.id}/script">Facts beside the script</a></div>
           <div id="home-docs"><p class="sub">Loading documents…</p></div>
           ${questions.length ? `<details class="home-questions-box"><summary class="kicker home-q-head">Open questions · ${questions.length}</summary><ul class="home-questions">${questions.map(q => `<li>${esc(typeof q === 'string' ? q : q.question || q.text || '')}</li>`).join('')}</ul></details>` : ''}
