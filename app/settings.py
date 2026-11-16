@@ -13,7 +13,7 @@ editing Settings should be able to silently undo a deployment's own
 configuration. See `config._load_environment()`, which is where this ordering
 is actually applied.
 
-Every value here becomes an environment variable at startup — the mechanism
+Except for live appearance preferences, values become environment variables at startup — the mechanism
 this project already uses everywhere a key or a URL is configurable — so nothing
 downstream of `config.py` needs to know Settings exists at all.
 """
@@ -55,6 +55,9 @@ class Field:
 # The whole of what Settings can configure — everything `.env.example` lists,
 # as a form instead of a file. Order here is UI order.
 FIELDS: list[Field] = [
+    # Appearance is read live, never exported into the process environment.
+    Field("theme", "", "Theme", group="Internal", default="system",
+          options=(("system", "System"), ("light", "Light"), ("dark", "Dark"))),
     Field("stt_engine", brand.ENV_PREFIX + "STT_ENGINE", "Default engine",
           group="Speech-to-text", options=(("", "Choose an engine"),
           ("faster-whisper", "faster-whisper"), ("whisper.cpp", "whisper.cpp"),
@@ -298,6 +301,8 @@ def save_file(values: dict[str, str]) -> dict[str, str]:
     unknown = sorted(set(values) - set(FIELDS_BY_KEY))
     if unknown:
         raise ValueError(f"Not a setting: {', '.join(unknown)}")
+    if "theme" in values and values["theme"] not in ("", "system", "light", "dark"):
+        raise ValueError("Theme must be system, light or dark")
     current = load_file()
     for k, v in values.items():
         v = str(v).strip()
@@ -325,7 +330,7 @@ def environment_overrides() -> dict[str, str]:
     layer `config._load_environment()` folds in — see that function for why
     order matters here."""
     stored = load_file()
-    return {FIELDS_BY_KEY[k].env: v for k, v in stored.items() if k in FIELDS_BY_KEY}
+    return {FIELDS_BY_KEY[k].env: v for k, v in stored.items() if k in FIELDS_BY_KEY and FIELDS_BY_KEY[k].env}
 
 
 def status() -> list[dict[str, Any]]:
@@ -355,3 +360,8 @@ def status() -> list[dict[str, Any]]:
             "default": f.default,
         })
     return out
+
+
+def theme() -> str:
+    value = load_file().get("theme", "system")
+    return value if value in ("system", "light", "dark") else "system"

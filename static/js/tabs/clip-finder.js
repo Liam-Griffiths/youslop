@@ -57,8 +57,13 @@ async function renderClipFinder(sid, fid) {
       $('#cf-partial').textContent=doc.words.filter(w=>w.start>=player.currentTime-2 && w.start<=player.currentTime+4).map(w=>w.w).join(' ');
     };
     $('#cf-time').oninput=e=>{player.currentTime=Number(e.target.value);};
-    const wave=$('#cf-wave'), ctx=wave.getContext('2d'); ctx.fillStyle=getComputedStyle(host).getPropertyValue('--cool');
-    data.waveform.forEach((v,i)=>{const h=Math.max(1,(v+120)/120*80);ctx.fillRect(i*1024/data.waveform.length,40-h/2,1,h);});
+    const wave=$('#cf-wave'), ctx=wave.getContext('2d');
+    wave.paintTheme=()=>{
+      ctx.clearRect(0,0,wave.width,wave.height);
+      ctx.fillStyle=getComputedStyle(host).getPropertyValue('--cool');
+      data.waveform.forEach((v,i)=>{const h=Math.max(1,(v+120)/120*80);ctx.fillRect(i*1024/data.waveform.length,40-h/2,1,h);});
+    };
+    wave.paintTheme();
     const time=e=>Math.max(0,Math.min(duration,(e.clientX-wave.getBoundingClientRect().left)/wave.getBoundingClientRect().width*duration));
     let waveStart=0;
     wave.onpointerdown=e=>{waveStart=time(e);wave.setPointerCapture(e.pointerId);};

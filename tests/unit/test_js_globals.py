@@ -53,6 +53,8 @@ def test_classic_script_dependency_order():
     assert all(tag.get("type", "text/javascript") == "text/javascript" for tag in scripts)
     assert all("async" not in tag and "defer" not in tag for tag in scripts)
     sources = [tag["src"].removeprefix("/static/js/") for tag in scripts]
+    assert sources[1] == "theme.js"  # Live preference needs core.api before tabs/boot.
+    sources.remove("theme.js")
     assert sources[0] == "core.js"
     assert sources[-1] == "boot.js"
     timeline = sources.index("timeline/core.js")

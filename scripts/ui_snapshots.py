@@ -316,7 +316,7 @@ def server():
                 raise RuntimeError('UI server failed to stop')
 
 
-def capture(base, out):
+def capture(base, out, theme="dark"):
     from app.stage import StageError, _evaluate, _run_cdp
     errors, rows = [], []
 
@@ -342,6 +342,10 @@ def capture(base, out):
 
         cdp.on_event = event  # Error sink survives the CDP queue's 200-event bound.
         cdp.send('Network.enable', session=session)
+        cdp.send('Emulation.setEmulatedMedia', {'features': [
+            {'name': 'prefers-color-scheme', 'value': theme}]}, session)
+        cdp.send('Page.addScriptToEvaluateOnNewDocument', {'source':
+            "try { localStorage.setItem('corkbored-theme', " + json.dumps(theme) + "); } catch (e) {}"}, session)
         cdp.send('Emulation.setDeviceMetricsOverride', {
             'width': 1600, 'height': 1000, 'deviceScaleFactor': 1, 'mobile': False}, session)
         for route in pending_routes[:]:
@@ -747,6 +751,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=Path('ui-snapshots'))
     parser.add_argument('--compare', type=Path)
+    parser.add_argument('--theme', choices=('dark', 'light'), default='dark',
+                        help='Same synthetic routes in either theme; use separate output folders')
     args = parser.parse_args(argv)
     if args.compare and args.compare.resolve() == args.out.resolve():
         parser.error('--compare must differ from --out to preserve the baseline')
@@ -762,9 +768,11 @@ def main(argv=None):
             if not stage.browser():
                 raise RuntimeError('Chromium unavailable; browser verification is reviewer-run')
             seed()
+            from app import settings
+            settings.save_file({'theme': args.theme})
             args.out.mkdir(parents=True, exist_ok=True)
             with server() as base:
-                rows, errors = capture(base, args.out)
+                rows, errors = capture(base, args.out, args.theme)
             from app import jobs
             assert not any(j['kind'] == 'block posters' for j in jobs.recent()), 'Snapshots started a poster batch'
             from app import block_library

@@ -67,6 +67,11 @@ async function renderSettings() {
 
     <h2 class="micro">Appearance</h2>
     <div class="panel">
+      <div class="micro">Theme · applies immediately</div>
+      <div class="theme-options" role="group" aria-label="Theme">
+        ${themeModes.map(mode => `<button type="button" class="btn" data-theme-choice="${mode}"
+          aria-pressed="${themeMode() === mode}" onclick="setTheme('${mode}')">${mode[0].toUpperCase() + mode.slice(1)}</button>`).join('')}
+      </div>
       <label class="field"><span>Display face</span>
         <select id="display-face" onchange="setDisplayFace(this.value)">
           <option value="archivo" ${document.documentElement.dataset.display !== 'grotesk' ? 'selected' : ''}>Archivo (condensed)</option>

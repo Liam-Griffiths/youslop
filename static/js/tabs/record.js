@@ -1033,7 +1033,7 @@ function voiceBar(p, working) {
           ${esc(trackLabel(used))}, and none of its reads are touched — switch above
           once you've heard enough.</div>` : ''}
       ${used && usedCount < n ? `
-        <div class="mono" style="color:var(--warn, #e0a050);margin-top:8px">
+        <div class="mono" style="color:var(--warn);margin-top:8px">
           ${n - usedCount} paragraph${n - usedCount === 1 ? ' has' : 's have'} no read in
           ${esc(trackLabel(used))} yet and will be silent in the render.</div>` : ''}
     </div>`;

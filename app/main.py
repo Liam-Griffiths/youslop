@@ -2096,6 +2096,12 @@ def setup_checks() -> dict:
     return checks()
 
 
+@app.get("/api/theme")
+def get_theme() -> dict:
+    """Live appearance shared by the desktop window and browser."""
+    return {"theme": settings_mod.theme()}
+
+
 @app.get("/api/settings")
 def get_settings() -> dict:
     """Everything the Settings page needs: every field, its current value
@@ -2108,13 +2114,12 @@ def get_settings() -> dict:
 
 @app.post("/api/settings")
 def save_settings(payload: dict = Body(...)) -> dict:
-    """Write a batch of settings. Takes effect on next launch — everything in
-    `config.py` is read once at import, same as `.env` always was."""
+    """Write settings. Theme applies live; config.py fields need a restart."""
     try:
         settings_mod.save_file(payload)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return {"fields": settings_mod.status(), "restart_required": True}
+    return {"fields": settings_mod.status(), "restart_required": bool(set(payload) - {"theme"})}
 
 
 # ------------------------------------------------------------------------ llm

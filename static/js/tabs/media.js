@@ -20,7 +20,7 @@ async function renderLibrary() {
         in place — nothing is copied, only a small thumbnail per file. Rescan
         any time to pick up what changed.</p>
       ${folders.map((f) => `
-        <div class="row" style="margin-bottom:8px;padding:9px 12px;background:#0f1116;
+        <div class="row" style="margin-bottom:8px;padding:9px 12px;background:var(--field);
              border:1px solid var(--line-soft);border-radius:8px">
           <div style="flex:1;min-width:0">
             <strong>${esc(f.label || f.path.split('/').pop())}</strong>
@@ -807,7 +807,7 @@ function openDiagramEditor(sid) {
       </div>
       <div class="grid-2">
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
-          <div class="panel" style="background:#13151c;margin:0 0 16px;padding:14px">
+          <div class="panel" style="background:var(--editor-panel);margin:0 0 16px;padding:14px">
             <div class="row" style="margin-bottom:8px">
               <span style="font-size:13px">✨ Ask Claude to draw this</span>
             </div>
@@ -1027,7 +1027,7 @@ function openCustomDesigner(opts) {
       </div>
       <div class="grid-2">
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
-          <div class="panel" style="background:#13151c;margin:0 0 16px;padding:14px">
+          <div class="panel" style="background:var(--editor-panel);margin:0 0 16px;padding:14px">
             <div class="row" style="margin-bottom:8px">
               <span style="font-size:13px">✨ ${styleMode
                 ? 'Describe the look you want' : 'Ask Claude to design this slide'}</span>
@@ -1105,7 +1105,7 @@ function openCustomDesigner(opts) {
 
   function paintElements() {
     q('#cels').innerHTML = spec.elements.map((el, i) => `
-      <div class="panel" style="background:#13151c;margin:0 0 10px;padding:12px">
+      <div class="panel" style="background:var(--editor-panel);margin:0 0 10px;padding:12px">
         <div class="row" style="margin-bottom:8px">
           <strong style="font-size:13px">${i + 1}. ${esc(el.type)}</strong>
           <div class="spacer"></div>

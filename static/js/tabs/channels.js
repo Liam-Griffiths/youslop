@@ -523,7 +523,7 @@ function avatarPanel(c) {
         </div>
         ${a.path ? `
           <img src="/api/channels/${c.id}/file/${a.path}?v=${c.updated_at}"
-               style="height:86px;border-radius:8px;background:#0f1116">
+               style="height:86px;border-radius:8px;background:var(--field)">
           <button class="btn sm ghost danger" onclick="removeAvatar()">remove</button>`
         : `<label class="btn sm" style="cursor:pointer">choose an image
              <input type="file" accept="image/*" hidden onchange="uploadAvatar(this.files[0])">
@@ -756,7 +756,7 @@ function paintChannelSetup() {
             onchange="saveIntro({fly_duration:+this.value})"></label>
       </div>
 
-      <div class="panel" style="background:#0f1116;margin:4px 0 18px">
+      <div class="panel" style="background:var(--field);margin:4px 0 18px">
         <div class="row" style="margin-bottom:${intro.music ? '14px' : '0'}">
           <div style="flex:1;min-width:200px">
             <strong>Slate sting</strong>

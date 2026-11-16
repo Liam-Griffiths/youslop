@@ -347,8 +347,8 @@ layered editing in Edit, project-defined layers, Library like Bridge, no
 | T21.2 | Project bin: drop notes, pictures, clips; label them | L | T21.1 | done | 2026-11-15 Codex + review (one layout follow-up); model, upload/note/link/patch/delete API (removed files kept in bin/.removed), dashboard grid, labels with 1–9 keys, filters; checked on Tube Mail |
 | T21.2c | Bin: multi-select, batch labels, label vocabulary editor | M | T21.2 | done | 2026-11-15 Codex + review; Shift/Ctrl select, batch add/remove with (some) state, rename/merge/delete vocabulary in reusable static/ui component, one undo step |
 | T21.3 | Script as a writing app: binder, editor, inspector | L | T21.1 | done | 2026-11-15 Codex + review (resumed after a killed run, owner changes mid-build, one follow-up); a page grouped by shot with inline shot descriptions, chapters/shots binder (no filter), facts inspector, Write/Outline, focus + typewriter modes; typing saves (checked on Tube Mail) |
-| T21.3c | Script inspector: linked facts, insert at caret, private notes | M | T21.3 | todo | split from T21.3; plus full-height panes, two-line binder labels |
-| T21.8 | Light mode for the whole app, with a toggle | M | — | doing | owner 2026-11-15; queued right after T21.3 so later UI tickets are built in both themes |
+| T21.3c | Script inspector: linked facts, insert at caret, private notes | M | T21.3 | doing | split from T21.3; plus full-height panes, two-line binder labels |
+| T21.8 | Light mode for the whole app, with a toggle | M | — | done | 2026-11-15 Codex + review; System/Light/Dark in Settings, palette and top bar, stored in settings (first paint from localStorage); checked Dashboard, Script, Voice, Edit incl. lanes, Library, Settings in light; dark unchanged | owner 2026-11-15; queued right after T21.3 so later UI tickets are built in both themes |
 | T21.3b | Corkboard view: the outline as cards inside Script | M | T21.3 | todo | supersedes T20.10 |
 | T21.5 | Project layers: model, derivation, timeline lanes | L | T21.1 | todo | |
 | T21.5b | Layer manager and agent-proposed layers | M | T21.5 | todo | |

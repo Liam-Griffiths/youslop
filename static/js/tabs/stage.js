@@ -258,7 +258,7 @@ function intakeFacts(m, a, kind) {
     const h = (a.ceiling_y - a.floor_y) * k;
     const odd = h < 2.2 || h > 6;
     room = `<p class="mi-p">Floor to ceiling: <b>${h.toFixed(2)} m</b> at this size.
-      ${odd ? `<span style="color:#d9a05e">Rooms are usually 2.4\u20135 m, so the size is probably off.</span>
+      ${odd ? `<span style="color:var(--warn-ink)">Rooms are usually 2.4\u20135 m, so the size is probably off.</span>
         <button class="btn xs ghost" onclick="miRoomHeight(3.5)">make it 3.5 m</button>` : ''}</p>`;
   }
   const limits = (window.Stage3D ? window.Stage3D.limitsFor({ ...a, kind }) : a.limits || [])
@@ -306,7 +306,7 @@ async function openModelIntake(mid) {
 
   const regionsList = () => (draft.regions || []).map((r, i) => `
     <div class="row" style="gap:6px;margin-bottom:4px">
-      <input type="text" value="${esc(r.label)}" style="flex:1;min-width:0;${i === regionSel ? 'border-color:#ffb347' : ''}"
+      <input type="text" value="${esc(r.label)}" style="flex:1;min-width:0;${i === regionSel ? 'border-color:var(--region-select)' : ''}"
         oninput="miRegionLabel(${i}, this.value)" onfocus="miRegionSelect(${i})">
       <button class="btn xs ghost danger" onclick="miRegionDelete(${i})">\u00d7</button>
     </div>`).join('') || '<p class="mi-p">No regions yet.</p>';
@@ -363,7 +363,7 @@ async function openModelIntake(mid) {
     }
     if (scales.length === 2) {
       const off = Math.abs(scales[0] - scales[1]) / Math.min(...scales);
-      if (off > 0.05) rows.push(`<p class="mi-p" style="color:#d9a05e">These two sizes disagree by ${Math.round(off * 100)}%:
+      if (off > 0.05) rows.push(`<p class="mi-p" style="color:var(--warn-ink)">These two sizes disagree by ${Math.round(off * 100)}%:
         the model may be stylised, or one figure is off. Pick the one that matters most for your shots.</p>`);
     }
     if (id.subject) rows.push(`<p class="mi-p">Subject: <b>${esc(id.subject.name)}</b>${id.subject.refined ? ' <span class="mono">(placed from a closer look)</span>' : ''}${id.north && id.north !== 'unknown' ? ` \u00b7 north is ${esc(id.north)}` : ''}
@@ -684,7 +684,7 @@ async function paintStage() {
               ${['move', 'framing', 'side', 'join'].map((k) => `<select style="width:auto" title="${k}"
                 onchange="stageEdit('${s.id}', {intent: {${k}: this.value}})">${opt(k, it[k])}</select>`).join('')}
             </div>
-            ${sol.flag || sol.error ? `<div class="mi-p" style="color:var(--warn,#d9a441);margin-top:6px">${esc(sol.error || sol.flag)}</div>` : ''}
+            ${sol.flag || sol.error ? `<div class="mi-p" style="color:var(--warn);margin-top:6px">${esc(sol.error || sol.flag)}</div>` : ''}
             ${(sol.notes || []).length ? `<div class="mono" style="color:var(--ink-faint);margin-top:4px">${sol.notes.map(esc).join(' · ')}</div>` : ''}
           </div>
         </div>

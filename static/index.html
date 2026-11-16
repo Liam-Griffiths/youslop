@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Corkbored</title>
+<!-- Cache the preference before styles load; System is handled by CSS. -->
+<script>try{var t=localStorage.getItem('corkbored-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="/static/styles.css">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <link rel="icon" type="image/svg+xml" href="/static/brand/corkbored-mark.svg">
@@ -28,6 +30,9 @@
     </nav>
   </details>
   <div id="topbar-right" class="topbar-right"></div>
+  <button type="button" id="theme-toggle" class="btn sm ghost" onclick="cycleTheme()" aria-label="Theme: system. Switch to light" title="Theme: system. Switch to light">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2a6 6 0 0 1 0 12Z" fill="currentColor"/></svg>
+  </button>
   <button type="button" class="btn sm ghost" onclick="openPalette()" aria-label="Open command palette" aria-keyshortcuts="Control+K Meta+K">Ctrl K</button>
 </header>
 <nav id="stage-bar" class="stage-bar" aria-label="Project stages" hidden></nav>
@@ -44,6 +49,7 @@
   "three/addons/": "/static/vendor/three/addons/"}}</script>
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/js/core.js"></script>
+<script src="/static/js/theme.js"></script>
 <script src="/static/js/tabs/home.js"></script>
 <script src="/static/js/tabs/dashboard.js"></script>
 <script src="/static/ui/labels.js"></script>

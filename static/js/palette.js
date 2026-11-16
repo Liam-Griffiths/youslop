@@ -118,3 +118,8 @@ for (const [id, label, run] of [
     when: () => typeof footageView !== 'undefined' && !!footageView && !!$('#footage-grid')
       && (id !== 'estimate' || !footageView.processing), run});
 }
+
+for (const mode of ['light', 'dark', 'system']) {
+  registerCommand({id: `theme-${mode}`, label: `Theme: ${mode}`, group: 'Appearance',
+    run: () => setTheme(mode)});
+}
