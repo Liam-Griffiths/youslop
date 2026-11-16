@@ -26,7 +26,7 @@ def render_signature(project: Project) -> str:
     if project.kind == 'clip':
         data['clip'] = project.clip
     data['slides'] = [{k: getattr(s, k) for k in s.__dataclass_fields__
-                       if k not in {'takes', 'history', 'queries', 'locked_media'}}
+                       if k not in {'takes', 'history', 'queries', 'locked_media', 'note'}}
                       for s in project.slides]
     for slide in data['slides']:
         if not slide['kind']:

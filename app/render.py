@@ -1943,6 +1943,7 @@ def _segment_key(project, group, settings) -> str:
     rows = []
     for slide, duration in group:
         row = dataclasses.asdict(slide)
+        row.pop("note", None)  # Private writing notes do not affect output or cache keys.
         row.pop("duplicate_of", None)  # Script provenance does not change the picture.
         if any('at' in cue for key, cues in slide.cues.items() if key in cuts.KEYS for cue in cues):
             row['cue_clock'] = 'paragraph-v2'
@@ -2683,6 +2684,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     slides = []
     for s, d in group:
         row = dataclasses.asdict(s)
+        row.pop("note", None)  # Private writing notes do not affect output or cache keys.
         row.pop("duplicate_of", None)
         if any('at' in cue for key, cues in s.cues.items() if key in cuts.KEYS for cue in cues):
             row['cue_clock'] = 'paragraph-v2'
@@ -2750,7 +2752,7 @@ def _kind_context(project, slide):
     fmt = kinds.kind_for(project, slide)
     run = kinds.run_project(project, slide).slides if fmt in {'casefile', 'groupchat'} else []
     return [fmt, _lead_overlap(project, slide),
-            [s.to_dict() for s in run[:next((i for i, s in enumerate(run) if s.id == slide.id), 0)]]]
+            [{k: v for k, v in s.to_dict().items() if k != "note"} for s in run[:next((i for i, s in enumerate(run) if s.id == slide.id), 0)]]]
 
 
 def _chain_overlaps(project, groups, group_indices, count):

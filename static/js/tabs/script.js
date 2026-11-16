@@ -64,7 +64,7 @@ function paintScript() {
           <a class="btn sm" href="#/p/${p.id}/edit">Edit in timeline</a>`;
       } else {
         html += `<div class="script-text" data-para="${s.id}" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Narration, paragraph ${i + 1}"
-          oninput="scriptInput(this,'${s.id}')" oncompositionstart="scriptComposing=true; clearTimeout(scriptTimer)" oncompositionend="scriptComposing=false; scriptInput(this,'${s.id}')" onblur="scriptFlush()" onpaste="scriptPaste(event)" onkeydown="scriptEditorKey(event,'${s.id}')">${esc(scriptDrafts.get(s.id)?.text ?? s.narration)}</div>
+          oninput="scriptInput(this,'${s.id}')" oncompositionstart="scriptComposing=true; clearTimeout(scriptTimer)" oncompositionend="scriptComposing=false; scriptInput(this,'${s.id}')" onfocus="scriptSaveCaret(this,'${s.id}')" onkeyup="scriptSaveCaret(this,'${s.id}')" onmouseup="scriptSaveCaret(this,'${s.id}')" onblur="scriptSaveCaret(this,'${s.id}'); scriptFlush()" onpaste="scriptPaste(event)" onkeydown="scriptEditorKey(event,'${s.id}')">${esc(scriptDrafts.get(s.id)?.text ?? s.narration)}</div>
           <span class="script-voice mono">${scriptVoice(s)}</span>`;
       }
       html += `</article></div>`;
@@ -87,6 +87,8 @@ function paintScript() {
         ${s.duplicate_of ? '<span class="pill">Duplicate paragraph</span>' : ''}
         <label><input type="checkbox" ${s.on_camera ? 'checked' : ''} onchange="scriptCamera('${s.id}',this.checked)"> On camera</label>
         <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button></div>`;
+    if (!s.insert?.kind) html += scriptDetail('notes', 'Notes · private', `<label for="script-note-${s.id}">Private paragraph note</label>
+      <textarea id="script-note-${s.id}" oninput="scriptNoteInput(this,'${s.id}')" onblur="scriptFlush()">${esc(scriptNotes.get(s.id)?.text ?? s.note ?? '')}</textarea>`);
     html += '</div>';
   });
   const nWarn = Object.values(vflags).filter(f => f.level === 'warn').length;
@@ -112,27 +114,17 @@ function paintScript() {
 
 // The dossier research.gather() found before a word was written — see
 // app/research.py. A video scripted before that existed, or with SEARXNG_URL
-// unset, has an empty one and this renders nothing.
+// unset, has an empty dossier; bin notes can still appear.
 function sourcesPanel(research) {
   const facts = research.facts || [];
-  if (!facts.length) return '';
-  const dotColor = { high: 'var(--good)', medium: 'var(--cool)', low: 'var(--ink-faint)' };
   return `<details id="script-sources" ${scriptPreference('facts', true) ? 'open' : ''} ontoggle="scriptRemember('facts',this.open)" style="margin-bottom:16px">
     <summary style="cursor:pointer;font-weight:600">
       Facts and sources — ${facts.length} researched fact${facts.length === 1 ? '' : 's'}
       ${research.source_count ? `from ${research.source_count} page(s)` : ''}
     </summary>
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
-      ${facts.map((f) => `
-        <div style="font-size:13.5px;line-height:1.5">
-          <span class="dot" style="background:${dotColor[f.confidence] || dotColor.medium};
-                display:inline-block;margin-right:7px"></span>
-          ${esc(f.claim)}${f.date ? ` <span class="mono" style="color:var(--ink-faint)">(${esc(f.date)})</span>` : ''}
-          — ${f.url
-            ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.source || 'source')}</a>`
-            : `<span style="color:var(--ink-faint)">${esc(f.source || 'source')}</span>`}
-        </div>`).join('')}
-    </div>
+    <label for="script-fact-search">Search all facts</label>
+    <input id="script-fact-search" type="search" value="${esc(scriptFactsQuery)}" oninput="scriptRenderFacts(this.value)">
+    <div id="script-fact-list"></div>
     ${(research.open_questions || []).length ? `
       <div style="margin-top:14px">
         <strong style="font-size:13px">Left unclear by research</strong>

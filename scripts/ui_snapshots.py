@@ -73,7 +73,7 @@ def console_error(event):
 def seed_writing():
     """Manuscript fixtures: no generated media, recordings, or model work."""
     from app import store
-    from app.schema import Project, Slide
+    from app.schema import BinItem, Project, Slide
     for size, count in [('short', 2), ('long', 32)]:
         p = Project(id=f'psnapwrite{size}', idea='Synthetic writing workspace', target_minutes=8,
             slides=[Slide(id=f'write{i}', narration='The station wakes before the city. '
@@ -85,6 +85,14 @@ def seed_writing():
             'date': '1920', 'source': 'Fixture archive', 'url': 'https://example.test/archive'}],
             'flags': [{'slide_id': 'write1', 'severity': 'high', 'claim': 'Opening date',
                 'issue': 'Confirm the date against the archive.'}]}
+        p.research['facts'] += [
+            dict(claim='The first train reaches the station at sunrise.', beat='Morning',
+                 source='Timetable', date='2026', confidence='high'),
+            dict(claim='Synthetic ocean tides peak at noon.', source='Tide archive', confidence='low')]
+        p.slides[0].note = 'Private: check the pronunciation before recording.'
+        p.slides[0].beat = 'Morning'
+        p.bin = [BinItem(id='stationnote', kind='note', title='Station morning',
+            note='The platform clock is visible before sunrise.', labels=['station'])]
         if size == 'long':
             p.set_take(p.slides[0], 'mic', {'path': 'takes/synthetic.wav',
                 'duration': 5, 'narration': p.slides[0].narration})
@@ -591,8 +599,42 @@ def capture(base, out, theme="dark"):
                         'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
                     _evaluate(cdp, session, expression)
                     _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+                    if phase == 'writing':
+                        _evaluate(cdp, session, """(async () => {
+                          scriptLocate('write0');
+                          const el = document.querySelector('[data-para="write0"]');
+                          const before = el.innerText, take = JSON.stringify(state.project.slides[0].take);
+                          const range = document.createRange();
+                          range.setStart(el.firstChild, 4); range.collapse(true);
+                          getSelection().removeAllRanges(); getSelection().addRange(range);
+                          scriptSaveCaret(el, 'write0');
+                          document.querySelector('#script-fact-search').focus();
+                          scriptInsertFact(0);
+                          if (el.innerText !== before.slice(0,4) + state.project.research.facts[0].claim + before.slice(4))
+                            throw Error('Fact missed saved caret');
+                          await scriptFlush();
+                          if (JSON.stringify(state.project.slides[0].take) !== take) throw Error('Insertion changed take');
+                          document.execCommand('undo'); scriptInput(el, 'write0'); await scriptFlush();
+                          if (el.innerText !== before) throw Error('Fact insertion cannot undo');
+                          const note = document.querySelector('#script-note-write0');
+                          note.value = 'Private inspector snapshot note'; scriptNoteInput(note, 'write0');
+                          await scriptFlush();
+                          const saved = await api('/api/projects/' + state.project.id);
+                          if (saved.slides[0].note !== note.value || saved.slides[0].narration !== before)
+                            throw Error('Private note did not save separately');
+                          scriptRenderFacts('ocean');
+                          if (!document.querySelector('#script-fact-list').textContent.includes('ocean tides') ||
+                              document.querySelector('#script-fact-list').textContent.includes('1920'))
+                            throw Error('All facts search failed');
+                          scriptRenderFacts('');
+                          document.querySelector('.script-main').scrollTop = 0;
+                          return true;
+                        })()""")
                     if phase == 'review':
                         _evaluate(cdp, session, """(() => {
+                          const status = document.querySelector('.script-status').getBoundingClientRect();
+                          const jobs = document.querySelector('.jobs-strip').getBoundingClientRect();
+                          if (Math.abs(status.bottom - jobs.top) > 2) throw Error('Writing panes do not fill to jobs strip');
                           const tabs = document.querySelector('.stage-subtabs');
                           const tools = document.querySelector('.script-tools');
                           const shot = document.querySelector('.script-shot-heading');

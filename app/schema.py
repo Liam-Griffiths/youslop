@@ -88,6 +88,7 @@ class Slide:
     title_hold: float | None = None
     chapter_hold: float | None = None  # card before this paragraph
     narration: str = ""
+    note: str = ""                        # private writing note; never used for output
     duplicate_of: str = ""                # copied paragraph origin; old saves default empty
     visual_note: str = ""                 # plain-English description of the shot
     queries: list[str] = field(default_factory=list)

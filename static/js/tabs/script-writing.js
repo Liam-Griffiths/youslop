@@ -1,6 +1,7 @@
 // Writing workspace. Drafts keep their project id until the write succeeds.
 let scriptActive = '', scriptWrites = Promise.resolve(), scriptTimer, scriptFlushing, scriptComposing = false;
-const scriptDrafts = new Map();
+const scriptDrafts = new Map(), scriptNotes = new Map();
+let scriptCaret = null, scriptFactsQuery = "";
 function scriptPreference(key, fallback) {
   try { return JSON.parse(localStorage.getItem('corkbored-script-' + key)) ?? fallback; } catch { return fallback; }
 }
@@ -58,6 +59,7 @@ function scriptCurrent(sid) {
   const sources = $('#script-sources');
   if (sources && inspector) {
     inspector.querySelector('h2').after(sources);
+    scriptRenderFacts();
   }
   scriptStats();
 }
@@ -98,14 +100,15 @@ function scriptFlush() {
   if (scriptFlushing) return scriptFlushing;
   scriptFlushing = (async () => {
     await scriptWrites;
-    while (scriptDrafts.size) {
-      const [sid, draft] = scriptDrafts.entries().next().value;
+    while (scriptDrafts.size || scriptNotes.size) {
+      const drafts = scriptDrafts.size ? scriptDrafts : scriptNotes;
+      const [sid, draft] = drafts.entries().next().value;
       if (state.project?.id !== draft.pid) return false;
-      if (!(await scriptSave(sid, {narration: draft.text}))) {
+      if (!(await scriptSave(sid, drafts === scriptDrafts ? {narration: draft.text} : {note: draft.text}))) {
         if ($('#script-save-status')) $('#script-save-status').textContent = 'Not saved · retry Save';
         return false;
       }
-      if (scriptDrafts.get(sid) === draft) scriptDrafts.delete(sid);
+      if (drafts.get(sid) === draft) drafts.delete(sid);
     }
     if ($('#script-save-status')) $('#script-save-status').textContent = 'Saved';
     return true;
@@ -230,4 +233,82 @@ function scriptResize(e, pane) {
   el.onpointermove = move => scriptWidth(pane, width + (move.clientX - start) * (pane === 'binder' ? 1 : -1));
   el.onpointerup = el.onpointercancel = () => { el.onpointermove = null; };
 }
-window.addEventListener('beforeunload', e => { if (scriptDrafts.size) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (scriptDrafts.size || scriptNotes.size) { e.preventDefault(); e.returnValue = ''; } });
+
+function scriptNoteInput(el, sid) {
+  scriptNotes.set(sid, {pid: state.project.id, text: el.value});
+  clearTimeout(scriptTimer);
+  $('#script-save-status').textContent = 'Saving…';
+  scriptTimer = setTimeout(scriptFlush, 600);
+}
+// Keep a DOM range for native insertText/undo, including a selected span.
+function scriptSaveCaret(el, sid) {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  if (el.contains(range.startContainer) && el.contains(range.endContainer))
+    scriptCaret = {pid: state.project.id, sid, range: range.cloneRange()};
+}
+function scriptInsertFact(index) {
+  const p = state.project, sid = scriptActive;
+  const el = document.querySelector(`[data-para="${sid}"][contenteditable]`);
+  const claim = p.research?.facts?.[index]?.claim;
+  if (!el || !claim || scriptComposing) return;
+  const range = scriptCaret?.pid === p.id && scriptCaret.sid === sid &&
+    el.contains(scriptCaret.range.startContainer) && el.contains(scriptCaret.range.endContainer)
+    ? scriptCaret.range.cloneRange() : document.createRange();
+  if (!(scriptCaret?.pid === p.id && scriptCaret.sid === sid && el.contains(range.startContainer))) {
+    range.selectNodeContents(el); range.collapse(false);
+  }
+  el.focus();
+  const selection = window.getSelection();
+  selection.removeAllRanges(); selection.addRange(range);
+  document.execCommand('insertText', false, String(claim));
+  scriptSaveCaret(el, sid);
+  scriptInput(el, sid);
+}
+function scriptTerms(text) {
+  const stop = new Set('a an the and or of in on at to for from with is was were are it this that as by before after'.split(' '));
+  return new Set((String(text || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(t => t.length > 2 && !stop.has(t)));
+}
+function scriptFactRank(f, s) {
+  const linked = [f.slide_id, f.paragraph_id, ...(f.slide_ids || []), ...(f.paragraph_ids || [])].filter(Boolean);
+  if (linked.length) return linked.includes(s.id) ? 3000 : 0;
+  if (f.beat && s.beat && f.beat === s.beat) return 2000;
+  const overlap = (a, b) => [...scriptTerms(a)].filter(t => scriptTerms(b).has(t)).length;
+  const beat = overlap(f.claim, s.beat);
+  const text = overlap(f.claim, scriptDrafts.get(s.id)?.text ?? s.narration);
+  return beat ? 1000 + beat : text;
+}
+function scriptFactRows(p, s, query = '') {
+  const q = query.trim().toLowerCase();
+  return (p.research?.facts || []).map((fact, index) => ({fact, index, rank: scriptFactRank(fact, s)}))
+    .filter(({fact:f}) => [f.claim, f.source, f.date, f.url].join(' ').toLowerCase().includes(q))
+    .sort((a,b) => b.rank - a.rank || a.index - b.index);
+}
+function scriptRenderFacts(query = scriptFactsQuery) {
+  scriptFactsQuery = query;
+  const p = state.project, s = p.slides.find(s => s.id === scriptActive);
+  const host = $('#script-fact-list');
+  if (!host || !s) return;
+  const rows = scriptFactRows(p, s, query);
+  const row = ({fact:f, index}) => `<div class="script-fact"><p>${esc(f.claim)}</p>
+    <span class="mono">${esc(f.confidence || 'medium')} confidence${f.date ? ' · ' + esc(f.date) : ''}</span>
+    <div>${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.source || 'Source')}</a>` : esc(f.source || 'Source')}
+    ${s.insert?.kind ? '' : `<button class="btn sm" onclick="scriptInsertFact(${index})">Insert</button>`}</div></div>`;
+  host.innerHTML = `<h3 class="kicker">Matched facts</h3>${rows.filter(r => r.rank > 0).map(row).join('') || '<p class="sub">No matched facts.</p>'}
+    ${scriptDetail('all-facts', 'All facts · ' + rows.length, rows.map(row).join('') || '<p class="sub">No facts match your search.</p>')}
+    <h3 class="kicker">From your bin</h3>${(p.bin || []).filter(item => item.kind === 'note' &&
+      scriptFactRank({claim:[item.title, item.note, ...(item.labels || [])].join(' ')}, s) > 0)
+      .map(item => `<div class="script-fact"><strong>${esc(item.title)}</strong><p>${esc(item.note)}</p>
+        <a href="#/p/${p.id}/dashboard" onclick="scriptOpenBinNote('${esc(item.id)}'); return false">Open note in bin</a></div>`).join('') || '<p class="sub">No matching bin notes.</p>'}`;
+}
+
+async function scriptOpenBinNote(id) {
+  const pid = state.project.id;
+  if (!(await scriptFlush()) || state.project.id !== pid) return;
+  if (binView.pid !== pid) binView = binInitial(pid);
+  binView.selected = [id];
+  binView.query = binView.kind = binView.label = '';
+  go('#/p/' + pid + '/dashboard');
+}
