@@ -548,7 +548,7 @@ function descriptionPanel(p) {
           timestamps, credits and tags</span>
         <div class="spacer"></div>
         <button class="btn sm ${text ? 'ghost' : ''}" onclick="writeDescription()">
-          ${text ? 'write it again' : 'write it'}</button>
+          ${text ? 'Write it again' : 'Write it'}</button>
         ${text ? `<button class="btn sm" onclick="copyDescription()">Copy</button>` : ''}
       </div>
         <textarea id="desc-text" rows="14" style="width:100%;font-family:var(--mono, monospace);font-size:13px"
