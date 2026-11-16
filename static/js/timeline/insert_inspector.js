@@ -13,6 +13,12 @@ function tlInsertInspector(sel, body) {
     ${item.kind === 'picture' ? `<p>${item.candidate_id ? 'Search result' : item.bin_id ? 'Materials' : 'Library'} · ${esc(item.candidate_id || item.bin_id || item.asset_id)}</p>` : ''}
     <div data-insert-vars></div><button type="submit" class="btn sm">Save insert</button></form>
     <button type="button" class="btn sm ghost" data-insert-delete>Delete insert</button><p role="status"></p>`;
+  if (item.kind === 'stage') {
+    body.insertAdjacentHTML('beforeend', `<button type="button" class="btn sm" data-shot-edit>Edit shot</button>
+      <button type="button" class="btn sm ghost" data-shot-solve>Solve shot</button>`);
+    body.querySelector('[data-shot-edit]').onclick = () => tlModal(() => openShot(row.id));
+    body.querySelector('[data-shot-solve]').onclick = () => stageSolve([row.id]);
+  }
   const form = body.querySelector('form');
   let block;
   if (item.kind === 'block') {

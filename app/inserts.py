@@ -9,6 +9,8 @@ FIELDS = {
     'block': {'block', 'vars'},
     'picture': {'asset_id', 'bin_id', 'source_slide', 'candidate_id'},
     'card': {'text'},
+    'stage': {'model_id', 'source_slide'},
+    'graphic': {'graphic_id'},
 }
 
 
@@ -27,7 +29,7 @@ def prepare(project, payload, slide=None):
     data = {**row.insert, **payload}
     kind = data.get('kind')
     if not isinstance(kind, str) or kind not in FIELDS:
-        raise ValueError('Insert kind must be clip, block, picture or card')
+        raise ValueError('Insert kind must be clip, block, picture, card, stage or graphic')
     if slide and kind != slide.insert['kind']:
         raise ValueError('Insert kind cannot be changed; add a new insert')
     if payload.keys() - (FIELDS[kind] | {'kind', 'seconds', 'after'}):
@@ -61,7 +63,10 @@ def prepare(project, payload, slide=None):
         seconds = data.get('seconds')
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
             raise ValueError('seconds must be finite and greater than zero')
-        if kind == 'picture':
+        if kind in {'stage', 'graphic'}:
+            from . import composing_sources
+            composing_sources.prepare(project, row, data, slide)
+        elif kind == 'picture':
             if data.get('bin_id') or data.get('candidate_id'):
                 from .picture_sources import candidate
                 # The placed candidate is independent of its search paragraph.
@@ -95,6 +100,8 @@ def prepare(project, payload, slide=None):
 
 def place(project, row, after):
     """Apply only after prepare succeeds; None preserves a patched row's order."""
+    from .composing_sources import attach
+    attach(project, row)
     if after is None:
         project.slides[project.slides.index(project.slide(row.id))] = row
         return

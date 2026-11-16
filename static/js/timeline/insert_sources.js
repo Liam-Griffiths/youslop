@@ -45,7 +45,6 @@ function tlInsertSourceList(box, items, onPick, drag = true) {
     };
     if (!drag) return;
     button.ondragstart = e => {
-      if (['model','graphic'].includes(item.payload.kind)) { e.preventDefault(); return; }
       tlPause(); TL.insertDrag = {pid:TL.pid, payload:structuredClone(item.payload)};
       e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', item.label);
     };

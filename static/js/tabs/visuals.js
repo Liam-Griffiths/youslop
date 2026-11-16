@@ -6,7 +6,7 @@ function pictureKind(s, p = state.project) {
 }
 function pictureKindLabel(kind, s = null) {
   const names = {kenburns:'Documentary photo', essay:'Essay slide', board:'Board', stage:'3D',
-    flameboat:'Flameboat', casefile:'Casefile', loudmouth:'Loudmouth', groupchat:'Group Chat', ticker:'Ticker', camera:'Camera'};
+    flameboat:'Flameboat', casefile:'Casefile', loudmouth:'Loudmouth', groupchat:'Group Chat', ticker:'Ticker', camera:'Camera', 'custom:graphic':'Create graphic'};
   if (kind === 'block' && !s) return 'Block';
   if (kind === 'block') return 'Block: ' + (s?.cues?.blocks?.[0]?.block || '').replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
   return names[kind] || (state.slideStyles || []).find(x => 'custom:'+x.id === kind)?.name || kind;

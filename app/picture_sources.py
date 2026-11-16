@@ -82,11 +82,29 @@ def apply(project, sid, payload):
             data['seconds'] = slide.insert['seconds']
         row, _ = inserts.prepare(project, data)
         slide.insert, slide.candidates, slide.chosen_id = row.insert, row.candidates, row.chosen_id
-        slide.kind, slide.locked_media = 'kenburns', True
+        slide.kind, slide.locked_media = row.kind, True
+        slide.shot, slide.custom_html, slide.custom = row.shot, row.custom_html, row.custom
+        if row.kind == 'stage':
+            slide.visual_note = row.visual_note
+        from .composing_sources import attach
+        attach(project, slide)
         if slide.cues.get('blocks'):
             slide.cues = dict(slide.cues, inactive_blocks=slide.cues['blocks'], blocks=[])
         return
     lead = project.slide(next((r[0] for r in project.picture_runs() if sid in r), sid))
+    if payload.get('kind') in {'stage', 'graphic'}:
+        from .composing_sources import attach
+        row, _ = inserts.prepare(project, dict(payload, seconds=4))
+        lead.kind, lead.locked_media = row.kind, True
+        lead.chosen_id = ''  # Keep candidates available without downloading an old choice.
+        lead.shot, lead.custom_html, lead.custom = row.shot, row.custom_html, row.custom
+        if row.kind == 'stage':
+            lead.visual_note = row.visual_note
+        if lead.cues.get('blocks'):
+            lead.cues = dict(lead.cues, inactive_blocks=lead.cues['blocks'], blocks=[])
+        row.id = lead.id
+        attach(project, row)
+        return
     if payload.get('kind') == 'block':
         row, _ = inserts.prepare(project, dict(payload, seconds=4))
         lead.kind, lead.locked_media = 'kenburns', True

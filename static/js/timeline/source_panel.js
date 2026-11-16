@@ -40,8 +40,11 @@ async function tlSourcesMount() {
   view.items = [...(items || []), ...(materials?.items || []).filter(i => ['image','clip'].includes(i.kind)).map(i => ({
     label:i.title, thumb:i.thumb, tab:'Materials', meta:[i.shows,i.origin,i.licence,i.made,i.credit].filter(Boolean).join(' · '),
     payload:{kind:'picture', bin_id:i.id, seconds:4}})),
-    ...(models || []).map(m => ({label:m.title, tab:'3D', thumb:`/api/models/${m.id}/thumb.jpg`, payload:{kind:'model', id:m.id}})),
-    ...(graphics?.graphics || []).map(g => ({label:g.title, tab:'Graphics', meta:g.versions?.length ? 'Designed' : 'Design in Create', payload:{kind:'graphic', id:g.id}}))];
+    ...(models || []).map(m => ({label:m.title, tab:'3D', thumb:`/api/models/${m.id}/thumb.jpg`, payload:{kind:'stage', model_id:m.id, seconds:4}})),
+    ...state.project.slides.filter(s => s.shot?.intent).map(s => ({label:s.title || s.visual_note || s.id, tab:'3D', meta:'Existing shot',
+      payload:{kind:'stage', source_slide:s.id, seconds:s.insert?.seconds || 4}})),
+    ...(graphics?.graphics || []).map(g => ({label:g.title, tab:'Graphics', meta:g.versions?.length ? 'Designed' : 'Design in Create',
+      payload:{kind:'graphic', graphic_id:g.id, seconds:g.seconds || 6}}))];
   view.error = results.some(r => r.status === 'rejected') ? 'Some sources failed to load. Reopen Sources to retry.' : '';
   tlSourcesPaint();
 }
@@ -56,7 +59,7 @@ function tlSourcesPaint() {
   const panel = $('#tl-sources');
   if (!panel) return;
   const v = tlSourceView, tab = v.tab;
-  panel.querySelector('[data-use]').textContent = tab === '3D' ? 'Open model' : 'Use on selected picture';
+  panel.querySelector('[data-use]').textContent = 'Use on selected picture';
   panel.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
   const tools = panel.querySelector('[data-source-tools]');
   tools.innerHTML = tab === 'Search' ? `<label for="tl-source-kind">Archive type</label>
@@ -64,23 +67,48 @@ function tlSourcesPaint() {
         `<option value="${k}" ${(v.searchKind || 'image') === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
       <button type="button" class="btn sm" data-search ${v.searching ? 'disabled' : ''}>Search archives</button>`
     : tab === 'Graphics' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/create">Open Create</a>`
-    : tab === '3D' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/edit/cast">Cast and models</a><a class="btn sm ghost" href="#/p/${TL.pid}/edit/stage">Shot planning</a>`
+    : tab === '3D' ? `<button type="button" class="btn sm ghost" data-intake>Model intake…</button><a class="btn sm ghost" href="#/p/${TL.pid}/edit/cast">Cast and models</a><a class="btn sm ghost" href="#/p/${TL.pid}/edit/stage">Shot planning</a>`
     : tab === 'Blocks' ? '<button type="button" class="btn sm ghost" data-browse>Browse blocks…</button>' : '';
   if (tools.querySelector('[data-search]')) {
     tools.querySelector('[data-search]').onclick = tlSourceSearch;
     tools.querySelector('select').onchange = e => { v.searchKind = e.target.value; };
   }
   if (tools.querySelector('[data-browse]')) tools.querySelector('[data-browse]').onclick = () => tlInsertBlock(tlInsertNearest());
+  if (tab === '3D') tools.querySelector('[data-intake]').onclick = () => {
+    const id = v.choice?.model_id;
+    if (id) openModelIntake(id); else toast('Select a model for intake.', true);
+  };
+  if (['3D','Graphics'].includes(tab)) {
+    tools.insertAdjacentHTML('beforeend', `<label for="tl-source-seconds">Insert length (seconds)</label>
+      <input id="tl-source-seconds" type="number" min="0.05" step="0.05" value="${esc(v.choice?.seconds ?? 4)}">
+      <button type="button" class="btn sm" data-insert-source>Insert at nearest boundary</button>`);
+    const length = tools.querySelector('#tl-source-seconds');
+    // The box shows the chosen source's own length (a graphic's is set in
+    // Create); editing it changes only that source.
+    length.oninput = () => {
+      if (v.choice && ['stage','graphic'].includes(v.choice.kind) && Number(length.value) > 0) v.choice.seconds = Number(length.value);
+    };
+    tools.querySelector('[data-insert-source]').onclick = () => {
+      const point = tlInsertNearest();
+      if (!v.choice) return toast('Choose a source first.', true);
+      if (point && tlCanEdit([], ['pictures'])) tlInsertSave('', {...v.choice, after:point.after});
+    };
+  }
   const items = tab === 'Search' ? v.archive || tlSourceArchiveItems() : v.items.filter(i => i.tab === tab
     && `${i.label} ${i.meta || ''}`.toLowerCase().includes(v.query.toLowerCase()));
   const grid = panel.querySelector('[data-source-grid]');
   tlInsertSourceList(grid, items, payload => { v.choice = payload; });
   grid.querySelectorAll('[data-source]').forEach(b => {
     const item = items[+b.dataset.source];
-    b.draggable = !['model','graphic'].includes(item.payload.kind);
+    b.draggable = true;
     b.ondblclick = () => tlSourceUse(item.payload);
     b.setAttribute('aria-pressed', String(v.choice === item.payload));
-    b.onclick = () => { v.choice = item.payload; grid.querySelectorAll('button').forEach(n => n.setAttribute('aria-pressed', String(n === b))); };
+    b.onclick = () => {
+      v.choice = item.payload;
+      grid.querySelectorAll('button').forEach(n => n.setAttribute('aria-pressed', String(n === b)));
+      const length = $('#tl-source-seconds');
+      if (length && item.payload.seconds) length.value = item.payload.seconds;
+    };
   });
   if (tab === 'Search' && !items.length) grid.innerHTML = '<p>Select a picture, enter a query and search archives. Results can replace pictures or be inserted at +.</p>';
   panel.querySelector('[data-source-status]').textContent = tab === 'Search' ? v.searchStatus || v.error || '' : v.error || '';
@@ -123,7 +151,7 @@ function tlSourcePicture() {
 }
 function tlSourceUse(payload, selection = null) {
   if (!payload) return toast('Choose a source first.', true);
-  if (payload.kind === 'model') return openModelIntake(payload.id);
+  payload = structuredClone(payload);
   const sel = selection || tlSourcePicture();
   if (!sel || !tlCanEdit([sel], ['pictures'])) return;
   const pid = TL.pid;
@@ -134,12 +162,7 @@ function tlSourceUse(payload, selection = null) {
       tlPause();
       const s = state.project.slides.find(s => s.id === sel.sid);
       if (!s || s.on_camera) throw Error('Choose a non-camera picture paragraph.');
-      if (payload.kind === 'graphic') {
-        if (s.insert?.kind) throw Error('Choose a narrated paragraph for a Create graphic.');
-        const r = await api(`/api/projects/${pid}/graphics/${payload.id}/place`, {method:'POST', body:JSON.stringify({slide:s.id})});
-        watchJob(r.job, 'graphic'); return;
-      }
-      if (!['picture','block','clip'].includes(payload.kind)) throw Error('Choose a picture, block or footage source.');
+      if (!['picture','block','clip','stage','graphic'].includes(payload.kind)) throw Error('Choose a picture source.');
       const project = await api(`/api/projects/${pid}/slides/${s.id}/picture-source`, {
         method:'POST', body:JSON.stringify(payload), editLabel:'replace picture', editGesture:crypto.randomUUID()});
       if (TL.pid === pid && state.project?.id === pid) { state.project = project; await tlRefresh(); tlInspector(); }

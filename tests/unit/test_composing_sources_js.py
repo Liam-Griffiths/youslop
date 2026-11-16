@@ -23,7 +23,7 @@ const toast=m=>notices.push(m), tlPause=()=>{}, crypto={randomUUID:()=> 'gesture
 const tlInsertClearGhost=()=>{};
 let tlInspectorQueue=Promise.resolve(), locked=false, refreshed=0, inspected=0;
 const tlCanEdit=()=>!locked, tlRefresh=async()=>{refreshed++;}, tlInspector=()=>{inspected++;};
-const tools={querySelector:()=>({})}, status={}, use={};
+const toolNodes={}, tools={querySelector:s=>toolNodes[s] ||= {}, insertAdjacentHTML(){}}, status={}, use={};
 let focused;
 const grid={querySelectorAll(){
   const count=(this.innerHTML.match(/data-source=/g)||[]).length;
@@ -35,6 +35,10 @@ const panel={querySelector:s=>({'[data-use]':use,'[data-source-tools]':tools,
   '[data-source-grid]':grid,'[data-source-status]':status})[s], querySelectorAll:()=>[]};
 const $=s=>s==='#tl-sources'?panel:{focus(){focused='query';}};
 const document={querySelectorAll:()=>[]};
+const tlInsertNearest=()=>({after:'held',t:4});
+const tlInsertSave=async(id,payload)=>calls.push({url:'/inserts',body:JSON.stringify(payload)});
+let intake;
+const openModelIntake=id=>{intake=id;};
 let release;
 const api=async(url,opts)=>{
   calls.push({url,...opts});
@@ -67,6 +71,30 @@ async function run(){
   const clip={kind:'clip',shoot_id:'shoot',source_id:'source',in_s:2,out_s:6};
   await tlSourceUse(clip,{kind:'picture',sid:'insert'});
   check(calls.at(-1).url.endsWith('/insert/picture-source') && JSON.parse(calls.at(-1).body).kind==='clip','footage replaces existing insert');
+  for (const [tab,payload] of [['3D',{kind:'stage',model_id:'model',seconds:4}],
+      ['Graphics',{kind:'graphic',graphic_id:'graphic',seconds:6}]]) {
+    tlSourceView={pid:'p',tab,query:'',items:[{label:tab,tab,payload}]};
+    toolNodes['#tl-source-seconds']={value:'5.5'};
+    tlSourcesPaint();
+    check(use.textContent==='Use on selected picture' && grid.buttons[0].draggable,'3D/Create can place and drag');
+    grid.buttons[0].onclick();
+    // The length box edits only the chosen source; it starts at the source's own length.
+    toolNodes['#tl-source-seconds'].value='5.5'; toolNodes['#tl-source-seconds'].oninput();
+    grid.buttons[0].ondragstart({dataTransfer:transfer});
+    check(TL.insertDrag.payload.seconds===5.5 && TL.insertDrag.payload.kind===payload.kind,'drag uses explicit duration');
+    await grid.buttons[0].ondblclick();
+    check(calls.at(-1).url.endsWith('/held/picture-source') && JSON.parse(calls.at(-1).body).kind===payload.kind,'3D/Create replacement uses undoable source API');
+    check(intake===undefined,'placement never opens intake');
+    toolNodes['[data-insert-source]'].onclick();
+    check(calls.at(-1).url==='/inserts' && JSON.parse(calls.at(-1).body).seconds===5.5
+      && JSON.parse(calls.at(-1).body).after==='held','explicit boundary insertion');
+    if(tab==='3D') {toolNodes['[data-intake]'].onclick();check(intake==='model','intake remains separate');intake=undefined;}
+  }
+  tlSourceView={pid:'p',tab:'Search',items:[],query:'station'};
+  let releasePlacement; tlInspectorQueue=new Promise(r=>{releasePlacement=r;});
+  const queued={kind:'stage',model_id:'before',seconds:4}, queuedSave=tlSourceUse(queued);
+  queued.model_id='after';releasePlacement();await queuedSave;
+  check(JSON.parse(calls.at(-1).body).model_id==='before','queued placement retains the clicked source');
   let unblock;tlInspectorQueue=new Promise(r=>unblock=r);
   const count=calls.length, pending=tlSourceUse(clip); locked=true; unblock();await pending;
   check(calls.length===count,'lock rechecked after queued saves'); locked=false;
@@ -81,7 +109,7 @@ async function run(){
   tlInsertSourceList(box,buttons.map((b,i)=>({label:String(i),payload:clip})),()=>{});
   buttons[0].onkeydown({key:'ArrowDown',preventDefault(){}});check(focused===2,'arrow grid navigation');
   buttons[2].onkeydown({key:'Home',preventDefault(){}});check(focused===0,'Home grid navigation');
-  print('archive tiles, footage replacement, guards and keyboard passed');
+  print('archive tiles, 3D/Create placement, duration, guards and keyboard passed');
 }
 run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
 '''

@@ -2808,6 +2808,17 @@ def _proxy_ready(project: Project, groups, index: int, channel: Any, hide: froze
 
 def _kind_context(project, slide):
     fmt = kinds.kind_for(project, slide)
+    if fmt == 'stage':
+        from . import models3d
+        # Model confirmation, dimensions, parts and appearance affect the pixels
+        # even when the placed intent and its solved path have not changed.
+        models = []
+        for entry in shots_mod.entries(project, (slide.shot or {}).get('intent') or {'subjects': []}):
+            try:
+                models.append(models3d.get(entry['model']))
+            except models3d.ModelError:
+                models.append(None)
+        return [fmt, _lead_overlap(project, slide), models]
     run = kinds.run_project(project, slide).slides if fmt in {'casefile', 'groupchat'} else []
     return [fmt, _lead_overlap(project, slide),
             [{k: v for k, v in s.to_dict().items() if k != "note"} for s in run[:next((i for i, s in enumerate(run) if s.id == slide.id), 0)]]]

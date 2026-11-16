@@ -28,6 +28,8 @@ const tlSectionEnd = () => 10;
 const tlItems = () => state.project.slides.map(s=>({kind:'picture',sid:s.id,id:s.id,t0:2}));
 const tlRefresh = async () => {refreshed++;};
 const render = async () => {renders++;};
+const tlModal=open=>open();let openedShot,solvedShot;
+const openShot=sid=>{openedShot=sid;}, stageSolve=ids=>{solvedShot=ids;};
 let menuPoint;
 const renderBlocks = async (path,o) => {check(o.aspect==='16:9' && o.mode==='pick','shared aspect picker');
  await o.onUse({block:'title_card',vars:{title:'Custom'}});};
@@ -110,7 +112,7 @@ async function run() {
    '#insert-audio':{checked:true}};
  const submit={}, fields=[{dataset:{insertField:'in_s'},type:'number',value:'1'},
    {dataset:{insertField:'out_s'},type:'number',value:'3'}];
- const body={isConnected:true,querySelector:k=>nodes[k],querySelectorAll:k=>k==='[data-insert-field]'?fields:[]};
+ const body={isConnected:true,querySelector:k=>nodes[k],querySelectorAll:k=>k==='[data-insert-field]'?fields:[],insertAdjacentHTML(){}};
  const row={id:'inspect',insert:{kind:'clip',shoot_id:'shoot',source_id:'f',in_s:0,out_s:2,seconds:2}};
  state.project.slides.push(row);TL.selection={kind:'paragraph',sid:row.id};
  check(tlInsertInspector(TL.selection,body) && body.innerHTML.includes('Source out'),'clip inspector');
@@ -123,6 +125,11 @@ async function run() {
  fields.splice(0,2,{dataset:{insertField:'seconds'},type:'number',value:'5'});
  await nodes.form.onsubmit({preventDefault(){}});
  check(edited.patch.seconds===5 && edited.patch.vars.title==='Edited vars','block duration and vars save');
+ row.insert={kind:'stage',model_id:'model',seconds:4};
+ nodes['[data-shot-edit]']={};nodes['[data-shot-solve]']={};
+ tlInsertInspector(TL.selection,body);
+ nodes['[data-shot-edit]'].onclick();nodes['[data-shot-solve]'].onclick();
+ check(openedShot===row.id && solvedShot[0]===row.id,'insert keeps shot editor and explicit solve');
  check(!tlInsertInspector({kind:'chapter',sid:row.id},body),'attached layer inspector retained');
  tlInsertSave=save;
  state.project.style={format:'kenburns'};
