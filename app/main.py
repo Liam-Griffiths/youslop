@@ -1567,7 +1567,7 @@ def replace_picture_source(pid: str, sid: str, payload: dict = Body(...)) -> dic
         p = _load(pid)
         try:
             picture_sources.apply(p, sid, payload)
-        except ValueError as exc:
+        except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
         token = undo.edit_source.set(undo.edit_source.get() or ('replace picture', ''))
         try:

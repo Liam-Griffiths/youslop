@@ -35,6 +35,14 @@ function tlInsertSourceList(box, items, onPick, drag = true) {
   box.querySelectorAll('[data-source]').forEach(button => {
     const item = items[+button.dataset.source];
     button.onclick = () => onPick(item.payload);
+    button.onkeydown = e => {
+      const step = {ArrowRight:1, ArrowLeft:-1, ArrowDown:2, ArrowUp:-2}[e.key];
+      if (!step && !['Home','End'].includes(e.key)) return;
+      e.preventDefault();
+      const buttons = [...box.querySelectorAll('[data-source]')], i = buttons.indexOf(button);
+      buttons[e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length-1
+        : Math.max(0,Math.min(buttons.length-1,i+step))]?.focus();
+    };
     if (!drag) return;
     button.ondragstart = e => {
       if (['model','graphic'].includes(item.payload.kind)) { e.preventDefault(); return; }

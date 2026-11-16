@@ -89,8 +89,11 @@ def resolve(candidate, *, preview=False, progress=lambda m: None):
     """Resolve only manifest-owned IDs and validate the saved edit range."""
     try:
         shoot = footage.load(candidate.get('shoot_id', ''))
-        clip = next(c for c in shoot.clips if c.id == candidate.get('clip_id'))
-        source = next(f for f in shoot.files if f.id == clip.file)
+        if candidate.get('source_id'):
+            source = next(f for f in shoot.files if f.id == candidate['source_id'] and f.kind == 'video')
+        else:
+            clip = next(c for c in shoot.clips if c.id == candidate.get('clip_id'))
+            source = next(f for f in shoot.files if f.id == clip.file)
         start, end = candidate.get('in_s'), candidate.get('out_s')
         if not (isinstance(start, (int, float)) and isinstance(end, (int, float))
                 and math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= source.duration):

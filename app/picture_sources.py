@@ -1,4 +1,4 @@
-"""Resolve local sources by owned IDs, never client-supplied paths."""
+"""Resolve composing sources by owned IDs, never client-supplied paths."""
 from copy import deepcopy
 import shutil
 import uuid
@@ -18,6 +18,25 @@ def local_path(project, path):
 
 
 def candidate(project, payload):
+    if payload.get('candidate_id'):
+        source = project.slide(payload.get('source_slide'))
+        found = next((c for c in source.candidates if c['id'] == payload['candidate_id']), None) if source else None
+        if not found:
+            raise ValueError('Search result is no longer available; search again')
+        return deepcopy(found)
+    if payload.get('kind') == 'clip':
+        from . import footage, inserts
+        row, _ = inserts.prepare(project, payload)
+        meta = row.insert
+        shoot = footage.load(meta['shoot_id'])
+        source = next(f for f in shoot.files if f.id == meta['source_id'])
+        root = f'/api/footage/shoots/{shoot.id}/media'
+        return dict(id='ft' + uuid.uuid4().hex, provider='footage', kind='video',
+                    title=source.source_path.split('/')[-1] or source.id,
+                    shoot_id=shoot.id, source_id=source.id, in_s=meta['in_s'], out_s=meta['out_s'],
+                    duration=meta['seconds'], width=source.width, height=source.height,
+                    url=f'{root}/proxies/{source.id}.mp4', thumb=f'{root}/sprites/{source.id}.jpg',
+                    license='Your footage', author='you')
     if payload.get('bin_id'):
         item = project_bin.item_for(project, payload['bin_id'])
         if item.kind not in {'image', 'clip'}:
@@ -53,10 +72,26 @@ def candidate(project, payload):
 
 
 def apply(project, sid, payload):
+    from . import inserts
     slide = project.slide(sid)
-    if not slide or slide.insert or slide.on_camera or project.kind == 'clip':
+    if not slide or slide.on_camera or project.kind == 'clip':
         raise ValueError('Choose a non-camera picture paragraph')
+    if slide.insert:
+        data = dict(payload, kind=payload.get('kind', 'picture'))
+        if data['kind'] != 'clip':
+            data['seconds'] = slide.insert['seconds']
+        row, _ = inserts.prepare(project, data)
+        slide.insert, slide.candidates, slide.chosen_id = row.insert, row.candidates, row.chosen_id
+        slide.kind, slide.locked_media = 'kenburns', True
+        if slide.cues.get('blocks'):
+            slide.cues = dict(slide.cues, inactive_blocks=slide.cues['blocks'], blocks=[])
+        return
     lead = project.slide(next((r[0] for r in project.picture_runs() if sid in r), sid))
+    if payload.get('kind') == 'block':
+        row, _ = inserts.prepare(project, dict(payload, seconds=4))
+        lead.kind, lead.locked_media = 'kenburns', True
+        lead.cues = dict(lead.cues, blocks=[dict(block=row.insert['block'], vars=row.insert['vars'])])
+        return
     found = candidate(project, payload)
     lead.candidates = [deepcopy(found)] + [c for c in lead.candidates if c['id'] != found['id']]
     lead.chosen_id, lead.locked_media, lead.kind = found['id'], True, 'kenburns'

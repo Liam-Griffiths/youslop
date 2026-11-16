@@ -7,7 +7,7 @@ from .schema import Slide
 FIELDS = {
     'clip': {'shoot_id', 'source_id', 'in_s', 'out_s', 'source_audio'},
     'block': {'block', 'vars'},
-    'picture': {'asset_id', 'bin_id'},
+    'picture': {'asset_id', 'bin_id', 'source_slide', 'candidate_id'},
     'card': {'text'},
 }
 
@@ -62,9 +62,14 @@ def prepare(project, payload, slide=None):
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
             raise ValueError('seconds must be finite and greater than zero')
         if kind == 'picture':
-            if data.get('bin_id'):
+            if data.get('bin_id') or data.get('candidate_id'):
                 from .picture_sources import candidate
-                found = candidate(project, data)
+                # The placed candidate is independent of its search paragraph.
+                # Duration edits still work after that paragraph is removed.
+                same = slide and data.get('candidate_id') and all(
+                    data.get(k) == slide.insert.get(k) for k in ('candidate_id', 'source_slide'))
+                found = next((deepcopy(c) for c in row.candidates if c['id'] == row.chosen_id), None) if same else None
+                found = found or candidate(project, data)
                 row.candidates, row.chosen_id = [found], found['id']
                 row.insert = deepcopy(data)
                 row.narration = ''

@@ -504,7 +504,7 @@ def _chosen(project: Project, slide: Slide, *, preview: bool = False) -> tuple[P
                 return inserts.source(meta, preview=preview), 'video', []
             except (OSError, ValueError):
                 return None, 'video', []
-        if meta['kind'] == 'picture' and not meta.get('bin_id'):
+        if meta['kind'] == 'picture' and not (meta.get('bin_id') or meta.get('candidate_id')):
             from . import library
             asset, path = library.get(meta['asset_id']), library.file_path(meta['asset_id'])
             return (path if path and path.is_file() else None), (asset or {}).get('kind', 'image'), []

@@ -27,6 +27,9 @@ async function tlSourcesMount() {
     tlSourceView.query = e.target.value; tlSourcesPaint();
     panel.querySelector('.tl-source-results').scrollTop = 0;
   };
+  $('#tl-source-query').onkeydown = e => {
+    if (e.key === 'Enter' && tlSourceView.tab === 'Search') { e.preventDefault(); tlSourceSearch(); }
+  };
   panel.querySelector('[data-use]').onclick = () => tlSourceUse(tlSourceView.choice);
   const view = tlSourceView;
   panel.querySelector('[data-source-status]').textContent = 'Loading…';
@@ -56,19 +59,20 @@ function tlSourcesPaint() {
   panel.querySelector('[data-use]').textContent = tab === '3D' ? 'Open model' : 'Use on selected picture';
   panel.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
   const tools = panel.querySelector('[data-source-tools]');
-  tools.innerHTML = tab === 'Search' ? '<button type="button" class="btn sm" data-search>Search archives…</button>'
+  tools.innerHTML = tab === 'Search' ? `<label for="tl-source-kind">Archive type</label>
+      <select id="tl-source-kind">${[['image','Photos'],['video','Clips'],['reaction','Reaction GIFs']].map(([k,label]) =>
+        `<option value="${k}" ${(v.searchKind || 'image') === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
+      <button type="button" class="btn sm" data-search ${v.searching ? 'disabled' : ''}>Search archives</button>`
     : tab === 'Graphics' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/create">Open Create</a>`
     : tab === '3D' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/edit/cast">Cast and models</a><a class="btn sm ghost" href="#/p/${TL.pid}/edit/stage">Shot planning</a>`
     : tab === 'Blocks' ? '<button type="button" class="btn sm ghost" data-browse>Browse blocks…</button>' : '';
-  if (tools.querySelector('[data-search]')) tools.querySelector('[data-search]').onclick = () => {
-    const sel = tlSourcePicture();
-    if (sel && tlCanEdit([sel], ['pictures'])) {
-      const sid = (state.project.picture_runs || []).find(r => r.includes(sel.sid))?.[0] || sel.sid;
-      openMediaSearch(sid, v.query || null, cid => saveSlide(sid, {chosen_id:cid}), () => tlRefreshProject());
-    }
-  };
+  if (tools.querySelector('[data-search]')) {
+    tools.querySelector('[data-search]').onclick = tlSourceSearch;
+    tools.querySelector('select').onchange = e => { v.searchKind = e.target.value; };
+  }
   if (tools.querySelector('[data-browse]')) tools.querySelector('[data-browse]').onclick = () => tlInsertBlock(tlInsertNearest());
-  const items = v.items.filter(i => i.tab === tab && `${i.label} ${i.meta || ''}`.toLowerCase().includes(v.query.toLowerCase()));
+  const items = tab === 'Search' ? v.archive || tlSourceArchiveItems() : v.items.filter(i => i.tab === tab
+    && `${i.label} ${i.meta || ''}`.toLowerCase().includes(v.query.toLowerCase()));
   const grid = panel.querySelector('[data-source-grid]');
   tlInsertSourceList(grid, items, payload => { v.choice = payload; });
   grid.querySelectorAll('[data-source]').forEach(b => {
@@ -78,8 +82,39 @@ function tlSourcesPaint() {
     b.setAttribute('aria-pressed', String(v.choice === item.payload));
     b.onclick = () => { v.choice = item.payload; grid.querySelectorAll('button').forEach(n => n.setAttribute('aria-pressed', String(n === b))); };
   });
-  if (tab === 'Search') grid.innerHTML = '<p>Search the archives for the selected picture. Queries and results open in the search picker.</p>';
-  panel.querySelector('[data-source-status]').textContent = v.error || '';
+  if (tab === 'Search' && !items.length) grid.innerHTML = '<p>Select a picture, enter a query and search archives. Results can replace pictures or be inserted at +.</p>';
+  panel.querySelector('[data-source-status]').textContent = tab === 'Search' ? v.searchStatus || v.error || '' : v.error || '';
+}
+function tlSourceArchiveItems(sid = null, candidates = null) {
+  const p = state.project;
+  sid ||= (p.picture_runs || []).find(r => r.includes(TL.selection?.sid))?.[0] || TL.selection?.sid;
+  return (candidates || p.slides.find(s => s.id === sid)?.candidates || []).filter(c =>
+    !['library','materials','footage','local'].includes(c.provider)).map(c => ({
+      label:c.title || c.provider, thumb:thumbUrl(c), meta:[c.provider,c.license].filter(Boolean).join(' · '),
+      payload:{kind:'picture', source_slide:sid, candidate_id:c.id, seconds:4}}));
+}
+async function tlSourceSearch() {
+  const v = tlSourceView, pid = TL.pid, sel = tlSourcePicture(), query = v.query.trim();
+  if (!sel || !tlCanEdit([sel], ['pictures']) || v.searching) return;
+  if (!query) { $('#tl-source-query').focus(); return; }
+  const sid = (state.project.picture_runs || []).find(r => r.includes(sel.sid))?.[0] || sel.sid;
+  v.searching = true; v.searchStatus = 'Searching archives…'; tlSourcesPaint();
+  // Searching explicitly gathers candidates; opening Sources never searches.
+  const result = tlInspectorQueue.then(async () => {
+    if (TL.pid !== pid || state.project?.id !== pid) return;
+    if (!tlCanEdit([sel], ['pictures'])) return;
+    const r = await api(`/api/projects/${pid}/slides/${sid}/search`, {method:'POST',
+      body:JSON.stringify({query, kind:v.searchKind || 'image'})});
+    if (TL.pid !== pid || state.project?.id !== pid || tlSourceView !== v) return;
+    const s = state.project.slides.find(s => s.id === sid);
+    if (s) s.candidates = r.slide.candidates;
+    v.archive = tlSourceArchiveItems(sid, r.results); v.choice = null;
+    v.searchStatus = `${v.archive.length} results for “${query}”`;
+    tlInspector();
+  });
+  tlInspectorQueue = result.catch(() => {});
+  try { await result; } catch (e) { v.searchStatus = e.message; }
+  finally { v.searching = false; if (tlSourceView === v && TL.pid === pid) tlSourcesPaint(); }
 }
 function tlSourcePicture() {
   const sel = TL.selection;
@@ -94,22 +129,18 @@ function tlSourceUse(payload, selection = null) {
   const pid = TL.pid;
   const result = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
+    if (!tlCanEdit([sel], ['pictures'])) return;
     try {
       tlPause();
       const s = state.project.slides.find(s => s.id === sel.sid);
-      if (!s || s.insert || s.on_camera) throw Error('Choose a non-camera picture paragraph.');
+      if (!s || s.on_camera) throw Error('Choose a non-camera picture paragraph.');
       if (payload.kind === 'graphic') {
+        if (s.insert?.kind) throw Error('Choose a narrated paragraph for a Create graphic.');
         const r = await api(`/api/projects/${pid}/graphics/${payload.id}/place`, {method:'POST', body:JSON.stringify({slide:s.id})});
         watchJob(r.job, 'graphic'); return;
       }
-      if (payload.kind !== 'picture' && payload.kind !== 'block') throw Error('Place footage clips on an insert point (+).');
-      let project;
-      if (payload.kind === 'block') {
-        const lead = (state.project.picture_runs || []).find(r => r.includes(s.id))?.[0] || s.id;
-        if (!await saveSlide(lead, {kind:'kenburns', locked_media:true, cues:{blocks:[{block:payload.block, vars:payload.vars}]}},
-          {editLabel:'replace picture with block', editGesture:crypto.randomUUID()})) return;
-        project = await api(`/api/projects/${pid}`);
-      } else project = await api(`/api/projects/${pid}/slides/${s.id}/picture-source`, {
+      if (!['picture','block','clip'].includes(payload.kind)) throw Error('Choose a picture, block or footage source.');
+      const project = await api(`/api/projects/${pid}/slides/${s.id}/picture-source`, {
         method:'POST', body:JSON.stringify(payload), editLabel:'replace picture', editGesture:crypto.randomUUID()});
       if (TL.pid === pid && state.project?.id === pid) { state.project = project; await tlRefresh(); tlInspector(); }
     } catch (error) { toast(error.message, true); }

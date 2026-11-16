@@ -309,6 +309,8 @@ def seed():
     inserts.id, inserts.title = 'psnapinserts', 'Snapshot · main-track inserts'
     inserts.bin = [BinItem(id='editphoto', kind='image', title='Station photo',
                           source='library:'+asset['id'], shows='Station entrance', licence='CC0')]
+    inserts.slides[0].candidates.append(dict(inserts.slides[0].candidates[0],
+        id='archivefixture', provider='commons', title='Station archive', license='Public domain'))
     inserts.slides[1:1] = [
         Slide(id='insertclip', insert=dict(kind='clip', seconds=2, shoot_id='ssnapshot',
             source_id='f1', in_s=0, out_s=2, source_audio=False)),
@@ -761,7 +763,7 @@ def capture(base, out, theme="dark"):
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route == '#/p/psnapinserts/edit':
-                for width, height in ((1280, 720), (1920, 1080)):
+                for width, height in ((1280, 720), (1440, 900), (1920, 1080)):
                     cdp.send('Emulation.setDeviceMetricsOverride', {
                         'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
                     for tab in ('Materials', 'Library', 'Search', 'Blocks', '3D', 'Graphics'):
@@ -782,6 +784,8 @@ def capture(base, out, theme="dark"):
                           const r=results.getBoundingClientRect();
                           const items=[...document.querySelectorAll('[data-source-grid] [data-source]')];
                           if (tlSourceView.tab === 'Materials' && !items.length) throw Error('Materials fixture has no sources');
+                          if (tlSourceView.tab === 'Search' && (!items.length || !items.every(b=>b.draggable)))
+                            throw Error('Archive fixture missing draggable results');
                           if (items.length) {
                             const first=items[0].getBoundingClientRect();
                             const visible=Math.min(first.bottom,r.bottom,panel.bottom)-Math.max(first.top,r.top,panel.top);
