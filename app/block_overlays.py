@@ -147,7 +147,7 @@ def compose(project, group, inputs, graph, last, size, fps, channel=None, *, pre
             continue
         if role(item) == 'media':
             inputs, graph, last = compose_media(project, item, inputs, graph, last, size, fps,
-                lead + offset + item['at'], f'mo{count}')
+                lead + offset + item['at'], f'mo{count}', prepare_only=prepare_only)
             count += 1
             continue
         path = clip(project, item, size, fps, channel, prepare_only=prepare_only)

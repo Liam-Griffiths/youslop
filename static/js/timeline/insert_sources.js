@@ -12,7 +12,7 @@ async function tlInsertSources() {
     const shoot = result.value;
     const add = (file,a,b,label) => {
       if (file?.kind !== 'video' || file.error || !(b > a)) return;
-      items.push({label, tab:'Materials', payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, source_audio:false}});
+      items.push({label, tab:'Materials', payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, seconds:b-a, source_audio:false}});
     };
     shoot.clips.filter(c => !c.rejected).forEach(c => add(shoot.files.find(f => f.id === c.file), c.in_s,c.out_s,
       c.title || c.note || `Clip ${c.id}`));
@@ -23,7 +23,7 @@ async function tlInsertSources() {
     items.push({label:b.name, tab:'Blocks', thumb:b.posters?.[tlInsertAspect()], overlay:!!b.overlay, payload:{kind:'block', block:b.ref, vars, seconds:4}});
   });
   assets.filter(a => ['image','video'].includes(a.kind)).forEach(a => items.push({label:a.title || a.id, tab:'Library', thumb:`/api/library/thumb/${a.id}`,
-    payload:{kind:'picture', asset_id:a.id, seconds:4}}));
+    payload:{kind:'picture', asset_id:a.id, seconds:a.duration || 4}}));
   if (results.some(r => r.status === 'rejected') || manifests.some(r => r.status === 'rejected'))
     toast('Some sources could not be loaded. Reopen Sources to retry.', true);
   return items;

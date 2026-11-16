@@ -1578,6 +1578,23 @@ def replace_picture_source(pid: str, sid: str, payload: dict = Body(...)) -> dic
         return p.to_dict()
 
 
+@app.post('/api/projects/{pid}/slides/{sid}/media-overlay')
+def place_media_overlay(pid: str, sid: str, payload: dict = Body(...)) -> dict:
+    from . import media_overlays, undo
+    with store.lock_for(pid):
+        p = _load(pid)
+        try:
+            media_overlays.place(p, sid, payload)
+        except (ValueError, OSError, KeyError, TypeError, StopIteration) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        token = undo.edit_source.set(undo.edit_source.get() or ('place media', ''))
+        try:
+            store.save(p)
+        finally:
+            undo.edit_source.reset(token)
+        return p.to_dict()
+
+
 @app.patch('/api/projects/{pid}/inserts/{sid}')
 def patch_insert(pid: str, sid: str, payload: dict = Body(...)) -> dict:
     return _edit_insert(pid, payload, sid)

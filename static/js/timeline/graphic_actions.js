@@ -1,6 +1,6 @@
 // Graphic commands share one atomic batch and undo step, including reattachment.
 let tlGraphicClipboard = null;
-const tlGraphicSelection = () => !TL.section && TL.selections?.length && TL.selections.every(s => s.kind === 'overlay') ? [...TL.selections] : [];
+const tlGraphicSelection = () => !TL.section && TL.selections?.length && TL.selections.every(s => ['overlay','media'].includes(s.kind)) ? [...TL.selections] : [];
 function tlGraphicTarget(t) {
   const q = tlParas().find(q => q.start <= t && t < q.start+q.duration);
   const slide = state.project.slides.find(s => s.id === q?.id);
@@ -21,12 +21,14 @@ function tlGraphicBatch(label, build) {
       build(list, ids);
       const edits = [...patches].map(([sid,overlays]) => ({sid,patch:{overlays}}));
       if (!edits.length) return false;
+      const mediaEdit = [...patches.values()].some(rows => rows.some(o => o.type === 'media'))
+        || state.project.slides.some(s => patches.has(s.id) && s.overlays?.some(o => o.type === 'media'));
       const project = await api(`/api/projects/${pid}/slides-batch`, {method:'PATCH', body:JSON.stringify({edits}),
         editLabel:label, editGesture:crypto.randomUUID()});
       if (TL.pid !== pid || state.project?.id !== pid) return false;
       state.project = project; TL.mixFailed = false;
-      await tlRefresh(true);
-      const selected = tlItems('overlay').filter(s => ids.some(key => key.sid === s.sid && key.id === s.id));
+      await tlRefresh(!mediaEdit, mediaEdit);
+      const selected = [...tlItems('overlay'), ...tlItems('media').filter(s => s.kind === 'media')].filter(s => ids.some(key => key.sid === s.sid && key.id === s.id));
       tlSelect(null); selected.forEach((s,i) => tlSelect(s, i > 0));
       return true;
     } catch (error) { tlMsg(error.message); tlDraw(); return false; }
@@ -34,7 +36,7 @@ function tlGraphicBatch(label, build) {
   tlInspectorQueue = result.then(() => {}); return result;
 }
 function tlGraphicLive(sel) {
-  const live = tlItems('overlay').find(s => s.sid === sel.sid && s.id === sel.id);
+  const live = tlItems(sel.kind).find(s => s.sid === sel.sid && s.id === sel.id);
   if (!live || !tlGraphic(live)) throw Error('Graphic changed; select it again.');
   return live;
 }
@@ -50,7 +52,8 @@ function tlGraphicCommand(action, items = tlGraphicSelection(), value = null) {
   if (typeof tlCanEdit === 'function' && !tlCanEdit(items)) return;
   const clipboard = action === 'paste' ? tlGraphicClipboard : null;
   if (action === 'paste' ? clipboard?.pid !== TL.pid : !items.length) return;
-  return tlGraphicBatch(`${action} graphic${items.length > 1 ? 's' : ''}`, (list, ids) => {
+  const noun = items.length && items.every(s => s.kind === 'media') ? 'media item' : 'graphic';
+  return tlGraphicBatch(`${action} ${noun}${items.length > 1 ? 's' : ''}`, (list, ids) => {
     const live = action === 'paste' ? [] : items.map(tlGraphicLive);
     if (action === 'paste' || action === 'duplicate') {
       const snapshot = clipboard || tlGraphicSnapshot(live);
@@ -68,7 +71,7 @@ function tlGraphicCommand(action, items = tlGraphicSelection(), value = null) {
         if (value-s.t0 < .05 || s.t1-value < .05) throw Error('Place the playhead inside the graphic, away from its edges.');
         const first = value-s.t0, id = 'graphic-'+crypto.randomUUID();
         overlays.splice(index,1,{...item, at:s.t0-tlParas().find(q => q.id === s.sid).start, dur:first, on:'', by:'hand'},
-          {...item, id, at:value-tlParas().find(q => q.id === s.sid).start, dur:item.dur-first, on:'', by:'hand'});
+          {...item, id, at:value-tlParas().find(q => q.id === s.sid).start, dur:item.dur-first, ...(item.type === 'media' ? {in:(item.in || 0)+first} : {}), on:'', by:'hand'});
         ids.push({sid:s.sid, id}, {sid:s.sid, id:s.id});
       } else {
         const changes = typeof value === 'function' ? value(s,item) : value;

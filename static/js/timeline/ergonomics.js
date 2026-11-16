@@ -140,7 +140,7 @@ function tlGroupDelta(items, delta) {
     const q = tlParas().find(q => q.id === s.sid);
     if (!q) return 0;
     lo = Math.max(lo, q.start - s.t0);
-    hi = Math.min(hi, q.start + (s.kind === 'overlay' ? Math.max(0, q.duration - (s.t1-s.t0)) : q.spoken) - s.t0);
+    hi = Math.min(hi, q.start + (['overlay','media'].includes(s.kind) ? Math.max(0, q.duration - (s.t1-s.t0)) : q.spoken) - s.t0);
   }
   return Math.max(lo, Math.min(hi, delta));
 }
@@ -173,7 +173,7 @@ function tlGroupDrag(e, el, sel) {
     if (!moved && Math.abs(ev.clientX-x) < 3) return;
     moved = true;
     const q = tlParas().find(q => q.id === sel.sid);
-    const words = sel.kind === 'overlay' ? (q.word_times || []).filter(w => w.src && w.src !== 'est').map(w => ({...w,end:w.start})) : q.word_times || [];
+    const words = ['overlay','media'].includes(sel.kind) ? (q.word_times || []).filter(w => w.src && w.src !== 'est').map(w => ({...w,end:w.start})) : q.word_times || [];
     const snap = tlSnap(sel.t0 + (ev.clientX-x)/TL.zoom, words, tlFps(), 6, TL.zoom, ev.altKey);
     requested = snap.t-sel.t0;
     const delta = tlGroupDelta(items, requested);
@@ -203,7 +203,7 @@ function tlGroupPatches(items, action, delta) {
     const patch = patches.get(s.sid) || {};
     if (s.kind === 'title') Object.assign(patch, action === 'delete' ? {title:''} : {title_at:s.t0-q.start+delta});
     if (s.kind === 'chapter') patch.chapter = '';
-    if (s.kind === 'overlay') {
+    if (['overlay','media'].includes(s.kind)) {
       patch.overlays = (patch.overlays || slide.overlays).flatMap(o => o.id !== s.id ? [o]
         : action === 'delete' ? [] : [{...o, at:s.t0-q.start+delta, on:'', by:'hand'}]);
     }
@@ -240,7 +240,7 @@ function tlGroupSave(items, action, delta = 0) {
       if (TL.pid !== pid || state.project?.id !== pid) return;
       state.project = project;
       if (action === 'delete') tlSelect(null);
-      await tlRefresh(); tlInspector();
+      await tlRefresh(false, live.some(s => s.kind === 'media')); tlInspector();
       if (move.message) tlMsg(move.message);
     } catch (error) { tlMsg(error.message); tlDraw(); }
   });

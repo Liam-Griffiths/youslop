@@ -2662,8 +2662,9 @@ def _layers(project, segs):
                 for item in block_overlays.resolved(slide.take, slide.overlays, q.get('duration')):
                     a = q['start'] + item['at']
                     if item.get('type') == 'media':
+                        from .media_overlays import info
                         add('media', item['id'], slide.id, a, a + item['dur'],
-                            'Media', 'media', item['src'], layer=item.get('layer', ''))
+                            'Media', 'media', item['src'], layer=item.get('layer', ''), **info(project, item))
                         continue
                     add('graphics', item['id'], slide.id, a, a + item['dur'],
                         library[item['block_id']]['meta']['name'], 'overlay', item['src'],

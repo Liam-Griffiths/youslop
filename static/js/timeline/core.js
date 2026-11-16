@@ -180,7 +180,7 @@ async function tlMount() {
 // Re-read the layout. After an edit the changed entries come back not-ready,
 // and the one under the playhead is redrawn straight away. Opening the tab
 // draws nothing by itself: that waits for a play, a click or an edit.
-async function tlRefresh(redrawCurrent = false) {
+async function tlRefresh(redrawCurrent = false, mediaEdit = false) {
   if (!TL.host || !document.body.contains(TL.host)) return;
   let data;
   const query = tlHideQuery();
@@ -201,7 +201,7 @@ async function tlRefresh(redrawCurrent = false) {
     const seg = tlSegAt(TL.cur);
     if (seg && !seg.ready) { TL.failed.delete(seg.ref); tlEnsure([seg.ref], true); }
   }
-  tlEnsureMix();
+  if (!mediaEdit) tlEnsureMix();
 }
 
 // The clock the player runs on: the sound when there is some, else the wall.

@@ -41,6 +41,7 @@ function tlSelectionPaint() {
     el.classList.toggle('sel', (TL.selections || []).some(s => tlSameItem(s, item)));
   });
   if (typeof tlGraphicTools === 'function') tlGraphicTools();
+  if (typeof tlMediaBox === 'function') tlMediaBox();
 }
 function tlSelectKind(kind) {
   const seg = tlSegAt(TL.cur);
@@ -63,7 +64,7 @@ function tlInspector() {
   if (TL.section) { box.innerHTML = `<h3>Section · ${TL.section.ids.length} main-track items</h3><p>Drag on the main track or use Alt + arrows to change script order. Titles, graphics, cues, chapters, inserts and sponsor reads travel with it.</p>`; return; }
   if (TL.selections?.length > 1) { tlMultiInspector(box); return; }
   const sel = TL.selection, p = state.project;
-  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay'];
+  const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay', 'media'];
   box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
     <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask" title="Sends the selected paragraph and your instruction">Ask Claude about this</button><div id="tl-fields"></div>`;
   $('#tl-ask').onclick = tlAsk;
@@ -74,6 +75,7 @@ function tlInspector() {
   }
   if (!sel) { body.textContent = 'Select a picture or paragraph, or choose a kind at the playhead.'; return; }
   if (typeof tlInsertInspector === 'function' && tlInsertInspector(sel, body)) return;
+  if (sel.kind === 'media') { tlMediaInspector(sel, body); return; }
   if (sel.kind === 'overlay') { tlGraphicInspector(sel, body); return; }
   if (sel.kind === 'sponsor') {
     const slot = p.sponsors.find((s) => s.id === sel.id);

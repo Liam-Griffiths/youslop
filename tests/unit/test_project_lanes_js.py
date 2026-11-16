@@ -45,7 +45,7 @@ const lane=new El({track:'names',role:'graphics'});
 lane.querySelector=s=>s==='.tl-layer-name'?name:label;
 const addGraphic=new El(),addSponsor=new El(),track=new El(),pic=new El();
 let lanes=[lane],nodes=[],selected,dropped;
-track.querySelectorAll=s=>s==='.tl-lane'||s==='[data-role="graphics"]'?lanes:nodes;
+track.querySelectorAll=s=>s==='.tl-lane'||s==='[data-role="graphics"], [data-role="media"]'?lanes:nodes;
 track.querySelector=()=>pic;
 const $=s=>({'#tl-track':track,'#tl-add-graphic':addGraphic,'#tl-add-sponsor':addSponsor}[s]);
 const document={createElement:()=>new El()};
@@ -83,6 +83,7 @@ node.onclick({stopPropagation(){}});check(selected===b,'locked item remains sele
 const tlInsertClearGhost=()=>{},tlGraphicTarget=t=>({sid:'s',at:t});
 let tlGraphicBlocks=[{ref:'lower',overlay:{max_dur:10}}];
 const tlGraphicDrop=(payload,t,layer)=>{dropped={payload,t,layer};};
+const tlMediaDrop=(payload,t,layer)=>{dropped={payload,t,layer,media:true};};
 const payload={kind:'block',block:'lower'};
 const event={clientX:144,dataTransfer:{},preventDefault(){},stopPropagation(){}};
 nodes=[];
@@ -91,6 +92,11 @@ check(event.dataTransfer.dropEffect==='none'&&TL.graphicDrop===null,'locked dest
 TL.data.project_layers[0].locked=false;
 TL.insertDrag={pid:'p',payload};tlWireGraphics();lane.ondragover(event);lane.ondrop(event);
 check(dropped.layer==='names'&&dropped.t===2,'drop resolves track id and time by role');
+const mediaLane=new El({track:'insets',role:'media'});
+lanes=[mediaLane];TL.data.project_layers.push(row('insets','media'));
+TL.insertDrag={pid:'p',payload:{kind:'picture',asset_id:'photo',seconds:7}};
+tlWireGraphics();mediaLane.ondragover(event);mediaLane.ondrop(event);
+check(dropped.media&&dropped.layer==='insets'&&dropped.t===2&&dropped.payload.seconds===7,'media drop keeps source, own length and layer');
 lanes=[];TL.insertDrag={pid:'p',payload};tlWireGraphics();
 addGraphic.ondragover(event);addGraphic.ondrop(event);
 check(dropped.layer===''&&dropped.t===6,'missing Graphics lane retains drop at playhead');

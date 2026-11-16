@@ -1,7 +1,7 @@
 /* Paragraph graphics share the block form and the inspector save queue. */
 let tlGraphicBlocks = null;
 const tlGraphic = sel => state.project.slides.find(s => s.id === sel.sid)?.overlays?.find(o => o.id === sel.id);
-const tlGraphicMax = sel => tlGraphicBlocks?.find(b => b.ref === tlGraphic(sel)?.block_id)?.overlay?.max_dur || 30;
+const tlGraphicMax = sel => sel.kind === 'media' ? (sel.source_length || Infinity) : tlGraphicBlocks?.find(b => b.ref === tlGraphic(sel)?.block_id)?.overlay?.max_dur || 30;
 
 function tlGraphicSave(sel, changes) {
   tlSaveTiming(sel, () => {
@@ -79,10 +79,10 @@ function tlGraphicAdd() {
 }
 
 function tlGraphicKey(e) {
-  if (TL.selection?.kind !== 'overlay') return false;
+  if (!['overlay','media'].includes(TL.selection?.kind)) return false;
   const sel = {...TL.selection}, item = tlGraphic(sel);
   if (!item) return false;
-  if (e.key === 'Delete' || e.key === 'Backspace') tlGraphicSave(sel, null);
+  if (e.key === 'Delete' || e.key === 'Backspace') tlGraphicCommand('delete', [sel]);
   else if (['ArrowLeft','ArrowRight'].includes(e.key)) {
     const delta = (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) / tlFps();
     tlGraphicCommand('move', [sel], live => ({time:Math.max(tlParas()[0].start, live.t0 + delta)}));

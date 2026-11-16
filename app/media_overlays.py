@@ -1,4 +1,4 @@
-"""Owned local pictures and clips on paragraph layers; no downloads or writes."""
+"""Owned media placement and composition; no downloads or source-file edits."""
 import math
 
 from . import ffutil, store
@@ -19,9 +19,18 @@ def validate(item):
     if not isinstance(source, dict):
         raise ValueError('Media source needs an owned source id')
     keys = set(source)
-    if keys not in ({'bin_id'}, {'asset_id'}, {'source_slide', 'candidate_id'}) or any(
-            not isinstance(v, str) or not v.strip() for v in source.values()):
+    if keys == {'shot'}:
+        from .media_shots import validate as validate_shot
+        validate_shot(source['shot'])
+    elif keys not in ({'bin_id'}, {'asset_id'}, {'source_slide', 'candidate_id'}, {'clip'}) or any(
+            not isinstance(v, str) or not v.strip() for v in source.values() if keys != {'clip'}):
         raise ValueError('Choose Materials, Library or a cached candidate')
+    if keys == {'clip'}:
+        meta = source['clip']
+        if (not isinstance(meta, dict) or any(not isinstance(meta.get(k), str) for k in ('shoot_id', 'source_id'))
+                or any(type(meta.get(k)) not in (int, float) or not math.isfinite(meta[k]) for k in ('in_s', 'out_s', 'seconds'))
+                or not 0 <= meta['in_s'] < meta['out_s'] or meta['seconds'] != meta['out_s']-meta['in_s']):
+            raise ValueError('Invalid owned clip range')
     box = item.get('box', dict(x=.65, y=.05, w=.3, h=.3))
     if not isinstance(box, dict) or set(box) != set('xywh') or any(
             isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
@@ -42,8 +51,20 @@ def source(project, item):
     """Return path, kind, range start and range length, resolving IDs only."""
     from . import library, project_bin
     ref, offset = item['source'], 0.
-    if 'bin_id' in ref:
-        entry = project_bin.item_for(project, ref['bin_id'])
+    if 'shot' in ref:
+        from .media_shots import resolve
+        result = resolve(project, ref['shot'])
+        if item['in'] >= result[3]:
+            raise ValueError('Media source offset is outside the clip')
+        return result
+    if 'clip' in ref:
+        from .inserts import source as clip_source
+        meta = ref['clip']
+        path, kind, offset, length = clip_source(meta), 'video', meta['in_s'], meta['seconds']
+    elif 'bin_id' in ref:
+        entry = next((i for i in project.bin if i.id == ref['bin_id']), None)
+        if entry is None:
+            raise ValueError('Media material is no longer available')
         path, kind, length = project_bin.file_path(project.id, entry), entry.kind, entry.duration
         if entry.source.startswith('footage:'):
             from . import footage
@@ -75,16 +96,80 @@ def source(project, item):
     return path, 'video' if video else 'image', offset, length
 
 
+def info(project, item):
+    try:
+        _, kind, _, length = source(project, item)
+        return dict(source_kind=kind, source_length=length, unavailable='')
+    except (ValueError, OSError, KeyError, StopIteration) as exc:
+        return dict(source_kind='', source_length=0, unavailable=str(exc))
+
+
+def place(project, sid, payload):
+    """Owned placement and an optional new lane in the same undo snapshot."""
+    import uuid
+    from . import block_overlays, cuts, inserts, kinds, layers
+    slide = project.slide(sid)
+    if not slide or slide.on_camera or cuts.is_cut(kinds.kind_for(project, slide)) or project.kind == 'clip':
+        raise ValueError('Place media inside a picture paragraph')
+    data = payload.get('source')
+    if not isinstance(data, dict):
+        raise ValueError('Choose a media source')
+    if data.get('kind') == 'stage':
+        from .media_shots import snapshot
+        ref = dict(shot=snapshot(project, data))
+    elif data.get('kind') == 'clip':
+        row, _ = inserts.prepare(project, data)
+        ref = dict(clip=row.insert)
+    else:
+        ref = {k: data[k] for k in ('bin_id', 'asset_id', 'source_slide', 'candidate_id') if k in data}
+    item = validate(dict(id='media-'+uuid.uuid4().hex, type='media', source=ref,
+                         at=payload.get('at', 0), dur=data.get('seconds', 4)))
+    _, kind, _, length = source(project, item)
+    if kind == 'video':
+        item['dur'] = length
+    layer = payload.get('layer', '')
+    if layer:
+        if not any(r['id'] == layer and r['role'] == 'media' and not r['locked'] for r in layers.rows(project)):
+            raise ValueError('Choose an unlocked media layer')
+    else:
+        # Reuse the top unlocked media lane that is free here; add a lane only when none is.
+        def free(lane):
+            return not any(role(o) == 'media' and o.get('layer') == lane
+                           and o['at'] < item['at'] + item['dur'] and item['at'] < o['at'] + o['dur']
+                           for o in slide.overlays)
+        lanes = [r['id'] for r in layers.rows(project)
+                 if r['role'] == 'media' and not r['locked'] and not str(r['id']).startswith('derived:')]
+        layer = next((lane for lane in reversed(lanes) if free(lane)), '')
+        if not layer:
+            layers.manage(project, dict(op='add', role='media', name='Media'))
+            layer = project.layers[-1].id
+    slide.overlays = block_overlays.validate(slide.take, [*slide.overlays, dict(item, layer=layer)])
+
+
 def cache_state(project, slide):
     from .render import _stat
-    return [[o, str(path), kind, offset, length, _stat(path)]
-            for o in slide.overlays if role(o) == 'media'
-            for path, kind, offset, length in [source(project, validate(o))]]
+    result = []
+    for o in slide.overlays:
+        if role(o) != 'media':
+            continue
+        try:
+            path, kind, offset, length = source(project, validate(o))
+            result.append([o, str(path), kind, offset, length, _stat(path)])
+        except (ValueError, OSError, KeyError, StopIteration) as exc:
+            if 'cached inside the project' in str(exc):
+                raise
+            result.append([o, 'unavailable', str(exc)])
+    return result
 
 
-def compose(project, item, inputs, graph, last, size, fps, at, tag):
+def compose(project, item, inputs, graph, last, size, fps, at, tag, *, prepare_only=False):
     from . import render
-    path, kind, offset, length = source(project, item)
+    if 'shot' in item['source']:
+        from .media_shots import resolve
+        path, kind, offset, length = resolve(project, item['source']['shot'],
+                                           size=size, fps=fps, render=not prepare_only)
+    else:
+        path, kind, offset, length = source(project, item)
     duration = min(item['dur'], length-item['in']) if kind == 'video' else item['dur']
     index = inputs.count('-i')
     x, y, w, h = (item['box'][k] for k in 'xywh')

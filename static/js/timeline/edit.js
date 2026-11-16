@@ -15,7 +15,7 @@ function tlSnap(t, words, fps, pxTol, zoom, alt) {
 
 function tlTimingKind(s) {
   if (s.kind === 'title' && s.id === s.sid) return 'title';
-  if (s.kind === 'overlay') return 'overlay';
+  if (['overlay','media'].includes(s.kind)) return 'overlay';
   if (s.kind === 'cue') return 'cue';
   if (s.kind === 'chapter') return 'chapter';
   return '';

@@ -1,14 +1,14 @@
 // Separate from paragraph timing drags: graphics may cross paragraph boundaries.
 function tlWireGraphics() {
   const track = $('#tl-track');
-  const lanes = [...track.querySelectorAll('[data-role="graphics"]')];
+  const lanes = [...track.querySelectorAll('[data-role="graphics"], [data-role="media"]')];
   // An empty project has no Graphics lane. The Add graphic button stays a
   // drop target; main-track drops still insert full-frame blocks as before.
   const add = $('#tl-add-graphic');
   if (add && state.project.kind !== 'clip') lanes.push(add);
   lanes.forEach(lane => {
     lane.ondragover = e => {
-      if (TL.insertDrag?.pid !== TL.pid || TL.insertDrag.payload.kind !== 'block') return;
+      if (TL.insertDrag?.pid !== TL.pid || (lane.dataset.role === 'media' ? !['picture','clip','stage'].includes(TL.insertDrag.payload.kind) : TL.insertDrag.payload.kind !== 'block')) return;
       if (TL.data?.project_layers?.find(row => row.id === lane.dataset.track)?.locked) {
         TL.graphicDrop = null; e.dataTransfer.dropEffect = 'none'; return;
       }
@@ -17,11 +17,11 @@ function tlWireGraphics() {
       try {
         tlGraphicTarget(t);
         const b = tlGraphicBlocks?.find(b => b.ref === TL.insertDrag.payload.block);
-        if (!b?.overlay) throw Error();
+        if (lane.dataset.role !== 'media' && !b?.overlay) throw Error();
         e.dataTransfer.dropEffect = 'copy'; TL.graphicDrop = t;
         const ghost = document.createElement('div'); ghost.className = 'tl-insert-ghost';
-        ghost.style.left = `${t*TL.zoom}px`; ghost.style.width = `${Math.min(4,b.overlay.max_dur)*TL.zoom}px`;
-        ghost.textContent = 'Graphic';
+        ghost.style.left = `${t*TL.zoom}px`; ghost.style.width = `${(lane.dataset.role === 'media' ? TL.insertDrag.payload.seconds || 4 : Math.min(4,b.overlay.max_dur))*TL.zoom}px`;
+        ghost.textContent = lane.dataset.role === 'media' ? 'Media' : 'Graphic';
         (lane === add ? track.querySelector('.tl-pictures') : lane).append(ghost);
       } catch { TL.graphicDrop = null; e.dataTransfer.dropEffect = 'none'; }
     };
@@ -30,10 +30,10 @@ function tlWireGraphics() {
       if (TL.insertDrag?.pid !== TL.pid || TL.graphicDrop == null) return;
       e.preventDefault(); e.stopPropagation();
       const {payload} = TL.insertDrag, t = TL.graphicDrop;
-      TL.insertDrag = null; TL.graphicDrop = null; tlInsertClearGhost(); tlGraphicDrop(payload,t,lane.dataset.track || '');
+      TL.insertDrag = null; TL.graphicDrop = null; tlInsertClearGhost(); (lane.dataset.role === 'media' ? tlMediaDrop : tlGraphicDrop)(payload,t,lane.dataset.track || '');
     };
   });
-  track.querySelectorAll('[data-layer="graphics"]').forEach(node => {
+  track.querySelectorAll('[data-layer="graphics"], [data-layer="media"]').forEach(node => {
     node.classList.add('editable');
     const sel = tlItemForNode(node), click = node.onclick;
     for (const edge of ['start','end']) {
@@ -45,8 +45,8 @@ function tlWireGraphics() {
       if (e.button !== 0 || TL.drag) return;
       node.graphicClick = false;
       if (e.shiftKey || e.ctrlKey || e.metaKey) return;
-      if (tlGroupDrag(e,node,sel)) { node.graphicClick = true; return; }
-      tlGraphicPointer(e,node,sel,e.target.closest('[data-graphic-edge]')?.dataset.graphicEdge || 'move');
+      if (!(e.altKey && sel.kind === 'media') && tlGroupDrag(e,node,sel)) { node.graphicClick = true; return; }
+      tlGraphicPointer(e,node,sel,e.target.closest('[data-graphic-edge]')?.dataset.graphicEdge || (e.altKey && sel.kind === 'media' && sel.source_kind === 'video' ? 'slip' : 'move'));
     };
     node.onclick = e => { e.stopPropagation(); if (node.graphicClick) node.graphicClick = false; else click?.(e); };
   });
@@ -62,22 +62,25 @@ function tlGraphicPointer(e, node, sel, edge) {
   const move = ev => {
     if (!moved && Math.max(Math.abs(ev.clientX-e.clientX), Math.abs((ev.clientY || 0)-(e.clientY || 0))) < 3) return;
     moved = true; node.graphicClick = true;
-    destination = edge === 'move' && [...track.querySelectorAll('[data-role="graphics"]')].find(lane => {
+    destination = edge === 'move' && [...track.querySelectorAll(`[data-role="${sel.kind === 'media' ? 'media' : 'graphics'}"]`)].find(lane => {
       const r = lane.getBoundingClientRect(); return ev.clientY >= r.top && ev.clientY < r.bottom;
     });
     const points = [...tlParas().flatMap(q => (q.word_times || []).filter(w => w.src && w.src !== 'est')),
       ...tlParas().map(q => ({start:q.start,end:q.start+q.duration})), {start:TL.cur,end:TL.cur}];
     const snap = tlSnap(base+(ev.clientX-e.clientX)/TL.zoom, points, tlFps(),6,TL.zoom,ev.altKey);
     let a = sel.t0, b = sel.t1;
-    if (edge === 'move') {
+    if (edge === 'slip') {
+      patch = {in:Math.max(0, Math.min(sel.source_length-item.dur, (item.in || 0)+(ev.clientX-e.clientX)/TL.zoom))};
+    } else if (edge === 'move') {
       const rows = tlParas(); a = Math.max(rows[0].start,Math.min(rows.at(-1).start+rows.at(-1).duration-.05,snap.t));
       try { const target = tlGraphicTarget(a), next = rows.find(q => q.id === target.sid); b = Math.min(a+item.dur,next.start+next.duration); patch = {time:a}; }
       catch { patch = null; hint.show('Place graphics inside a picture paragraph.',a); return; }
     } else if (edge === 'start') {
       a = Math.max(q.start,sel.t1-tlGraphicMax(sel),Math.min(sel.t1-.05,snap.t));
-      patch = {time:a,dur:sel.t1-a};
+      if (sel.kind === 'media') a = Math.max(a, sel.t0-(item.in || 0));
+      patch = {time:a,dur:sel.t1-a, ...(sel.kind === 'media' ? {in:(item.in || 0)+a-sel.t0} : {})};
     } else {
-      b = Math.max(a+.05,Math.min(q.start+q.duration,a+tlGraphicMax(sel),snap.t)); patch = {dur:b-a};
+      b = Math.max(a+.05,Math.min(q.start+q.duration,a+tlGraphicMax(sel)-(sel.kind === 'media' ? item.in || 0 : 0),snap.t)); patch = {dur:b-a};
     }
     node.style.left = `${a*TL.zoom}px`; node.style.width = `${Math.max(2,(b-a)*TL.zoom-2)}px`;
     const target = edge === 'end' ? b : a;
@@ -90,8 +93,10 @@ function tlGraphicPointer(e, node, sel, edge) {
     node.onpointermove = node.onpointerup = node.onpointercancel = node.onlostpointercapture = null;
     if (node.hasPointerCapture(e.pointerId)) node.releasePointerCapture(e.pointerId);
     guide.remove(); hint.remove(); node.style.left = left; node.style.width = width;
-    if (!cancel && moved && destination && destination.dataset.track !== node.closest('[data-track]').dataset.track)
-      tlLayerRequest({op:'move_item', sid:sel.sid, item:sel.id, to:destination.dataset.track}, '', 'move graphic to layer');
+    if (!cancel && moved && destination && destination.dataset.track !== node.closest('[data-track]').dataset.track) {
+      if (sel.kind === 'media') tlGraphicCommand('move', [sel], {...patch, layer:destination.dataset.track});
+      else tlLayerRequest({op:'move_item', sid:sel.sid, item:sel.id, to:destination.dataset.track}, '', 'move graphic to layer');
+    }
     else if (!cancel && moved && patch) tlGraphicCommand(edge === 'move' ? 'move' : 'resize', [sel], patch);
   };
   const key = ev => { if (ev.key === 'Escape') {ev.preventDefault(); ev.stopImmediatePropagation(); finish(true);} };
@@ -113,10 +118,11 @@ function tlGraphicTools() {
   }
   [...tools.querySelectorAll('button')].forEach((button,i) => {
     button.disabled = [0,3].includes(i) && items.length !== 1;
+    button.hidden = i === 3 && sel.kind === 'media';
     button.onclick = () => i === 3 ? tlGraphicReplace(sel) : tlGraphicCommand(['split','duplicate','delete'][i],items,TL.playing ? tlNow() : TL.cur);
   });
   const sc = $('#tl-scroll');
-  const lane = [...track.querySelectorAll('[data-role="graphics"]')].find(lane =>
+  const lane = [...track.querySelectorAll(`[data-role="${sel.kind === 'media' ? 'media' : 'graphics'}"]`)].find(lane =>
     [...lane.querySelectorAll('[data-layer]')].some(node => tlSameItem(sel, tlItemForNode(node))));
   if (!lane || lane.classList.contains('collapsed')) {tools.remove(); return;}
   tools.style.maxWidth = `${sc.clientWidth-112}px`;

@@ -8,7 +8,8 @@ function tlLayerRequest(payload, ident = '', label = 'edit layers') {
         method:ident ? 'PATCH' : 'POST', body:JSON.stringify(payload), editLabel:label});
       if (TL.pid !== pid || state.project?.id !== pid) return false;
       state.project = project;
-      await tlRefresh(true); tlInspector();
+      const mediaEdit = payload.role === 'media' || TL.selection?.kind === 'media';
+      await tlRefresh(!mediaEdit, mediaEdit); tlInspector();
       return true;
     } catch (error) { tlMsg(error.message); return false; }
   });
@@ -73,7 +74,7 @@ function tlWireLayerManager(track) {
 function tlLayerDialog(id = '') {
   const pid = TL.pid;
   const rows = TL.data.project_layers, row = rows.find(r => r.id === id);
-  const roles = ['graphics', 'titles', 'music', 'notes', 'sponsors', 'captions', 'cues', 'chapters', 'stings'];
+  const roles = ['media', 'graphics', 'titles', 'music', 'notes', 'sponsors', 'captions', 'cues', 'chapters', 'stings'];
   const colors = [['accent','Accent'], ['cool','Blue'], ['good','Green'], ['warn','Amber'], ['bad','Red'], ['ink','Ink'], ['ink-2','Secondary ink'], ['dim','Muted']];
   const peers = rows.filter(r => r.role === row?.role && r.id !== id);
   const options = (values, selected) => values.map(([value, name]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(name)}</option>`).join('');
@@ -163,7 +164,7 @@ function tlItemLayerSelect(sel, body) {
 // Classify the gesture before handing horizontal movement to timing controls.
 function tlWireLayerMoves() {
   const track = $('#tl-track');
-  track.querySelectorAll('[data-layer]:not([data-layer="graphics"])').forEach(node => {
+  track.querySelectorAll('[data-layer]:not([data-layer="graphics"]):not([data-layer="media"])').forEach(node => {
     const original = node.onpointerdown;
     node.onpointerdown = e => {
       if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey || TL.drag || e.target.closest('.tl-resize')) return original?.(e);
