@@ -1918,6 +1918,16 @@ def _memory_check(progress: Progress) -> None:
 SEGMENT_VERSION = 1
 
 
+def _cache_layer_defaults(value):
+    """Keep pre-layer cache signatures when new references are defaulted."""
+    if isinstance(value, dict):
+        return {k: _cache_layer_defaults(v) for k, v in value.items()
+                if not (k in ('title_layer', 'music_layer', 'sting_layer') and v == '')}
+    if isinstance(value, (list, tuple)):
+        return [_cache_layer_defaults(v) for v in value]
+    return value
+
+
 def _block_versions(slide):
     from . import block_library
     cues = (slide.cues or {}).get('blocks', [])
@@ -1997,7 +2007,7 @@ def _segment_key(project, group, settings) -> str:
             ffutil.h264("segment.mp4", crf=settings["crf"], preset=settings["preset"])]
     if project.aspect in {'portrait', 'square'}:
         spec.append(['aspect-layout-v2', frame_size(project)])
-    return hashlib.sha1(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
+    return hashlib.sha1(json.dumps(_cache_layer_defaults(spec), sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _segment_ready(path):
@@ -2580,9 +2590,11 @@ def _layers(project, segs):
     slides = {s.id: s for s in project.slides}
     total = sum(s['duration'] for s in segs)
 
-    def add(row, ident, sid, a, b, text, kind, src='auto', **extra):
+    def add(row, ident, sid, a, b, text, kind, src='auto', layer='', **extra):
         a, b = max(0.0, a), min(total, b)
         if b > a:
+            if layer:
+                extra['layer'] = layer
             layers[row].append(dict(id=ident, sid=sid, t0=round(a, 3), t1=round(b, 3),
                                     text=text, kind=kind, src=src, **extra))
 
@@ -2609,14 +2621,16 @@ def _layers(project, segs):
                 for item in block_overlays.resolved(slide.take, slide.overlays, q.get('duration')):
                     a = q['start'] + item['at']
                     add('graphics', item['id'], slide.id, a, a + item['dur'],
-                        library[item['block_id']]['meta']['name'], 'overlay', item['src'])
+                        library[item['block_id']]['meta']['name'], 'overlay', item['src'],
+                        layer=item.get('layer', ''))
             if (slide.title and timing['title_hold']['value'] > 0
                     and fmt != 'essay' and not cuts.is_cut(fmt)):
                 a = timing['title_at']['start']
                 add('titles', slide.id, slide.id, a,
                     a + timing['title_hold']['value'] + project.frame.arrive_s * project.frame.exit_ratio,
                     slide.title, 'title', 'user' if 'user' in
-                    (timing['title_at']['src'], timing['title_hold']['src']) else 'auto')
+                    (timing['title_at']['src'], timing['title_hold']['src']) else 'auto',
+                    layer=slide.title_layer)
             if fmt == 'essay':
                 head = cuts.head_pad_for(project, group[0][0])
                 plan = _essay_phrases(project, slide, q['duration'],
@@ -2631,7 +2645,7 @@ def _layers(project, segs):
             for i, (cue, span) in enumerate(zip(cue_rows.get(slide.id, []), timing['cues'])):
                 add('cues', f'{slide.id}:{i}', slide.id, span['start'], span['end'],
                     next((cue[k] for k in ('text', 'caption', 'headline', 'title') if cue.get(k)), ''),
-                    'cue', span['src'], cue=i, cue_kind=cue.get('kind', ''))
+                    'cue', span['src'], cue=i, cue_kind=cue.get('kind', ''), layer=cue.get('layer', ''))
             if slide.insert and chapter_title(project, slide):
                 add('chapters', slide.id, slide.id, q['start'],
                     q['start'] + timing['chapter_hold']['value'], chapter_title(project, slide),
@@ -2647,12 +2661,14 @@ def _layers(project, segs):
     if music:
         opening = next((s for s in segs if s['type'] == 'intro'), None)
         start = max(0, opening['duration'] - 0.35) if opening and 'intro' in stings else 0
-        add('music', 'music', '', start, total, music.name, 'music')
+        add('music', 'music', '', start, total, music.name, 'music', layer=project.music_layer)
     for role, (path, spec) in stings.items():
         seg = next(s for s in segs if s['type'] == role)
         from .intro import sting_window
         _, span, _ = sting_window(spec, seg['duration'])
-        add('stings', role, '', seg['start'], seg['start'] + span, path.name, 'sting')
+        add('stings', role, '', seg['start'], seg['start'] + span, path.name, 'sting',
+            layer=getattr(getattr(spec, '_spec', spec),
+                          'music_layer' if role == 'intro' else 'sting_layer', ''))
     return layers
 
 
@@ -2717,7 +2733,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         slides[0].append(target(project))
     if project.aspect in {'portrait', 'square'}:
         slides.append(['aspect-preview-v2', frame_size(project)])
-    blob = json.dumps(
+    blob = json.dumps(_cache_layer_defaults(
         [PROXY_VERSION, sorted(hide), scenes.SCENE_VERSION, project.title, project.subtitle,
          index, [sum(d for _, d in g) for g in groups[:index]], slides, _stat(pic),
          [c for c in _picture_source(project, lead).candidates
@@ -2728,7 +2744,7 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
          cache_owner(project.style), project.frame.to_dict(),
          camera_plan(project, groups)[index],
          cache_owner(channel),
-         _segments_before_slides(project), list(preview_size(project)), PREVIEW_FPS],
+         _segments_before_slides(project), list(preview_size(project)), PREVIEW_FPS]),
         default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -2935,8 +2951,8 @@ def _slate_key(project: Project, kind: str) -> str:
               dataclasses.asdict(channel.outro), dataclasses.asdict(channel.style),
               channel.frame.to_dict()]
              if channel else None)
-    blob = json.dumps([PROXY_VERSION, scenes.SCENE_VERSION, kind, project.title,
-                       parts, extra, list(preview_size(project)), PREVIEW_FPS],
+    blob = json.dumps(_cache_layer_defaults([PROXY_VERSION, scenes.SCENE_VERSION, kind, project.title,
+                       parts, extra, list(preview_size(project)), PREVIEW_FPS]),
                       default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -3163,7 +3179,7 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     music = pick_music(project)
     stings = _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
     card = _slate_channel(project) if lay["outro"] else None
-    blob = json.dumps(
+    blob = json.dumps(_cache_layer_defaults(
         [PROXY_VERSION, "linear-master-v1", project.frame.voice_lufs,
          sorted(hide), takes, lay["body"], lay["pre"], lay["total"],
          lay["intro"] and lay["intro"]["length"], lay["outro"] and lay["outro"]["length"],
@@ -3173,7 +3189,7 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
          project.style.music_db, project.voice.target_lufs, project.style.sponsor_music_db,
          [[dataclasses.asdict(slot), start, _stat(root / slot.take["path"])
            if (slot.take or {}).get("path") else None] for slot, start in lay["sponsors"]],
-         float(card.outro.music_fade) if card else 5.0],
+         float(card.outro.music_fade) if card else 5.0]),
         default=str, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 

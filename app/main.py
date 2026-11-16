@@ -3753,19 +3753,9 @@ def get_timeline(pid: str, hide: str = "") -> dict:
         seg["findings"] = [f for f in result["findings"] if a <= f["t"] < b]
     tl["check"] = result
     tl["review"] = get_review(pid)
-    notes = [dict(n, text=n['msg'], severity=n['level'], source='check') for n in result['findings']]
-    notes += [n for n in tl['review'].get('notes', []) if n.get('source') != 'check']
-    notes += tl['review'].get('warnings_kept', [])
-    weakest = tl['review'].get('weakest')
-    if weakest:
-        notes.append(dict(weakest, id='weakest', problem=weakest['why'], severity='P2'))
-    for i, n in enumerate(notes):
-        if n.get('state', 'open') not in ('open', 'kept'):
-            continue
-        t = max(0, float(n.get('t', 0)))
-        tl['layers']['notes'].append(dict(id=n.get('id', f'note:{i}'), sid=n.get('slide_id', ''),
-            t0=t, t1=min(tl['total'], t + 0.8), kind='note', src=n.get('source', 'review'),
-            text=n.get('text') or n.get('problem', ''), severity=n.get('severity', 'P2')))
+    from . import layers
+    tl['layers']['notes'] += layers.note_items(tl['total'], result['findings'], tl['review'])
+    tl['project_layers'] = layers.rows(p, tl)
     return tl
 
 

@@ -15,7 +15,7 @@ def test_endpoints_and_gate(project, monkeypatch):
         return result
     monkeypatch.setattr(check, 'run', run)
     monkeypatch.setattr(render, 'timeline', lambda p, hide=frozenset(): {
-        'segments': [dict(start=0, duration=2), dict(start=2, duration=3)],
+        'segments': [dict(ref='0', start=0, duration=2), dict(ref='1', start=2, duration=3)],
         'layers': {'notes': []}, 'total': 5})
     started = []
     monkeypatch.setattr(main.jobs, 'start', lambda *args: started.append(args) or 'job1')

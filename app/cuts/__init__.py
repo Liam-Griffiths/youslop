@@ -75,6 +75,8 @@ def normalise(module, cues) -> list[dict]:
                 clean["on"] = str(c.get("on") or "").strip()[:120]
                 if isinstance(c.get("at"), (int, float)):
                     clean["at"] = max(0.0, float(c["at"]))
+                if isinstance(c.get('layer'), str):
+                    clean['layer'] = c['layer']
                 out.append(clean)
     return out
 

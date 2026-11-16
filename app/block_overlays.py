@@ -35,12 +35,15 @@ def validate(take, overlays):
             raise ValueError('Unsupported overlay position or duration exceeds max_dur')
         if 'on' in item and not isinstance(item['on'], str):
             raise ValueError('Overlay on must be a word or phrase')
+        if 'layer' in item and not isinstance(item['layer'], str):
+            raise ValueError('Overlay layer must be a layer id')
         values = blocks.validate_vars(block['meta'], item.get('vars', {}))
         if item['at'] < 0:
             raise ValueError('Overlay at must be zero or more seconds')
         clean.append(dict(id=ident, block_id=ref, vars=values, at=float(item['at']), dur=float(item['dur']),
                           position=position, by=item.get('by', 'hand'),
-                          **provenance(item), **({'on': item['on']} if 'on' in item else {})))
+                          **provenance(item), **({'on': item['on']} if 'on' in item else {}),
+                          **({'layer': item['layer']} if 'layer' in item else {})))
     return clean
 
 

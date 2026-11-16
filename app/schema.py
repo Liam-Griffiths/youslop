@@ -14,9 +14,43 @@ from typing import Any, get_type_hints
 # what that choice looks like. It cannot collide with a filename.
 AUTO_MUSIC = "__auto__"
 
+# Track colours name existing theme tokens; never store a dark-only hex value.
+LAYER_COLORS = ('accent', 'cool', 'good', 'warn', 'bad', 'ink', 'ink-2', 'dim')
+LAYER_ROLES = ('pictures', 'voice', 'graphics', 'sponsors', 'titles', 'captions',
+               'cues', 'chapters', 'music', 'stings', 'notes')
+
 
 def _uid(prefix: str) -> str:
     return f"{prefix}{uuid.uuid4().hex[:8]}"
+
+
+@dataclass
+class Layer:
+    """A named project track. Roles retain their existing rendering meaning."""
+    id: str = field(default_factory=lambda: _uid('ly'))
+    name: str = 'Graphics'
+    role: str = 'graphics'
+    color: str = 'cool'
+    hidden: bool = False
+    locked: bool = False
+    order: int = 0
+
+    def __post_init__(self):
+        if not isinstance(self.id, str) or not self.id.strip():
+            raise ValueError('Layer needs a nonempty id')
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError('Layer needs a nonempty name')
+        if self.role not in LAYER_ROLES or self.color not in LAYER_COLORS:
+            raise ValueError('Unknown layer role or colour token')
+        if type(self.order) is not int or type(self.hidden) is not bool or type(self.locked) is not bool:
+            raise ValueError('Layer order must be an integer; hidden and locked must be booleans')
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> 'Layer':
+        return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
@@ -78,6 +112,7 @@ class Slide:
     section: str = "main"                 # intro | main | conclusion
     beat: str = ""                        # outline beat this paragraph serves
     title: str = ""                       # lower-left typography; "" = no title
+    title_layer: str = ""                 # missing/unknown -> first titles layer
     # A full-frame card announcing the section this paragraph opens, held in
     # the silence that precedes it. "" = this paragraph opens nothing. The
     # words are the card's, not the paragraph's: a chapter is usually titled
@@ -555,6 +590,7 @@ class IntroSpec:
     # A sting of its own for the slate. The main music bed holds off until the
     # slate is over, so the two never fight.
     music: str = ""                 # relative to the channel dir, "" = none
+    music_layer: str = ""           # opening sting's project layer
     music_filename: str = ""
     music_db: float = -4.0          # relative to the narration's -16 LUFS
     music_tail: float = 1.1         # how long it rings on over the first slide
@@ -600,6 +636,7 @@ class OutroSpec:
     # it starts as the card comes up and runs for as long as the card is on
     # screen (shorter if the file is). The bed's own fade-out is unchanged.
     sting: str = ""                 # relative to the owner's folder, "" = none
+    sting_layer: str = ""           # closing sting's project layer
     sting_filename: str = ""
     sting_db: float = -4.0          # relative to the narration's -16 LUFS
     sting_start: float = 0.0        # seconds into the file the window opens
@@ -843,6 +880,7 @@ class Project:
     style_kit: dict = field(default_factory=dict)
     block_presets: list[dict] = field(default_factory=list)
     bin: list[BinItem] = field(default_factory=list)
+    layers: list[Layer] = field(default_factory=list)  # empty -> derive, never auto-persist
     labels: list[str] = field(default_factory=list)
     channel_id: str = ""
     use_intro: bool = True
@@ -910,6 +948,7 @@ class Project:
     voice_track: str = ""
     lexicon: list[dict] = field(default_factory=list)   # pronunciations, this video
     music: str = ""          # a filename in assets/music, AUTO_MUSIC, or "" = none
+    music_layer: str = ""
     # The YouTube description and tags, as last written (by the generator or
     # by hand). Kept on the project so the upload form starts from them.
     description: str = ""
@@ -956,6 +995,7 @@ class Project:
             "style_kit": deepcopy(self.style_kit),
             "block_presets": deepcopy(self.block_presets),
             "bin": [item.to_dict() for item in self.bin],
+            "layers": [layer.to_dict() for layer in self.layers],
             "labels": list(self.labels),
             "id": self.id,
             "idea": self.idea,
@@ -993,6 +1033,7 @@ class Project:
             "narrator": self.narrator.to_dict(),
             "lexicon": self.lexicon,
             "music": self.music,
+            "music_layer": self.music_layer,
             "description": self.description,
             "yt_tags": self.yt_tags,
             "cast": self.cast,
@@ -1086,7 +1127,7 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"clip", "style_kit", "blocks", "block_presets", "bin", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"clip", "style_kit", "blocks", "block_presets", "bin", "layers", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         base["prefer_public_domain"] = d.get("prefer_public_domain", d.get("example", False)) is True
@@ -1097,6 +1138,7 @@ class Project:
             blocks=deepcopy(d.get("blocks") or []),
             block_presets=deepcopy(d.get("block_presets") or []),
             bin=[BinItem.from_dict(item) for item in (d.get("bin") or [])],
+            layers=[Layer.from_dict(item) for item in (d.get("layers") or [])],
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
             sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],
