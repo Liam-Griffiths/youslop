@@ -321,7 +321,7 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 | T20.3 | One app dialog, and a theme pick you can cancel | M | — | done | P1 UX-02, UX-07; 2026-11-16 Codex + review (inline fix: theme tiles are reachable and pressable from the keyboard); shared appConfirm/appPrompt/appChoose, older dialog helpers now adapters; theme pick has a real Cancel and an Undo toast that also restores grade, pacing and end-screen slots; checked in Chromium light and dark: Cancel leaves the channel unchanged, Undo restores it |
 | T20.3b | Replace the remaining native prompt and confirm dialogs | M | T20.3 | done | UX-07; 2026-11-16 Codex + review (inline fixes: opening a project file that is already here gets a real Cancel beside Keep both and Replace; dialog titles no longer repeat as the body); no native prompt/confirm/alert left in static/js; New channel is one two-field dialog, writing rules a text box, rule scope a choice; checked in Chromium light and dark |
 | T20.4 | Edit: the timeline in view at 1280×720 | M | — | dropped | folded into T21.6 acceptance; UX-03, UX-23; guide question G1 |
-| T20.5 | Plain errors with a next step, and quieter jobs | M | — | todo | UX-06, UX-18 |
+| T20.5 | Plain errors with a next step, and quieter jobs | M | — | doing | UX-06, UX-18; Codex |
 | T20.6 | Project bar at small sizes, one accent on Review & publish | S | — | todo | UX-04, UX-05, UX-22 |
 | T20.7 | Block previews: no seek race, no broken images | S | — | todo | UX-08, UX-09 |
 | T20.8 | Settings: sections in order, only the fields that apply | M | — | todo | UX-11, UX-28 |
