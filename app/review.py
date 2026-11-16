@@ -413,6 +413,8 @@ def note_id(note):
     key = f"{round(note['t'], 1)}|{fix['kind']}|{fix.get('slide_id', '')}"
     if note.get('code') == 'script.style':
         key += f"|script.style|{fix.get('sentence_index')}|{note['msg']}"
+    if note.get('code') == 'missing_recording':
+        key += f"|{fix.get('owner')}|{fix.get('id')}|{fix.get('track')}|{fix.get('path')}"
     return hashlib.sha1(key.encode()).hexdigest()[:10]
 
 

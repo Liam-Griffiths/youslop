@@ -24,7 +24,8 @@ function tlPaintNote() {
     : (mix.music ? `with the “${mix.music.replace(/\.[^.]+$/, '')}” bed` : 'narration only, no music bed')
       + (mix.sting ? (mix.stings && mix.stings.length > 1 ? ' and both stings' : ' and the ' + ((mix.stings || [''])[0] === 'outro' ? 'end card' : 'slate') + ' sting') : '');
   note.textContent = `${fmtTime(d.total)} · ${pics} pictures · ${d.width}×${d.height} at ${d.fps}fps · ${sound}`
-    + (d.estimated ? ' · some lengths estimated' : '');
+    + (d.estimated ? ' · some lengths estimated' : '')
+    + (mix.ready && mix.warnings?.length ? ' · ' + mix.warnings.join(' ') : '');
 }
 
 function tlDraw() {
@@ -145,13 +146,15 @@ function tlFixButtons(row, note, finding = false, context = null) {
   const slide = project?.slides.find(s => s.id === note.fix?.slide_id);
   const cueSupported = !['cue', 'cues'].includes(kind) || (slide && isCut(pictureKind(slide)));
   const canFix = !note.fix?.unsupported && !note.unsupported && !note.proposal?.unsupported
-    && (note.fix?.overlay_id || (cueSupported && ['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind)));
+    && (kind === 'recording' || note.fix?.overlay_id || (cueSupported && ['text', 'words', 'cue', 'cues', 'picture', 'title', 'look', 'style'].includes(kind)));
   for (const [action, label] of [['fix', 'Fix'], ['dismiss', 'Dismiss'], ['keep', 'Keep']]) {
     const button = document.createElement('button');
     button.className = 'btn sm';
-    button.textContent = label;
+    button.textContent = action === 'fix' && kind === 'recording'
+      ? (note.fix.reprocess ? 'Reprocess' : note.fix.owner === 'inserts' ? 'Find source' : 'Re-voice') : label;
     button.disabled = action === 'fix' && !canFix;
     button.onclick = async () => {
+      if (action === 'fix' && kind === 'recording') return recoverRecording(note.fix);
       if (action === 'fix' && note.code === 'script.style') return go(`#/p/${context?.pid || TL.pid}/script`);
       if (action === 'fix' && note.fix?.overlay_id) return openGraphicEdit(note.fix.slide_id, note.fix.overlay_id);
       button.disabled = true;

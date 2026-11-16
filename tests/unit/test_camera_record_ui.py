@@ -136,9 +136,11 @@ def test_camera_recorder_js(tmp_path):
         {id:'s2',narration:'Next',takes:{}}]}};
       const TRACK_ORDER=['mic','kokoro','elevenlabs','openai'];
       function toast(){} function fmtTime(s){return String(s);}
+      const api = async () => [];
     """
     # Load the real voice hooks as well as camera functions; stub only unrelated UI.
-    sources = (ROOT / 'static/js/tabs/record.js').read_text() + '\n' + (ROOT / 'static/js/tabs/camera.js').read_text()
+    sources = '\n'.join((ROOT / path).read_text() for path in (
+        'static/js/tabs/record.js', 'static/js/tabs/camera.js', 'static/js/tabs/recording_health.js'))
     runtime = shutil.which('gjs')
     if not runtime:
         pytest.skip('GJS is needed for the plain JS recorder test')

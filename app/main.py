@@ -1213,6 +1213,8 @@ def create_project(payload: dict = Body(...)) -> dict:
 def get_project(pid: str) -> dict:
     p = _load(pid)
     d = p.to_dict()
+    from .recording_health import missing
+    d['missing_recordings'] = missing(p)
     d["jobs"] = [{"id": j["id"], "kind": j["kind"]} for j in jobs.active_for(pid)]
     d["youtube"] = youtube_mod.status(p.channel_id) if p.channel_id else {"connected": False}
     if "stage" in kinds.kinds_in(p):
@@ -3473,6 +3475,22 @@ def retime_take(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         raise HTTPException(400, str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
+
+
+@app.get('/api/projects/{pid}/recordings')
+def get_recording_health(pid: str) -> list[dict]:
+    from .recording_health import missing
+    return missing(_load(pid))
+
+
+@app.post('/api/projects/{pid}/recordings/reprocess')
+def reprocess_recording(pid: str, payload: dict = Body(...)) -> dict:
+    from .recording_health import reprocess
+    try:
+        reprocess(pid, payload)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return get_project(pid)
 
 
 @app.post("/api/projects/{pid}/takes/reprocess")

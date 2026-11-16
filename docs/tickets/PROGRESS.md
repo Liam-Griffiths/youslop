@@ -317,7 +317,7 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 | ID | Title | Size | Depends | Status | Notes |
 |---|---|---|---|---|---|
 | T20.1 | UX self-review of the whole app | M | Phase 17, Phase 18, T15.2 | done | 2026-11-11: report docs/ux-review/2026-11-11/README.md + artifact; 2 P1, 18 P2, 10 P3, 4 guide questions; owner asked for fix tickets (T20.2–T20.14) |
-| T20.2 | Missing recordings: find them, name them, keep mixing | M | — | doing | P1 UX-01; Codex |
+| T20.2 | Missing recordings: find them, name them, keep mixing | M | — | done | P1 UX-01; 2026-11-16 Codex + review (inline fixes: Re-voice no longer switches the whole video's narrator to the draft voice; reprocess cleans outside the project lock and re-checks; a take without a duration falls back to the paragraph length); missing takes show in Voice and as a P0 check with Re-voice/Reprocess, the mix keeps going with silence and a warning; new takes never reuse a missing file's name; checked with a hidden take on Tube Mail |
 | T20.3 | One app dialog, and a theme pick you can cancel | M | — | todo | P1 UX-02, UX-07 |
 | T20.3b | Replace the remaining native prompt and confirm dialogs | M | T20.3 | todo | UX-07 |
 | T20.4 | Edit: the timeline in view at 1280×720 | M | — | dropped | folded into T21.6 acceptance; UX-03, UX-23; guide question G1 |

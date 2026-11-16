@@ -31,7 +31,7 @@ async function tlEnsureMix() {
     return;
   } catch (e) {
     TL.mixFailed = true;
-    toast(`Sound: ${e.message}`, true);
+    toast('Sound could not be mixed. Check the recordings in Voice and try again.', true);
   }
   TL.mixBusy = false;
   tlPaintNote();

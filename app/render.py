@@ -302,10 +302,16 @@ def _sponsor_placements(project, plan):
 def _sponsor_audio(project, entries, inputs, next_idx, lead=0.0):
     """Append read inputs in the same order the audio graph indexes them."""
     from . import sponsors
+    from .recording_health import take_missing, warn
     audio = []
     for slot, start in entries:
-        if (slot.take or {}).get("path"):
-            inputs += ["-i", str(project_dir(project.id) / slot.take["path"])]
+        if slot.take:
+            if take_missing(project_dir(project.id), slot.take):
+                warn(f'Sponsor {slot.vars.get("name") or slot.id}')
+                inputs += ['-f', 'lavfi', '-t', f'{sponsors.duration(slot):.6f}',
+                           '-i', 'anullsrc=r=48000:cl=mono']
+            else:
+                inputs += ["-i", str(project_dir(project.id) / slot.take["path"])]
             audio.append((next_idx, start + lead, sponsors.duration(slot)))
             next_idx += 1
     return audio, next_idx
@@ -3309,6 +3315,7 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
 
 def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> dict:
     from .layers import visibility, visible_stings
+    from .recording_health import missing
     hide = visibility(project, hide)
     music = None if hide.item("music", project.music_layer) else pick_music(project)
     sting = visible_stings(project, _stings_for(project, bool(lay["intro"]), bool(lay["outro"])), hide)
@@ -3325,7 +3332,10 @@ def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> di
     return {"audible": audible, "ready": bool(audible and fresh), "have": bool(audible and have and (fresh or not hide)),
             "stamp": round(out.stat().st_mtime) if have else 0,
             "path": f"cache/{out.name}", "music": music.name if music else "",
-            "sting": bool(sting), "stings": sorted(sting)}
+            "sting": bool(sting), "stings": sorted(sting),
+            "warnings": [f"Sound mixed without {r['label']}: its recording is missing."
+                for r in missing(project) if r['active'] and
+                ('sponsors' if r['owner'] == 'sponsors' else 'voice') not in hide]}
 
 
 def build_mix(project: Project, progress: Progress = lambda m: None, *,

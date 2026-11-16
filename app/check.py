@@ -660,6 +660,14 @@ def run(project, measure=False) -> dict:
                     line['metrics'] = metrics
     _scene_text(project, sb, ctx, groups, can_measure)
     findings = [f for rule in RULES for f in rule(sb, project.frame, ctx)]
+    from .recording_health import missing
+    starts = {p['id']: p['start'] for p in sb['paragraphs']}
+    starts.update({s.get('sponsor'): s['start'] for s in sb['segments'] if s['type'] == 'sponsor'})
+    for item in missing(project):
+        findings.append(_finding('missing_recording', 'P0', starts.get(item['id'], 0),
+            item['id'] if item['owner'] != 'sponsors' else '',
+            f"Recording for {item['label']} is missing on disk ({item['path'] or 'no file path'}).",
+            'recording', **item))
     findings.extend(script_style(sb['paragraphs']))
     for para in sb['paragraphs']:
         slide = next(s for s in project.slides if s.id == para['id'])

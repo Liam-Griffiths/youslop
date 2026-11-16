@@ -1444,6 +1444,7 @@ main:has(.voice-studio) .project-tools { padding: 12px 20px 0; }
 .voice-paragraph.mic .voice-state { color: var(--good); }
 .voice-paragraph.draft .voice-state { color: var(--cool); }
 .voice-paragraph.live .voice-state { color: var(--accent-ink); }
+.voice-paragraph.missing .voice-state, .voice-take.missing .voice-meta { color: var(--bad); }
 .voice-work { min-width: 0; padding: 28px 32px; }
 .voice-meta { font-family: var(--mono); font-size: 11px; color: var(--dim); overflow-wrap: anywhere; }
 .voice-options { margin: 16px 0; }

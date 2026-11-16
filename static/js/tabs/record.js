@@ -1,6 +1,7 @@
 
 // ------------------------------------------------------------------ record
 function paintRecord() {
+  loadRecordingHealth(state.project);
   if (cameraMode()) return paintCameraRecord();
   const p = state.project;
   const i = Math.min(state.rec.index, p.slides.length - 1);
@@ -21,7 +22,7 @@ function paintRecord() {
     ${voiceParagraphList(p)}
     <section class="voice-work" aria-label="Prompter">
     <div class="voice-meta">¶${i + 1} · ${done} of ${p.slides.length} ${ai ? 'drafted' : 'recorded'} · ${fmtTime(p.recorded_seconds)} in the can</div>
-    <details class="voice-options" ${ai && done < p.slides.length ? 'open' : ''}><summary>Voice &amp; draft settings</summary>
+    <details class="voice-options" ${state.rec.openDraft || ai && done < p.slides.length ? 'open' : ''}><summary>Voice &amp; draft settings</summary>
     ${recordModeSwitch()}
     ${voiceBar(p, track)}
 
@@ -722,6 +723,7 @@ async function voiceOneSlide() {
     const r = await api(`/api/projects/${p.id}/slides/${s.id}/voice-over`, { method: 'POST' });
     p.slides[state.rec.index] = r.slide;
     p.recorded_seconds = r.recorded_seconds;
+    state.rec.openDraft = false;
     syncVoiceCounts();
     paintRecord();
     playTake();
@@ -967,6 +969,7 @@ function playTake(track) {
   if (cameraMode()) return reviewCamera();
   track = track || recTrack();
   const slide = state.project.slides[state.rec.index];
+  if (recordingMissing(state.project, slide.id, track)) return toast('This recording is missing. Re-voice, record again, or put the file back.', true);
   if (!(slide.takes || {})[track]) return;
   const el = document.getElementById('player');
   el.src = `/api/projects/${state.project.id}/slides/${slide.id}/take.wav`
@@ -1454,13 +1457,14 @@ function abReload() {
 
 // The list is cheap markup; media elements exist only for the selected paragraph.
 function voiceParagraphList(p) {
-  const done = p.slides.filter(s => s.take).length;
+  const done = p.slides.filter(s => s.take && !recordingMissing(p, s.id)).length;
   return `<aside class="voice-list" aria-label="Paragraphs"><h2>Takes · ${done} of ${p.slides.length} voiced</h2>
     ${p.slides.map((s, n) => {
       const take = s.take;
       const live = n === state.rec.index && state.rec.recording;
-      const kind = live ? 'live' : !take ? 'empty' : take.synthetic ? 'draft' : 'mic';
-      const label = live ? 'recording' : !take ? 'not voiced' : take.synthetic ? 'draft voice' : s.on_camera ? 'camera' : 'mic';
+      const missing = recordingMissing(p, s.id);
+      const kind = live ? 'live' : missing ? 'missing' : !take ? 'empty' : take.synthetic ? 'draft' : 'mic';
+      const label = live ? 'recording' : missing ? 'missing' : !take ? 'not voiced' : take.synthetic ? 'draft voice' : s.on_camera ? 'camera' : 'mic';
       return `<button type="button" class="btn ghost voice-paragraph ${kind}" ${cameraLocked() ? 'disabled' : ''}
         ${n === state.rec.index ? 'aria-current="true"' : ''} onclick="selectVoiceParagraph(${n})">
         <span class="num">${String(n + 1).padStart(2, '0')}</span><span class="voice-excerpt">${esc(s.narration)}</span><span class="voice-state">${label}</span></button>`;
@@ -1491,12 +1495,18 @@ function voiceTakesPanel(p, s) {
     <audio controls preload="none" aria-label="Play ${t.synthetic ? 'draft' : 'recorded'} take" src="${file(t.path)}"></audio>`;
   return `<aside class="voice-takes" aria-label="Takes"><h2>¶${state.rec.index + 1} · every take is kept</h2>
     ${state.rec.recording ? '<div class="voice-take live"><strong>Recording · live</strong><p>The new take is saved when you stop.</p></div>' : ''}
-    ${Object.entries(s.takes || {}).map(([track, t]) => `<div class="voice-take">
+    ${Object.entries(s.takes || {}).map(([track, t]) => {
+      const missing = recordingMissing(p, s.id, track);
+      return `<div class="voice-take${missing ? ' missing' : ''}">
       <strong>${esc(trackLabel(track))}${t.synthetic ? ' · draft' : ''}</strong>
-      <span class="voice-meta">${fmtTime(t.duration || 0)} · ${track === used ? 'in the cut' : 'available'}</span>
-      ${media(t)}${!t.synthetic && ['mic','camera'].includes(track) ? `<button type="button" class="btn sm" ${locked}
+      <span class="voice-meta">${fmtTime(t.duration || 0)} · ${missing ? 'missing' : track === used ? 'in the cut' : 'available'}</span>
+      ${missing ? `<p>This file is missing on disk. Re-voice, record again, or put the file back.</p>
+        <p class="voice-meta">${esc(missing.path || 'No file path')}</p>
+        <button type="button" class="btn sm" ${locked} onclick="recoverVoiceTake('${esc(track)}','draft')">Re-voice</button>
+        <button type="button" class="btn sm" ${locked} onclick="recoverVoiceTake('${esc(track)}','record')">Record</button>
+        ${missing.reprocess ? `<button type="button" class="btn sm" ${locked} onclick="recoverVoiceTake('${esc(track)}','')">Reprocess</button>` : ''}` : media(t)}${!t.synthetic && ['mic','camera'].includes(track) ? `<button type="button" class="btn sm" ${missing ? 'disabled' : locked}
         data-track="${esc(track)}" data-path="${esc(t.path)}" onclick="retimeRecordedTake(this)">Retime words</button>` : ''}${track !== used && track !== 'camera' ? `<button type="button" class="btn sm" ${locked} onclick="useVoiceTrack('${esc(track)}')">Use this voice for the video</button>` : ''}
-    </div>`).join('')}
+    </div>`; }).join('')}
     <h2>Earlier takes · ${(s.history || []).length}</h2>
     ${(s.history || []).map((t, n) => `<div class="voice-take"><strong>${esc(trackLabel(t.track || (t.synthetic ? t.engine : 'mic')))} · history</strong>
       <span class="voice-meta">${fmtTime(t.duration || 0)} · ${esc(t.reason || '')}${t.narration !== s.narration ? ' · different text' : ''}</span>

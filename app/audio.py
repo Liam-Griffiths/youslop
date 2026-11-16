@@ -546,6 +546,7 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
                   head: float, tail: float,
                   fill: dict[str, float] | None = None, extra_gaps=None, hide=frozenset()) -> float:
     from .store import project_dir
+    from .recording_health import insert_source, take_missing, warn
 
     root = project_dir(project.id)
     wanted = {s.id for s in slides}
@@ -556,8 +557,8 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         # Legacy in-memory projects may not have been through sync_takes yet.
         if not slide.takes and not slide.on_camera:
             take = slide.take
-        if slide.id in wanted and (slide.insert or (take and take.get("path")) or slide.id in fill):
-            takes.append((slide, take if not slide.insert and (take and take.get("path")) else None))
+        if slide.id in wanted and (slide.insert or take or slide.id in fill):
+            takes.append((slide, take if not slide.insert else None))
     if not takes:
         raise ValueError("Nothing recorded yet.")
 
@@ -569,15 +570,19 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
 
     for i, (slide, take) in enumerate(takes):
         meta = slide.insert
-        if meta and meta.get('source_audio'):
-            from .inserts import source as insert_source
+        clip = insert_source(meta) if meta and meta.get('source_audio') else None
+        gone = take_missing(root, take) or bool(meta and meta.get('source_audio') and clip is None)
+        if gone:
+            warn(f'¶{project.slides.index(slide) + 1}')
+        if clip:
             inputs += ['-ss', f"{meta['in_s']:.6f}", '-t', f"{meta['seconds']:.6f}",
-                       '-i', str(insert_source(meta))]
-        elif take:
+                       '-i', str(clip)]
+        elif take and not gone:
             inputs += ["-i", str(root / take["path"])]
         else:
-            seconds = meta['seconds'] if meta else max(0.1, fill[slide.id])
-            length = f'{seconds:.6f}' if meta else f'{seconds:.3f}'
+            seconds = (meta['seconds'] if meta else float(take.get('duration') or fill.get(slide.id, 0.1)) if take
+                       else max(0.1, fill[slide.id]))
+            length = f'{seconds:.6f}' if meta or take else f'{seconds:.3f}'
             inputs += ["-f", "lavfi", "-t", length,
                        "-i", "anullsrc=r=48000:cl=mono"]
         pad_before = head if i == 0 else 0.0
