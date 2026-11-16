@@ -29,6 +29,7 @@ track.querySelectorAll=s=>s.includes('[data')?[layer]:s==='.tl-lane'?[lane]:[];t
 const document={querySelectorAll:()=>[],createElement:()=>new El(),addEventListener(k,f){this.key=f;},removeEventListener(){this.key=null;}};
 const $=s=>s==='#tl-track'?track:s==='#tl-add-sponsor'?add:null;
 const state={project:{id:'p',updated_at:123,slides:[0,1,2,3].map(i=>({id:'s'+i}))}};
+const tlWireLayerManager=()=>{}; // Keep this harness focused on section gestures.
 const crypto={randomUUID:()=> 'section-gesture'};
 let calls=[];const api=async(url,opts)=>{
  calls.push({url,...opts});const op=JSON.parse(opts.body).op;

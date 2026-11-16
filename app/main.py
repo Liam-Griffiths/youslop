@@ -1395,6 +1395,16 @@ async def locked_layer_error(_request: Request, exc: LockedLayerError) -> JSONRe
     return JSONResponse({'detail': str(exc)}, status_code=409)
 
 
+@app.post('/api/projects/{pid}/layers')
+def manage_layers(pid: str, payload: dict = Body(...)) -> dict:
+    from . import layers
+    with store.lock_for(pid):
+        p = _load(pid)
+        layers.manage(p, payload)
+        store.save(p)
+    return p.to_dict()
+
+
 @app.patch('/api/projects/{pid}/layers/{ident:path}')
 def patch_layer_flags(pid: str, ident: str, payload: dict = Body(...)) -> dict:
     from . import layers

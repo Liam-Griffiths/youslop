@@ -214,14 +214,110 @@ def visible_stings(project, stings, hide):
 def patch_flags(project, ident, patch):
     """Materialize the drawing view only on an explicit layer edit."""
     from .edits import EditError
-    if not patch or set(patch) - {'hidden', 'locked'} or any(type(v) is not bool for v in patch.values()):
-        raise EditError('Layer hidden and locked settings must be booleans.')
+    if not patch or set(patch) - {'hidden', 'locked', 'name', 'color'}:
+        raise EditError('Unknown layer setting.')
     tracks = [Layer.from_dict(row) for row in rows(project)]
     target = next((layer for layer in tracks if layer.id == ident), None)
     if target is None:
         raise EditError('No such layer.', 404)
-    for key, value in patch.items():
-        setattr(target, key, value)
+    try:
+        updated = Layer(**dict(target.to_dict(), **patch))
+        if 'name' in patch and len(updated.name) > 24:
+            raise ValueError('Layer names must be at most 24 characters.')
+    except (TypeError, ValueError) as exc:
+        raise EditError(str(exc)) from exc
+    tracks[tracks.index(target)] = updated
+    project.layers = tracks
+
+
+def _bindings(project):
+    """Stored references, including dormant items that aren't timeline spans."""
+    for slide in project.slides:
+        for item in slide.overlays:
+            yield 'graphics', item, 'layer'
+        for kind, cues in slide.cues.items():
+            if kind not in {'blocks', 'inactive_blocks'}:
+                for cue in cues:
+                    yield 'cues', cue, 'layer'
+        if slide.title:
+            yield 'titles', slide.__dict__, 'title_layer'
+    if project.music:
+        yield 'music', project.__dict__, 'music_layer'
+    if project.intro.music:
+        yield 'stings', project.intro.__dict__, 'music_layer'
+    if project.outro.sting:
+        yield 'stings', project.outro.__dict__, 'sting_layer'
+
+
+def manage(project, payload):
+    """One structural edit, persisted atomically by the caller with one undo."""
+    from .edits import EditError
+    tracks = [Layer.from_dict(row) for row in rows(project)]
+    op = payload.get('op')
+    source = next((t for t in tracks if t.id == payload.get('id')), None)
+    if op in {'duplicate', 'delete'} and source is None:
+        raise EditError('No such layer.', 404)
+    # Resolve legacy/default assignments before changing the first track.
+    bindings = [(owner, key, resolve(tracks, role, owner.get(key, '')))
+                for role, owner, key in _bindings(project)]
+    if op in {'add', 'duplicate'}:
+        try:
+            new = (Layer(name=source.name, role=source.role, color=source.color) if op == 'duplicate'
+                   else Layer(name=payload.get('name'), role=payload.get('role')))
+            if len(new.name) > 24:
+                raise ValueError('Layer names must be at most 24 characters.')
+            if new.role in {'pictures', 'voice'} and any(t.role == new.role for t in tracks):
+                raise ValueError('Pictures and Voice each use one main track.')
+        except (TypeError, ValueError) as exc:
+            raise EditError(str(exc)) from exc
+        new.order = max((t.order for t in tracks), default=-1) + 1
+        tracks.append(new)
+    elif op == 'move_item':
+        target = next((t for t in tracks if t.id == payload.get('to')), None)
+        if not target or target.role != 'graphics':
+            raise EditError('Choose a graphics layer.')
+        slide = next((s for s in project.slides if s.id == payload.get('sid')), None)
+        item = next((o for o in slide.overlays if o.get('id') == payload.get('item')), None) if slide else None
+        if item is None:
+            raise EditError('Graphic changed; select it again.', 409)
+        item['layer'] = target.id
+        bindings = []  # Keep this explicit move rather than pinning its old assignment.
+    elif op == 'reorder':
+        ids = payload.get('ids')
+        if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids) or sorted(ids) != sorted(t.id for t in tracks):
+            raise EditError('Reorder must include each layer exactly once.')
+        tracks.sort(key=lambda t: ids.index(t.id))
+        for i, track in enumerate(tracks):
+            track.order = i
+    elif op == 'delete':
+        if source.role in {'pictures', 'voice'}:
+            raise EditError('Pictures and Voice cannot be deleted.')
+        if source.locked:
+            raise LockedLayerError(_locked_message(source))
+        target = next((t for t in tracks if t.id == payload.get('move_to') and
+                       t.role == source.role and t.id != source.id), None)
+        occupied = any(row['items'] for row in rows(project) if row['id'] == source.id)
+        occupied |= any(track and track.id == source.id for _, _, track in bindings)
+        if occupied and target is None:
+            raise EditError('Move items to another layer of the same role before deleting.')
+        if occupied and target.locked:
+            raise LockedLayerError(_locked_message(target))
+        for owner, key, track in bindings:
+            if track and track.id == source.id:
+                owner[key] = target.id
+        # Roles without individual references resolve to their first remaining track.
+        if occupied and (source.role not in {'graphics', 'titles', 'music', 'stings'}
+                         or source.role == 'stings' and project.channel_id):
+            tracks.remove(target)
+            tracks.insert(tracks.index(source), target)
+            target.order = source.order
+        tracks.remove(source)
+    else:
+        raise EditError('Unknown layer operation.')
+    # Pin surviving movable items so reordering never silently moves them.
+    for owner, key, track in bindings:
+        if track and track in tracks and not track.locked:
+            owner[key] = track.id
     project.layers = tracks
 
 

@@ -26,7 +26,7 @@ const tlClock=String,tlInsertButtons=()=>'<insert>',tlGapItems=()=>'<gaps>',tlCa
 let html=tlLayerRows('<pictures>','<voice>');
 check(html.indexOf('data-track="names"')<html.indexOf('data-track="voice"')&&
  html.indexOf('data-track="voice"')<html.indexOf('data-track="maps"'),'ordered tracks across roles');
-check(!html.includes('data-track="empty"'),'no empty saved role lane');
+check(html.includes('data-track="empty"'),'saved empty layer remains available to the manager');
 check(html.includes('Names &lt;quoted>')&&html.includes('--track-color:var(--cool)'),'escaped name and token swatch');
 check(html.indexOf('data-item="1"')<html.indexOf('data-item="0"'),'shared ids keep paragraph-aware legacy indexes');
 check(html.includes('<pictures><insert>')&&html.includes('<voice><gaps>')&&html.includes('<camera>'),'main-track and camera actions retained');
@@ -50,6 +50,7 @@ track.querySelector=()=>pic;
 const $=s=>({'#tl-track':track,'#tl-add-graphic':addGraphic,'#tl-add-sponsor':addSponsor}[s]);
 const document={createElement:()=>new El()};
 const tlPause=()=>{},tlGraphicAdd=()=>{},tlSponsorAdd=()=>{};
+const tlWireLayerManager=()=>{}; // Manager wiring is exercised separately.
 let message='';const tlMsg=v=>{message=v;};
 const tlSelect=s=>{selected=s;},tlSeek=()=>{};
 tlWireLaneCollapse();

@@ -58,10 +58,13 @@ function tlGraphicPointer(e, node, sel, edge) {
   const guide = document.createElement('div'); guide.className = 'tl-snap-guide'; guide.hidden = true; track.append(guide);
   const hint = tlTrackHint(track), drag = {graphic:true}; TL.drag = drag; node.graphicClick = false;
   node.setPointerCapture(e.pointerId);
-  let moved = false, patch;
+  let moved = false, patch, destination;
   const move = ev => {
-    if (!moved && Math.abs(ev.clientX-e.clientX) < 3) return;
+    if (!moved && Math.max(Math.abs(ev.clientX-e.clientX), Math.abs((ev.clientY || 0)-(e.clientY || 0))) < 3) return;
     moved = true; node.graphicClick = true;
+    destination = edge === 'move' && [...track.querySelectorAll('[data-role="graphics"]')].find(lane => {
+      const r = lane.getBoundingClientRect(); return ev.clientY >= r.top && ev.clientY < r.bottom;
+    });
     const points = [...tlParas().flatMap(q => (q.word_times || []).filter(w => w.src && w.src !== 'est')),
       ...tlParas().map(q => ({start:q.start,end:q.start+q.duration})), {start:TL.cur,end:TL.cur}];
     const snap = tlSnap(base+(ev.clientX-e.clientX)/TL.zoom, points, tlFps(),6,TL.zoom,ev.altKey);
@@ -87,7 +90,9 @@ function tlGraphicPointer(e, node, sel, edge) {
     node.onpointermove = node.onpointerup = node.onpointercancel = node.onlostpointercapture = null;
     if (node.hasPointerCapture(e.pointerId)) node.releasePointerCapture(e.pointerId);
     guide.remove(); hint.remove(); node.style.left = left; node.style.width = width;
-    if (!cancel && moved && patch) tlGraphicCommand(edge === 'move' ? 'move' : 'resize', [sel], patch);
+    if (!cancel && moved && destination && destination.dataset.track !== node.closest('[data-track]').dataset.track)
+      tlLayerRequest({op:'move_item', sid:sel.sid, item:sel.id, to:destination.dataset.track}, '', 'move graphic to layer');
+    else if (!cancel && moved && patch) tlGraphicCommand(edge === 'move' ? 'move' : 'resize', [sel], patch);
   };
   const key = ev => { if (ev.key === 'Escape') {ev.preventDefault(); ev.stopImmediatePropagation(); finish(true);} };
   node.onpointermove = move; node.onpointerup = ev => {move(ev); finish(false);};

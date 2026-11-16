@@ -79,11 +79,13 @@ class El {
  setAttribute(){} querySelectorAll(){return this.buttons ||= [new El(),new El(),new El(),new El()];}
 }
 const track=new El(),sc=new El(),pic=new El();sc.clientWidth=500;sc.scrollLeft=0;
+track.querySelectorAll=()=>[];
 track.querySelector=()=>pic;
 const $=s=>s==='#tl-scroll'?sc:track;
 const document={createElement:()=>new El(),addEventListener(k,f){this.key=f;},removeEventListener(){this.key=null;}};
 const hint=()=>track.children.find(n=>n.className==='tl-track-hint');
 const event=x=>({clientX:x,button:0,pointerId:1,altKey:true,preventDefault(){},stopPropagation(){}});
+let layerMoves=[];const tlLayerRequest=async payload=>{layerMoves.push(payload);};
 const key=(k,extra={})=>({key:k,ctrlKey:true,target:{closest:()=>null},...extra});
 async function run(){
  await tlGraphicDrop({block:'lower',vars:{title:'Ada'}},6.5,'names');
@@ -112,6 +114,14 @@ async function run(){
  check(hint().textContent.includes('s ·')&&calls.length===n,'move readout on track without requests');
  node.onpointerup(event(100));await tlInspectorQueue;
  check(TL.selection.sid==='b'&&calls.length===n+1&&!hint(),'drag across paragraph saves once');
+ const dest={dataset:{track:'maps'},getBoundingClientRect:()=>({top:80,bottom:110})};
+ track.querySelectorAll=()=>[dest];node.closest=()=>({dataset:{track:'names'}});
+ const moveLayer=y=>({...event(0),clientY:y});
+ const anchorBefore=JSON.stringify(tlGraphic(TL.selection)), saveCount=calls.length;
+ tlGraphicPointer(moveLayer(30),node,TL.selection,'move');node.onpointerup(moveLayer(90));
+ check(layerMoves.length===1&&layerMoves[0].to==='maps'&&calls.length===saveCount,'vertical drag makes one layer move');
+ check(JSON.stringify(tlGraphic(TL.selection))===anchorBefore,'vertical move preserves word anchor and timing');
+ track.querySelectorAll=()=>[];
  const start=TL.selection.t0;
  tlGraphicPointer(event(0),node,TL.selection,'start');node.onpointerup(event(4));await tlInspectorQueue;
  check(near(TL.selection.t0,start+.2)&&near(tlGraphic(TL.selection).dur,.8),'left edge keeps end');

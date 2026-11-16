@@ -1,0 +1,128 @@
+// Structural edits use the existing project snapshot history; dialogs stay in-page.
+function tlLayerRequest(payload, ident = '', label = 'edit layers') {
+  const pid = TL.pid;
+  const result = tlInspectorQueue.then(async () => {
+    if (TL.pid !== pid || state.project?.id !== pid) return false;
+    try {
+      const project = await api(`/api/projects/${pid}/layers${ident ? '/' + encodeURIComponent(ident) : ''}`, {
+        method:ident ? 'PATCH' : 'POST', body:JSON.stringify(payload), editLabel:label});
+      if (TL.pid !== pid || state.project?.id !== pid) return false;
+      state.project = project;
+      await tlRefresh(true); tlInspector();
+      return true;
+    } catch (error) { tlMsg(error.message); return false; }
+  });
+  tlInspectorQueue = result.then(() => {}); return result;
+}
+
+function tlLayerReorder(id, before) {
+  const ids = TL.data.project_layers.map(row => row.id).filter(key => key !== id);
+  ids.splice(before ? ids.indexOf(before) : ids.length, 0, id);
+  return tlLayerRequest({op:'reorder', ids}, '', 'reorder layers');
+}
+
+function tlWireLayerManager(track) {
+  $('#tl-layer-add').onclick = () => tlLayerDialog();
+  track.querySelectorAll('[data-manage]').forEach(button => {
+    button.onpointerdown = e => e.stopPropagation();
+    button.onclick = e => { e.stopPropagation(); tlLayerDialog(button.dataset.manage); };
+  });
+  track.querySelectorAll('.tl-layer-label').forEach(label => {
+    const id = label.closest('[data-track]').dataset.track;
+    label.ondblclick = e => { if (!e.target.closest('button')) { e.stopPropagation(); tlLayerDialog(id); } };
+    label.draggable = true;
+    label.ondragstart = e => { e.stopPropagation(); TL.layerDrag = id; e.dataTransfer.setData('text/plain', id); };
+    label.ondragend = () => { TL.layerDrag = null; };
+    label.ondragover = e => { if (TL.layerDrag && TL.layerDrag !== id) { e.preventDefault(); e.stopPropagation(); } };
+    label.ondrop = e => {
+      if (!TL.layerDrag || TL.layerDrag === id) return;
+      e.preventDefault(); e.stopPropagation();
+      tlLayerReorder(TL.layerDrag, id); TL.layerDrag = null;
+    };
+  });
+}
+
+function tlLayerDialog(id = '') {
+  const pid = TL.pid;
+  const rows = TL.data.project_layers, row = rows.find(r => r.id === id);
+  const roles = ['graphics', 'titles', 'music', 'notes', 'sponsors', 'captions', 'cues', 'chapters', 'stings'];
+  const colors = [['accent','Accent'], ['cool','Blue'], ['good','Green'], ['warn','Amber'], ['bad','Red'], ['ink','Ink'], ['ink-2','Secondary ink'], ['dim','Muted']];
+  const peers = rows.filter(r => r.role === row?.role && r.id !== id);
+  const options = (values, selected) => values.map(([value, name]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(name)}</option>`).join('');
+  const {dialog, close} = tlInsertDialog(row ? `Manage ${row.name}` : 'Add layer', `
+    ${row ? `<p><span class="mono">${row.items.length}</span> ${row.items.length === 1 ? 'item' : 'items'} on this layer</p>` : ''}
+    <form id="layer-details" class="tl-layer-section">
+      <h3>${row ? 'Name and colour' : 'New layer'}</h3>
+      <label class="field" for="layer-name"><span>Name</span><input type="text" id="layer-name" required maxlength="24" value="${esc(row?.name || '')}"></label>
+      ${row ? `<fieldset class="tl-layer-colors"><legend>Colour</legend><div class="row">
+        ${colors.map(([value, name]) => `<label class="tl-layer-color" title="${esc(name)}">
+          <input type="radio" name="layer-color" value="${value}" aria-label="${esc(name)}" ${value === row.color ? 'checked' : ''}>
+          <span aria-hidden="true" style="--track-color:var(--${value})"></span></label>`).join('')}
+        </div></fieldset>` : `<label class="field" for="layer-role"><span>Role</span><select id="layer-role">${options(roles.map(r => [r,r[0].toUpperCase()+r.slice(1)]), 'graphics')}</select></label>`}
+    </form>
+    ${row ? `<section class="tl-layer-section" aria-labelledby="layer-visibility-title">
+      <h3 id="layer-visibility-title">Visibility</h3>
+      <label class="tl-layer-toggle"><input type="checkbox" data-toggle="locked" ${row.locked ? 'checked' : ''}>Locked</label>
+      <label class="tl-layer-toggle"><input type="checkbox" data-toggle="hidden" aria-describedby="layer-hidden-help" ${row.hidden ? 'checked' : ''}>Hidden</label>
+      <p id="layer-hidden-help" class="sub">Hidden layers are left out of previews.</p>
+      <label class="tl-layer-toggle"><input type="checkbox" id="layer-render" aria-describedby="layer-render-help" ${state.project.hide_in_render ? 'checked' : ''}>Exclude hidden layers from final renders</label>
+      <p id="layer-render-help" class="sub">Applies to all hidden layers in this project; otherwise they appear in final renders.</p>
+      </section>
+      <section class="tl-layer-section" aria-labelledby="layer-order-title">
+      <h3 id="layer-order-title">Order</h3>
+      <div class="row"><button type="button" class="btn" data-up ${rows[0] === row ? 'disabled' : ''}>Move up</button>
+      <button type="button" class="btn" data-down ${rows.at(-1) === row ? 'disabled' : ''}>Move down</button></div>
+      </section>
+      ${['pictures','voice'].includes(row.role) ? '<p class="sub">The main track can be renamed and reordered.</p>' : `
+      <section class="tl-layer-section" aria-label="Add a similar layer">
+      <button type="button" class="btn" data-duplicate>Add an empty layer like this</button>
+      </section>
+      <section class="tl-layer-section" aria-labelledby="layer-delete-title">
+      <h3 id="layer-delete-title">Delete layer</h3>
+      <label class="field" for="layer-destination"><span>Move its items to</span><select id="layer-destination"><option value="">Choose a ${esc(row.role)} layer</option>${options(peers.map(r => [r.id,r.name]), '')}</select></label>
+      <button type="button" class="btn danger" data-delete>Delete layer</button>
+      </section>`}` : ''}
+    <div class="tl-layer-footer"><button type="submit" form="layer-details" class="btn primary">${row ? 'Save' : 'Add layer'}</button></div>`);
+  dialog.classList.add('tl-layer-dialog');
+  const footer = dialog.querySelector('.tl-layer-footer');
+  footer.before(dialog.querySelector('[role="status"]'));
+  footer.prepend(dialog.querySelector('[data-close]'));
+  const send = async (payload, target = '', label = 'edit layers') => {
+    if (TL.pid !== pid || state.project?.id !== pid) { close(); return; }
+    const controls = [...dialog.querySelectorAll('button, input, select')], disabled = controls.map(control => control.disabled);
+    controls.forEach(control => { control.disabled = true; });
+    if (await tlLayerRequest(payload, target, label)) close();
+    else { dialog.querySelector('[role="status"]').textContent = $('#tl-msg')?.textContent || 'Could not save this layer. Check the destination and locks.';
+      controls.forEach((control,i) => { control.disabled = disabled[i]; });
+      dialog.querySelectorAll('[data-toggle]').forEach(input => { input.checked = row[input.dataset.toggle]; }); }
+  };
+  dialog.querySelector('form').onsubmit = e => {
+    e.preventDefault(); const name = dialog.querySelector('#layer-name').value.trim();
+    send(row ? {name, color:dialog.querySelector('[name="layer-color"]:checked').value}
+      : {op:'add', name, role:dialog.querySelector('#layer-role').value}, id, row ? 'rename or recolour layer' : 'add layer');
+  };
+  dialog.querySelectorAll('[data-toggle]').forEach(input => { input.onchange = () => send({[input.dataset.toggle]:input.checked}, id, `toggle ${input.dataset.toggle} layer`); });
+  const render = dialog.querySelector('#layer-render');
+  if (render) render.onchange = async e => {
+    if (TL.pid !== pid) { close(); return; }
+    await $('#tl-hide-render').onchange(e); $('#tl-hide-render').checked = state.project.hide_in_render;
+  };
+  const wire = (selector, handler) => { const button = dialog.querySelector(selector); if (button) button.onclick = handler; };
+  wire('[data-duplicate]', () => send({op:'duplicate', id}, '', 'duplicate empty layer'));
+  wire('[data-delete]', () => send({op:'delete', id, move_to:dialog.querySelector('#layer-destination').value}, '', 'delete layer'));
+  const reorder = async before => { if (TL.pid !== pid || await tlLayerReorder(id, before)) close(); };
+  wire('[data-up]', () => reorder(rows[rows.indexOf(row)-1]?.id));
+  wire('[data-down]', () => reorder(rows[rows.indexOf(row)+2]?.id));
+  dialog.querySelector('#layer-name').focus();
+}
+
+function tlGraphicLayerSelect(sel, body) {
+  const rows = TL.data.project_layers.filter(row => row.role === 'graphics');
+  const current = rows.find(row => row.items.some(item => item.id === sel.id && item.sid === sel.sid));
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `<label for="graphic-layer">Layer</label><select id="graphic-layer">${rows.map(row => `<option value="${esc(row.id)}" ${current?.id === row.id ? 'selected' : ''} ${row.locked ? 'disabled' : ''}>${esc(row.name)}${row.locked ? ' (locked)' : ''}</option>`).join('')}</select>`;
+  wrap.querySelector('select').onchange = async e => {
+    if (!await tlLayerRequest({op:'move_item', sid:sel.sid, item:sel.id, to:e.target.value}, '', 'move graphic to layer')) e.target.value = current?.id;
+  };
+  body.prepend(wrap);
+}

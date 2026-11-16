@@ -40,6 +40,7 @@ async function tlGraphicInspector(sel, body) {
       } catch (error) { body.querySelector('#graphic-status').textContent = error.message; }
     };
     body.querySelector('#graphic-delete').onclick = () => tlGraphicSave(sel, null);
+    tlGraphicLayerSelect(sel, body);
   } catch (error) { if (body.isConnected) body.textContent = error.message; }
 }
 
