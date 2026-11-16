@@ -26,8 +26,10 @@ async function scriptLoadCheck() {
     });
     document.querySelectorAll('[data-findings]').forEach(el => {
       el.innerHTML = (bySlide.get(el.dataset.findings) || []).join('');
-      document.querySelector(`[data-binder-sid="${el.dataset.findings}"]`)?.classList.toggle('has-finding', !!el.innerHTML);
+      document.querySelector(`.script-card[data-sid="${el.dataset.findings}"]`)?.classList.toggle('has-finding', !!el.innerHTML);
     });
+    const badge = $('#script-check-count');
+    if (badge) badge.textContent = findings.length ? String(findings.length) : '';
     $('#script-check-results').innerHTML = `<div class="script-counts mono">${['P0','P1','P2','P3'].map(l => `<span class="${l}">${l} ${result.counts[l]}</span>`).join('')}</div>
       ${findings.map((f, i) => `<div class="script-check-item"><button class="btn sm ghost mono" onclick="scriptLocate('${f.slide_id}')">${f.level} · ${f.slide_id ? '¶' + (state.project.slides.findIndex(s => s.id === f.slide_id) + 1) : 'Script'}</button>${row(f, i)}</div>`).join('') || '<p>No open word findings.</p>'}
       <button class="btn sm ghost" onclick="scriptLoadCheck()">Refresh check</button>
@@ -61,8 +63,7 @@ function scriptFixFinding(i) {
   const f = state.scriptFindings[i];
   if (!f.slide_id) return go(`#/p/${state.project.id}/plan`);
   scriptLocate(f.slide_id);
-  const section = document.querySelector(`[data-script-inspector="${f.slide_id}"] [data-script-detail="findings"]`);
-  if (section) section.open = true;
+  scriptToggle('para:' + f.slide_id, true);
   toast('Edit the narration to address the finding; Check facts refreshes researched claims.');
 }
 async function scriptDismiss(id) {

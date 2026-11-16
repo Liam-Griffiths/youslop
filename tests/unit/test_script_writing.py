@@ -56,7 +56,7 @@ def test_append_blank_and_undo_preserve_recordings(tmp_path, monkeypatch):
     asyncio.run(run())
 
 
-def test_writing_save_queue_and_binder(tmp_path):
+def test_writing_save_queue(tmp_path):
     gjs = shutil.which('gjs')
     if not gjs:
         pytest.skip('GJS unavailable')
@@ -79,9 +79,7 @@ const api=async(path,options)=>{
 scriptStats=()=>{};scriptLoadCheck=()=>{};paintScript=()=>{};scriptLocate=()=>{};
 const loop=new imports.gi.GLib.MainLoop(null,false);
 (async()=>{
- check(scriptPreference('binder',240)===240,'storage fallback'); scriptRemember('binder',300);
- check(scriptSection('a',true).join(',')==='a,b','whole chapter');
- check(scriptSection('c',false).join(',')==='c','single paragraph');
+ check(scriptPreference('agent',340)===340,'storage fallback'); scriptRemember('agent',300);
  scriptDrafts.set('a',{pid:'p',text:'New A'});scriptDrafts.set('b',{pid:'p',text:'New B'});
  check(await scriptFlush(),'flush succeeds');
  check(state.project.slides[0].narration==='New A'&&state.project.slides[1].narration==='New B','correct paragraph saves');
@@ -96,7 +94,7 @@ const loop=new imports.gi.GLib.MainLoop(null,false);
  check(!await scriptFlush()&&scriptNotes.has('a'),'failed note save retains draft');
  fail=false;check(await scriptFlush()&&!scriptNotes.size,'retry note saves');
  check(state.project.slides[0].note==='Private draft'&&state.project.slides[0].narration==='Retry me','note stays separate from narration');
- await scriptMoveChapter(scriptSection('a',true),'');
+ await scriptMoveChapter(['a','b'],'');
  const move=calls.at(-1);
  check(move.path.endsWith('/sections')&&move.op==='move'&&move.ids.join(',')==='a,b'&&move.to===''&&move.version===state.project.updated_at,'atomic versioned section reorder');
  let release;
@@ -117,14 +115,11 @@ const loop=new imports.gi.GLib.MainLoop(null,false);
  await bound;
  check(calls.at(-1).path==='/api/projects/p/slides/a','queued write stays with its project');
  state.project=previousProject;
- const before=calls.length;
- scriptBinderKey({key:'j',target:{},currentTarget:{},preventDefault(){throw Error('typing intercepted');}},0);
- check(calls.length===before,'typing ignored by binder shortcuts');
  let prevented=false;
  const composing={key:'Enter',isComposing:true,preventDefault(){prevented=true;}};
  await scriptEditorKey(composing,'a');check(!prevented,'IME ignored');
  check(scriptVoice({take:{narration:'Old'}}).includes('out of date'),'recording text warning');
- print('writing save queue and binder passed');
+ print('writing save queue passed');
 })().catch(e=>{printerr(e.stack);imports.system.exit(1);}).finally(()=>loop.quit());loop.run();
 '''
     source = '\n'.join(Path('static/js/tabs/' + name).read_text() for name in ('script.js', 'script-writing.js'))
@@ -132,7 +127,7 @@ const loop=new imports.gi.GLib.MainLoop(null,false);
     script.write_text('const window={addEventListener(){}};\n' + source + '\n' + harness)
     result = subprocess.run([gjs, str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert 'writing save queue and binder passed' in result.stdout
+    assert 'writing save queue passed' in result.stdout
 
 
 def test_writing_snapshot_fixtures(tmp_path, monkeypatch):
@@ -148,38 +143,40 @@ def test_writing_snapshot_fixtures(tmp_path, monkeypatch):
     assert '#/p/psnapwritelong/script' in routes()
 
 
-def test_review_binder_rows_toolbar_and_caret(tmp_path):
+def test_page_shots_toolbar_and_caret(tmp_path):
     gjs = shutil.which('gjs')
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path('static/js/tabs/' + name).read_text() for name in
-                       ('script.js', 'script-writing.js', 'script-check.js'))
-    harness = r'''
+                       ('script.js', 'script-writing.js', 'script-check.js', 'script-agent.js'))
+    harness = r"""
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
-const esc=s=>String(s||''), fmtTime=String, isStage=()=>false;
-const pictureKind=()=> 'image', presenterPanel=()=>'';
+const esc=s=>String(s||''), fmtTime=String, isStage=()=>false, thumbUrl=()=>'/t.jpg';
+const pictureKind=()=> 'image', pictureKindLabel=()=>'Photo', presenterPanel=()=>'';
 const localStorage={getItem:()=>null,setItem(){}};
 const state={project:{id:'p',style:{format:'kenburns'},target_minutes:8,
- picture_runs:[['a'],['b','c'],['insert']],slides:[
- {id:'a',narration:'Single paragraph',word_count:2,chapter:'Opening',take:{duration:2,narration:'Single paragraph'}},
- {id:'b',narration:'Shared lead',word_count:2},
- {id:'c',narration:'Shared tail',word_count:2},
+ picture_runs:[['a'],['b'],['c'],['d'],['insert']],slides:[
+ {id:'a',narration:'Single paragraph',word_count:2,chapter:'Opening',visual_note:'Carrier',take:{duration:2,narration:'Single paragraph'}},
+ {id:'b',narration:'Shared lead',word_count:2,visual_note:'Engraving'},
+ {id:'c',narration:'Shared tail',word_count:2,visual_note:'Engraving'},
+ {id:'d',narration:'Forced break',word_count:2,visual_note:'Engraving',picture_mode:'new'},
  {id:'insert',narration:'',word_count:0,insert:{kind:'card',seconds:4,text:'Title'}}]}};
 const body={}, tools={}, toolbar={children:[],replaceChildren(el){this.children=[el];}};
 const layout={classList:{toggle(){}},style:{setProperty(){}}};
-const $=s=>s==='#tabbody'?body:s==='#script-toolbar'?toolbar:s==='.script-tools'?tools:s==='.script-layout'?layout:{};
+const stub={checked:false,hidden:true,setAttribute(){},classList:{toggle(){}},style:{setProperty(){}}};
+const $=s=>s==='#tabbody'?body:s==='#script-toolbar'?toolbar:s==='.script-tools'?tools:s==='.script-layout'?layout:stub;
 scriptCurrent=sid=>{scriptActive=sid;};scriptLoadCheck=()=>{};
 paintScript();paintScript();
 check(toolbar.children.length===1&&toolbar.children[0]===tools,'repaint replaces shared toolbar controls');
-const html=body.innerHTML, binder=scriptBinder(state.project);
-check((binder.match(/class="binder-shot"/g)||[]).length===1,'only shared shot has a separate heading');
-check((binder.match(/class="binder-row/g)||[]).length===4,'one navigable row per paragraph or insert');
-const single=binder.match(/<div class="binder-row binder-single-shot" data-binder-sid="a"[\s\S]*?<\/details><\/div>/)[0];
-check(single.includes('SHOT 1')&&single.includes('Single paragraph')&&single.includes('data-binder-count>2')&&
- single.includes('Has take')&&single.includes('Paragraph actions')&&single.includes("scriptDrag(event,'a')"),'single shot keeps number, label, count, mic, menu and drag');
-check(scriptSection('b','shot').join(',')==='b,c','shared shot drag retains both paragraphs');
-for(const sid of ['a','b','c'])check(html.includes(`data-para="${sid}" contenteditable="plaintext-only"`),'stable editable selector '+sid);
-check(!html.includes('data-para="insert"'),'insert stays non-editable');
+const html=body.innerHTML;
+check(!html.includes('script-binder')&&!html.includes('Filter binder'),'no binder');
+check(scriptRuns(state.project).map(r=>r.map(s=>s.id).join('+')).join(',')==='a,b+c,d,insert','shots follow description, forced breaks and inserts');
+check((html.match(/data-script-shot=/g)||[]).length===4&&html.includes('SHOT 2')&&html.includes('Engraving'),'one section per shot with its description');
+check(html.includes('Merge with shot above')&&html.includes('id="script-pane-agent"')&&html.includes('id="script-pane-check"'),'merge control and agent/check panel');
+check(html.includes('data-panel="desc:b"')&&html.includes('data-panel="facts:b"')&&html.includes('data-panel="para:c"'),'description, facts and paragraph panels');
+for(const sid of ['a','b','c','d'])check(html.includes(`data-para="${sid}" contenteditable="plaintext-only"`),'stable editable selector '+sid);
+check(!html.includes('data-para="insert"')&&html.split('data-sid="insert"')[1].includes('saveChapter'),'insert stays non-editable and keeps its chapter');
+check(!/\bprompt\(|\bconfirm\(/.test(Function.prototype.toString.call(scriptAgentSend)+scriptAgentApply+scriptNewShot+scriptMergeShot),'agent and shot gestures use no native dialogs');
 let focused, caret, scrolled;
 const selection={removeAllRanges(){caret=null;},addRange(range){caret=range;}};
 window.getSelection=()=>selection;
@@ -193,20 +190,19 @@ const cards=state.project.slides.map(s=>{
 });
 const document={querySelectorAll:sel=>sel==='.script-card'?cards:[],createRange:()=>({
  selectNodeContents(node){this.node=node;},collapse(start){this.start=start;}})};
-const click=single.match(/onclick="([^"]+)"/)[1];
-const event={target:{closest:()=>null}};
-eval(click);
-check(focused===cards[0].text&&caret.node===focused&&caret.start&&scriptActive==='a','binder click sets caret in narration');
-check(!cards[0].unit.hidden&&!cards[0].shot.hidden&&scrolled==='a','click reveals and scrolls paragraph');
+const head=html.split('data-script-shot="b"')[1].match(/class="script-shot-select" onclick="([^"]+)"/)[1];
+eval(head);
+check(focused===cards[1].text&&caret.node===focused&&caret.start&&scriptActive==='b','shot header puts the caret in its first paragraph');
+check(!cards[1].unit.hidden&&!cards[1].shot.hidden&&scrolled==='b','header reveals and scrolls paragraph');
 scriptWorkspaceKey({key:'ArrowDown',ctrlKey:true,preventDefault(){}});
-check(focused===cards[1].text&&caret.node===focused&&scriptActive==='b','next shortcut sets caret');
+check(focused===cards[2].text&&scriptActive==='c','next shortcut sets caret');
 scriptWorkspaceKey({key:'ArrowUp',metaKey:true,preventDefault(){}});
-check(focused===cards[0].text&&caret.node===focused,'previous shortcut sets caret');
-scriptLocate('insert');check(focused===cards[3].link,'insert navigation keeps Edit link reachable');
-print('review binder, toolbar and caret passed');
-'''
-    script = tmp_path / 'review-writing.js'
+check(focused===cards[1].text,'previous shortcut sets caret');
+scriptLocate('insert');check(focused===cards[4].link,'insert navigation keeps Edit link reachable');
+print('page shots, toolbar and caret passed');
+"""
+    script = tmp_path / 'page-writing.js'
     script.write_text('const window={addEventListener(){}};\n' + source + '\n' + harness)
     result = subprocess.run([gjs, str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert 'review binder, toolbar and caret passed' in result.stdout
+    assert 'page shots, toolbar and caret passed' in result.stdout

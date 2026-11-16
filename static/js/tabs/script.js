@@ -34,80 +34,86 @@ function paintScript() {
     return;
   }
   const stage = isStage(p.style.format), vflags = p.visual_flags || {}, runs = scriptRuns(p);
+  const chapters = p.slides.filter(s => s.chapter), facts = p.research?.facts || [];
   let html = `<div class="script-workspace" onkeydown="scriptWorkspaceKey(event)"><div class="script-tools">
-    <button class="btn sm script-binder-toggle" onclick="$('.script-layout').classList.toggle('binder-open')">Binder</button>
+    ${chapters.length ? `<label class="sr-only" for="script-jump">Jump to chapter</label>
+      <select id="script-jump" class="script-jump" onchange="if (this.value) scriptLocate(this.value); this.selectedIndex = 0">
+      <option value="">Jump to chapter…</option>${chapters.map((s, i) => `<option value="${s.id}">${i + 1} · ${esc(s.chapter)}</option>`).join('')}</select>` : ''}
+    <button class="btn sm" onclick="scriptOpenFind()">Find</button>
     <button class="btn sm" onclick="regenScript()">Rewrite script</button>
     ${p.has_source ? `<span class="pill">${esc(p.fidelity)} import</span>
       <button class="btn sm" onclick="reimport('${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}')">Re-split as ${p.fidelity === 'faithful' ? 'adapted' : 'faithful'}</button>
       <button class="btn sm ghost" onclick="reimport('')">Re-split again</button>` : ''}
     <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
-    <button class="btn sm" onclick="scriptOpenFind()">Find</button>
     <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list for the shoot</a>
+    <span class="spacer"></span>
+    <button class="btn sm" id="script-facts-toggle" aria-pressed="false" aria-controls="script-facts" onclick="scriptToggleFacts()">All facts · ${facts.length}</button>
+    <button class="btn sm" onclick="scriptFocus()">Focus</button>
     </div><div id="script-find" hidden><label>Find in script <input type="search" oninput="scriptFind(this.value)"></label>
     <button class="btn sm ghost" onclick="scriptFind(''); this.previousElementSibling.querySelector('input').value=''; this.parentElement.hidden=true">Close find</button>
     <span id="script-find-count" class="mono" role="status"></span></div><div id="chapter-proposals"></div>
     <div class="script-layout">
-    <nav class="script-binder" aria-label="Script binder">${scriptBinder(p)}</nav>
-    <div class="script-splitter" role="separator" tabindex="0" aria-label="Binder width" aria-orientation="vertical" onpointerdown="scriptResize(event,'binder')" onkeydown="scriptResizeKey(event,'binder')"></div>
+    <aside class="script-agent" aria-label="Script agent">${scriptAgentPanel(p, stage && Object.keys(vflags).length ? castChangedNote(Object.values(vflags).filter(f => f.level === 'warn').length, Object.keys(vflags).length - Object.values(vflags).filter(f => f.level === 'warn').length) : '')}</aside>
+    <div class="script-splitter" role="separator" tabindex="0" aria-label="Agent panel width" aria-orientation="vertical" onpointerdown="scriptResize(event,'agent')" onkeydown="scriptResizeKey(event,'agent')"></div>
     <section class="script-main" aria-label="Script document"><div class="script-page">`;
+  let seconds = 0, chapterNo = 0, paragraph = 0;
   runs.forEach((run, shot) => {
-    const lead = run[0];
-    html += `${lead.chapter ? `<h2 class="script-chapter">${esc(lead.chapter)}</h2>` : ''}<section class="script-shot" data-script-shot="${lead.id}">
-      ${scriptShotHeader(p, lead, shot)}`;
-    run.forEach(s => {
+    const lead = run[0], start = seconds;
+    run.forEach(s => { seconds += scriptSeconds(s); });
+    if (lead.chapter) html += `<h2 class="script-chapter" data-chapter="${lead.id}"><span class="mono">Chapter ${++chapterNo}</span> ${esc(lead.chapter)}</h2>`;
+    else if (shot) html += `<div class="script-shot-break">${scriptCanMerge(run, runs[shot - 1])
+      ? `<button class="btn xs ghost" onclick="scriptMergeShot('${lead.id}')">Merge with shot above</button>` : ''}</div>`;
+    html += `<section class="script-shot" data-script-shot="${lead.id}" aria-label="Shot ${shot + 1}">
+      ${scriptShotHeader(p, run, shot, start, seconds)}${scriptShotDescription(p, lead, shot)}`;
+    run.forEach((s, k) => {
       const i = p.slides.indexOf(s);
       html += `<div class="script-unit" data-index="${i}">
-        <article class="script-card" data-sid="${s.id}" tabindex="-1" onfocusin="scriptCurrent('${s.id}')" aria-label="Paragraph ${i + 1}">`;
+        <article class="script-card" data-sid="${s.id}" tabindex="-1" onfocusin="scriptCurrent('${s.id}')" aria-label="${s.insert?.kind ? 'Insert' : 'Paragraph ' + (paragraph + 1)}">`;
       if (s.insert?.kind) {
-        html += `<strong>Insert · ${esc(s.insert.kind)} · ${s.insert.seconds.toFixed(1)} s</strong>
+        html += `<div class="script-gutter"></div><div class="script-body"><strong>Insert · ${esc(s.insert.kind)} · ${s.insert.seconds.toFixed(1)} s</strong>
           <p>${esc(s.insert.text || s.insert.block || s.insert.asset_id || s.insert.source_id || '')}</p>
-          <a class="btn sm" href="#/p/${p.id}/edit">Edit in timeline</a>`;
+          <a class="btn sm" href="#/p/${p.id}/edit">Edit in timeline</a>
+          <details class="script-insert-chapter"><summary>Chapter</summary><label>Chapter name<input value="${esc(s.chapter)}" onblur="saveChapter('${s.id}',this.value)"></label></details></div>`;
       } else {
-        html += `<div class="script-text" data-para="${s.id}" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Narration, paragraph ${i + 1}"
+        const n = ++paragraph;
+        html += `<div class="script-gutter"><span class="mono script-para-number">${n}</span>
+          <details class="script-para-menu"><summary aria-label="Paragraph ${n} actions">⋯</summary><div class="script-menu">
+            <button class="btn sm ghost" data-toggle="para:${s.id}" aria-expanded="${scriptOpen.has('para:' + s.id)}" onclick="scriptToggle('para:${s.id}'); this.closest('details').open=false">Title, chapter and note</button>
+            <button class="btn sm ghost" onclick="scriptAgentRewrite('${s.id}', ${n}); this.closest('details').open=false">Ask the agent to rewrite</button>
+            ${k ? `<button class="btn sm ghost" onclick="scriptNewShot('${s.id}')">Start a new shot here</button>` : ''}
+            <button class="btn sm ghost" onclick="splitSlide('${s.id}')">Split</button>
+            <button class="btn sm ghost" onclick="startChapter('${s.id}')">Start a chapter</button>
+            <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button>
+          </div></details></div>
+          <div class="script-body"><div class="script-text" data-para="${s.id}" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Narration, paragraph ${n}"
           oninput="scriptInput(this,'${s.id}')" oncompositionstart="scriptComposing=true; clearTimeout(scriptTimer)" oncompositionend="scriptComposing=false; scriptInput(this,'${s.id}')" onfocus="scriptSaveCaret(this,'${s.id}')" onkeyup="scriptSaveCaret(this,'${s.id}')" onmouseup="scriptSaveCaret(this,'${s.id}')" onblur="scriptSaveCaret(this,'${s.id}'); scriptFlush()" onpaste="scriptPaste(event)" onkeydown="scriptEditorKey(event,'${s.id}')">${esc(scriptDrafts.get(s.id)?.text ?? s.narration)}</div>
-          <span class="script-voice mono">${scriptVoice(s)}</span>`;
+          <span class="script-voice mono">${scriptVoice(s)}</span>
+          ${scriptParagraphDetails(p, s)}</div>`;
       }
       html += `</article></div>`;
     });
-    html += '</section>';
+    html += `<div class="script-shot-facts" data-panel="facts:${lead.id}" ${scriptOpen.has('facts:' + lead.id) ? '' : 'hidden'}></div></section>`;
   });
-  html += `</div></section><div class="script-splitter" role="separator" tabindex="0" aria-label="Inspector width" aria-orientation="vertical" onpointerdown="scriptResize(event,'inspector')" onkeydown="scriptResizeKey(event,'inspector')"></div>
-    <aside class="script-check" aria-label="Paragraph inspector">`;
-  p.slides.forEach(s => {
-    html += `<div data-script-inspector="${s.id}" hidden><h2 class="kicker">${s.insert?.kind ? 'Insert' : 'Paragraph'} · ${p.slides.indexOf(s) + 1}</h2>`;
-    html += `${scriptDetail('title', 'Title and chapter', `<label>Lower-third text<input value="${esc(s.title)}" onblur="scriptSave('${s.id}',{title:this.value})"></label>
-        <label>Chapter name<input value="${esc(s.chapter)}" onblur="saveChapter('${s.id}',this.value)"></label>
-        ${s.chapter ? `<button class="btn sm ghost" onclick="saveChapter('${s.id}','')">Remove chapter</button>` : ''}`)}`;
-    if (!s.insert?.kind) html += `${scriptDetail('findings', 'Findings', `<div data-findings="${s.id}"></div>
-        ${p.has_source && p.fidelity === 'faithful' ? '' : `<button class="btn sm ghost" data-style-slide="${s.id}" hidden onclick="smoothFlaggedLines('${s.id}',this)">Smooth flagged lines</button>`}
-        <div class="script-style-proposal" data-style-proposal="${s.id}" aria-live="polite"></div>`)}
-      <div class="script-footer"><span class="mono script-word-count" data-script-count="${s.id}">${s.word_count} words</span>
-        <button class="btn sm ghost" onclick="rewrite('${s.id}')">Rewrite</button><button class="btn sm ghost" onclick="splitSlide('${s.id}')">Split</button>
-        <button class="btn sm ghost" onclick="startChapter('${s.id}')">Start a chapter</button>
-        ${s.duplicate_of ? '<span class="pill">Duplicate paragraph</span>' : ''}
-        <label><input type="checkbox" ${s.on_camera ? 'checked' : ''} onchange="scriptCamera('${s.id}',this.checked)"> On camera</label>
-        <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button></div>`;
-    if (!s.insert?.kind) html += scriptDetail('notes', 'Notes · private', `<label for="script-note-${s.id}">Private paragraph note</label>
-      <textarea id="script-note-${s.id}" oninput="scriptNoteInput(this,'${s.id}')" onblur="scriptFlush()">${esc(scriptNotes.get(s.id)?.text ?? s.note ?? '')}</textarea>`);
-    html += '</div>';
-  });
-  const nWarn = Object.values(vflags).filter(f => f.level === 'warn').length;
-  if (stage && Object.keys(vflags).length) html += castChangedNote(nWarn, Object.keys(vflags).length - nWarn);
-  html += `${sourcesPanel(p.research || {})}
-    ${p.research?.facts?.length ? '<button class="btn sm ghost" onclick="runFactcheck()">Check facts</button>' : ''}
-    ${p.has_source && p.fidelity === 'faithful' ? '' : '<button class="btn sm" data-style-all disabled onclick="smoothFlaggedLines(null,this)">Smooth flagged lines</button>'}
-    ${scriptDetail('check', 'Check · words only', '<div id="script-check-results" role="status">Loading check…</div>')}
-    <details class="script-camera"><summary>On camera / presenter</summary>${presenterPanel(p)}</details></aside></div>
+  html += `<p class="script-keys mono">Enter at the end: new paragraph · Ctrl+Enter: new shot from this paragraph · Ctrl+↑/↓: previous or next paragraph</p>
+    </div></section>
+    <aside class="script-facts" id="script-facts" aria-label="All facts" hidden>
+    <div class="script-facts-head"><h2 class="kicker">All facts</h2><button class="btn sm ghost" aria-label="Close all facts" onclick="scriptToggleFacts(false)">Close</button></div>
+    ${sourcesPanel(p.research || {})}
+    ${facts.length ? '<button class="btn sm ghost" onclick="runFactcheck()">Check facts</button>' : ''}</aside></div>
     <div class="script-status"><span class="mono script-summary"></span><span class="mono" id="script-current-count"></span>
     <span class="mono" id="script-save-status" role="status">Saved</span><button class="btn sm" onclick="scriptFlush()">Save</button>
-    <button class="btn sm" onclick="scriptFocus()">Focus mode</button><label><input type="checkbox" id="script-typewriter" onchange="scriptRemember('typewriter',this.checked)"> Typewriter scrolling</label></div></div>`;
+    <label><input type="checkbox" id="script-typewriter" onchange="scriptRemember('typewriter',this.checked)"> Typewriter scrolling</label></div></div>`;
   $('#tabbody').innerHTML = html;
   const toolbar = $('#script-toolbar');
   if (toolbar) toolbar.replaceChildren($('.script-tools'));
   const layout = $('.script-layout');
-  for (const pane of ['binder', 'inspector']) scriptWidth(pane, scriptPreference(pane, pane === 'binder' ? 240 : 340));
+  scriptWidth('agent', scriptPreference('agent', 340));
   layout.classList.toggle('script-focus', scriptPreference('focus', false));
   $('#script-typewriter').checked = scriptPreference('typewriter', false);
+  scriptToggleFacts(scriptPreference('all-facts', false));
+  scriptAgentTab(scriptPreference('agent-tab', 'agent'));
+  scriptAgentPaint();
+  scriptOpen.forEach(key => { if (key.startsWith('facts:')) scriptRenderShotFacts(key.slice(6)); });
   scriptCurrent(p.slides.some(s => s.id === scriptActive) ? scriptActive : p.slides[0].id);
   scriptLoadCheck();
 }
@@ -117,7 +123,7 @@ function paintScript() {
 // unset, has an empty dossier; bin notes can still appear.
 function sourcesPanel(research) {
   const facts = research.facts || [];
-  return `<details id="script-sources" ${scriptPreference('facts', true) ? 'open' : ''} ontoggle="scriptRemember('facts',this.open)" style="margin-bottom:16px">
+  return `<details id="script-sources" open style="margin-bottom:16px">
     <summary style="cursor:pointer;font-weight:600">
       Facts and sources — ${facts.length} researched fact${facts.length === 1 ? '' : 's'}
       ${research.source_count ? `from ${research.source_count} page(s)` : ''}
