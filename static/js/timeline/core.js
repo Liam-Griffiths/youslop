@@ -124,6 +124,8 @@ async function tlMount() {
     <div id="tl-hover" class="mono tl-note" aria-live="off">Hover over the timeline for time and item.</div>
     <div class="tl-scroll" aria-label="Timeline lanes" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
     <button type="button" class="btn sm ghost" id="tl-layer-add">+ Layer</button>
+    <button type="button" class="btn sm ghost" id="tl-layer-suggest">Suggest layers</button>
+    <div id="tl-layer-proposal" class="tl-fix-proposal"></div>
     <details class="tl-check"><summary id="tl-check-summary">Check</summary>
       <div class="tl-problems" id="tl-problems"></div></details>
     <details class="tl-review"><summary>Review</summary>

@@ -893,6 +893,8 @@ class Project:
     graphics: list[dict] = field(default_factory=list)  # Create: HTML graphics and their versions
     hide_in_render: bool = False     # preview eyes affect export only when opted in
     layers: list[Layer] = field(default_factory=list)  # empty -> derive, never auto-persist
+    layer_defaults: dict = field(default_factory=dict)  # role-wide derived placement
+    layer_proposal: dict = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)
     channel_id: str = ""
     use_intro: bool = True
@@ -1013,6 +1015,8 @@ class Project:
             "bin": [item.to_dict() for item in self.bin],
             "graphics": deepcopy(self.graphics),
             "layers": [layer.to_dict() for layer in self.layers],
+            "layer_proposal": deepcopy(self.layer_proposal),
+            "layer_defaults": deepcopy(self.layer_defaults),
             "hide_in_render": self.hide_in_render,
             "labels": list(self.labels),
             "id": self.id,
@@ -1145,7 +1149,7 @@ class Project:
         outro = OutroSpec(**{k: v for k, v in (d.get("outro") or {}).items()
                              if k in OutroSpec.__dataclass_fields__})
         known = ({f for f in cls.__dataclass_fields__}
-                 - {"clip", "style_kit", "blocks", "block_presets", "bin", "layers", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
+                 - {"clip", "style_kit", "blocks", "block_presets", "bin", "layers", "layer_proposal", "layer_defaults", "frame", "slides", "shot_list", "sponsors", "style", "voice", "presenter", "thumb", "narrator",
                     "intro", "outro"})
         base = {k: v for k, v in d.items() if k in known}
         base["prefer_public_domain"] = d.get("prefer_public_domain", d.get("example", False)) is True
@@ -1157,6 +1161,8 @@ class Project:
             block_presets=deepcopy(d.get("block_presets") or []),
             bin=[BinItem.from_dict(item) for item in (d.get("bin") or [])],
             layers=[Layer.from_dict(item) for item in (d.get("layers") or [])],
+            layer_proposal=deepcopy(d.get("layer_proposal") or {}),
+            layer_defaults=deepcopy(d.get("layer_defaults") or {}),
             slides=[Slide.from_dict(s) for s in d.get("slides", [])],
             shot_list=[PlannedShot.from_dict(s) for s in (d.get("shot_list") or [])],
             sponsors=[SponsorSlot.from_dict(s) for s in (d.get("sponsors") or [])],

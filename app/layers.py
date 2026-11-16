@@ -114,7 +114,7 @@ def rows(project, timeline=None):
     by_id = {row['id']: row for row in result}
     for role, spans in items.items():
         for item in spans:
-            layer = resolve(layers, role, item.get('layer', ''))
+            layer = resolve(layers, role, item.get('layer') or project.layer_defaults.get(role, ''))
             by_id[layer.id]['items'].append(dict(item, layer=layer.id))
     return result
 
@@ -176,16 +176,16 @@ class Visibility(frozenset):
         if ids:
             import hashlib, json
             tokens.add('resolve:' + hashlib.sha1(json.dumps(
-                [(t.id, t.role) for t in tracks] + [project.music_layer]).encode()).hexdigest()[:12])
+                [(t.id, t.role) for t in tracks] + [project.music_layer, project.layer_defaults]).encode()).hexdigest()[:12])
         obj = super().__new__(cls, tokens)
-        obj.tracks, obj.ids = tracks, ids
+        obj.tracks, obj.ids, obj.defaults = tracks, ids, project.layer_defaults
         return obj
 
     def __reduce__(self):
-        return (_restore_visibility, (tuple(self), self.tracks, self.ids))
+        return (_restore_visibility, (tuple(self), self.tracks, self.ids, self.defaults))
 
     def item(self, role, ident=''):
-        track = resolve(self.tracks, role, ident)
+        track = resolve(self.tracks, role, ident or self.defaults.get(role, ''))
         return bool(track and track.id in self.ids)
 
     def __contains__(self, role):
@@ -194,9 +194,9 @@ class Visibility(frozenset):
         return self.item(role)
 
 
-def _restore_visibility(tokens, tracks, ids):
+def _restore_visibility(tokens, tracks, ids, defaults):
     obj = frozenset.__new__(Visibility, tokens)
-    obj.tracks, obj.ids = tracks, ids
+    obj.tracks, obj.ids, obj.defaults = tracks, ids, defaults
     return obj
 
 
@@ -206,9 +206,13 @@ def visibility(project, requested=(), *, final=False):
 
 def visible_stings(project, stings, hide):
     hide = visibility(project, hide)
-    return {role: entry for role, entry in stings.items() if not hide.item('stings',
-        getattr(getattr(entry[1], '_spec', entry[1]),
-                'music_layer' if role == 'intro' else 'sting_layer', ''))}
+    return {role: entry for role, entry in stings.items()
+            if not hide.item('stings', sting_layer(project, role, entry[1]))}
+
+
+def sting_layer(project, role, spec):
+    return project.layer_defaults.get('stings:' + role) or getattr(
+        getattr(spec, '_spec', spec), 'music_layer' if role == 'intro' else 'sting_layer', '')
 
 
 def patch_flags(project, ident, patch):
@@ -232,6 +236,13 @@ def patch_flags(project, ident, patch):
 
 def _bindings(project):
     """Stored references, including dormant items that aren't timeline spans."""
+    items = role_items(project)
+    for role in LAYER_ROLES:
+        if items[role] or role in project.layer_defaults:
+            yield role, project.layer_defaults, role
+    for role in ('intro', 'outro'):
+        if 'stings:' + role in project.layer_defaults:
+            yield 'stings', project.layer_defaults, 'stings:' + role
     for slide in project.slides:
         for item in slide.overlays:
             yield 'graphics', item, 'layer'
@@ -252,13 +263,20 @@ def _bindings(project):
 def manage(project, payload):
     """One structural edit, persisted atomically by the caller with one undo."""
     from .edits import EditError
+    if payload.get('op') in {'apply_proposal', 'dismiss_proposal'}:
+        from .layer_proposals import decide
+        return decide(project, payload)
     tracks = [Layer.from_dict(row) for row in rows(project)]
     op = payload.get('op')
     source = next((t for t in tracks if t.id == payload.get('id')), None)
     if op in {'duplicate', 'delete'} and source is None:
         raise EditError('No such layer.', 404)
     # Resolve legacy/default assignments before changing the first track.
-    bindings = [(owner, key, resolve(tracks, role, owner.get(key, '')))
+    for row in rows(project):
+        if row['role'] == 'stings':
+            for item in row['items']:
+                project.layer_defaults.setdefault('stings:' + item['id'], row['id'])
+    bindings = [(owner, key, resolve(tracks, role, owner.get(key) or project.layer_defaults.get(role, '')))
                 for role, owner, key in _bindings(project)]
     if op in {'add', 'duplicate'}:
         try:
@@ -274,14 +292,40 @@ def manage(project, payload):
         tracks.append(new)
     elif op == 'move_item':
         target = next((t for t in tracks if t.id == payload.get('to')), None)
-        if not target or target.role != 'graphics':
-            raise EditError('Choose a graphics layer.')
+        role = payload.get('role', 'graphics')
+        if not target or target.role != role or role in {'pictures', 'voice'}:
+            raise EditError('Choose another layer of the same supported role.')
+        candidates = [r for r in rows(project) if r['role'] == role]
+        current = next((r for r in candidates if any(i['id'] == payload.get('item')
+            and i.get('sid', '') == payload.get('sid', '') for i in r['items'])), None)
+        if current is None:
+            raise EditError('Item changed; select it again.', 409)
+        require_unlocked(project, role, current['id'])
+        require_unlocked(project, role, target.id)
         slide = next((s for s in project.slides if s.id == payload.get('sid')), None)
-        item = next((o for o in slide.overlays if o.get('id') == payload.get('item')), None) if slide else None
-        if item is None:
-            raise EditError('Graphic changed; select it again.', 409)
-        item['layer'] = target.id
-        bindings = []  # Keep this explicit move rather than pinning its old assignment.
+        if role == 'graphics':
+            next(o for o in slide.overlays if o.get('id') == payload['item'])['layer'] = target.id
+        elif role == 'titles':
+            slide.title_layer = target.id
+        elif role == 'cues':
+            from . import cuts, kinds
+            from copy import deepcopy
+            fmt = kinds.kind_for(project, slide)
+            cues = deepcopy(cuts.cues_for(cuts.BY_KEY[fmt], slide))
+            index = next(i['cue'] for r in candidates for i in r['items'] if i['id'] == payload['item'])
+            cues[index]['layer'] = target.id
+            slide.cues[fmt] = cues  # Materialize automatic cues, preserving on/at.
+        elif role == 'music':
+            project.music_layer = target.id
+        elif role == 'stings':
+            project.layer_defaults['stings:' + payload['item']] = target.id
+        else:
+            # Captions, chapters, sponsors and notes have role-wide ownership.
+            for row in candidates:
+                if row['items']:
+                    require_unlocked(project, role, row['id'])
+            project.layer_defaults[role] = target.id
+        bindings = []
     elif op == 'reorder':
         ids = payload.get('ids')
         if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids) or sorted(ids) != sorted(t.id for t in tracks):
@@ -297,20 +341,18 @@ def manage(project, payload):
         target = next((t for t in tracks if t.id == payload.get('move_to') and
                        t.role == source.role and t.id != source.id), None)
         occupied = any(row['items'] for row in rows(project) if row['id'] == source.id)
-        occupied |= any(track and track.id == source.id for _, _, track in bindings)
+        occupied |= any(track and track.id == source.id for owner, _, track in bindings
+                        if owner is not project.layer_defaults)
         if occupied and target is None:
             raise EditError('Move items to another layer of the same role before deleting.')
         if occupied and target.locked:
             raise LockedLayerError(_locked_message(target))
         for owner, key, track in bindings:
             if track and track.id == source.id:
-                owner[key] = target.id
-        # Roles without individual references resolve to their first remaining track.
-        if occupied and (source.role not in {'graphics', 'titles', 'music', 'stings'}
-                         or source.role == 'stings' and project.channel_id):
-            tracks.remove(target)
-            tracks.insert(tracks.index(source), target)
-            target.order = source.order
+                if target:
+                    owner[key] = target.id
+                else:
+                    owner.pop(key, None)  # An empty track's default is only metadata.
         tracks.remove(source)
     else:
         raise EditError('Unknown layer operation.')
@@ -329,7 +371,7 @@ def require_unlocked(project, role, ident=''):
     """Preflight only the role(s) an operation changes, including external writes."""
     tracks = effective(project, items={})
     for kind in (role,) if isinstance(role, str) else role:
-        track = resolve(tracks, kind, ident)
+        track = resolve(tracks, kind, ident or project.layer_defaults.get(kind, ''))
         if track and track.locked:
             raise LockedLayerError(_locked_message(track))
 
@@ -358,7 +400,7 @@ def assert_unlocked(before, after):
     def contents(raw, tracks, layer):
         role, result = layer.role, []
         def belongs(ident=''):
-            track = resolve(tracks, role, ident)
+            track = resolve(tracks, role, ident or raw.get('layer_defaults', {}).get(role, ''))
             return track and track.id == layer.id
         for slide in raw['slides']:
             sid = slide['id']

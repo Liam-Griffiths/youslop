@@ -23,6 +23,34 @@ function tlLayerReorder(id, before) {
 
 function tlWireLayerManager(track) {
   $('#tl-layer-add').onclick = () => tlLayerDialog();
+  const suggest = $('#tl-layer-suggest'), proposal = $('#tl-layer-proposal');
+  if (suggest) suggest.onclick = async () => {
+    const pid = TL.pid;
+    suggest.disabled = true;
+    try {
+      const result = await api(`/api/projects/${pid}/layers/suggest`, {method:'POST'});
+      if (TL.pid === pid) watchJob(result.job, 'suggest layers');
+    } catch (error) { tlMsg(error.message); }
+    finally { suggest.disabled = false; }
+  };
+  if (proposal) {
+    const plan = state.project.layer_proposal;
+    proposal.hidden = !plan?.id;
+    proposal.innerHTML = plan?.id ? `<h3>Proposed layers</h3>
+      ${(() => {
+        // Apply replaces layers whose role the proposal covers and keeps the rest.
+        const roles = new Set(plan.entries.map(e => e.role)), now = TL.data.project_layers || [];
+        const replaced = now.filter(r => roles.has(r.role)).map(r => r.name), kept = now.filter(r => !roles.has(r.role)).map(r => r.name);
+        return `<p class="mono">${replaced.length ? `<del>${esc(replaced.join(', '))}</del> → ` : ''}<ins>${esc(plan.entries.map(e => e.name).join(', '))}</ins>${kept.length ? `<br>Kept: ${esc(kept.join(', '))}` : ''}</p>`;
+      })()}
+      ${plan.entries.map(e => `<p><strong>${esc(e.name)}</strong> · ${esc(e.role)}<br>${esc(e.why)}</p>`).join('')}
+      <button type="button" class="btn sm light" data-apply>Apply</button>
+      <button type="button" class="btn sm ghost" data-dismiss>Dismiss</button>` : '';
+    for (const [selector, op] of [['[data-apply]', 'apply_proposal'], ['[data-dismiss]', 'dismiss_proposal']]) {
+      const button = proposal.querySelector(selector);
+      if (button) button.onclick = () => tlLayerRequest({op, proposal:plan.id}, '', op === 'apply_proposal' ? 'apply layer proposal' : 'dismiss layer proposal');
+    }
+  }
   track.querySelectorAll('[data-manage]').forEach(button => {
     button.onpointerdown = e => e.stopPropagation();
     button.onclick = e => { e.stopPropagation(); tlLayerDialog(button.dataset.manage); };
@@ -116,13 +144,68 @@ function tlLayerDialog(id = '') {
   dialog.querySelector('#layer-name').focus();
 }
 
-function tlGraphicLayerSelect(sel, body) {
-  const rows = TL.data.project_layers.filter(row => row.role === 'graphics');
-  const current = rows.find(row => row.items.some(item => item.id === sel.id && item.sid === sel.sid));
+function tlGraphicLayerSelect(sel, body) { tlItemLayerSelect(sel, body); }
+
+function tlItemLayerSelect(sel, body) {
+  const current = TL.data.project_layers.find(row => row.items.some(item => item.id === sel.id && item.sid === sel.sid && item.kind === sel.kind));
+  if (!current || ['pictures', 'voice'].includes(current.role)) return;
+  const rows = TL.data.project_layers.filter(row => row.role === current.role);
+  const shared = ['captions', 'chapters', 'sponsors', 'notes'].includes(current.role);
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<label for="graphic-layer">Layer</label><select id="graphic-layer">${rows.map(row => `<option value="${esc(row.id)}" ${current?.id === row.id ? 'selected' : ''} ${row.locked ? 'disabled' : ''}>${esc(row.name)}${row.locked ? ' (locked)' : ''}</option>`).join('')}</select>`;
+  wrap.innerHTML = `<label for="item-layer">Layer${shared ? ' (all ' + esc(current.role) + ')' : ''}</label><select id="item-layer">${rows.map(row => `<option value="${esc(row.id)}" ${current.id === row.id ? 'selected' : ''} ${row.locked ? 'disabled' : ''}>${esc(row.name)}${row.locked ? ' (locked)' : ''}</option>`).join('')}</select>${shared ? '<p class="tl-note">These items move together.</p>' : ''}`;
+  wrap.querySelector('select').disabled = current.locked;
   wrap.querySelector('select').onchange = async e => {
-    if (!await tlLayerRequest({op:'move_item', sid:sel.sid, item:sel.id, to:e.target.value}, '', 'move graphic to layer')) e.target.value = current?.id;
+    if (!await tlLayerRequest({op:'move_item', role:current.role, sid:sel.sid, item:sel.id, to:e.target.value}, '', 'move ' + current.role + ' to layer')) e.target.value = current.id;
   };
   body.prepend(wrap);
+}
+
+// Classify the gesture before handing horizontal movement to timing controls.
+function tlWireLayerMoves() {
+  const track = $('#tl-track');
+  track.querySelectorAll('[data-layer]:not([data-layer="graphics"])').forEach(node => {
+    const original = node.onpointerdown;
+    node.onpointerdown = e => {
+      if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey || TL.drag || e.target.closest('.tl-resize')) return original?.(e);
+      const pid = TL.pid, sel = TL.data.layers[node.dataset.layer][+node.dataset.item];
+      const row = TL.data.project_layers.find(r => r.id === node.closest('[data-track]').dataset.track);
+      if (!row || !tlCanEdit([sel])) return;
+      e.stopPropagation();
+      let vertical = false;
+      const cleanup = () => {
+        document.removeEventListener('pointermove', move, true);
+        document.removeEventListener('pointerup', finish, true);
+        document.removeEventListener('pointercancel', cancel, true);
+        document.removeEventListener('keydown', key, true);
+        node.style.transform = ''; TL.drag = null;
+      };
+      const move = ev => {
+        const dx = ev.clientX-e.clientX, dy = ev.clientY-e.clientY;
+        if (!vertical && Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+        if (!vertical && Math.abs(dx) > Math.abs(dy)) {
+          cleanup(); original?.(e); node.onpointermove?.(ev); return;
+        }
+        if (!vertical) { tlPause(); tlSelect(sel); }
+        vertical = true; TL.drag = {layerMove:true};
+        node.style.transform = `translateY(${dy}px)`;
+        ev.preventDefault(); ev.stopImmediatePropagation();
+      };
+      const finish = ev => {
+        const destination = [...track.querySelectorAll('[data-track]')].find(lane => {
+          const r = lane.getBoundingClientRect(); return ev.clientY >= r.top && ev.clientY < r.bottom;
+        });
+        cleanup();
+        if (!vertical || TL.pid !== pid) return;
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        if (destination?.dataset.role === row.role && destination.dataset.track !== row.id)
+          tlLayerRequest({op:'move_item', role:row.role, sid:sel.sid, item:sel.id, to:destination.dataset.track}, '', 'move ' + row.role + ' to layer');
+      };
+      const cancel = () => cleanup();
+      const key = ev => { if (ev.key === 'Escape') { cleanup(); ev.preventDefault(); ev.stopImmediatePropagation(); } };
+      document.addEventListener('pointermove', move, true);
+      document.addEventListener('pointerup', finish, true);
+      document.addEventListener('pointercancel', cancel, true);
+      document.addEventListener('keydown', key, true);
+    };
+  });
 }

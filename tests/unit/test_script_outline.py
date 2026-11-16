@@ -106,6 +106,7 @@ check(state.project.slides.every(s=>s.chapter!=='One'),'display does not mutate 
 
 
 def test_board_writing_keeps_chapter_columns(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.llm.complete_json', lambda *a, **kw: [])
     from app import plan_board, script_gen
     monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
     from scripts.ui_snapshots import seed_outline

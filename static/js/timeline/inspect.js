@@ -77,7 +77,7 @@ function tlInspector() {
   if (sel.kind === 'overlay') { tlGraphicInspector(sel, body); return; }
   if (sel.kind === 'sponsor') {
     const slot = p.sponsors.find((s) => s.id === sel.id);
-    if (slot) { body.innerHTML = tlSponsorFields(slot); tlSponsorWire(slot); }
+    if (slot) { body.innerHTML = tlSponsorFields(slot); tlSponsorWire(slot); tlItemLayerSelect(sel, body); }
     return;
   }
   const slide = p.slides.find((s) => s.id === sel.sid);
@@ -158,6 +158,7 @@ function tlInspector() {
       if (e.key === 'Enter') { e.preventDefault(); send(); TL.host.focus(); }
     };
   });
+  tlItemLayerSelect(sel, body);
   const remove = body.querySelector('[data-remove]');
   if (remove) remove.onclick = () => tlInspectorSave({...sel}, 'remove', '', remove);
 }

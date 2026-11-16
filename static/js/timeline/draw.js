@@ -68,6 +68,7 @@ function tlDraw() {
   tlWireInserts();
   tlWireTrims();
   tlWireGraphics();
+  tlWireLayerMoves();
   tlSectionPaint();
   tlPaintProblems();
   tlPaintReview();

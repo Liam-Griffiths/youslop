@@ -78,6 +78,13 @@ def prepare_create(payload):
     return project, script
 
 def initialize(pid, payload, progress):
+    result = _initialize(pid, payload, progress)
+    from .layer_proposals import suggest
+    suggest(pid, progress)
+    return result
+
+
+def _initialize(pid, payload, progress):
     with store.lock_for(pid):
         p = store.load(pid)
         src = project_dir(p.id) / "source.txt"
@@ -129,6 +136,8 @@ def plan(pid, payload, progress):
         if only is None or only:
             media.gather(p, progress, only=only)
             store.save(p)
+    from .layer_proposals import suggest
+    suggest(pid, progress)
     return {"slides": len(p.slides)}
 
 

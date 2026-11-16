@@ -10,6 +10,7 @@ from app.schema import Project, Slide
 @pytest.fixture(autouse=True)
 def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
+    monkeypatch.setattr('app.llm.complete_json', lambda *a, **kw: [])
 
 
 def fixture():

@@ -126,4 +126,6 @@ def write(pid, progress):
         fresh.outline, fresh.slides, fresh.draft = outline, result, {}
         fresh.status = 'scripted'
         store.save(fresh)
+    from .layer_proposals import suggest
+    suggest(pid, progress)
     return {'slides': len(result)}

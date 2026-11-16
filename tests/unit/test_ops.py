@@ -15,7 +15,8 @@ def isolated(monkeypatch, tmp_path):
         pytest.fail('Unexpected LLM call')
     monkeypatch.setattr(script_gen, 'complete_json', forbidden)
     monkeypatch.setattr(research, 'complete_json', forbidden)
-    monkeypatch.setattr(ops.reviews.llm, 'complete_json', forbidden)
+    monkeypatch.setattr(ops.reviews.llm, 'complete_json', lambda prompt, **kw:
+        [] if prompt.startswith('Suggest 3–8 timeline layers.') else forbidden())
 
 
 def test_closed_loop(monkeypatch, capsys, project):

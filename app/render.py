@@ -2700,9 +2700,9 @@ def _layers(project, segs):
         seg = next(s for s in segs if s['type'] == role)
         from .intro import sting_window
         _, span, _ = sting_window(spec, seg['duration'])
+        from .layers import sting_layer
         add('stings', role, '', seg['start'], seg['start'] + span, path.name, 'sting',
-            layer=getattr(getattr(spec, '_spec', spec),
-                          'music_layer' if role == 'intro' else 'sting_layer', ''))
+            layer=sting_layer(project, role, spec))
     return layers
 
 

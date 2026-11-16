@@ -1410,6 +1410,13 @@ def manage_layers(pid: str, payload: dict = Body(...)) -> dict:
     return p.to_dict()
 
 
+@app.post('/api/projects/{pid}/layers/suggest')
+def suggest_layers(pid: str) -> dict:
+    from .layer_proposals import suggest
+    _load(pid)
+    return {'job': jobs.start('suggest layers', pid, lambda pr: suggest(pid, pr))}
+
+
 @app.patch('/api/projects/{pid}/layers/{ident:path}')
 def patch_layer_flags(pid: str, ident: str, payload: dict = Body(...)) -> dict:
     from . import layers
@@ -1865,6 +1872,8 @@ def reimport_script(pid: str, payload: dict = Body(default={})) -> dict:
             store.save(proj)
             media.gather(proj, progress)
             store.save(proj)
+        from .layer_proposals import suggest
+        suggest(pid, progress)
         return {"slides": len(proj.slides), "fidelity": fidelity}
 
     return {"job": jobs.start("re-import", pid, work)}

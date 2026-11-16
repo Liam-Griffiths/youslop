@@ -1052,6 +1052,10 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-layer-item.P0 { border-color: var(--bad); }
 .tl-layer-item.P1 { border-color: var(--accent); }
 .tl-layer-item.P2 { border-color: var(--cool); }
+#tl-layer-proposal { padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+#tl-layer-proposal del { color: var(--bad); }
+#tl-layer-proposal ins { color: var(--good); text-decoration: none; }
+#tl-layer-proposal [data-apply] { background: var(--ink); color: var(--bg); }
 .tl-layer-item:focus-visible, .tl-layer-label button:focus-visible { outline: 2px solid var(--cool); }
 .tl-layer-item[data-layer="titles"], .tl-layer-item[data-layer="sponsors"] { background: var(--accent-tint, var(--panel-2)); }
 .tl-track { padding-left: 104px; box-sizing: content-box; }
