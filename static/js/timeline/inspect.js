@@ -286,6 +286,7 @@ function tlEditText(sid) {
         <button class="btn sm ghost" id="tx-cancel">cancel</button>
         <button class="btn sm primary" id="tx-save">save</button>
       </div>
+      <label class="micro-label" for="tx-text">Narration</label>
       <textarea id="tx-text" rows="8" style="width:100%">${esc(s.narration)}</textarea>
       <label class="field" style="margin-top:10px"><span>On-screen title (optional)</span>
         <input type="text" id="tx-title" value="${esc(s.title)}"></label>

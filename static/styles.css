@@ -301,7 +301,6 @@ body:has(.jobs-live-status) .app-shell { padding-bottom: 48px; }
 .app-dialog label { display: block; margin-top: 16px; }
 .app-dialog input, .app-dialog textarea { width: 100%; margin-top: 8px; }
 .app-dialog-actions { justify-content: flex-end; flex-wrap: wrap; margin-top: 20px; }
-.studio-dialog :focus-visible, .jobs-strip-button:focus-visible, .tpl[role=button]:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .command-palette { width: min(560px, 90vw); }
 .command-palette label { display: block; margin-top: 16px; }
 #command-query { width: 100%; margin: 8px 0; }
@@ -337,7 +336,7 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 }
 .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .mono { font-size: 12.5px; }
-.micro, .kicker, .section-head h2, .mi-k, .tab, label.field > span, div.field > span {
+.micro, .micro-label, .kicker, .section-head h2, .mi-k, .tab, label.field > span, div.field > span {
   font-family: var(--ui); font-size: 11px; text-transform: uppercase;
   letter-spacing: .08em; color: var(--dim);
 }
@@ -371,7 +370,7 @@ label.field > span b { font-family: var(--mono); font-variant-numeric: tabular-n
 input[type=text], input[type=number], input[type=password], input[type=email],
 input[type=url], input[type=search], textarea, select {
   width: 100%; background: var(--field); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 9px 12px; outline: none; resize: vertical;
+  border-radius: var(--radius); padding: 9px 12px; resize: vertical;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--cool); }
 /* Native dropdown lists follow the app theme (owner: options were light on light). */
@@ -768,7 +767,6 @@ kbd {
 .error-details summary { cursor: pointer; }
 .error-details pre { user-select: text; white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 240px; overflow: auto; font-size: 12px; }
-.error-details summary:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .toast:has(button) { pointer-events: auto; }
 .toast button { margin-left: 12px; }
 .toast .error-details + button { margin: 10px 0 0; }
@@ -1081,11 +1079,9 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-input input, .tl-input select, #tl-kind { width:100%; min-height:34px; background-color:var(--bg); border:1px solid var(--line); border-radius:4px; }
 .tl-input input[type=number], .tl-input span { font-family:var(--mono); font-variant-numeric:tabular-nums; }
 .tl-input span { color:var(--dim); white-space:nowrap; }
-.tl-inspector :focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
 .tl-pic.sel { outline:2px solid var(--accent); outline-offset:-2px; }
 
 .tl-pic, .tl-para { text-align:left; color:var(--ink); padding:0; cursor:pointer; }
-.tl-track :focus-visible { outline:2px solid var(--cool); outline-offset:-2px; }
 
 /* Timeline layers share the picture ruler and explicit selection. */
 .tl-lane.tl-layer { height: 22px; border-top: 1px solid var(--line); }
@@ -1106,7 +1102,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 #tl-layer-proposal del { color: var(--bad); }
 #tl-layer-proposal ins { color: var(--good); text-decoration: none; }
 #tl-layer-proposal [data-apply] { background: var(--ink); color: var(--bg); }
-.tl-layer-item:focus-visible, .tl-layer-label button:focus-visible { outline: 2px solid var(--cool); }
 .tl-layer-item[data-layer="titles"], .tl-layer-item[data-layer="sponsors"] { background: var(--accent-tint, var(--panel-2)); }
 .tl-track { padding-left: 104px; box-sizing: content-box; }
 .tl-layer-label { left: 104px; transform: translateX(-104px); }
@@ -1269,7 +1264,6 @@ main:has(.script-layout, .shots-layout) .project-tools { padding: 0 20px; margin
 .script-tools [aria-pressed=true] { background: var(--accent-tint); border-color: var(--accent); }
 .script-layout { display: grid; grid-template-columns: var(--script-agent,340px) 6px minmax(0,1fr); height: max(360px, calc(100vh - 340px)); }
 .script-layout.facts-open { grid-template-columns: var(--script-agent,340px) 6px minmax(0,1fr) minmax(280px,360px); }
-.script-layout :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .script-splitter { background: var(--line); cursor: col-resize; touch-action: none; }
 .script-focus, .script-focus.facts-open { grid-template-columns: minmax(0,1fr); }
 .script-focus .script-agent, .script-focus .script-splitter, .script-focus .script-facts { display: none; }
@@ -1512,7 +1506,6 @@ main:has(.voice-studio) .project-tools { padding: 12px 20px 0; }
 .voice-take { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
 .voice-take.live { border-color: var(--accent); }
 .voice-take audio, .voice-take video { width: 100%; }
-.voice-studio :focus-visible, .mic-drawer :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .mic-drawer.modal { justify-content: flex-end; padding: 0; }
 .mic-drawer .mic-panel { width: min(900px, 100%); height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .voice-studio textarea { field-sizing: content; height: auto; min-height: 80px; }
@@ -1593,7 +1586,6 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .edit-workspace .tl-stage, .edit-workspace .tl-transport { max-width: 880px; margin-inline: auto; }
 .edit-workspace .tl-stage { background: var(--bg); border: 1px solid var(--line); }
 .tl-media-box { position: absolute; border: 2px solid var(--accent); z-index: 4; cursor: move; touch-action: none; box-sizing: border-box; }
-.tl-media-box:focus-visible, .tl-media-corner:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .tl-media-corner { position: absolute; width: 34px; height: 34px; min-height: 34px; padding: 10px; background: transparent; border: 0; }
 .tl-media-corner::after { content: ''; display: block; width: 10px; height: 10px; background: var(--panel); border: 1px solid var(--accent); }
 .tl-media-corner.nw, .tl-media-corner.ne { top: -17px; }
@@ -1817,7 +1809,6 @@ body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
 .block-card video { position:absolute; inset:12px; width:calc(100% - 24px); height:150px; background:var(--bg); }
 .block-detail dd { margin:4px 0 14px; color:var(--dim); }
 .block-detail img { height:auto; max-height:300px; }
-.blocks-browser :focus-visible,.block-detail :focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
 @media(max-width:700px) { .blocks-browser { grid-template-columns:minmax(0,1fr); } .blocks-filters { width:100%; } }
 .block-detail .block-meta { color: var(--dim); margin-top: 16px; line-height: 1.6; }
 .block-detail #block-trial label { display: block; margin-top: 8px; }
@@ -1861,7 +1852,6 @@ body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
 .channel-block-row small { display:block; color:var(--dim); }
 .channel-block-row pre { white-space:pre-wrap; overflow-wrap:anywhere; }
 .channel-block-row .row { flex-wrap:wrap; }
-.channel-blocks :focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
 
 /* Block preview uses the shared dialog and Instrument tokens. */
 #block-trial-image { width:100%; padding:0; border:1px solid var(--line); background:var(--bg); color:var(--ink); cursor:zoom-in; }
@@ -2133,7 +2123,6 @@ main:has(.home-layout) { max-width:1760px; }
 .theme-options [aria-pressed=true] { background: var(--raised); border-color: var(--cool); }
 #theme-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; }
 #theme-toggle svg { width: 16px; height: 16px; }
-.theme-options :focus-visible, #theme-toggle:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 
 /* Script corkboard: the page stays fixed; chapters and sources scroll inside it. */
 .plan-layout { flex-wrap: nowrap; height: max(320px, calc(100dvh - 290px)); overflow: hidden; }
@@ -2298,3 +2287,8 @@ main:has(.create-layout) .project-tools { padding:0 20px; margin:0; }
 @media (max-width: 1100px) { .edit-workspace .agent-open .tl-main, .edit-workspace .agent-open.sources-collapsed .tl-main { grid-template-columns: minmax(0, 1fr); } }
 .tl-agent .script-agent-input textarea { min-height: 36px; }
 .tl-agent .script-agent-chips .ghost { margin-left: auto; color: var(--dim); }
+
+/* Keyboard focus wins over selected-item outlines and editable-text resets.
+   Hidden colour inputs also outline their visible swatch above. */
+:root :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+.tl-track :focus-visible { outline-offset: -2px; }

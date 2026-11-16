@@ -1,9 +1,12 @@
 """UI harness contracts, deliberately independent of Chromium and sockets."""
 from pathlib import Path
+import json
+import shutil
+import subprocess
 
 import pytest
 
-from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_path, routes, seed
+from scripts.ui_snapshots import FIELD_LABEL_AUDIT, FORMATS, PROJECT_STAGES, console_error, output_path, routes, seed
 
 
 def test_routes_match_current_tabs_and_families():
@@ -124,3 +127,52 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
 def test_insert_snapshot_routes():
     assert '#/p/psnapinserts/edit' in routes()
     assert '#/p/psnapinserts/script' in routes()
+
+
+def test_field_label_audit(tmp_path):
+    """Execute the browser audit's naming decisions in GJS, without Chromium."""
+    runtime = shutil.which('gjs')
+    if not runtime:
+        pytest.skip('GJS unavailable')
+    fields = [
+        {'id': 'missing'},
+        {'id': 'placeholder', 'placeholder': 'Name'},
+        {'id': 'title', 'title': 'Name'},
+        {'id': 'blank', 'aria-label': '  ', 'labels': [' ']},
+        {'id': 'disabled', 'disabled': True},
+        {'id': 'broken-ref', 'aria-labelledby': 'absent empty'},
+        {'id': 'field-only-label', 'labels': [''], 'value': 'Not label text'},
+        {'id': 'explicit', 'labels': ['Name']},
+        {'id': 'wrapping', 'tag': 'TEXTAREA', 'labels': ['Narration']},
+        {'id': 'aria', 'tag': 'SELECT', 'aria-label': 'Voice'},
+        {'id': 'references', 'aria-labelledby': 'absent heading'},
+        {'id': 'offscreen', 'labels': ['Below the fold']},
+        {'id': 'hidden', 'type': 'hidden'},
+        {'id': 'closed-details', 'visible': False},
+        {'id': 'closed-dialog', 'visible': False},
+        {'id': 'hidden-ancestor', 'visible': False},
+        {'id': 'invisible', 'visible': False},
+        {'id': 'submit', 'type': 'submit'},
+        {'id': 'button', 'type': 'button'},
+        {'id': 'reset', 'type': 'reset'},
+    ]
+    harness = r'''
+const fields = FIXTURES.map(f => ({...f, tagName:f.tag || 'INPUT', type:f.type || 'text',
+  getAttribute:key => f[key] || null,
+  checkVisibility:options => {
+    if (!options.visibilityProperty) throw Error('Must check visibility:hidden');
+    return f.visible !== false;
+  },
+  labels:(f.labels || []).map(label => ({cloneNode:() => ({
+    textContent:label, querySelectorAll:() => [{remove(){}}]
+  })}))
+}));
+const document = {querySelectorAll:() => fields,
+  getElementById:id => ({heading:{textContent:'Voice'}, empty:{textContent:' '}}[id])};
+print(JSON.stringify(AUDIT));
+'''.replace('FIXTURES', json.dumps(fields)).replace('AUDIT', FIELD_LABEL_AUDIT)
+    script = tmp_path / 'field-labels.js'
+    script.write_text(harness)
+    result = subprocess.run([runtime, str(script)], text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [f'input#{f["id"]}' for f in fields[:7]]

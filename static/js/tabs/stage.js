@@ -119,7 +119,7 @@ async function paintCast() {
   const chapters = outline.sections || [];
   const planning = (p.jobs || []).some((j) => j.kind === 'brief' || j.kind === 'cast') && !subs.length;
   const used = new Set(subs.map((x) => x.model).filter(Boolean));
-  const roleSel = (x) => `<select onchange="castEdit('${x.id}', {role: this.value})" style="width:auto">
+  const roleSel = (x) => `<select aria-label="Role of ${esc(x.subject)}" onchange="castEdit('${x.id}', {role: this.value})" style="width:auto">
       ${['hero', 'comparison', 'supporting', 'cameo'].map((r) => `<option ${r === x.role ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
   const slot = (x) => {
     if (x.mode === 'photos') return `<span class="pill">photos and cards instead</span>
@@ -132,7 +132,7 @@ async function paintCast() {
       <button class="btn xs ghost" onclick="castEdit('${x.id}', {model: ''})">unlink</button>`;
     const spare = models.filter((mm) => !used.has(mm.id));
     return `<span class="pill warn">needs a model</span>
-      ${spare.length ? `<select onchange="if(this.value) castEdit('${x.id}', {model: this.value})" style="width:auto">
+      ${spare.length ? `<select aria-label="Model for ${esc(x.subject)}" onchange="if(this.value) castEdit('${x.id}', {model: this.value})" style="width:auto">
         <option value="">from the library…</option>${spare.map((mm) => `<option value="${mm.id}">${esc(mm.identity && mm.identity.name || mm.title)}</option>`).join('')}</select>` : ''}
       <label class="btn xs" style="cursor:pointer">upload .glb
         <input type="file" accept=".glb,model/gltf-binary" hidden onchange="uploadForSubject('${x.id}', this.files[0]);this.value=''"></label>
@@ -158,7 +158,7 @@ async function paintCast() {
       ${planning ? '<div class="empty-note">Planning the cast…</div>' : subs.map((x) => `
         <div class="cast-row">
           <div class="cast-head">
-            <input type="text" value="${esc(x.subject)}" onchange="castEdit('${x.id}', {subject: this.value})">
+            <input type="text" aria-label="Cast subject" value="${esc(x.subject)}" onchange="castEdit('${x.id}', {subject: this.value})">
             ${roleSel(x)}
             ${(x.chapters || []).map((c) => `<span class="pill" title="${esc((chapters[c] || {}).heading || '')}">ch ${c}</span>`).join('')}
             <div class="spacer"></div>
@@ -168,7 +168,7 @@ async function paintCast() {
           <div class="row cast-slot">${slot(x)}</div>
         </div>`).join('') || '<div class="empty-note">No subjects yet.</div>'}
       <div class="row" style="margin-top:12px">
-        <input type="text" id="newsubject" placeholder="add a subject, e.g. Concorde" style="flex:1;min-width:200px"
+        <input type="text" id="newsubject" aria-label="New subject" placeholder="add a subject, e.g. Concorde" style="flex:1;min-width:200px"
           onkeydown="if(event.key==='Enter') castAdd()">
         <button class="btn sm ghost" onclick="castAdd()">add</button>
         <button class="btn sm ghost" onclick="castPropose()" title="ask again; subjects with a model are kept">propose again</button>
@@ -307,7 +307,7 @@ async function openModelIntake(mid) {
 
   const regionsList = () => (draft.regions || []).map((r, i) => `
     <div class="row" style="gap:6px;margin-bottom:4px">
-      <input type="text" value="${esc(r.label)}" style="flex:1;min-width:0;${i === regionSel ? 'border-color:var(--region-select)' : ''}"
+      <input type="text" aria-label="Region ${i + 1} label" value="${esc(r.label)}" style="flex:1;min-width:0;${i === regionSel ? 'border-color:var(--region-select)' : ''}"
         oninput="miRegionLabel(${i}, this.value)" onfocus="miRegionSelect(${i})">
       <button class="btn xs ghost danger" onclick="miRegionDelete(${i})">\u00d7</button>
     </div>`).join('') || '<p class="mi-p">No regions yet.</p>';
@@ -454,11 +454,11 @@ async function openModelIntake(mid) {
     const sz = ctl ? ctl.size() : modelSize(live());
     const axis = draft.size_axis;
     $('#mi-side', wrap).innerHTML = `
-      <label class="mono mi-k">title</label>
+      <label class="mono mi-k" for="mi-title">title</label>
       <input type="text" id="mi-title" value="${esc(draft.title)}">
 
       <div class="mi-sec">
-        <div class="mi-h">What it is</div>
+        <label class="mi-h" for="mi-kind">What it is</label>
         <select id="mi-kind" style="width:100%;margin-bottom:8px">
           ${Object.entries((window.Stage3D && window.Stage3D.KINDS) || { object: 'Object' }).map(([k, label]) =>
             `<option value="${k}" ${k === kindNow() ? 'selected' : ''}>${esc(label)}${m.analysis && m.analysis.kind_auto === k ? '  (detected)' : ''}</option>`).join('')}
@@ -484,10 +484,10 @@ async function openModelIntake(mid) {
         <p class="mi-p">Files arrive at any scale. The grey figure is 1.8 m tall.
           Now: <b>${esc(sizeText(sz))}</b> <span class="mono" style="color:var(--ink-faint)">(width × height × length)</span></p>
         <div class="row">
-          <select id="mi-axis" style="width:auto">
+          <select id="mi-axis" aria-label="Size axis" style="width:auto">
             ${['width', 'length', 'height'].map((a) => `<option value="${a}" ${a === axis ? 'selected' : ''}>real ${a}</option>`).join('')}
           </select>
-          <input type="number" id="mi-metres" min="0.001" step="any" style="width:110px"
+          <input type="number" id="mi-metres" aria-label="Real size in metres" min="0.001" step="any" style="width:110px"
             value="${sz ? +sz[axis].toFixed(3) : ''}">
           <span class="mono">m</span>
           <button class="btn sm ghost" onclick="miApplySize()">apply</button>
@@ -502,7 +502,7 @@ async function openModelIntake(mid) {
         <div class="row">
           <label class="row" style="gap:6px"><input type="checkbox" id="mi-tinton" ${draft.tint ? 'checked' : ''}
             onchange="miTint()"> flat colour</label>
-          <input type="color" id="mi-tint" value="${esc(draft.tint || '#e8dcc2')}" oninput="miTint()"
+          <input type="color" id="mi-tint" aria-label="Model colour" value="${esc(draft.tint || '#e8dcc2')}" oninput="miTint()"
             ${draft.tint ? '' : 'disabled'}>
         </div>
       </div>
@@ -675,14 +675,14 @@ async function paintStage() {
             <div class="mi-p" style="margin:6px 0" title="${esc(s.narration)}">${esc(s.narration.slice(0, 160))}${s.narration.length > 160 ? '…' : ''}</div>
             <div class="mono" style="color:var(--ink-faint);margin-bottom:6px">${esc(s.visual_note)}</div>
             <div class="row" style="flex-wrap:wrap;gap:6px">
-              <select style="width:auto" onchange="stageEdit('${s.id}', {intent: {subjects: [this.value], part: ''}})">
+              <select aria-label="Shot subject" style="width:auto" onchange="stageEdit('${s.id}', {intent: {subjects: [this.value], part: ''}})">
                 ${subs.map((x) => `<option value="${x.id}" ${x.id === first ? 'selected' : ''}>${esc(x.subject)}</option>`).join('')}
               </select>
               ${(it.subjects || []).length > 1 ? `<span class="pill">+ ${(it.subjects || []).slice(1).map((id) => esc((subs.find((x) => x.id === id) || {}).subject || id)).join(', ')}</span>` : ''}
-              <select style="width:auto" onchange="stageEdit('${s.id}', {intent: {part: this.value}})">
+              <select aria-label="Subject part" style="width:auto" onchange="stageEdit('${s.id}', {intent: {part: this.value}})">
                 <option value="">whole</option>${parts.map((q) => `<option ${q === it.part ? 'selected' : ''}>${esc(q)}</option>`).join('')}
               </select>
-              ${['move', 'framing', 'side', 'join'].map((k) => `<select style="width:auto" title="${k}"
+              ${['move', 'framing', 'side', 'join'].map((k) => `<select aria-label="Shot ${k}" style="width:auto" title="${k}"
                 onchange="stageEdit('${s.id}', {intent: {${k}: this.value}})">${opt(k, it[k])}</select>`).join('')}
             </div>
             ${sol.flag || sol.error ? `<div class="mi-p" style="color:var(--warn);margin-top:6px">${esc(sol.error || sol.flag)}</div>` : ''}
@@ -732,7 +732,7 @@ async function openShot(sid) {
         <div class="empty-note" style="padding:60px">loading the scene…</div></div>
       <div class="row" style="margin-top:10px;gap:8px">
         <button class="btn sm" id="sh-play">play</button>
-        <input type="range" id="sh-seek" min="0" max="1000" value="0" style="flex:1">
+        <input type="range" id="sh-seek" aria-label="Shot preview position" min="0" max="1000" value="0" style="flex:1">
         <span class="mono" id="sh-t" style="width:80px;text-align:right">0.0 s</span>
       </div>
       <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">

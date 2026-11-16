@@ -28,8 +28,8 @@ async function renderLibraryManagement() {
           <button class="btn sm ghost" onclick="removeLibraryFolder('${f.id}')">remove</button>
         </div>`).join('') || `<div class="empty-note" style="padding:14px">no folders linked yet</div>`}
       <div class="row" style="margin-top:10px">
-        <input type="text" id="libfolderpath" placeholder="/path/to/your/photos"
-          style="flex:1;min-width:220px">
+        <label class="field" for="libfolderpath" style="flex:1;min-width:220px;margin:0"><span>Folder path</span>
+          <input type="text" id="libfolderpath" placeholder="/path/to/your/photos"></label>
         <button class="btn sm ghost" id="libfolderbrowse" onclick="browseForLibraryFolder()">browse…</button>
         <button class="btn sm primary" onclick="addLibraryFolder()">add folder</button>
       </div>
@@ -44,14 +44,18 @@ async function renderLibraryManagement() {
         <span class="mono" id="libfilename" style="color:var(--ink-faint)">no file chosen</span>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <input type="text" id="libtitle" placeholder="title" style="flex:1;min-width:200px">
-        <input type="text" id="libtags" placeholder="tags, comma separated" style="flex:1;min-width:200px">
+        <label class="field" for="libtitle" style="flex:1;min-width:200px;margin:0"><span>Title</span>
+          <input type="text" id="libtitle" placeholder="title"></label>
+        <label class="field" for="libtags" style="flex:1;min-width:200px;margin:0"><span>Tags</span>
+          <input type="text" id="libtags" placeholder="tags, comma separated"></label>
       </div>
       <div class="row" style="margin-bottom:12px">
-        <input type="text" id="libauthor" placeholder="author / photographer" style="flex:1;min-width:160px">
-        <input type="text" id="liblicense" placeholder="licence — e.g. “Storyblocks (Essentials)”"
-          style="flex:1;min-width:220px">
-        <input type="text" id="libsource" placeholder="source page (optional)" style="flex:1;min-width:220px">
+        <label class="field" for="libauthor" style="flex:1;min-width:160px;margin:0"><span>Author / photographer</span>
+          <input type="text" id="libauthor" placeholder="author / photographer"></label>
+        <label class="field" for="liblicense" style="flex:1;min-width:220px;margin:0"><span>Licence</span>
+          <input type="text" id="liblicense" placeholder="licence — e.g. “Storyblocks (Essentials)”"></label>
+        <label class="field" for="libsource" style="flex:1;min-width:220px;margin:0"><span>Source page (optional)</span>
+          <input type="text" id="libsource" placeholder="source page (optional)"></label>
       </div>
       <button class="btn sm" id="libadd" onclick="uploadLibraryAsset()">add to library</button>
     </div>
@@ -142,14 +146,18 @@ function editLibraryAsset(id) {
         <button class="btn sm ghost" id="ecancel">cancel</button>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <input type="text" id="etitle" placeholder="title" style="flex:1;min-width:200px" value="${esc(a.title)}">
-        <input type="text" id="etags" placeholder="tags, comma separated" style="flex:1;min-width:200px"
-          value="${esc(a.tags.join(', '))}">
+        <label class="field" for="etitle" style="flex:1;min-width:200px;margin:0"><span>Title</span>
+          <input type="text" id="etitle" placeholder="title" value="${esc(a.title)}"></label>
+        <label class="field" for="etags" style="flex:1;min-width:200px;margin:0"><span>Tags</span>
+          <input type="text" id="etags" placeholder="tags, comma separated" value="${esc(a.tags.join(', '))}"></label>
       </div>
       <div class="row" style="margin-bottom:14px">
-        <input type="text" id="eauthor" placeholder="author" style="flex:1;min-width:160px" value="${esc(a.author)}">
-        <input type="text" id="elicense" placeholder="licence" style="flex:1;min-width:200px" value="${esc(a.license)}">
-        <input type="text" id="esource" placeholder="source page" style="flex:1;min-width:200px" value="${esc(a.source_page)}">
+        <label class="field" for="eauthor" style="flex:1;min-width:160px;margin:0"><span>Author</span>
+          <input type="text" id="eauthor" placeholder="author" value="${esc(a.author)}"></label>
+        <label class="field" for="elicense" style="flex:1;min-width:200px;margin:0"><span>Licence</span>
+          <input type="text" id="elicense" placeholder="licence" value="${esc(a.license)}"></label>
+        <label class="field" for="esource" style="flex:1;min-width:200px;margin:0"><span>Source page</span>
+          <input type="text" id="esource" placeholder="source page" value="${esc(a.source_page)}"></label>
       </div>
       <button class="btn sm primary" id="esave">save</button>
     </div>`;
@@ -247,10 +255,10 @@ function openMediaSearch(sid, query = null, onPick = null, onClose = null) {
         <button class="btn sm ghost" id="pdone">done</button>
       </div>
       <div class="row" style="margin-bottom:12px">
-        <input type="text" id="pq" style="flex:1;min-width:220px"
+        <input type="text" id="pq" aria-label="Search archives" style="flex:1;min-width:220px"
           placeholder="search the archives — e.g. “Grytviken whaling station 1914”"
           value="${esc(term)}">
-        <select id="pkind" style="width:auto">
+        <select id="pkind" aria-label="Archive type" style="width:auto">
           <option value="image" ${s.prefer_kind === 'video' ? '' : 'selected'}>photos</option>
           <option value="video" ${s.prefer_kind === 'video' ? 'selected' : ''}>clips</option>
           <option value="reaction">reaction gif 😄</option>
@@ -361,19 +369,19 @@ function openMapPicker(sid) {
         <button class="btn sm ghost" id="mclose">cancel</button>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <input type="text" id="mjump" style="flex:1;min-width:220px"
+        <input type="text" id="mjump" aria-label="Map place" style="flex:1;min-width:220px"
           placeholder="jump to a place — e.g. “Ziguinchor, Senegal”" value="${esc(place)}">
         <button class="btn sm ghost" id="mjumpgo">jump</button>
       </div>
       <div id="mmap" style="height:380px;border-radius:8px;overflow:hidden;margin-bottom:10px"></div>
       <div class="row" style="margin-bottom:10px">
-        <select id="mkind" style="width:auto">
+        <select id="mkind" aria-label="Map type" style="width:auto">
           <option value="satellite">satellite</option>
           <option value="hybrid">satellite + labels</option>
           <option value="terrain">terrain</option>
           <option value="street">street map</option>
         </select>
-        <select id="mstyle" style="width:auto">
+        <select id="mstyle" aria-label="Map camera move" style="width:auto">
           <option value="still">still</option>
           <option value="establishing">establishing shot — smooth zoom in</option>
           <option value="reveal">reveal — pull back to context</option>
@@ -539,7 +547,7 @@ function openCueEditor(sid) {
           <div class="mono" style="color:var(--ink-faint);margin-bottom:8px">
             kinds: ${esc(info.kinds)}. Each cue's <b>on</b> is the words it lands on.
             ${written.length ? '' : '<br>Nothing written yet — this is drawn from the narration.'}</div>
-          <textarea id="ccues" rows="16" spellcheck="false"
+          <textarea id="ccues" aria-label="Paragraph cues as JSON" rows="16" spellcheck="false"
             style="font-family:monospace;font-size:12px"
             placeholder='[{"kind": "...", "on": "first words it lands on"}]'
           >${esc(written.length ? JSON.stringify(written, null, 2) : '')}</textarea>
@@ -756,7 +764,7 @@ function openDiagramEditor(sid) {
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
           <div class="panel" style="background:var(--editor-panel);margin:0 0 16px;padding:14px">
             <div class="row" style="margin-bottom:8px">
-              <span style="font-size:13px">✨ Ask Claude to draw this</span>
+              <label class="micro-label" for="daskwhat">Ask Claude to draw this</label>
             </div>
             <textarea id="daskwhat" rows="2" style="margin-bottom:8px"
               placeholder="Leave blank to let Claude read the paragraph and pick a shape, or steer it — “as a cycle”, “put the database in the middle”…"></textarea>
@@ -791,7 +799,7 @@ Edge cache > Your server : miss ~"
         </div>
         <div style="align-self:start">
           <img id="dprev" style="width:100%;border-radius:8px;background:#2f3843">
-          <textarea id="dspec" rows="12" class="mono" style="display:none;margin-top:10px"
+          <textarea id="dspec" aria-label="Diagram spec as JSON" rows="12" class="mono" style="display:none;margin-top:10px"
             placeholder="paste a spec here"></textarea>
           <div class="row" style="margin-top:8px;display:none" id="dspecrow">
             <button class="btn sm ghost" id="dspecload">load that spec</button>
@@ -976,8 +984,8 @@ function openCustomDesigner(opts) {
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
           <div class="panel" style="background:var(--editor-panel);margin:0 0 16px;padding:14px">
             <div class="row" style="margin-bottom:8px">
-              <span style="font-size:13px">✨ ${styleMode
-                ? 'Describe the look you want' : 'Ask Claude to design this slide'}</span>
+              <label class="micro-label" for="caskwhat">${styleMode
+                ? 'Describe the look you want' : 'Ask Claude to design this slide'}</label>
             </div>
             <textarea id="caskwhat" rows="2" style="margin-bottom:8px"
               placeholder="${styleMode
@@ -1021,7 +1029,7 @@ function openCustomDesigner(opts) {
             ${styleMode
               ? 'Image slots stay empty here — each paragraph fetches its own picture when the video is written.'
               : 'Image elements only show here once they’ve been fetched — press “use it on this slide” to pull them from the archives.'}</div>
-          <textarea id="cspec" rows="14" class="mono" style="display:none;margin-top:10px"></textarea>
+          <textarea id="cspec" aria-label="Slide spec as JSON" rows="14" class="mono" style="display:none;margin-top:10px"></textarea>
           <div class="row" style="margin-top:8px;display:none" id="cspecrow">
             <button class="btn sm ghost" id="cspecload">load that spec</button>
           </div>
@@ -1060,26 +1068,26 @@ function openCustomDesigner(opts) {
           <button class="btn xs ghost danger" data-del="${i}">remove</button>
         </div>
         ${el.type === 'text' ? `
-          <textarea rows="2" data-f="text" data-i="${i}"
+          <textarea aria-label="Element ${i + 1} text" rows="2" data-f="text" data-i="${i}"
             style="margin-bottom:8px">${esc(el.text || '')}</textarea>
           <div class="row" style="gap:6px;margin-bottom:8px">
-            <select data-f="size" data-i="${i}" style="width:auto">
+            <select aria-label="Element ${i + 1} text size" data-f="size" data-i="${i}" style="width:auto">
               ${customOptions(CUSTOM_SIZES, el.size)}
             </select>
-            <select data-f="font" data-i="${i}" style="width:auto">
+            <select aria-label="Element ${i + 1} font" data-f="font" data-i="${i}" style="width:auto">
               ${customOptions(CUSTOM_FONTS, el.font)}
             </select>
-            <select data-f="align" data-i="${i}" style="width:auto">
+            <select aria-label="Element ${i + 1} text alignment" data-f="align" data-i="${i}" style="width:auto">
               ${customOptions(['left', 'center', 'right'], el.align)}
             </select>
-            <input type="text" data-f="color" data-i="${i}" value="${esc(el.color || '#ffffff')}"
+            <input type="text" aria-label="Element ${i + 1} text colour" data-f="color" data-i="${i}" value="${esc(el.color || '#ffffff')}"
               style="width:90px">
           </div>` : ''}
         ${el.type === 'image' ? `
-          <input type="text" data-f="query" data-i="${i}" placeholder="what to search the archives for"
+          <input type="text" aria-label="Element ${i + 1} archive search" data-f="query" data-i="${i}" placeholder="what to search the archives for"
             value="${esc(el.query || '')}" style="margin-bottom:8px">
           <div class="row" style="gap:6px;margin-bottom:8px">
-            <select data-f="fit" data-i="${i}" style="width:auto">
+            <select aria-label="Element ${i + 1} picture fit" data-f="fit" data-i="${i}" style="width:auto">
               ${customOptions(['cover', 'contain'], el.fit)}
             </select>
             <span class="mono" style="color:var(--ink-faint)">
@@ -1087,12 +1095,12 @@ function openCustomDesigner(opts) {
           </div>` : ''}
         ${['rect', 'circle', 'line'].includes(el.type) ? `
           <div class="row" style="gap:6px;margin-bottom:8px">
-            <input type="text" data-f="color" data-i="${i}" value="${esc(el.color || '#E8C36A')}"
+            <input type="text" aria-label="Element ${i + 1} shape colour" data-f="color" data-i="${i}" value="${esc(el.color || '#E8C36A')}"
               style="width:90px">
             <label class="row" style="gap:4px;cursor:pointer">
               <input type="checkbox" data-f="fill" data-i="${i}" style="width:auto"
                 ${el.fill ? 'checked' : ''}><span class="mono">filled</span></label>
-            <input type="number" data-f="stroke" data-i="${i}" value="${el.stroke || 4}"
+            <input type="number" aria-label="Element ${i + 1} stroke width" data-f="stroke" data-i="${i}" value="${el.stroke || 4}"
               min="1" max="20" style="width:70px" title="stroke width">
           </div>` : ''}
         <div class="row" style="gap:6px">
@@ -1105,7 +1113,7 @@ function openCustomDesigner(opts) {
           <label class="mono" style="color:var(--ink-faint)">order
             <input type="number" data-f="order" data-i="${i}" value="${el.order || 0}"
               min="0" max="20" style="width:66px"></label>
-          <select data-f="anim" data-i="${i}" style="width:auto">
+          <select aria-label="Element ${i + 1} animation" data-f="anim" data-i="${i}" style="width:auto">
             ${customOptions(CUSTOM_ANIMS, el.anim)}
           </select>
           <label class="mono" style="color:var(--ink-faint)">opacity

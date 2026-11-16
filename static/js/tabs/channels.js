@@ -836,7 +836,7 @@ function paintChannelSetup() {
                          </div>`
                       : `<div class="cast-empty" onclick="changeCastImage(${i})"
                               style="cursor:pointer">no portrait — find one</div>`}
-                <input type="text" value="${esc(s)}" onchange="editCast(${i}, this.value)">
+                <input type="text" aria-label="Cast member ${i + 1}" value="${esc(s)}" onchange="editCast(${i}, this.value)">
                 <div class="cast-acts">
                   <button class="btn xs ghost" onclick="changeCastImage(${i})"
                     title="choose a different portrait">change</button>
@@ -852,7 +852,7 @@ function paintChannelSetup() {
             }).join('')}
       </div>
       <div class="row" style="margin-top:12px">
-        <input type="text" id="newcast" placeholder="add someone — e.g. “Ada Lovelace portrait”"
+        <input type="text" id="newcast" aria-label="New cast member" placeholder="add someone — e.g. “Ada Lovelace portrait”"
           style="flex:1" onkeydown="if(event.key==='Enter')addCast(this)">
         <button class="btn sm" onclick="addCast(document.getElementById('newcast'))">add</button>
       </div>`}
@@ -944,7 +944,7 @@ async function changeCastImage(i) {
         <button class="btn sm ghost" id="pclose">close</button>
       </div>
       <div class="row" style="margin-bottom:12px">
-        <input type="text" id="pq" value="${esc(subject)}" style="flex:1"
+        <input type="text" id="pq" aria-label="Search portraits" value="${esc(subject)}" style="flex:1"
           placeholder="search for something else">
         <button class="btn sm" id="pgo">search</button>
       </div>

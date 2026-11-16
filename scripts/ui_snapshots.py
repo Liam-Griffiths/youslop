@@ -25,6 +25,27 @@ DASHBOARD_PROJECTS = ('psnapnew', 'psnaphalf', 'psnapdone')
 DASHBOARD_SIZES = ((1280, 720), (1920, 1080))
 PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
 
+# A placeholder/title is a hint, not a label. Native .labels covers both
+# for/id and wrapping labels; ARIA names support compact contextual controls.
+# checkVisibility includes fields below the fold, but excludes closed details,
+# closed dialogs, hidden ancestors and visibility:hidden.
+FIELD_LABEL_AUDIT = r'''(() => {
+  const text = label => {
+    const copy = label.cloneNode(true);
+    copy.querySelectorAll('input, select, textarea').forEach(el => el.remove());
+    return copy.textContent.trim();
+  };
+  return [...document.querySelectorAll('input, select, textarea')].filter(el => {
+    if (!el.checkVisibility({visibilityProperty: true}) ||
+        ['hidden', 'button', 'submit', 'reset', 'image'].includes(el.type)) return false;
+    if ((el.getAttribute('aria-label') || '').trim()) return false;
+    const refs = (el.getAttribute('aria-labelledby') || '').trim().split(/\s+/);
+    if (refs.some(id => document.getElementById(id)?.textContent.trim())) return false;
+    return ![...(el.labels || [])].some(label => text(label));
+  }).map(el => el.tagName.toLowerCase() + (el.id ? '#' + el.id :
+    '[type=' + el.type + ']' + (el.name ? '[name=' + el.name + ']' : '')));
+})()'''
+
 # Run before route-specific dialogs/interactions. Closed details and dialogs
 # have no visible boxes; actions below the fold still count as page actions.
 PROJECT_CHROME_CHECK = r'''(() => {
@@ -446,6 +467,18 @@ def capture(base, out, theme="dark"):
                     activity[0] = time.monotonic()
 
         cdp.on_event = event  # Error sink survives the CDP queue's 200-event bound.
+
+        def audit_labels(context=''):
+            missing = _evaluate(cdp, session, FIELD_LABEL_AUDIT)['result']['value']
+            for field in missing:
+                message = f'{current[0]}{context}: unlabelled field {field}'
+                if message not in errors:
+                    errors.append(message)
+
+        def screenshot():
+            audit_labels()
+            return cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
+
         cdp.send('Network.enable', session=session)
         cdp.send('Emulation.setEmulatedMedia', {'features': [
             {'name': 'prefers-color-scheme', 'value': theme}]}, session)
@@ -493,7 +526,7 @@ def capture(base, out, theme="dark"):
                         if(LX.selected.size!==4)throw Error('Library range selection failed');}
                       return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
                     })()""")
-                    png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                    png = screenshot()
                     path = out / f'library--{phase}--1280.png'
                     path.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(path),'t':0,'why':f'Library {phase} at 1280×720'})
@@ -524,7 +557,7 @@ def capture(base, out, theme="dark"):
                   window.scrollTo(0, 0);
                   return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
                 })()""")
-                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                png = screenshot()
                 path = out / 'settings--top--1280.png'
                 path.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(path),'t':0,'why':'Settings top, LM Studio, at 1280×720'})
@@ -553,7 +586,7 @@ def capture(base, out, theme="dark"):
                     throw Error('Settings navigation or save bar overlaps fixed chrome');
                   return true;
                 })()""")
-                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                png = screenshot()
                 path = out / 'settings--speech--1280.png'
                 path.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(path),'t':0,'why':'Settings scrolled to Speech with live jobs at 1280×720'})
@@ -789,11 +822,31 @@ def capture(base, out, theme="dark"):
                 _evaluate(cdp, session, "(async () => { tlGraphicBlocks = await api('/api/blocks?overlay=1'); tlSelectKind('overlay'); return true; })()")
             if route == '#/p/psnapdone/dashboard':
                 _evaluate(cdp, session, "binView.selected=['bin0']; binPanel(); true")
-            png = cdp.send('Page.captureScreenshot', {'format': 'png', 'fromSurface': True}, session)
+            png = screenshot()
             path = output_path(out, route)
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            # Audit controls behind menus and secondary panels as well as the
+            # default route. Opening these surfaces never submits an action.
+            if route == '#/library':
+                _evaluate(cdp, session, "document.querySelector('.library-tools').open=true; true")
+                audit_labels(' (add file)')
+                _evaluate(cdp, session, "editLibraryAsset(state.library.items[0].id); true")
+                audit_labels(' (edit asset)')
+                _evaluate(cdp, session, "document.querySelector('#ecancel').click(); document.querySelector('.library-tools').open=false; true")
+            if route == '#/channels/csnapshot/setup':
+                _evaluate(cdp, session, 'themeBuilderOpen().then(() => true)')
+                audit_labels(' (theme builder)')
+                _evaluate(cdp, session, "document.querySelector('.theme-builder').close(); true")
+            if route == '#/p/psnapkenburns/edit':
+                _evaluate(cdp, session, "tlSide('agent'); document.querySelectorAll('.tl-menu').forEach(d=>d.open=true); true")
+                audit_labels(' (agent and Edit menus)')
+                _evaluate(cdp, session, "tlSide('inspect'); document.querySelectorAll('.tl-menu').forEach(d=>d.open=false); true")
+            if route == '#/':
+                _evaluate(cdp, session, "window.__labelPrompt=appPrompt({title:'Label audit', label:'Name'}); true")
+                audit_labels(' (shared dialog)')
+                _evaluate(cdp, session, "document.querySelector('dialog.app-dialog').close(); window.__labelPrompt.then(() => true)")
             if route in [f'#/p/psnapkenburns/{stage}' for stage in PROJECT_STAGES]:
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
@@ -807,7 +860,7 @@ def capture(base, out, theme="dark"):
                 })()''')
                 _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
                 _evaluate(cdp, session, PROJECT_CHROME_CHECK)
-                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                png = screenshot()
                 extra = path.with_stem(f'{path.stem}--1280x720')
                 extra.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(extra), 't':0, 'why':f'{route} at 1280×720 with long title and channel'})
@@ -822,7 +875,7 @@ def capture(base, out, theme="dark"):
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
                 _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
-                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                png = screenshot()
                 path = path.with_name(path.stem + '--1280.png')
                 path.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(path), 't':0, 'why':route + ' at 1280×720'})
@@ -888,7 +941,7 @@ def capture(base, out, theme="dark"):
                           document.querySelector('.script-main').scrollTop = 0;
                           return true;
                         })()""")
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     extra = path.with_stem(f'{path.stem}--{phase}')
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':phase})
@@ -899,7 +952,7 @@ def capture(base, out, theme="dark"):
                     cdp.send('Emulation.setDeviceMetricsOverride', {
                         'width': width, 'height': height, 'deviceScaleFactor': 1, 'mobile': False}, session)
                     _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     extra = path.with_stem(f'{path.stem}--{width}x{height}')
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':f'{route} at {width}×{height}'})
@@ -910,7 +963,7 @@ def capture(base, out, theme="dark"):
                     ('bin-multi-select', "binSelect('bin0', {}, binView.items.map(i=>i.id)); binSelect('bin3', {shiftKey:true}, binView.items.map(i=>i.id)); true"),
                     ('bin-vocabulary', "document.querySelector('#bin-edit-labels').click(); true")]:
                     _evaluate(cdp, session, expression)
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     extra = path.with_stem(f'{path.stem}--{phase}')
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':phase})
@@ -938,7 +991,7 @@ def capture(base, out, theme="dark"):
                         throw Error('Candidates cannot be scrolled into view');
                       return true;
                     })()""")
-                    png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                    png = screenshot()
                     extra = out / f'p--psnapinspector--candidates--{width}.png'
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':f'Picture candidates at {width}×{height}'})
@@ -981,7 +1034,7 @@ def capture(base, out, theme="dark"):
                           }
                           return true;
                         })()""")
-                        png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                        png = screenshot()
                         extra = out / f'p--psnapinserts--sources-{tab.lower()}--{width}.png'
                         extra.write_bytes(base64.b64decode(png['data']))
                         rows.append({'path':str(extra), 't':0, 'why':f'{tab} at {width}×{height}'})
@@ -989,7 +1042,7 @@ def capture(base, out, theme="dark"):
                         expression = "openEditPictureTools(); true" if tool == 'picture' else "openEditStageTools(" + json.dumps(tool) + ")"
                         _evaluate(cdp, session, expression)
                         _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-                        png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                        png = screenshot()
                         extra = out / f'p--psnapinserts--tools-{tool}--{width}.png'
                         extra.write_bytes(base64.b64decode(png['data']))
                         rows.append({'path':str(extra), 't':0, 'why':f'{tool} tools at {width}×{height}'})
@@ -1002,7 +1055,7 @@ def capture(base, out, theme="dark"):
                     ('insert-drop', "tlInsertGhost(tlInsertNearest(), 4); true"),
                     ('insert-menu', "tlInsertClearGhost(); tlInsertMenu(); true")]:
                     _evaluate(cdp, session, expression)
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     extra = out / f'p--psnapinserts--{phase}.png'
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':phase})
@@ -1021,7 +1074,7 @@ def capture(base, out, theme="dark"):
                         cdp.send('Input.dispatchMouseEvent', {'type':'mouseMoved',
                                  'x':point['x']-60, 'y':point['y'], 'buttons':1}, session)
                         _evaluate(cdp, session, "if (!document.querySelector('.tl-section-ghost')) throw Error('Section ghost missing'); true")
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     path = out / f'p--psnapkenburns--{phase}.png'
                     path.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(path), 't':0, 'why':phase})
@@ -1039,7 +1092,7 @@ def capture(base, out, theme="dark"):
                       if (!tlSectionClipboard) throw Error('Clipboard missing');
                       return true;
                     })()""")
-                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    png = screenshot()
                     path = out / f'p--psnapkenburns--{phase}.png'
                     path.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(path), 't':0, 'why':phase})
@@ -1059,7 +1112,7 @@ def capture(base, out, theme="dark"):
                   if (r.project.style.format !== 'casefile' || r.project.style.accent !== kit.look.accent) throw Error('Home kit not applied');
                   await openStylePicker('home'); return true;
                 })()""")
-                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                png = screenshot()
                 picker = out / 'home--styles.png'; picker.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(picker),'t':0,'why':'Grouped style picker'})
                 _evaluate(cdp, session, "designStyleBlock(); new Promise(r => setTimeout(() => r(true),500))")
@@ -1067,7 +1120,7 @@ def capture(base, out, theme="dark"):
             if route == '#/blocks/number_slam':
                 _evaluate(cdp, session, "document.querySelector('#block-expand').focus(); document.querySelector('#block-expand').click(); true")
                 _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                png = screenshot()
                 player = out / 'blocks--number_slam--player.png'
                 player.write_bytes(base64.b64decode(png['data']))
                 rows.append({'path':str(player), 't':0, 'why':'Expanded block player'})
@@ -1143,7 +1196,7 @@ def main(argv=None):
                 compare(rows, args.compare)
             for error in errors:
                 print(error, file=sys.stderr)
-            print(f'{len(rows)} screenshots; {len(errors)} console errors; {time.monotonic() - started:.2f}s')
+            print(f'{len(rows)} screenshots; {len(errors)} console/label errors; {time.monotonic() - started:.2f}s')
             return int(bool(errors))
         except (OSError, RuntimeError) as exc:
             print(f'UI snapshots failed: {exc}', file=sys.stderr)

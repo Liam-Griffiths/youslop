@@ -336,11 +336,11 @@ function openVoiceLibrary() {
         <button class="btn sm ghost" id="vlclose">close</button>
       </div>
       <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <input type="text" id="vlq" placeholder="deep, documentary, british, calm…" style="flex:1;min-width:200px">
-        <select id="vlgender"><option value="">any voice</option><option value="male">male</option>
+        <input type="text" id="vlq" aria-label="Search voices" placeholder="deep, documentary, british, calm…" style="flex:1;min-width:200px">
+        <select id="vlgender" aria-label="Voice gender"><option value="">any voice</option><option value="male">male</option>
           <option value="female">female</option><option value="neutral">neutral</option></select>
-        <select id="vluse"><option value="narrative_story">Narration &amp; story</option></select>
-        <input type="text" id="vlaccent" placeholder="accent (american, british…)" style="width:190px">
+        <select id="vluse" aria-label="Voice use"><option value="narrative_story">Narration &amp; story</option></select>
+        <input type="text" id="vlaccent" aria-label="Voice accent" placeholder="accent (american, british…)" style="width:190px">
         <button class="btn sm primary" id="vlgo">search</button>
       </div>
       <div id="vlresults" class="voice-grid" style="max-height:60vh;overflow:auto">
@@ -561,9 +561,9 @@ function pronunciationPanel(p) {
     ${lex.length ? `<div class="say-list">
       ${lex.map((e, n) => `
         <div class="say-row">
-          <input type="text" value="${esc(e.term)}" placeholder="in the script"
+          <input type="text" aria-label="Word in pronunciation ${n + 1}" value="${esc(e.term)}" placeholder="in the script"
             onchange="editSay(${n},'term',this.value)">
-          <input type="text" value="${esc(e.respell)}" placeholder="ELL-on"
+          <input type="text" aria-label="Respelling in pronunciation ${n + 1}" value="${esc(e.respell)}" placeholder="ELL-on"
             onchange="editSay(${n},'respell',this.value)">
           <span class="mono say-ipa" title="the phonemes actually used">${esc(e.ipa)}</span>
           <button class="btn xs ghost" onclick="hearSay(${n})">hear</button>
@@ -572,9 +572,9 @@ function pronunciationPanel(p) {
     </div>` : ''}
 
     <div class="say-row" style="margin-top:10px">
-      <input type="text" id="sayterm" placeholder="word in the script — e.g. Elon"
+      <input type="text" id="sayterm" aria-label="New pronunciation word" placeholder="word in the script — e.g. Elon"
         onkeydown="if(event.key==='Enter')addSay()">
-      <input type="text" id="sayrespell" placeholder="say it — e.g. ELL-on"
+      <input type="text" id="sayrespell" aria-label="New pronunciation respelling" placeholder="say it — e.g. ELL-on"
         onkeydown="if(event.key==='Enter')addSay()">
       <span class="mono say-ipa" id="saypreview"></span>
       <button class="btn xs ghost" onclick="hearSayDraft()">hear</button>

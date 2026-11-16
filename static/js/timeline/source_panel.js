@@ -23,7 +23,7 @@ async function tlSourcesMount() {
   panel.id = 'tl-sources'; panel.setAttribute('aria-label','Add to the video');
   panel.innerHTML = `<div class="tl-source-tabs" role="group" aria-label="What to add">${TL_SOURCE_GROUPS.map(([g]) => `<button type="button" data-group="${g}">${g}</button>`).join('')}</div>
     <div class="tl-source-chips" role="group" aria-label="Where from" data-chips></div>
-    <label class="sr-only" for="tl-source-query">Find</label><input id="tl-source-query" type="search" placeholder="Find…" value="${esc(tlSourceView.query)}">
+    <label class="micro-label" for="tl-source-query">Find sources</label><input id="tl-source-query" type="search" placeholder="Find…" value="${esc(tlSourceView.query)}">
     <div class="tl-source-results" tabindex="0" role="region" aria-label="Results">
       <div class="tl-source-grid" data-source-grid></div><div data-source-tools></div>
       <p data-source-status role="status"></p>
@@ -98,6 +98,7 @@ function tlSourcesPaint() {
   }
   const query = $('#tl-source-query');
   if (query) { query.hidden = tab === 'Sponsor'; query.placeholder = tab === 'Search' ? 'Search archives for…' : 'Find…'; }
+  panel.querySelector('label[for="tl-source-query"]').hidden = tab === 'Sponsor';
   if (actions) actions.hidden = tab === 'Sponsor';
   const media = panel.querySelector('[data-media]');
   if (media) media.hidden = ['Blocks','Graphics'].includes(tab);

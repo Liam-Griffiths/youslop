@@ -157,7 +157,8 @@ async function paintThumb() {
         <label class="field"><span>Headline — a few words, not the title again</span>
           <textarea id="thumbhead" rows="2" placeholder="${esc((p.title || p.idea || '').slice(0, 50))}"
             oninput="saveThumb({headline:this.value})">${esc(t.headline || '')}</textarea></label>
-        <div class="row" style="margin:-6px 0 14px">
+        <label class="micro-label" for="thumbkick">Kicker (optional)</label>
+        <div class="row" style="margin:5px 0 14px">
           <input type="text" id="thumbkick" style="flex:1" placeholder="kicker — optional, one or two words"
             value="${esc(t.kicker || '')}" oninput="saveThumb({kicker:this.value})">
           <button class="btn sm" onclick="suggestHeadlines()">write me some</button>
@@ -296,7 +297,7 @@ function openThumbPicker() {
         <button class="btn sm ghost" id="tpdone">done</button>
       </div>
       <div class="row" style="margin-bottom:12px">
-        <input type="text" id="tpq" style="flex:1;min-width:220px"
+        <input type="text" id="tpq" aria-label="Search thumbnail pictures" style="flex:1;min-width:220px"
           placeholder="search the archives for something better…"
           value="${esc(p.title || p.idea || '')}">
         <button class="btn sm primary" id="tpgo">search</button>

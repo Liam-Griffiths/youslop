@@ -543,7 +543,7 @@ function descriptionPanel(p) {
   return `
     <div class="panel" style="margin-top:18px">
       <div class="row" style="margin-bottom:10px">
-        <strong>YouTube description</strong>
+        <label class="micro-label" for="desc-text">YouTube description</label>
         <span class="mono" style="color:var(--ink-faint)">hook, summary, chapters with
           timestamps, credits and tags</span>
         <div class="spacer"></div>

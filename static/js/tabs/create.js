@@ -86,6 +86,7 @@ function createStage(g) {
         <textarea id="create-brief-edit" rows="3" onchange="createPatch({brief:this.value})">${esc(g.brief || '')}</textarea>
         <p class="sub">Rights: yours, made in this project.</p>
         ${made ? `<details><summary>Edit the HTML</summary>
+          <label class="micro-label" for="create-html">Graphic HTML</label>
           <textarea id="create-html" rows="8" class="mono">${esc(g.versions[g.current]?.html || '')}</textarea>
           <button class="btn sm" onclick="createPatch({html:$('#create-html').value})">Save as a new version</button></details>` : ''}
       </section>

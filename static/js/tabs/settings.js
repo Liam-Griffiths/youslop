@@ -40,7 +40,7 @@ function settingsFieldRow(f) {
          ${f.locked ? 'disabled' : ''}
          oninput="settingsFieldChanged(this)">`;
   return `
-    <label class="field">
+    <label class="field" for="${id}">
       <span>${esc(f.label)} ${badge}</span>
       ${control}
       ${f.help ? `<div class="mono" style="color:var(--ink-faint);margin-top:5px;font-size:12px">${esc(f.help)}</div>` : ''}

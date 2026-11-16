@@ -31,7 +31,8 @@ const grid={querySelectorAll(){
     setAttribute(){},focus(){focused=i;}}));
   return this.buttons;
 }};
-const panel={querySelector:s=>({'[data-use]':use,'[data-source-tools]':tools,
+const queryLabel={};
+const panel={querySelector:s=>({'label[for="tl-source-query"]':queryLabel,'[data-use]':use,'[data-source-tools]':tools,
   '[data-source-grid]':grid,'[data-source-status]':status})[s], querySelectorAll:()=>[]};
 const $=s=>s==='#tl-sources'?panel:{focus(){focused='query';}};
 const document={querySelectorAll:()=>[]};

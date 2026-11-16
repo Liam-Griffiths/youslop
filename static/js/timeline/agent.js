@@ -34,7 +34,8 @@ function tlSideHtml() {
           <button type="button" class="btn xs" onclick="editAgentPrefill('Take me to the part about ')">Find…</button>
           <button type="button" class="btn xs ghost" onclick="editAgentClear()" title="Clear this conversation">Clear</button>
         </div>
-        <div class="script-agent-input"><label class="sr-only" for="edit-agent-input">Message the agent</label>
+        <label class="micro-label" for="edit-agent-input">Message the agent</label>
+        <div class="script-agent-input">
           <textarea id="edit-agent-input" rows="1" placeholder="Find a part, add a title…"
             onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();editAgentSend();}"></textarea>
           <button type="button" class="btn sm" id="edit-agent-send" onclick="editAgentSend()">Send</button></div>
