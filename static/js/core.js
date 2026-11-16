@@ -274,7 +274,7 @@ function paintJob() {
   const progress = $('#jobprogress');
   if (progress) progress.textContent = state.job.done ? '' : state.job.lines.at(-1) || 'Working…';
   const el = $('#jobstate');
-  if (el) el.textContent = state.job.done ? state.job.done : `${state.job.elapsed || 0}s`;
+  if (el) el.textContent = state.job.done ? (state.job.done === 'error' ? 'failed' : state.job.done) : `${state.job.elapsed || 0}s`;
   // The rendering placeholder says what the renderer last said, so a slate that
   // takes four seconds is visibly doing something rather than just sitting.
   const line = $('#renderline');
@@ -299,7 +299,7 @@ function jobPanel() {
   return `<div class="panel" id="jobcard" style="margin-bottom:18px">
     <div class="row" style="margin-bottom:10px">
       ${running ? '<span class="spin"></span>' : ''}
-      <strong>${esc(state.job.kind)}</strong>
+      <strong>${esc(jobLabel(state.job))}</strong>
       <span class="mono" id="jobstate" style="color:var(--ink-faint)"></span>
       <div class="spacer"></div>
       ${running ? '' : `<button class="btn sm ghost" onclick="state.job=null;render()">Dismiss</button>`}
@@ -463,9 +463,9 @@ function openFocal(src, current, onSave) {
       <div class="row" style="margin-top:14px">
         <span class="mono" id="fread" style="color:var(--ink-faint)">no point set</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="fclear">clear</button>
-        <button class="btn sm ghost" id="fcancel">cancel</button>
-        <button class="btn sm primary" id="fsave">save</button>
+        <button class="btn sm ghost" id="fclear">Clear</button>
+        <button class="btn sm ghost" id="fcancel">Cancel</button>
+        <button class="btn sm primary" id="fsave">Save</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -611,7 +611,7 @@ async function render() {
       <span class="sub">${esc(p.subtitle || p.outline.thesis || '')}</span>
       <div class="spacer"></div>
       <button class="btn ghost sm" onclick="saveProjectFile()"
-        title="everything in this video as one file, to open on another computer">save project file…</button>
+        title="everything in this video as one file, to open on another computer">Save project file…</button>
     </div>` : ''}
     ${state.stage === 'script' ? '<div class="script-stage-toolbar">' : ''}
     ${tabs.length > 1 ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
@@ -709,13 +709,13 @@ async function videoFailed(el) {
       ${pb.command ? `
         <div class="row" style="margin-top:10px">
           <code class="cmd">${esc(pb.command)}</code>
-          <button class="btn sm ghost" onclick="copyText('${esc(encodeURIComponent(pb.command))}')">copy</button>
+          <button class="btn sm ghost" onclick="copyText('${esc(encodeURIComponent(pb.command))}')">Copy</button>
         </div>` : ''}
       ${pb.note ? `<div class="mono" style="color:var(--ink-faint);margin-top:8px">${esc(pb.note)}</div>` : ''}
       ${file.id ? `
         <div class="row" style="margin-top:10px">
           <button class="btn sm" onclick="revealFile('${esc(file.scope || 'project')}','${esc(file.id)}','${esc(encodeURIComponent(file.rel || ''))}')">
-            open the folder</button>
+            Open the folder</button>
           <span class="mono" style="color:var(--ink-faint)">and play it in your own player</span>
         </div>` : ''}
     </div>`);
@@ -751,7 +751,7 @@ function openVideoModal(head, videoTag) {
       <div class="row" style="margin-bottom:10px">
         ${head}
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="vclose">close</button>
+        <button class="btn sm ghost" id="vclose">Close</button>
       </div>
       ${videoTag}
     </div>`;

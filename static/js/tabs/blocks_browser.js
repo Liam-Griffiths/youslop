@@ -258,7 +258,8 @@ function blockTrialField(key, spec, i) {
   else field = `<input type="${spec.type === 'number' ? 'number' : 'text'}" ${attr} value="${esc(v)}" ${spec.type === 'number' ? 'step="any"' : ''}
     ${spec.max_length ? `data-max="${spec.max_length}" aria-describedby="${id}-count"` : ''}>
     ${spec.max_length ? `<small id="${id}-count">${spec.max_length - String(v).length} characters remaining</small>` : ''}`;
-  return `<label for="${id}">${esc(key)} · ${esc(spec.type)}</label>${field}${['image','clip'].includes(spec.type) ? `<button type="button" class="btn sm" data-pick-local="${id}">Choose from Library…</button>` : ''}<small id="${id}-error" role="status" class="block-field-error"></small>`;
+  const label = spec.label || key.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return `<label for="${id}" title="${esc(spec.type)}">${esc(label)}</label>${field}${['image','clip'].includes(spec.type) ? `<button type="button" class="btn sm" data-pick-local="${id}">Choose from Library…</button>` : ''}<small id="${id}-error" role="status" class="block-field-error"></small>`;
 }
 
 function blockTrialError(detail, message) {

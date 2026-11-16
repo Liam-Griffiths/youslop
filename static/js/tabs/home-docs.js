@@ -65,7 +65,7 @@ function homeDocView(d) {
     if (words.length) html = html.replace(new RegExp(words.join('\\s+'), 'i'), m => `<mark>${m}</mark>`);
   });
   return `<div class="home-doc-head"><strong>${esc(d.title)}</strong>
-      <span class="mono sub">${HOME_DOC_KIND[d.kind] || 'DOC'}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source link</a>` : ''}</span>
+      <span class="mono sub">${HOME_DOC_KIND[d.kind] || 'DOC'}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">Source link</a>` : ''}</span>
       <span class="spacer"></span>
       ${d.file ? `<a class="btn sm" href="/api/projects/${homeDocs.pid}/documents/${d.id}/file" target="_blank" rel="noopener">Open original</a>` : ''}
       <button class="btn sm" onclick="homeDocRead('${d.id}')">${d.read_at ? 'Read again for facts' : 'Read for facts'}</button>

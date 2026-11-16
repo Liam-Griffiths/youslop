@@ -14,8 +14,8 @@ function paintScript() {
           <strong>${esc(outline.title || p.idea.slice(0, 80))}</strong><br>
           ${(outline.sections || []).map((c, i) => `${i}. ${esc(c.heading || '')}`).join('<br>')}<br><br>
           The script is written after the cast is gathered, so it only describes what the models can show.<br><br>
-          <button class="btn sm" onclick="go('#/p/${p.id}/cast')">gather the cast</button>
-          <button class="btn sm ghost" onclick="castWrite()">write it now</button>
+          <button class="btn sm" onclick="go('#/p/${p.id}/cast')">Gather the cast</button>
+          <button class="btn sm ghost" onclick="castWrite()">Write it now</button>
         </div>`;
       return;
     }
@@ -27,7 +27,7 @@ function paintScript() {
            <span class="mono" style="color:var(--ink-faint)">Carrying on writes only
              the ${total - written} that are missing.</span><br><br>
            <button class="btn sm" onclick="regenScript()">Continue draft</button>
-           <button class="btn sm ghost" onclick="regenScript(true)">start again</button>
+           <button class="btn sm ghost" onclick="regenScript(true)">Start again</button>
          </div>`
       : `<div class="empty-note">No script yet. Write one from the idea to begin.
            <button class="btn sm" onclick="regenScript()">Write the script</button></div>`;
@@ -189,7 +189,7 @@ function visualLine(s, flag) {
     <input type="text" value="${esc(s.visual_note)}" aria-label="what the stage shows"
       onchange="saveVisual('${s.id}', this.value)">
     ${flag ? `<span class="pill ${flag.level === 'warn' ? 'warn' : ''}" title="${esc(flag.text)}"><span class="dot"></span>${esc(flag.text)}</span>
-      <button class="btn xs ghost" onclick="reviseVisuals(['${s.id}'])">rewrite</button>` : ''}
+      <button class="btn xs ghost" onclick="reviseVisuals(['${s.id}'])">Rewrite</button>` : ''}
   </div>`;
 }
 function castChangedNote(nWarn, nHint) {
@@ -197,7 +197,7 @@ function castChangedNote(nWarn, nHint) {
     <span>${nWarn ? `<strong>${nWarn} visual line${nWarn === 1 ? '' : 's'}</strong> no longer fit${nWarn === 1 ? 's' : ''} the cast` : ''}${nWarn && nHint ? ' · ' : ''}${nHint ? `${nHint} photo beat${nHint === 1 ? '' : 's'} could be 3D now` : ''}.
       The narration is untouched; only the visual lines are rewritten.</span>
     <div class="spacer"></div>
-    <button class="btn sm" onclick="reviseVisuals()">rewrite ${nWarn + nHint === 1 ? 'it' : 'them'}</button>
+    <button class="btn sm" onclick="reviseVisuals()">Rewrite ${nWarn + nHint === 1 ? 'it' : 'them'}</button>
   </div>`;
 }
 // The flags depend on the visual line, so a saved edit reloads the project.

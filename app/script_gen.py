@@ -1407,7 +1407,7 @@ def import_script(project: Project, raw_text: str, fidelity: str = "faithful",
     text = clean_pasted(raw_text)
     words = len(text.split())
     if words < 120:
-        raise ValueError("That script is too short to build a video from.")
+        raise ValueError(f"Paste at least 120 words (you have {words}).")
     progress(f"Cleaned script: {words} words (~{words / WORDS_PER_MINUTE:.1f} min read)")
 
     rules = ADAPTED_RULES if fidelity == "adapted" else FAITHFUL_RULES

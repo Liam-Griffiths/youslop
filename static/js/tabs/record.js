@@ -28,7 +28,7 @@ function paintRecord() {
 
     <div class="row" style="margin:14px 0 0;gap:6px">
       <button class="btn sm ${ai ? 'ghost' : 'selected'}"
-        onclick="setNarrator({mode:'mic'})">read it yourself</button>
+        onclick="setNarrator({mode:'mic'})">Read it yourself</button>
       <button class="btn sm ${ai ? 'selected' : 'ghost'}"
         onclick="setNarrator({mode:'ai'})">Narrator</button>
       <span class="mono" style="color:var(--ink-faint)">${ai
@@ -81,22 +81,22 @@ function paintRecord() {
       <div class="level" role="meter" aria-label="Input peak" aria-valuemin="-80" aria-valuemax="0"><i id="level"></i></div><span class="mono" id="voice-peak">Peak — dB</span>
       ${take ? `<span class="pill on num"><span class="dot"></span>${take.duration.toFixed(1)}s</span>` : ''}
       ${!state.rec.stream && micAvailable()
-        ? `<button class="btn sm ghost" onclick="openMic()">check the microphone</button>` : ''}
+        ? `<button class="btn sm ghost" onclick="openMic()">Check the microphone</button>` : ''}
       ${state.mic.report && state.mic.report.analysis.ok
         ? `<span class="pill ${state.mic.report.analysis.room_score >= 50 ? 'on' : 'warn'}"
              title="measured in the mic panel">room: ${esc(state.mic.report.analysis.verdict)}</span>` : ''}
     </div>`}
 
     <div class="rec-nav">
-      <button class="btn sm" onclick="jumpTake(-1)" ${i === 0 ? 'disabled' : ''}>← previous</button>
-      <button class="btn sm" onclick="jumpTake(1)" ${i >= p.slides.length - 1 ? 'disabled' : ''}>next →</button>
-      ${take ? `<button class="btn sm ghost" onclick="playTake()">play back</button>
-                  <button class="btn sm ghost" onclick="dropTake()">retire to history</button>` : ''}
+      <button class="btn sm" onclick="jumpTake(-1)" ${i === 0 ? 'disabled' : ''}>← Previous</button>
+      <button class="btn sm" onclick="jumpTake(1)" ${i >= p.slides.length - 1 ? 'disabled' : ''}>Next →</button>
+      ${take ? `<button class="btn sm ghost" onclick="playTake()">Play back</button>
+                  <button class="btn sm ghost" onclick="dropTake()">Retire to history</button>` : ''}
       <div class="spacer"></div>
       ${done && !ai ? `<button class="btn sm ghost" onclick="recleanTakes()"
         title="run every take through the current voice chain again, from the raw recording"
-        >re-clean all takes</button>` : ''}
-      <button class="btn sm ghost" onclick="jumpNextUnrecorded()">jump to next blank</button>
+        >Re-clean all takes</button>` : ''}
+      <button class="btn sm ghost" onclick="jumpNextUnrecorded()">Jump to next blank</button>
     </div>
     ${ai ? '' : `
     <div class="row" style="margin-top:12px;color:var(--ink-faint);font-size:12.5px">
@@ -248,7 +248,7 @@ function cloudVoicePanel(p, e) {
       <strong>Couldn't list the ${esc(e.label)} voices.</strong>
       <div class="mono" style="margin-top:6px;user-select:text">${esc(list.error)}</div>
       <button class="btn sm" style="margin-top:10px"
-        onclick="state.cloudVoices['${e.key}']=undefined;paintRecord()">try again</button>
+        onclick="state.cloudVoices['${e.key}']=undefined;paintRecord()">Try again</button>
     </div>`;
   }
   const n = p.narrator || {};
@@ -272,7 +272,7 @@ function cloudVoicePanel(p, e) {
       Reading as <b>${esc(n.voice)}</b>, which isn't in this account's list — pick one below.</div>`}
     ${e.key === 'elevenlabs' ? `
       <div class="row" style="gap:10px;margin-bottom:10px">
-        <button class="btn sm" onclick="openVoiceLibrary()">browse the ElevenLabs voice library…</button>
+        <button class="btn sm" onclick="openVoiceLibrary()">Browse the ElevenLabs voice library…</button>
         <span class="mono" style="color:var(--ink-faint)">the thousands of voices on their
           website — hear any of them, then add one to your account to read with</span>
       </div>` : ''}
@@ -287,7 +287,7 @@ function cloudVoicePanel(p, e) {
               <strong>${esc(v.label)}</strong>
               <div class="spacer"></div>
               <button class="btn xs ghost" onclick="event.stopPropagation();hearVoice('${esc(v.id)}')"
-                >hear</button>
+                >Hear</button>
             </div>
             <div class="mono voice-note">${esc(v.note || v.sex || '')}</div>
           </div>`).join('')}
@@ -307,10 +307,10 @@ function cloudVoicePanel(p, e) {
 
     <div class="row" style="margin-top:12px">
       <button class="btn" onclick="voiceWholeScript()">
-        ${read ? (stale ? `re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
-                        : 'read anything still blank') : 'read the whole script'}</button>
+        ${read ? (stale ? `Re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
+                        : 'Read anything still blank') : 'Read the whole script'}</button>
       ${read ? `<button class="btn sm ghost" onclick="voiceWholeScript(true)"
-        title="re-read every paragraph, including ones already done">read it all again</button>` : ''}
+        title="re-read every paragraph, including ones already done">Read it all again</button>` : ''}
       <div class="spacer"></div>
       <span class="mono" style="color:var(--ink-faint)">the whole script is
         ${chars.toLocaleString()} characters, billed to your ${esc(e.label)} account</span>
@@ -333,7 +333,7 @@ function openVoiceLibrary() {
         <strong>ElevenLabs voice library</strong>
         <span class="mono" style="color:var(--ink-faint)">English voices, most popular first</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="vlclose">close</button>
+        <button class="btn sm ghost" id="vlclose">Close</button>
       </div>
       <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <input type="text" id="vlq" aria-label="Search voices" placeholder="deep, documentary, british, calm…" style="flex:1;min-width:200px">
@@ -341,13 +341,13 @@ function openVoiceLibrary() {
           <option value="female">female</option><option value="neutral">neutral</option></select>
         <select id="vluse" aria-label="Voice use"><option value="narrative_story">Narration &amp; story</option></select>
         <input type="text" id="vlaccent" aria-label="Voice accent" placeholder="accent (american, british…)" style="width:190px">
-        <button class="btn sm primary" id="vlgo">search</button>
+        <button class="btn sm primary" id="vlgo">Search</button>
       </div>
       <div id="vlresults" class="voice-grid" style="max-height:60vh;overflow:auto">
         <div class="empty-note" style="grid-column:1/-1">Looking…</div>
       </div>
       <div class="row" style="margin-top:10px">
-        <button class="btn sm ghost" id="vlmore" style="display:none">more</button>
+        <button class="btn sm ghost" id="vlmore" style="display:none">More</button>
         <div class="spacer"></div>
         <span class="mono" style="color:var(--ink-faint)">Adding a voice uses one of your
           ElevenLabs plan's custom voice slots, as it does on their site.</span>
@@ -368,8 +368,8 @@ function openVoiceLibrary() {
       <div class="row" style="gap:6px">
         <strong>${esc(v.label)}</strong>
         <div class="spacer"></div>
-        ${v.preview_url ? `<button class="btn xs ghost" data-hear="${n}">hear</button>` : ''}
-        <button class="btn xs" data-use="${n}">use</button>
+        ${v.preview_url ? `<button class="btn xs ghost" data-hear="${n}">Hear</button>` : ''}
+        <button class="btn xs" data-use="${n}">Use</button>
       </div>
       <div class="mono voice-note">${esc([v.sex, v.age, v.accent, v.use_case].filter(Boolean).join(' · '))}</div>
       ${v.note ? `<div class="mono voice-note" style="margin-top:4px">${esc(v.note)}</div>` : ''}
@@ -406,7 +406,7 @@ function openVoiceLibrary() {
       el.play().catch(() => toast('Could not play that preview.', true));
     } else if (use) {
       const v = found[+use.dataset.use];
-      use.disabled = true; use.textContent = 'adding…';
+      use.disabled = true; use.textContent = 'Adding…';
       try {
         const r = await api('/api/tts/library/add', { method: 'POST',
           body: JSON.stringify({ owner: v.owner, id: v.id, name: v.label }) });
@@ -414,7 +414,7 @@ function openVoiceLibrary() {
         close();
         await setNarrator({ voice: r.voice_id });
         toast(`${v.label} added to your ElevenLabs voices and picked`);
-      } catch (err) { toast(err.message, true); use.disabled = false; use.textContent = 'use'; }
+      } catch (err) { toast(err.message, true); use.disabled = false; use.textContent = 'Use'; }
     }
   });
   wrap.querySelector('#vlgo').onclick = () => run(false);
@@ -445,7 +445,7 @@ function localVoicePanel(p, slide) {
           </div>
           <div id="install-cmd" style="margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
             <code style="color:var(--good);font-size:12px;font-family:monospace;display:block;overflow-x:auto;padding-right:50px" id="cmd-text">pip install kokoro-onnx soundfile</code>
-            <button class="btn xs ghost" onclick="copyInstallCommand()" style="position:absolute;top:4px;right:4px">copy</button>
+            <button class="btn xs ghost" onclick="copyInstallCommand()" style="position:absolute;top:4px;right:4px">Copy</button>
           </div>
           <div id="cmd-note" style="margin-top:6px;font-size:12px;color:var(--ink-faint);display:none"></div>
           <script>showCommand('linux-mac')</script>
@@ -474,7 +474,7 @@ function localVoicePanel(p, slide) {
         <div style="margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px;position:relative">
           <pre style="margin:0;color:var(--good);font-size:12px;font-family:monospace;overflow-x:auto;padding-right:50px" id="weights-cmd">${esc(cmd)}</pre>
           <button class="btn xs ghost" style="position:absolute;top:4px;right:4px"
-            onclick="navigator.clipboard.writeText($('#weights-cmd').textContent).then(() => toast('Copied to clipboard'), () => toast('Failed to copy', true))">copy</button>
+            onclick="navigator.clipboard.writeText($('#weights-cmd').textContent).then(() => toast('Copied to clipboard'), () => toast('Failed to copy', true))">Copy</button>
         </div>
         <div style="margin-top:6px;font-size:12px;color:var(--ink-faint)">Run in a terminal, then restart Corkbored.</div>`;
     } else if (t.detail) {
@@ -508,7 +508,7 @@ function localVoicePanel(p, slide) {
               <strong>${esc(v.label)}</strong>
               <div class="spacer"></div>
               <button class="btn xs ghost" onclick="event.stopPropagation();hearVoice('${v.id}')"
-                >hear</button>
+                >Hear</button>
             </div>
             <div class="mono voice-note">${esc(v.note)}</div>
           </div>`).join('')}
@@ -521,10 +521,10 @@ function localVoicePanel(p, slide) {
 
     <div class="row" style="margin-top:12px">
       <button class="btn" onclick="voiceWholeScript()">
-        ${read ? (stale ? `re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
-                        : 'read anything still blank') : 'read the whole script'}</button>
+        ${read ? (stale ? `Re-read ${stale} paragraph${stale === 1 ? '' : 's'}`
+                        : 'Read anything still blank') : 'Read the whole script'}</button>
       ${read ? `<button class="btn sm ghost" onclick="voiceWholeScript(true)"
-        title="re-read every paragraph, including ones already done">read it all again</button>` : ''}
+        title="re-read every paragraph, including ones already done">Read it all again</button>` : ''}
       <div class="spacer"></div>
       <span class="mono" style="color:var(--ink-faint)">about ${
         Math.max(1, Math.round(p.slides.length * 3.5 / 60))} min to synthesise</span>
@@ -566,7 +566,7 @@ function pronunciationPanel(p) {
           <input type="text" aria-label="Respelling in pronunciation ${n + 1}" value="${esc(e.respell)}" placeholder="ELL-on"
             onchange="editSay(${n},'respell',this.value)">
           <span class="mono say-ipa" title="the phonemes actually used">${esc(e.ipa)}</span>
-          <button class="btn xs ghost" onclick="hearSay(${n})">hear</button>
+          <button class="btn xs ghost" onclick="hearSay(${n})">Hear</button>
           <button class="btn xs ghost danger" onclick="dropSay(${n})">×</button>
         </div>`).join('')}
     </div>` : ''}
@@ -577,8 +577,8 @@ function pronunciationPanel(p) {
       <input type="text" id="sayrespell" aria-label="New pronunciation respelling" placeholder="say it — e.g. ELL-on"
         onkeydown="if(event.key==='Enter')addSay()">
       <span class="mono say-ipa" id="saypreview"></span>
-      <button class="btn xs ghost" onclick="hearSayDraft()">hear</button>
-      <button class="btn xs" onclick="addSay()">add</button>
+      <button class="btn xs ghost" onclick="hearSayDraft()">Hear</button>
+      <button class="btn xs" onclick="addSay()">Add</button>
     </div>
     <div class="mono" id="saycompare" style="color:var(--ink-faint);margin-top:8px"></div>
     <audio id="sayplayer" style="display:none"></audio>
@@ -1028,7 +1028,7 @@ function voiceBar(p, working) {
               ${t === used
                 ? '<span class="pill on">in use</span>'
                 : `<button class="btn sm" ${c ? '' : 'disabled'}
-                    onclick="useVoiceTrack('${t}')">use for the video</button>`}
+                    onclick="useVoiceTrack('${t}')">Use for the video</button>`}
             </div>`;
         }).join('')}
       </div>
@@ -1112,7 +1112,7 @@ async function openMicPanel() {
         <span class="mono" style="color:var(--ink-faint)">
           set it up once — every take on this video is cleaned the same way</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="micclose">done</button>
+        <button class="btn sm ghost" id="micclose">Done</button>
       </div>
       <div class="mic-cols">
         <div class="mic-col" id="micleft"></div>
@@ -1180,7 +1180,7 @@ function paintMicDevice() {
       </select>
     </label>
     ${state.rec.stream || !micAvailable() ? '' : `
-      <button class="btn sm" onclick="openMic().then(micRefresh)">open the microphone</button>`}
+      <button class="btn sm" onclick="openMic().then(micRefresh)">Open the microphone</button>`}
 
     <div class="meter-wrap">
       <div class="meter">
@@ -1214,9 +1214,9 @@ function paintMicDevice() {
       <button class="btn ${state.mic.report ? '' : 'primary'}" id="mictest"
         ${micAvailable() && !state.mic.counting && !state.mic.measuring ? '' : 'disabled'}
         onclick="micTestRecord()">
-        ${state.mic.counting ? `recording… ${state.mic.counting}` :
-          state.mic.measuring ? 'measuring…' :
-          state.mic.report ? 'record another test' : '● record 8 seconds'}</button>
+        ${state.mic.counting ? `Recording… ${state.mic.counting}` :
+          state.mic.measuring ? 'Measuring…' :
+          state.mic.report ? 'Record another test' : '● Record 8 seconds'}</button>
       <span class="mono" style="color:var(--ink-faint);flex:1;min-width:180px">
         read a couple of sentences the way you read a script</span>
     </div>
@@ -1295,10 +1295,10 @@ function paintMicVoice() {
 
     <div class="ab-bar">
       <button class="btn sm ${state.mic.ab === 'raw' ? 'selected' : ''}"
-        ${has ? '' : 'disabled'} onclick="abPlay('raw')">▶ before</button>
+        ${has ? '' : 'disabled'} onclick="abPlay('raw')">▶ Before</button>
       <button class="btn sm ${state.mic.ab === 'wet' ? 'selected' : ''}"
-        ${has ? '' : 'disabled'} onclick="abPlay('wet')">▶ after</button>
-      <button class="btn sm ghost" ${has ? '' : 'disabled'} onclick="abStop()">stop</button>
+        ${has ? '' : 'disabled'} onclick="abPlay('wet')">▶ After</button>
+      <button class="btn sm ghost" ${has ? '' : 'disabled'} onclick="abStop()">Stop</button>
       <span class="mono" id="abnote" style="color:var(--ink-faint);flex:1;min-width:150px">
         ${has ? (state.mic.busy ? 'rebuilding…' : 'switch while it plays — it stays in step')
               : 'record a test above to hear the chain'}</span>
@@ -1308,7 +1308,7 @@ function paintMicVoice() {
       <button class="btn sm ghost" onclick="saveVoiceToChannel()"
         ${state.project.channel_id ? '' : 'disabled'}
         title="every new video on this channel starts from these settings">
-        make this the channel default</button>
+        Make this the channel default</button>
       <button class="btn sm ghost" onclick="recleanTakes()"
         ${state.project.recorded_count ? '' : 'disabled'}
         title="run the takes already recorded through this chain again">

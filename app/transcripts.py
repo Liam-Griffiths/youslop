@@ -208,7 +208,7 @@ def source_range(shoot_id, source_id, start=None, end=None):
         raise FileNotFoundError('Unknown source')
     original = footage.source_path(shoot, source)
     if not original.is_file():
-        raise FileNotFoundError('Source unavailable')
+        raise footage.OriginalFileNotFound(f'Original file not found: {original.name}')
     a, b = 0 if start is None else start, source.duration if end is None else end
     if (any(type(v) not in (int, float) or not math.isfinite(v) for v in (a, b))
             or not 0 <= a < b <= source.duration):

@@ -132,14 +132,14 @@ async function paintThumb() {
           <span class="mono" id="thumbsize" style="color:var(--ink-faint)">1280×720</span>
           <div class="spacer"></div>
           ${t.image ? `<button class="btn sm ghost" onclick="thumbFocal()">
-            ${(t.focal || []).length === 2 ? '✛ focus set' : 'set focus point'}</button>` : ''}
+            ${(t.focal || []).length === 2 ? '✛ Focus set' : 'Set focus point'}</button>` : ''}
           <a class="btn sm" download="thumbnail.jpg"
              href="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at || 0}">Download</a>
         </div>
         <div class="mono thumb-credit">
           ${t.image
             ? `${esc(credit.provider || 'local')}${credit.author ? ' · ' + esc(credit.author) : ''}
-               ${credit.source_page ? `· <a href="${esc(credit.source_page)}" target="_blank">source</a>` : ''}
+               ${credit.source_page ? `· <a href="${esc(credit.source_page)}" target="_blank">Source</a>` : ''}
                <br>${esc((credit.license || '').slice(0, 80))}`
             : 'No picture yet — pick one below and it appears here.'}
         </div>
@@ -149,8 +149,8 @@ async function paintThumb() {
         <div class="row" style="margin-bottom:10px">
           <strong>Picture</strong>
           <div class="spacer"></div>
-          <button class="btn sm" onclick="openThumbPicker()">choose a picture…</button>
-          <label class="btn sm ghost" style="cursor:pointer">upload
+          <button class="btn sm" onclick="openThumbPicker()">Choose a picture…</button>
+          <label class="btn sm ghost" style="cursor:pointer">Upload
             <input type="file" accept="image/*" hidden onchange="uploadThumbImage(this.files[0])"></label>
         </div>
 
@@ -161,7 +161,7 @@ async function paintThumb() {
         <div class="row" style="margin:5px 0 14px">
           <input type="text" id="thumbkick" style="flex:1" placeholder="kicker — optional, one or two words"
             value="${esc(t.kicker || '')}" oninput="saveThumb({kicker:this.value})">
-          <button class="btn sm" onclick="suggestHeadlines()">write me some</button>
+          <button class="btn sm" onclick="suggestHeadlines()">Write me some</button>
         </div>
         <div id="thumbopts"></div>
 
@@ -294,13 +294,13 @@ function openThumbPicker() {
       <div class="row" style="margin-bottom:12px">
         <strong>Choose the thumbnail picture</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="tpdone">done</button>
+        <button class="btn sm ghost" id="tpdone">Done</button>
       </div>
       <div class="row" style="margin-bottom:12px">
         <input type="text" id="tpq" aria-label="Search thumbnail pictures" style="flex:1;min-width:220px"
           placeholder="search the archives for something better…"
           value="${esc(p.title || p.idea || '')}">
-        <button class="btn sm primary" id="tpgo">search</button>
+        <button class="btn sm primary" id="tpgo">Search</button>
       </div>
       <div class="mono" id="tpnote" style="color:var(--ink-faint);margin-bottom:10px"></div>
       <div class="pick-grid" id="tpres"></div>

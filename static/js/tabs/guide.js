@@ -72,13 +72,13 @@ function renderGuide() {
           <li><b>read it yourself</b>: press <b>● Record</b>, read the paragraph on screen,
             press stop. <kbd>space</kbd> records and stops, <kbd>→</kbd> moves to the next
             paragraph, <kbd>p</kbd> plays the take back, <kbd>r</kbd> retires it. Earlier takes stay available.
-            <b>check the microphone</b> first to hear how your room sounds.</li>
+            <b>Check the microphone</b> first to hear how your room sounds.</li>
           <li><b>Narrator</b>: pick a voice and a pace, then press <b>read the whole
             script</b>, or <b>read this paragraph</b> for just one. The built-in voice runs on your computer. Hosted voices send the text
             to the provider you select.</li>
         </ul>
         <p>The strip of squares at the bottom shows which paragraphs are done.
-          <b>jump to next blank</b> takes you to the first one that isn't.</p>`)}
+          <b>Jump to next blank</b> takes you to the first one that isn't.</p>`)}
 
       ${step(5, 'Make a thumbnail', `
         <p>On the <b>Thumbnail</b> tab, <b>choose a picture…</b> for the background and
@@ -112,7 +112,7 @@ function renderGuide() {
 
     <h2>Taking a video to another computer</h2>
     <div class="panel guide-before">
-      <p>On the video's page, <b>save project file…</b> puts the whole video in one
+      <p>On the video's page, <b>Save project file…</b> puts the whole video in one
         <span class="mono">.corkbored</span> file: script, chosen pictures, recordings,
         settings, and its channel, music and style if it has them.</p>
       <p>On the other computer, press <b>open project file…</b> at the top of the

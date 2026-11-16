@@ -57,7 +57,7 @@ async function paintRender() {
         <div class="row" style="gap:10px;margin:0 0 14px">
           ${music.length === 0
             ? `<div class="pill warn">drop mp3s into assets/music to get a bed</div>` : ''}
-          <button class="btn sm ghost" onclick="revealFile('music','','')">open the music folder</button>
+          <button class="btn sm ghost" onclick="revealFile('music','','')">Open the music folder</button>
           <span class="mono" style="color:var(--ink-faint)">add tracks, then reload this page to pick them</span>
         </div>
         <label class="field"><span>Music under voice — <b>${st.music_db.toFixed(0)} dB</b></span>
@@ -217,7 +217,7 @@ function openingPanel(p) {
               onchange="saveProject({use_outro:this.checked})">
             <span>close on the end screen</span>
           </label>
-          <a class="btn sm ghost" href="#/c/${p.channel_id}">edit them</a>
+          <a class="btn sm ghost" href="#/c/${p.channel_id}">Edit them</a>
         </div>
       </div>`;
   }
@@ -258,7 +258,7 @@ function openingPanel(p) {
             The title card. Your video's title is the type on it; the subtitle is
             the line above. The slates that need a cast of faces belong to a
             channel and aren't offered here.</span>
-          <button class="btn sm" onclick="previewOpening('intro')">preview it</button>
+          <button class="btn sm" onclick="previewOpening('intro')">Preview it</button>
         </div>
         <div class="tpl-strip">
           ${slates.map((t) => `
@@ -283,7 +283,7 @@ function openingPanel(p) {
           <span class="mono" style="color:var(--ink-faint);flex:1;min-width:0">
             The end card. The plates are empty on purpose — they are where you
             line up YouTube's own end-screen elements in Studio.</span>
-          <button class="btn sm" onclick="previewOpening('outro')">preview it</button>
+          <button class="btn sm" onclick="previewOpening('outro')">Preview it</button>
         </div>
         <div class="tpl-strip">
           ${ends.map((t) => `
@@ -337,8 +337,8 @@ function stingBlock(role, spec) {
         ${has ? `
           <audio id="sting-${role}" controls style="max-width:280px"
             src="/api/projects/${p.id}/file/${spec[f.file]}?v=${dur}-${esc(spec[f.name] || '')}"></audio>
-          <button class="btn sm ghost danger" onclick="removeProjectSting('${role}')">remove</button>`
-        : `<label class="btn sm" style="cursor:pointer">choose a sting
+          <button class="btn sm ghost danger" onclick="removeProjectSting('${role}')">Remove</button>`
+        : `<label class="btn sm" style="cursor:pointer">Choose a sting
              <input type="file" accept="audio/*" hidden
                onchange="uploadProjectSting('${role}', this.files[0])">
            </label>`}
@@ -348,7 +348,7 @@ function stingBlock(role, spec) {
           <div class="mono" style="flex:1;min-width:200px;color:var(--ink-faint)">
             ${fmtTime(dur)} long — it takes ${span.toFixed(1)}s, ${fmtTime(start)} to
             ${fmtTime(start + span)}${start + span > dur + 0.05 ? '. That runs off the end of the track.' : '.'}</div>
-          <button class="btn sm ghost" onclick="auditionProjectSting('${role}')">hear the window</button>
+          <button class="btn sm ghost" onclick="auditionProjectSting('${role}')">Hear the window</button>
         </div>
         <label class="field" style="margin:0 0 12px"><span>Start it — <b>${fmtTime(start)}${
             start > 0 ? ' into the track' : ' — the very top'}</b></span>
@@ -453,7 +453,7 @@ async function uploadPanel(p) {
           <div class="mono" style="color:var(--ink-faint);margin-top:4px">
             Connect this channel to YouTube to upload straight from here.</div>
         </div>
-        <a class="btn sm" href="#/c/${p.channel_id}">connect it</a>
+        <a class="btn sm" href="#/c/${p.channel_id}">Connect</a>
       </div>
     </div>`;
   }
@@ -479,7 +479,7 @@ async function uploadPanel(p) {
       <strong>Publish to YouTube</strong>
       <span class="mono" style="color:var(--ink-faint)">— ${esc(yt.channel_title || '')}</span>
       <div class="spacer"></div>
-      ${already ? `<a class="pill on" href="${esc(already)}" target="_blank">already uploaded — view it</a>` : ''}
+      ${already ? `<a class="pill on" href="${esc(already)}" target="_blank">Already uploaded — view it</a>` : ''}
     </div>
     <label class="field"><span>Title</span>
       <input type="text" value="${esc(u.title)}" maxlength="100"
@@ -549,7 +549,7 @@ function descriptionPanel(p) {
         <div class="spacer"></div>
         <button class="btn sm ${text ? 'ghost' : ''}" onclick="writeDescription()">
           ${text ? 'write it again' : 'write it'}</button>
-        ${text ? `<button class="btn sm" onclick="copyDescription()">copy</button>` : ''}
+        ${text ? `<button class="btn sm" onclick="copyDescription()">Copy</button>` : ''}
       </div>
         <textarea id="desc-text" rows="14" style="width:100%;font-family:var(--mono, monospace);font-size:13px"
           maxlength="5000" onchange="saveDescription(this.value)">${esc(text)}</textarea>
@@ -660,7 +660,7 @@ function presenterPanel(p) {
           <button class="btn sm ghost" onclick="setPresenterFocal()">
             ${(pr.focal || []).length === 2 ? '✛ focus set' : 'set focus point'}</button>
           <div class="spacer"></div>
-          <button class="btn sm ghost danger" onclick="removePresenter()">remove</button>
+          <button class="btn sm ghost danger" onclick="removePresenter()">Remove</button>
         </div>
         <div class="mono" style="color:var(--ink-faint);margin-top:10px">
           Your camera audio is levelled to match the narration 

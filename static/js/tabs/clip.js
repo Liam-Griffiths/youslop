@@ -13,7 +13,7 @@ async function paintClip() {
   const words = doc.words.filter(w => c.in_s <= w.start && w.end <= c.out_s);
   $('#tabbody').innerHTML = `<section class="panel" id="clip-controls"><div class="row"><h2>Clip</h2>
     <div class="spacer"></div><button class="btn ghost sm" onclick="saveProjectFile()"
-      title="everything in this video as one file, to open on another computer">save project file…</button></div>
+      title="everything in this video as one file, to open on another computer">Save project file…</button></div>
     ${p.subtitle || p.outline.thesis ? `<p class="sub">${esc(p.subtitle || p.outline.thesis)}</p>` : ''}
     <p>Trim the original range or remove a stretch. ${words.length ? 'Select word boundaries below.' : 'No transcript needed: enter source seconds.'}</p>
     <label for="clip-in">In (source seconds)</label>${clipBoundary('clip-in', c.in_s, words, 'start')}

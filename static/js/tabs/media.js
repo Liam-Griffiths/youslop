@@ -24,21 +24,21 @@ async function renderLibraryManagement() {
                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.path)}</div>
           </div>
           <span class="mono" style="color:var(--ink-faint)">${f.asset_count} asset${f.asset_count === 1 ? '' : 's'}</span>
-          <button class="btn sm ghost" onclick="rescanLibraryFolder('${f.id}')">rescan</button>
-          <button class="btn sm ghost" onclick="removeLibraryFolder('${f.id}')">remove</button>
-        </div>`).join('') || `<div class="empty-note" style="padding:14px">no folders linked yet</div>`}
+          <button class="btn sm ghost" onclick="rescanLibraryFolder('${f.id}')">Rescan</button>
+          <button class="btn sm ghost" onclick="removeLibraryFolder('${f.id}')">Remove</button>
+        </div>`).join('') || `<div class="empty-note" style="padding:14px">No folders linked yet. Add one below.</div>`}
       <div class="row" style="margin-top:10px">
         <label class="field" for="libfolderpath" style="flex:1;min-width:220px;margin:0"><span>Folder path</span>
           <input type="text" id="libfolderpath" placeholder="/path/to/your/photos"></label>
-        <button class="btn sm ghost" id="libfolderbrowse" onclick="browseForLibraryFolder()">browse…</button>
-        <button class="btn sm primary" onclick="addLibraryFolder()">add folder</button>
+        <button class="btn sm ghost" id="libfolderbrowse" onclick="browseForLibraryFolder()">Browse…</button>
+        <button class="btn sm primary" onclick="addLibraryFolder()">Add folder</button>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:22px">
       <h3>Add a single file</h3>
       <div class="row" style="margin-bottom:10px">
-        <label class="btn sm" style="cursor:pointer">choose a file
+        <label class="btn sm" style="cursor:pointer">Choose a file
           <input type="file" id="libfile" accept="image/*,video/*" hidden
             onchange="pickLibraryFile(this.files[0])"></label>
         <span class="mono" id="libfilename" style="color:var(--ink-faint)">no file chosen</span>
@@ -57,7 +57,7 @@ async function renderLibraryManagement() {
         <label class="field" for="libsource" style="flex:1;min-width:220px;margin:0"><span>Source page (optional)</span>
           <input type="text" id="libsource" placeholder="source page (optional)"></label>
       </div>
-      <button class="btn sm" id="libadd" onclick="uploadLibraryAsset()">add to library</button>
+      <button class="btn sm" id="libadd" onclick="uploadLibraryAsset()">Add to library</button>
     </div>
 
     <div class="card" style="margin-top:28px" id="models3d"></div>
@@ -143,7 +143,7 @@ function editLibraryAsset(id) {
       <div class="row" style="margin-bottom:14px">
         <strong>Edit asset</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="ecancel">cancel</button>
+        <button class="btn sm ghost" id="ecancel">Cancel</button>
       </div>
       <div class="row" style="margin-bottom:10px">
         <label class="field" for="etitle" style="flex:1;min-width:200px;margin:0"><span>Title</span>
@@ -159,7 +159,7 @@ function editLibraryAsset(id) {
         <label class="field" for="esource" style="flex:1;min-width:200px;margin:0"><span>Source page</span>
           <input type="text" id="esource" placeholder="source page" value="${esc(a.source_page)}"></label>
       </div>
-      <button class="btn sm primary" id="esave">save</button>
+      <button class="btn sm primary" id="esave">Save</button>
     </div>`;
   document.body.appendChild(wrap);
   const close = () => wrap.remove();
@@ -252,7 +252,7 @@ function openMediaSearch(sid, query = null, onPick = null, onClose = null) {
         <span class="mono" style="color:var(--ink-faint);min-width:0;overflow:hidden;
               text-overflow:ellipsis;white-space:nowrap">${esc(s.title || s.beat || '')}</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="pdone">done</button>
+        <button class="btn sm ghost" id="pdone">Done</button>
       </div>
       <div class="row" style="margin-bottom:12px">
         <input type="text" id="pq" aria-label="Search archives" style="flex:1;min-width:220px"
@@ -263,7 +263,7 @@ function openMediaSearch(sid, query = null, onPick = null, onClose = null) {
           <option value="video" ${s.prefer_kind === 'video' ? 'selected' : ''}>clips</option>
           <option value="reaction">reaction gif 😄</option>
         </select>
-        <button class="btn sm primary" id="pgo">search</button>
+        <button class="btn sm primary" id="pgo">Search</button>
       </div>
       <div class="mono" id="pnote" style="color:var(--ink-faint);margin-bottom:10px"></div>
       <div class="pick-grid" id="pres"></div>
@@ -366,12 +366,12 @@ function openMapPicker(sid) {
       <div class="row" style="margin-bottom:12px">
         <strong>Get a map</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="mclose">cancel</button>
+        <button class="btn sm ghost" id="mclose">Cancel</button>
       </div>
       <div class="row" style="margin-bottom:10px">
         <input type="text" id="mjump" aria-label="Map place" style="flex:1;min-width:220px"
           placeholder="jump to a place — e.g. “Ziguinchor, Senegal”" value="${esc(place)}">
-        <button class="btn sm ghost" id="mjumpgo">jump</button>
+        <button class="btn sm ghost" id="mjumpgo">Jump</button>
       </div>
       <div id="mmap" style="height:380px;border-radius:8px;overflow:hidden;margin-bottom:10px"></div>
       <div class="row" style="margin-bottom:10px">
@@ -388,7 +388,7 @@ function openMapPicker(sid) {
           <option value="pan">pan — drift in from the side</option>
         </select>
         <div class="spacer"></div>
-        <button class="btn sm primary" id="mgo" disabled>click the map first</button>
+        <button class="btn sm primary" id="mgo" disabled>Click the map first</button>
       </div>
       <div class="mono" id="mnote" style="color:var(--ink-faint)">click anywhere on the map to drop the pin — the zoom you're at is the zoom it renders at</div>
     </div>`;
@@ -421,7 +421,7 @@ function openMapPicker(sid) {
 
   function armGo() {
     go.disabled = false;
-    go.textContent = 'get it';
+    go.textContent = 'Get it';
   }
   map.on('click', (e) => {
     if (marker) marker.setLatLng(e.latlng); else marker = L.marker(e.latlng).addTo(map);
@@ -540,7 +540,7 @@ function openCueEditor(sid) {
       <div class="row" style="margin-bottom:12px">
         <strong>What this paragraph puts on screen — ${esc(info.label)}</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="cclose">close</button>
+        <button class="btn sm ghost" id="cclose">Close</button>
       </div>
       <div class="grid-2">
         <div>
@@ -552,10 +552,10 @@ function openCueEditor(sid) {
             placeholder='[{"kind": "...", "on": "first words it lands on"}]'
           >${esc(written.length ? JSON.stringify(written, null, 2) : '')}</textarea>
           <div class="row" style="margin-top:10px">
-            <button class="btn sm primary" id="csave">save</button>
+            <button class="btn sm primary" id="csave">Save</button>
             <div class="spacer"></div>
             <button class="btn sm ghost" id="cclear" title="go back to drawing it from the narration">
-              clear</button>
+              Clear</button>
           </div>
           <div class="mono" style="color:var(--ink-faint);margin-top:10px">
             ${esc(s.narration.slice(0, 260))}</div>
@@ -629,7 +629,7 @@ function openBoardEditor(sid) {
       <div class="row" style="margin-bottom:12px">
         <strong>What this slide writes</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="bclose">close</button>
+        <button class="btn sm ghost" id="bclose">Close</button>
       </div>
       <div class="grid-2">
         <div>
@@ -652,11 +652,11 @@ this | that pairs up the two columns of a versus board
           <label class="field"><span>Footnote, caption or attribution</span>
             <input type="text" id="bnote" value="${esc(s.board_note || '')}"></label>
           <div class="row">
-            <button class="btn sm primary" id="bsave">save</button>
-            <button class="btn sm ghost" id="bdiagram">draw a diagram…</button>
+            <button class="btn sm primary" id="bsave">Save</button>
+            <button class="btn sm ghost" id="bdiagram">Draw a diagram…</button>
             <div class="spacer"></div>
             <button class="btn sm ghost" id="bclear" title="go back to lines pulled out of the narration">
-              clear</button>
+              Clear</button>
           </div>
           <div class="mono" style="color:var(--ink-faint);margin-top:10px">
             ${esc(s.narration.slice(0, 220))}</div>
@@ -757,8 +757,8 @@ function openDiagramEditor(sid) {
       <div class="row" style="margin-bottom:12px">
         <strong>Draw a diagram</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="djson">show the spec</button>
-        <button class="btn sm ghost" id="dclose">close</button>
+        <button class="btn sm ghost" id="djson">Show the spec</button>
+        <button class="btn sm ghost" id="dclose">Close</button>
       </div>
       <div class="grid-2">
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
@@ -768,7 +768,7 @@ function openDiagramEditor(sid) {
             </div>
             <textarea id="daskwhat" rows="2" style="margin-bottom:8px"
               placeholder="Leave blank to let Claude read the paragraph and pick a shape, or steer it — “as a cycle”, “put the database in the middle”…"></textarea>
-            <button class="btn sm" id="dask">draw it for me</button>
+            <button class="btn sm" id="dask">Draw it for me</button>
             <span class="mono" id="daskstate" style="color:var(--ink-faint);margin-left:8px"></span>
           </div>
           <label class="field"><span>Layout</span>
@@ -792,8 +792,8 @@ Edge cache > Your server : miss ~"
           <label class="field"><span>Footnote</span>
             <input type="text" id="dnote" value="${esc(spec.note || '')}"></label>
           <div class="row">
-            <button class="btn sm primary" id="duse">use it on this slide</button>
-            <button class="btn sm ghost" id="dstill">as a still, not a drawing</button>
+            <button class="btn sm primary" id="duse">Use it on this slide</button>
+            <button class="btn sm ghost" id="dstill">As a still, not a drawing</button>
           </div>
           <div class="mono" id="dstate" style="color:var(--ink-faint);margin-top:10px"></div>
         </div>
@@ -802,7 +802,7 @@ Edge cache > Your server : miss ~"
           <textarea id="dspec" aria-label="Diagram spec as JSON" rows="12" class="mono" style="display:none;margin-top:10px"
             placeholder="paste a spec here"></textarea>
           <div class="row" style="margin-top:8px;display:none" id="dspecrow">
-            <button class="btn sm ghost" id="dspecload">load that spec</button>
+            <button class="btn sm ghost" id="dspecload">Load that spec</button>
           </div>
         </div>
       </div>
@@ -977,8 +977,8 @@ function openCustomDesigner(opts) {
         <strong>${styleMode ? 'Design a video style' : 'Design a slide'}</strong>
         <div class="spacer"></div>
         ${styleMode ? '' : '<label><input type="checkbox" id="chtml"> HTML</label>'}
-        <button class="btn sm ghost" id="cjson">show the spec</button>
-        <button class="btn sm ghost" id="cclose">close</button>
+        <button class="btn sm ghost" id="cjson">Show the spec</button>
+        <button class="btn sm ghost" id="cclose">Close</button>
       </div>
       <div class="grid-2">
         <div style="overflow:auto;max-height:calc(100vh - 160px);padding-right:16px">
@@ -991,7 +991,7 @@ function openCustomDesigner(opts) {
               placeholder="${styleMode
                 ? 'e.g. “one huge number on near-black with a thin accent rule”, “a full-bleed photo with a quote over a dark scrim”, “three cards across the middle”…'
                 : 'Leave blank to let Claude read the paragraph and design something, or steer it — “one huge number over a photo”, “three cards across the middle”, “a quote, big, on black”…'}"></textarea>
-            <button class="btn sm" id="cask">design it for me</button>
+            <button class="btn sm" id="cask">Design it for me</button>
             <span class="mono" id="caskstate" style="color:var(--ink-faint);margin-left:8px"></span>
           </div>
           ${styleMode ? `<div class="mono" style="color:var(--ink-faint);margin-bottom:12px">
@@ -1007,19 +1007,19 @@ function openCustomDesigner(opts) {
           <div id="cels"></div>
           <div class="row" style="margin:12px 0">
             <span class="mono" style="color:var(--ink-faint)">add:</span>
-            <button class="btn xs ghost" data-add="text">text</button>
-            <button class="btn xs ghost" data-add="rect">rect</button>
-            <button class="btn xs ghost" data-add="circle">circle</button>
-            <button class="btn xs ghost" data-add="line">line</button>
-            <button class="btn xs ghost" data-add="image">image</button>
+            <button class="btn xs ghost" data-add="text">Text</button>
+            <button class="btn xs ghost" data-add="rect">Rect</button>
+            <button class="btn xs ghost" data-add="circle">Circle</button>
+            <button class="btn xs ghost" data-add="line">Line</button>
+            <button class="btn xs ghost" data-add="image">Image</button>
           </div>
           </div><div class="row">
             ${styleMode ? '' : `
-              <button class="btn sm primary" id="cuse">use it on this slide</button>
-              <button class="btn sm ghost" id="cstill">as a still, not animated</button>`}
+              <button class="btn sm primary" id="cuse">Use it on this slide</button>
+              <button class="btn sm ghost" id="cstill">As a still, not animated</button>`}
             <button class="btn sm ${styleMode ? '' : 'ghost'}" id="csave"
               title="keep this design as a reusable video style">
-              ${styleMode ? 'save this style' : 'save as a style…'}</button>
+              ${styleMode ? 'Save this style' : 'Save as a style…'}</button>
           </div>
           <div class="mono" id="cstate" style="color:var(--ink-faint);margin-top:10px"></div>
         </div>
@@ -1031,7 +1031,7 @@ function openCustomDesigner(opts) {
               : 'Image elements only show here once they’ve been fetched — press “use it on this slide” to pull them from the archives.'}</div>
           <textarea id="cspec" aria-label="Slide spec as JSON" rows="14" class="mono" style="display:none;margin-top:10px"></textarea>
           <div class="row" style="margin-top:8px;display:none" id="cspecrow">
-            <button class="btn sm ghost" id="cspecload">load that spec</button>
+            <button class="btn sm ghost" id="cspecload">Load that spec</button>
           </div>
         </div>
       </div>
@@ -1065,7 +1065,7 @@ function openCustomDesigner(opts) {
           <strong style="font-size:13px">${i + 1}. ${esc(el.type)}</strong>
           <div class="spacer"></div>
           <button class="btn xs ghost" data-up="${i}" ${i ? '' : 'disabled'}>↑</button>
-          <button class="btn xs ghost danger" data-del="${i}">remove</button>
+          <button class="btn xs ghost danger" data-del="${i}">Remove</button>
         </div>
         ${el.type === 'text' ? `
           <textarea aria-label="Element ${i + 1} text" rows="2" data-f="text" data-i="${i}"

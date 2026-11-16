@@ -446,6 +446,10 @@ class ProcessingError(ValueError):
     pass
 
 
+class OriginalFileNotFound(FileNotFoundError):
+    """The viewing proxy can still work while its original is offline."""
+
+
 def lock_for(shoot_id: str):
     with _LOCKS_GUARD:
         return _LOCKS.setdefault(_key(shoot_id), threading.RLock())

@@ -435,7 +435,7 @@ function endScreenPanel(c) {
               The last 5 to 20 seconds, held for YouTube's own cards and the
               subscribe badge to sit on. Every video in the channel gets it.</div>
           </div>
-          <button class="btn sm" onclick="saveOutro({enabled:true})">add one</button>
+          <button class="btn sm" onclick="saveOutro({enabled:true})">Add one</button>
         </div>
       </div>`;
   }
@@ -445,8 +445,8 @@ function endScreenPanel(c) {
         <span class="mono" style="color:var(--ink-faint);flex:1;min-width:220px">
           ${esc(tpl.blurb || '')}</span>
         <div class="spacer"></div>
-        <button class="btn sm" onclick="previewOutro()">preview</button>
-        <button class="btn sm ghost" onclick="saveOutro({enabled:false})">turn off</button>
+        <button class="btn sm" onclick="previewOutro()">Preview</button>
+        <button class="btn sm ghost" onclick="saveOutro({enabled:false})">Turn off</button>
       </div>
 
       <div class="tpl-strip">
@@ -533,8 +533,8 @@ function avatarPanel(c) {
         ${a.path ? `
           <img src="/api/channels/${c.id}/file/${a.path}?v=${c.updated_at}"
                style="height:86px;border-radius:8px;background:var(--field)">
-          <button class="btn sm ghost danger" onclick="removeAvatar()">remove</button>`
-        : `<label class="btn sm" style="cursor:pointer">choose an image
+          <button class="btn sm ghost danger" onclick="removeAvatar()">Remove</button>`
+        : `<label class="btn sm" style="cursor:pointer">Choose an image
              <input type="file" accept="image/*" hidden onchange="uploadAvatar(this.files[0])">
            </label>`}
       </div>
@@ -601,8 +601,8 @@ function youtubePanel(c) {
         </div>
         ${yt.connected
           ? `${yt.channel_thumb ? `<img src="${esc(yt.channel_thumb)}" style="width:40px;height:40px;border-radius:50%">` : ''}
-             <button class="btn sm ghost danger" onclick="disconnectYoutube()">disconnect</button>`
-          : `<a class="btn sm" href="/api/youtube/oauth/start?channel_id=${c.id}">connect YouTube</a>`}
+             <button class="btn sm ghost danger" onclick="disconnectYoutube()">Disconnect</button>`
+          : `<a class="btn sm" href="/api/youtube/oauth/start?channel_id=${c.id}">Connect YouTube</a>`}
       </div>
     </div>`;
 }
@@ -636,8 +636,8 @@ function paintChannelOverview() {
         <h1>${esc(c.name)}</h1>
         <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
       </div>
-      <button class="btn ghost sm" onclick="go('#/c/${c.id}/setup')">channel setup</button>
-      <button class="btn ghost sm" onclick="go('#/')">all channels</button>
+      <button class="btn ghost sm" onclick="go('#/c/${c.id}/setup')">Channel setup</button>
+      <button class="btn ghost sm" onclick="go('#/')">All channels</button>
     </div>
     ${jobPanel()}
     <section class="panel" id="channel-sponsors" aria-label="Sponsors"></section>
@@ -646,10 +646,10 @@ function paintChannelOverview() {
     <div class="row" style="margin:20px 0 14px;align-items:baseline">
       <h2 style="margin:0">Videos in this channel</h2>
       <div class="spacer"></div>
-      <button class="btn sm primary" onclick="newVideoInChannel('${c.id}')">+ new video</button>
+      <button class="btn sm primary" onclick="newVideoInChannel('${c.id}')">New video</button>
     </div>
     ${(c.videos || []).length === 0
-      ? '<div class="empty-note">No music yet. Add a track above.</div>'
+      ? '<div class="empty-note">No videos yet. Start one with New video.</div>'
       : c.videos.map(projRow).join('')}
   `;
   paintJob();
@@ -681,7 +681,7 @@ function paintChannelSetup() {
         <h1>${esc(c.name)} <span class="sub">— setup</span></h1>
         <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
       </div>
-      <button class="btn ghost sm" onclick="go('#/c/${c.id}')">← videos</button>
+      <button class="btn ghost sm" onclick="go('#/c/${c.id}')">Videos</button>
     </div>
     ${jobPanel()}
     ${themePanel(c)}
@@ -732,10 +732,10 @@ function paintChannelSetup() {
           ${esc(tpl.blurb || '')}</span>
         <div class="spacer"></div>
         ${castLed ? `
-          <button class="btn sm" onclick="castChannel()">${cast.length ? 're-cast' : 'cast it for me'}</button>
-          <button class="btn sm" onclick="fetchPortraits()" ${cast.length ? '' : 'disabled'}>fetch portraits</button>` : ''}
+          <button class="btn sm" onclick="castChannel()">${cast.length ? 'Re-cast' : 'Cast it for me'}</button>
+          <button class="btn sm" onclick="fetchPortraits()" ${cast.length ? '' : 'disabled'}>Fetch portraits</button>` : ''}
         <button class="btn sm" onclick="previewIntro()"
-          ${ready ? '' : 'disabled'}>preview</button>
+          ${ready ? '' : 'disabled'}>Preview</button>
       </div>
 
       <div class="tpl-strip">
@@ -778,8 +778,8 @@ function paintChannelSetup() {
           ${intro.music ? `
             <audio id="stingaudio" controls style="max-width:280px"
               src="/api/channels/${c.id}/file/${intro.music}?v=${c.updated_at}"></audio>
-            <button class="btn sm ghost danger" onclick="removeSting()">remove</button>`
-          : `<label class="btn sm" style="cursor:pointer">choose a sting
+            <button class="btn sm ghost danger" onclick="removeSting()">Remove</button>`
+          : `<label class="btn sm" style="cursor:pointer">Choose a sting
                <input type="file" accept="audio/*" hidden onchange="uploadSting(this.files[0])">
              </label>`}
         </div>
@@ -787,7 +787,7 @@ function paintChannelSetup() {
           <div class="row" style="gap:10px;margin-bottom:12px">
             <div class="mono" style="flex:1;min-width:200px;color:var(--ink-faint)">
               ${stingWindowNote(intro)}</div>
-            <button class="btn sm ghost" onclick="auditionSting()">hear the window</button>
+            <button class="btn sm ghost" onclick="auditionSting()">Hear the window</button>
           </div>
           <label class="field" style="margin:0 0 12px"><span>Start it — <b>${fmtTime(intro.music_start)}${
               intro.music_start > 0 ? ' into the track' : ' — the very top'}</b></span>
@@ -839,14 +839,14 @@ function paintChannelSetup() {
                 <input type="text" aria-label="Cast member ${i + 1}" value="${esc(s)}" onchange="editCast(${i}, this.value)">
                 <div class="cast-acts">
                   <button class="btn xs ghost" onclick="changeCastImage(${i})"
-                    title="choose a different portrait">change</button>
+                    title="choose a different portrait">Change</button>
                   <label class="btn xs ghost" style="cursor:pointer"
                     title="use your own image">upload
                     <input type="file" accept="image/*" hidden
                       onchange="uploadCastImage(${i}, this.files[0])"></label>
                   <div class="spacer"></div>
                   <button class="btn xs ghost danger" onclick="removeCast(${i})"
-                    title="remove ${esc(s)} from the cast">remove</button>
+                    title="remove ${esc(s)} from the cast">Remove</button>
                 </div>
               </div>`;
             }).join('')}
@@ -854,7 +854,7 @@ function paintChannelSetup() {
       <div class="row" style="margin-top:12px">
         <input type="text" id="newcast" aria-label="New cast member" placeholder="add someone — e.g. “Ada Lovelace portrait”"
           style="flex:1" onkeydown="if(event.key==='Enter')addCast(this)">
-        <button class="btn sm" onclick="addCast(document.getElementById('newcast'))">add</button>
+        <button class="btn sm" onclick="addCast(document.getElementById('newcast'))">Add</button>
       </div>`}
 
       ${previewStage(c, 'intro preview', 'cache/intro_preview.webm', c.preview_at)}
@@ -868,7 +868,7 @@ function paintChannelSetup() {
 
     <div class="row" style="margin-top:30px">
       <div class="spacer"></div>
-      <button class="btn sm ghost danger" onclick="delChannel()">delete channel</button>
+      <button class="btn sm ghost danger" onclick="delChannel()">Delete channel</button>
     </div>
   `;
   paintJob();
@@ -941,12 +941,12 @@ async function changeCastImage(i) {
       <div class="row" style="margin-bottom:12px">
         <strong>A portrait for ${esc(subject)}</strong>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="pclose">close</button>
+        <button class="btn sm ghost" id="pclose">Close</button>
       </div>
       <div class="row" style="margin-bottom:12px">
         <input type="text" id="pq" aria-label="Search portraits" value="${esc(subject)}" style="flex:1"
           placeholder="search for something else">
-        <button class="btn sm" id="pgo">search</button>
+        <button class="btn sm" id="pgo">Search</button>
       </div>
       <div id="presults" class="pick-grid portraits">
         <div class="empty-note" style="grid-column:1/-1">Searching for portraits…</div>

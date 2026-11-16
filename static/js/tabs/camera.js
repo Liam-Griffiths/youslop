@@ -40,7 +40,7 @@ function paintCameraRecord() {
     <div class="row" style="margin:12px 0">
       <label>Camera <select ${locked} onchange="chooseCameraDevice('cb_camera',this.value)">${options('videoinput', 'cb_camera')}</select></label>
       <label>Microphone <select ${locked} onchange="chooseCameraDevice('vb_mic',this.value)">${options('audioinput', 'vb_mic')}</select></label>
-      <button class="btn sm" ${locked} onclick="openCamera()">open camera</button>
+      <button class="btn sm" ${locked} onclick="openCamera()">Open camera</button>
     </div>
     <div class="camera-frame">
       <video id="camera-live" autoplay muted playsinline></video>
@@ -63,7 +63,7 @@ function paintCameraRecord() {
     </div>
     <div class="camera-drop" ondragover="event.preventDefault()" ondrop="event.preventDefault();importCamera(event.dataTransfer.files[0])">Drop a phone or camera clip here</div>
     ${cam.busy ? `<progress id="camera-progress" max="100" value="${cam.progress}"></progress><span id="camera-upload-status">${cam.processing ? 'Processing picture and voice…' : 'Uploading…'}</span>` : ''}
-    ${cam.pending ? '<button class="btn sm" onclick="retryCameraUpload()">retry saved upload</button>' : ''}
+    ${cam.pending ? '<button class="btn sm" onclick="retryCameraUpload()">Retry saved upload</button>' : ''}
     ${take ? `<div class="panel" style="margin-top:12px">
       <video id="camera-review" controls playsinline preload="metadata" style="width:100%"></video>
       <audio id="camera-audio" preload="metadata"></audio>
@@ -73,17 +73,17 @@ function paintCameraRecord() {
       </select></label>
       <p>Pause the video, then click your face to set the crop focal point.
       <span id="camera-focal">${take.focal?.length ? `Focal: ${take.focal.map(v => Math.round(v * 100) + '%').join(', ')}` : 'No focal point set'}</span>
-      <button class="btn sm ghost" onclick="saveCameraLook({camera_focal:[]})">clear focal point</button></p>
+      <button class="btn sm ghost" onclick="saveCameraLook({camera_focal:[]})">Clear focal point</button></p>
       <p class="mono">Review shows the original picture. Preview this paragraph to see the saved look and crop.</p>
-      <div class="row"><button class="btn sm" onclick="reviewCamera()">review cleaned take</button>
+      <div class="row"><button class="btn sm" onclick="reviewCamera()">Review cleaned take</button>
       <span>Kept automatically</span><button class="btn sm" ${locked} onclick="toggleCameraRec()">Retake</button></div>
       ${take.sync_warning ? '<p>Audio/video offset exceeds 100 ms — check sync.</p>' : ''}
     </div>` : ''}
-    <div class="rec-nav"><button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index - 1})">← previous</button>
+    <div class="rec-nav"><button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index - 1})">← Previous</button>
       <span>paragraph ${state.rec.index + 1} of ${p.slides.length}</span>
-      <button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index + 1})">next →</button></div>
+      <button class="btn sm" ${locked} onclick="cameraJump(${state.rec.index + 1})">Next →</button></div>
     <p>If this desktop cannot record video, open this project in your system browser:
-      <a href="${esc(location.href)}" target="_blank" rel="noopener">open in browser</a></p>
+      <a href="${esc(location.href)}" target="_blank" rel="noopener">Open in browser</a></p>
     ${voiceNextUp(p, state.rec.index)}${voicePresenterOptions(p)}</section>${voiceTakesPanel(p, s)}</div>`;
   if (cam.stream) attachCameraPreview();
   if (take) setupCameraReview(p, take);

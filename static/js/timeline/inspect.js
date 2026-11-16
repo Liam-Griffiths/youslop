@@ -283,8 +283,8 @@ function tlEditText(sid) {
         <strong>Edit the words</strong>
         <span class="mono tl-note">paragraph ${state.project.slides.indexOf(s) + 1}</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="tx-cancel">cancel</button>
-        <button class="btn sm primary" id="tx-save">save</button>
+        <button class="btn sm ghost" id="tx-cancel">Cancel</button>
+        <button class="btn sm primary" id="tx-save">Save</button>
       </div>
       <label class="micro-label" for="tx-text">Narration</label>
       <textarea id="tx-text" rows="8" style="width:100%">${esc(s.narration)}</textarea>

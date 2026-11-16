@@ -55,14 +55,14 @@ async function paintModelLibrary() {
       front, how big it really is — and every video that uses it inherits that.
       GLB files only.</p>
     <div class="row" style="margin-bottom:14px">
-      <label class="btn sm primary" style="cursor:pointer">add a .glb model
+      <label class="btn sm primary" style="cursor:pointer">Add a .glb model
         <input type="file" accept=".glb,model/gltf-binary" hidden
           onchange="uploadModel(this.files[0], false);this.value=''"></label>
     </div>
     <div class="lib-grid">
       ${models.map((m) => modelCard(m, `
-        <button class="btn xs ghost" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
-        <button class="btn xs ghost danger" onclick="deleteModel('${m.id}')">delete</button>`)).join('')
+        <button class="btn xs ghost" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'Open' : 'Confirm…'}</button>
+        <button class="btn xs ghost danger" onclick="deleteModel('${m.id}')">Delete</button>`)).join('')
         || '<div class="empty-note">No 3D models yet.</div>'}
     </div>`;
 }
@@ -123,20 +123,20 @@ async function paintCast() {
       ${['hero', 'comparison', 'supporting', 'cameo'].map((r) => `<option ${r === x.role ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
   const slot = (x) => {
     if (x.mode === 'photos') return `<span class="pill">photos and cards instead</span>
-      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'model'})">use a model</button>`;
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'model'})">Use a model</button>`;
     const m = x.model && byId[x.model];
     if (m) return `<img src="/api/models/${m.id}/thumb.jpg?v=${Math.round(m.thumb_at || 0)}" style="width:96px;height:54px;object-fit:cover;border-radius:5px" onerror="this.style.opacity=0">
       <span>${esc(m.identity && m.identity.name || m.title)}</span>
       ${m.confirmed ? '<span class="pill on">ready</span>' : '<span class="pill warn">needs confirming</span>'}
-      <button class="btn xs ${m.confirmed ? 'ghost' : 'primary'}" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'open' : 'confirm…'}</button>
-      <button class="btn xs ghost" onclick="castEdit('${x.id}', {model: ''})">unlink</button>`;
+      <button class="btn xs ${m.confirmed ? 'ghost' : 'primary'}" onclick="openModelIntake('${m.id}')">${m.confirmed ? 'Open' : 'Confirm…'}</button>
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {model: ''})">Unlink</button>`;
     const spare = models.filter((mm) => !used.has(mm.id));
     return `<span class="pill warn">needs a model</span>
       ${spare.length ? `<select aria-label="Model for ${esc(x.subject)}" onchange="if(this.value) castEdit('${x.id}', {model: this.value})" style="width:auto">
         <option value="">from the library…</option>${spare.map((mm) => `<option value="${mm.id}">${esc(mm.identity && mm.identity.name || mm.title)}</option>`).join('')}</select>` : ''}
-      <label class="btn xs" style="cursor:pointer">upload .glb
+      <label class="btn xs" style="cursor:pointer">Upload .glb
         <input type="file" accept=".glb,model/gltf-binary" hidden onchange="uploadForSubject('${x.id}', this.files[0]);this.value=''"></label>
-      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'photos'})">photos instead</button>`;
+      <button class="btn xs ghost" onclick="castEdit('${x.id}', {mode: 'photos'})">Photos instead</button>`;
   };
   const gaps = sum.needing.length, unconfirmed = subs.filter((x) => x.mode === 'model' && x.model && byId[x.model] && !byId[x.model].confirmed).length;
   body.innerHTML = `
@@ -170,8 +170,8 @@ async function paintCast() {
       <div class="row" style="margin-top:12px">
         <input type="text" id="newsubject" aria-label="New subject" placeholder="add a subject, e.g. Concorde" style="flex:1;min-width:200px"
           onkeydown="if(event.key==='Enter') castAdd()">
-        <button class="btn sm ghost" onclick="castAdd()">add</button>
-        <button class="btn sm ghost" onclick="castPropose()" title="ask again; subjects with a model are kept">propose again</button>
+        <button class="btn sm ghost" onclick="castAdd()">Add</button>
+        <button class="btn sm ghost" onclick="castPropose()" title="ask again; subjects with a model are kept">Propose again</button>
       </div>
     </div>
     <div class="card">
@@ -192,8 +192,8 @@ function castScriptRow(p) {
   return `<div class="row"><span>The script is written (${p.slides.length} paragraphs).</span>
       ${what ? `<span class="pill ${w ? 'warn' : ''}"><span class="dot"></span>${what}</span>` : ''}
       <div class="spacer"></div>
-      ${fl.length ? '<button class="btn sm primary" onclick="reviseVisuals()">rewrite the visuals</button>' : ''}
-      <button class="btn sm ghost" onclick="go('#/p/${p.id}/script')">go to the script</button></div>`;
+      ${fl.length ? '<button class="btn sm primary" onclick="reviseVisuals()">Rewrite the visuals</button>' : ''}
+      <button class="btn sm ghost" onclick="go('#/p/${p.id}/script')">Go to the script</button></div>`;
 }
 
 async function castEdit(sid, patch) {
@@ -260,7 +260,7 @@ function intakeFacts(m, a, kind) {
     const odd = h < 2.2 || h > 6;
     room = `<p class="mi-p">Floor to ceiling: <b>${h.toFixed(2)} m</b> at this size.
       ${odd ? `<span style="color:var(--warn-ink)">Rooms are usually 2.4\u20135 m, so the size is probably off.</span>
-        <button class="btn xs ghost" onclick="miRoomHeight(3.5)">make it 3.5 m</button>` : ''}</p>`;
+        <button class="btn xs ghost" onclick="miRoomHeight(3.5)">Make it 3.5 m</button>` : ''}</p>`;
   }
   const limits = (window.Stage3D ? window.Stage3D.limitsFor({ ...a, kind }) : a.limits || [])
     .map((c) => LIMIT_TEXT[c] ? `<li>${esc(LIMIT_TEXT[c])}${c === 'one_direction' && a.centre_probe && a.centre_probe.open_sides.length
@@ -284,7 +284,7 @@ async function openModelIntake(mid) {
         <strong>${esc(m.title)}</strong>
         ${m.confirmed ? '<span class="pill on">confirmed</span>' : '<span class="pill warn">needs confirming</span>'}
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="mi-close">close</button>
+        <button class="btn sm ghost" id="mi-close">Close</button>
       </div>
       <div class="model-intake">
         <div class="model-view" id="mi-view"><div class="empty-note" style="padding:40px">loading the model…</div></div>
@@ -346,21 +346,21 @@ async function openModelIntake(mid) {
   const identityBlock = () => {
     const id = m.identity;
     if (asking) return '<p class="mi-p">Asking Claude what it is\u2026 (up to a minute)</p>';
-    if (!id) return `<button class="btn sm" onclick="miIdentify()" ${m.analysis ? '' : 'disabled'}>ask Claude what it is</button>`;
+    if (!id) return `<button class="btn sm" onclick="miIdentify()" ${m.analysis ? '' : 'disabled'}>Ask Claude what it is</button>`;
     const rows = [];
     rows.push(`<p class="mi-p"><b>${esc(id.name || 'not sure')}</b> <span class="mono">(${esc(id.confidence)} confidence)</span>
-      ${id.name && id.name !== draft.title ? `<button class="btn xs ghost" onclick="miUse('title')">use as title</button>` : ''}<br>${esc(id.what || '')}</p>`);
+      ${id.name && id.name !== draft.title ? `<button class="btn xs ghost" onclick="miUse('title')">Use as title</button>` : ''}<br>${esc(id.what || '')}</p>`);
     if (id.front_view) {
       const v = ((window.Stage3D && window.Stage3D.OBJECT_VIEWS) || []).find((x) => x.id === id.front_view);
       const want = v ? ((360 - v.az) % 360) : null;
       if (want != null) rows.push(`<p class="mi-p">Its front faces view ${esc(id.front_view)}.
-        ${want !== draft.heading ? `<button class="btn xs ghost" onclick="miUse('front')">turn it to face the arrow</button>` : '\u2713 facing the arrow'}</p>`);
+        ${want !== draft.heading ? `<button class="btn xs ghost" onclick="miUse('front')">Turn it to face the arrow</button>` : '\u2713 facing the arrow'}</p>`);
     }
     const scales = [];
     for (const [i, sz] of (id.sizes || []).entries()) {
       const k = impliedScale(sz); if (k) scales.push(k);
       rows.push(`<p class="mi-p">${esc(sz.feature)}: <b>${sz.metres} m</b> <span class="mono">(${esc(sz.how_sure)})</span>
-        ${k ? `<button class="btn xs ghost" onclick="miUse('size', ${i})">set size from this</button>` : ''}</p>`);
+        ${k ? `<button class="btn xs ghost" onclick="miUse('size', ${i})">Set size from this</button>` : ''}</p>`);
     }
     if (scales.length === 2) {
       const off = Math.abs(scales[0] - scales[1]) / Math.min(...scales);
@@ -369,11 +369,11 @@ async function openModelIntake(mid) {
     }
     if (id.subject) rows.push(`<p class="mi-p">Subject: <b>${esc(id.subject.name)}</b>${id.subject.refined ? ' <span class="mono">(placed from a closer look)</span>' : ''}${id.north && id.north !== 'unknown' ? ` \u00b7 north is ${esc(id.north)}` : ''}
       ${(draft.regions || m.regions || []).some((r) => r.label === id.subject.name) ? ' \u2713 marked'
-        : `<button class="btn xs ghost" onclick="miUse('subject')">mark it</button>`}</p>`);
+        : `<button class="btn xs ghost" onclick="miUse('subject')">Mark it</button>`}</p>`);
     const parts = Object.keys(id.parts || {});
     if (parts.length) rows.push(`<p class="mi-p">${parts.length} part names${id.parts_from_pictures ? ' (from pictures)' : ''}: ${esc(Object.values(id.parts).join(', '))}
-      ${draft.parts_labels ? ' \u2713' : `<button class="btn xs ghost" onclick="miUse('parts')">use them</button>`}</p>`);
-    rows.push(`<button class="btn xs ghost" onclick="miIdentify()">ask again</button>`);
+      ${draft.parts_labels ? ' \u2713' : `<button class="btn xs ghost" onclick="miUse('parts')">Use them</button>`}</p>`);
+    rows.push(`<button class="btn xs ghost" onclick="miIdentify()">Ask again</button>`);
     return rows.join('');
   };
 
@@ -454,7 +454,7 @@ async function openModelIntake(mid) {
     const sz = ctl ? ctl.size() : modelSize(live());
     const axis = draft.size_axis;
     $('#mi-side', wrap).innerHTML = `
-      <label class="mono mi-k" for="mi-title">title</label>
+      <label class="mono mi-k" for="mi-title">Title</label>
       <input type="text" id="mi-title" value="${esc(draft.title)}">
 
       <div class="mi-sec">
@@ -472,9 +472,9 @@ async function openModelIntake(mid) {
         <p class="mi-p">The arrow on the floor marks the front. Turn the model
           until its nose faces the arrow.</p>
         <div class="row">
-          <button class="btn sm ghost" onclick="miTurn(90)">turn left</button>
-          <button class="btn sm ghost" onclick="miTurn(-90)">turn right</button>
-          <button class="btn sm ghost" onclick="miTurn(180)">about face</button>
+          <button class="btn sm ghost" onclick="miTurn(90)">Turn left</button>
+          <button class="btn sm ghost" onclick="miTurn(-90)">Turn right</button>
+          <button class="btn sm ghost" onclick="miTurn(180)">About face</button>
           <span class="mono" style="color:var(--ink-faint)">${draft.heading}°</span>
         </div>
       </div>
@@ -490,7 +490,7 @@ async function openModelIntake(mid) {
           <input type="number" id="mi-metres" aria-label="Real size in metres" min="0.001" step="any" style="width:110px"
             value="${sz ? +sz[axis].toFixed(3) : ''}">
           <span class="mono">m</span>
-          <button class="btn sm ghost" onclick="miApplySize()">apply</button>
+          <button class="btn sm ghost" onclick="miApplySize()">Apply</button>
         </div>
         <p class="mi-p" style="margin-top:6px">e.g. a wingspan is the width; a car's length is the length.</p>
       </div>
@@ -513,9 +513,9 @@ async function openModelIntake(mid) {
           ${m.parts.length ? '' : 'This model has no named parts, so regions are how its parts exist. '}Select one to move or size it.</p>
         <div id="mi-regions">${regionsList()}</div>
         <div class="row" style="margin-top:6px">
-          <button class="btn sm ghost" onclick="miRegionAdd()">add region</button>
-          ${regionSel >= 0 ? `<button class="btn sm ghost" onclick="miRegionMode('move')">move</button>
-            <button class="btn sm ghost" onclick="miRegionMode('size')">size</button>` : ''}
+          <button class="btn sm ghost" onclick="miRegionAdd()">Add region</button>
+          ${regionSel >= 0 ? `<button class="btn sm ghost" onclick="miRegionMode('move')">Move</button>
+            <button class="btn sm ghost" onclick="miRegionMode('size')">Size</button>` : ''}
         </div>
       </div>
 
@@ -529,7 +529,7 @@ async function openModelIntake(mid) {
       </div>
 
       <div class="row" style="margin-top:14px">
-        <button class="btn primary" id="mi-confirm">${m.read_only ? 'Copy to my library' : m.confirmed ? 'save' : 'confirm model'}</button>
+        <button class="btn primary" id="mi-confirm">${m.read_only ? 'Copy to my library' : m.confirmed ? 'Save' : 'Confirm model'}</button>
         <span class="mono" style="color:var(--ink-faint)">${m.read_only ? 'Pack model · read-only' : 'saves front, size and look'}</span>
       </div>`;
     $('#mi-title', wrap).oninput = (e) => { draft.title = e.target.value; };
@@ -644,8 +644,8 @@ async function paintStage() {
           · ${c.ok || 0} checked${c.flagged ? ` · ${c.flagged} flagged` : ''}${c.stale ? ` · ${c.stale} out of date` : ''}${c.unsolved ? ` · ${c.unsolved} not solved` : ''}</span>
         <div class="spacer"></div>
         <button class="btn sm ghost" onclick="stageSolve()" ${busy || !st.total ? 'disabled' : ''}
-          title="solve the shots that are new or out of date, without asking Claude">solve what changed</button>
-        <button class="btn sm primary" onclick="stagePlan()" ${busy || !st.total ? 'disabled' : ''}>${c.ok || c.flagged ? 'plan again' : 'plan the shots'}</button>
+          title="solve the shots that are new or out of date, without asking Claude">Solve what changed</button>
+        <button class="btn sm primary" onclick="stagePlan()" ${busy || !st.total ? 'disabled' : ''}>${c.ok || c.flagged ? 'Plan again' : 'Plan the shots'}</button>
       </div>
       <p class="mono" style="color:var(--ink-faint);margin:8px 0 0">
         Claude directs each 3D paragraph (subject, part, move, framing, side, join); the stage works out the
@@ -668,9 +668,9 @@ async function paintStage() {
               <span class="pill ${cls}"><span class="dot"></span>${word}</span>
               ${sh.locked ? '<span class="pill">locked</span>' : ''}
               <div class="spacer"></div>
-              <button class="btn xs ghost" onclick="openShot('${s.id}')">preview</button>
-              <button class="btn xs ghost" onclick="stageSolve(['${s.id}'])" ${busy || sh.locked ? 'disabled' : ''}>solve</button>
-              <button class="btn xs ghost" onclick="stageEdit('${s.id}', {locked: ${!sh.locked}})">${sh.locked ? 'unlock' : 'lock'}</button>
+              <button class="btn xs ghost" onclick="openShot('${s.id}')">Preview</button>
+              <button class="btn xs ghost" onclick="stageSolve(['${s.id}'])" ${busy || sh.locked ? 'disabled' : ''}>Solve</button>
+              <button class="btn xs ghost" onclick="stageEdit('${s.id}', {locked: ${!sh.locked}})">${sh.locked ? 'Unlock' : 'Lock'}</button>
             </div>
             <div class="mi-p" style="margin:6px 0" title="${esc(s.narration)}">${esc(s.narration.slice(0, 160))}${s.narration.length > 160 ? '…' : ''}</div>
             <div class="mono" style="color:var(--ink-faint);margin-bottom:6px">${esc(s.visual_note)}</div>
@@ -726,20 +726,20 @@ async function openShot(sid) {
         <strong>Shot preview</strong>
         <span class="mono" style="color:var(--ink-faint)">${esc((data.solved && data.solved.subject) || '')} · ${data.secs.toFixed(1)} s</span>
         <div class="spacer"></div>
-        <button class="btn sm ghost" id="sh-close">close</button>
+        <button class="btn sm ghost" id="sh-close">Close</button>
       </div>
       <div id="sh-view" style="width:100%;background:var(--bg);border-radius:6px;overflow:hidden">
         <div class="empty-note" style="padding:60px">loading the scene…</div></div>
       <div class="row" style="margin-top:10px;gap:8px">
-        <button class="btn sm" id="sh-play">play</button>
+        <button class="btn sm" id="sh-play">Play</button>
         <input type="range" id="sh-seek" aria-label="Shot preview position" min="0" max="1000" value="0" style="flex:1">
         <span class="mono" id="sh-t" style="width:80px;text-align:right">0.0 s</span>
       </div>
       <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
-        <button class="btn sm ghost" id="sh-free" title="drag to orbit, right-drag to pan, scroll to move in">free camera</button>
-        <button class="btn sm ghost" id="sh-a" disabled>set start here</button>
-        <button class="btn sm ghost" id="sh-b" disabled>set end here</button>
-        <button class="btn sm primary" id="sh-save" disabled>check and keep</button>
+        <button class="btn sm ghost" id="sh-free" title="drag to orbit, right-drag to pan, scroll to move in">Free camera</button>
+        <button class="btn sm ghost" id="sh-a" disabled>Set start here</button>
+        <button class="btn sm ghost" id="sh-b" disabled>Set end here</button>
+        <button class="btn sm primary" id="sh-save" disabled>Check and keep</button>
         <span class="mono" id="sh-msg" style="color:var(--ink-faint)"></span>
       </div>
     </div>`;

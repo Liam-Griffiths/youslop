@@ -96,6 +96,10 @@ check(complete.reason==='model'&&state.job.done==='error','failed job is retaine
 check(notice.textContent.includes("writing model didn't answer"),'failed job toast mapped');
 state.project={id:'p1'};state.job.origin=location.hash;
 const card=jobPanel();
+check(card.includes('<strong>Script</strong>'),'sentence case job card');
+paintJob(); check(nodes['#jobstate'].textContent==='failed','plain failed state');
+state.job.done='done'; paintJob(); check(nodes['#jobstate'].textContent==='done','done state');
+state.job.done='error';
 check(card.includes('Dismiss')&&card.includes('Details')&&!card.split('<summary>Details</summary>')[0].includes('LLMError:'),'job diagnostic behind fold');
 check(!card.includes('synthetic</'),'no visible job id');
 check(friendlyError({last_log_line:'FAILED: legacy failure'}).message.includes('legacy failure'),'old summary without reason');

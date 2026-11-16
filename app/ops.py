@@ -22,7 +22,7 @@ def prepare_create(payload):
     if not script and len(idea) < 8:
         raise PayloadError("Describe the video idea, or paste a script.")
     if script and len(script.split()) < 120:
-        raise PayloadError("That script is too short to build a video from.")
+        raise PayloadError(f"Paste at least 120 words (you have {len(script.split())}).")
 
     channel = channels.load_or_none(payload.get("channel_id") or "")
     test = bool(payload.get("test")) and not script

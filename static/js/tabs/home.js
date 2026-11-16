@@ -14,12 +14,13 @@ async function renderHome() {
       <div class="row home-start-modes" role="group" aria-label="Start from">
         <button class="btn" data-start="idea" onclick="homeStart('idea')">An idea</button>
         <button class="btn" data-start="script" onclick="homeStart('script')">My own script</button>
-        <button class="btn" disabled>A footage shoot</button>
+        <button class="btn" disabled aria-describedby="footage-start-note">A footage shoot</button>
         <button class="btn" data-start="format" onclick="homeStart('format')">A saved style</button>
         <button class="btn ghost" onclick="$('#projfile').click()">Open a .corkbored file</button>
         <input type="file" id="projfile" accept=".corkbored,.youslop" hidden
           onchange="openProjectFile(this.files[0]);this.value=''">
       </div>
+      <p class="sub" id="footage-start-note">To use a footage shoot, start a video with an idea or script, then add its clips in Edit.</p>
       <p class="sub"><a href="#/guide">See how it works</a></p>
       <label class="field" id="idea-field"><span>What is the video about?</span>
         <textarea id="idea" rows="2" placeholder="Describe the story you want to tell."></textarea></label>
@@ -49,7 +50,7 @@ async function renderHome() {
       </div>
       <p id="shape-note" class="sub" hidden>Short targets at most 60 seconds.
         Pasted scripts keep their full length; keep yours under 60 seconds for a Short.</p>
-      <p id="script-length-note" class="sub" hidden>Length comes from your script, measured after import.</p>
+      <p id="script-length-note" class="sub" hidden>Set by your script, measured after import.</p>
       <form id="home-new-channel" hidden onsubmit="createHomeChannel(event)">
         <div class="row">
           <label class="field"><span>Channel name</span><input type="text" id="home-channel-name" required></label>
@@ -221,7 +222,7 @@ function projRow(p) {
     ${p.test ? '<span class="pill warn" title="a one-minute test run">test</span>' : ''}
     <span class="pill ${p.has_output ? 'on' : ''}">${esc(p.status)}</span>
     <button class="btn sm danger ghost"
-      onclick="event.stopPropagation();delProject('${p.id}')">delete</button>
+      onclick="event.stopPropagation();delProject('${p.id}')">Delete</button>
   </div>`;
 }
 
@@ -267,8 +268,9 @@ async function createProject(btn) {
   if (state.newKit) body.kit_id = state.newKit;
   if (scripting) {
     const script = $('#script').value.trim();
-    if (script.split(/\s+/).length < 120) {
-      return toast('Paste a bit more — that is too short to build a video from.', true);
+    const words = script ? script.split(/\s+/).length : 0;
+    if (words < 120) {
+      return toast(`Paste at least 120 words (you have ${words}).`, true);
     }
     body.script = script;
     body.fidelity = $('#fidelity').value;
@@ -363,6 +365,9 @@ function newTestRun(on) {
       option.dataset.test = 'true'; mins.add(option);
     }
     mins.disabled = state.newTest || state.mode === 'script';
+    mins.title = state.mode === 'script' ? 'Set by your script' : '';
+    if (state.mode === 'script') mins.setAttribute('aria-describedby', 'script-length-note');
+    else mins.removeAttribute('aria-describedby');
   }
   if (research) {
     research.disabled = state.newTest || state.mode === 'script';

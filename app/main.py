@@ -1102,6 +1102,8 @@ def _footage_call(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except footage.ProcessingError as exc:
         raise HTTPException(409, str(exc)) from exc
+    except footage.OriginalFileNotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(404, 'Footage unavailable') from exc
     except (ValueError, TypeError) as exc:

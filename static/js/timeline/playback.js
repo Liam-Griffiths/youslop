@@ -100,8 +100,9 @@ async function tlSeek(t, opts = {}) {
   tlPaintHead();
   if (!seg.have) {
     const failed = TL.failed.has(seg.ref);
-    tlMsg(failed ? `${tlName(seg)} could not be drawn.`
-      : opts.ensure === false || TL.scrubbing ? `${tlName(seg)} is not drawn yet. Press play to draw it.`
+    const name = tlName(seg).replace(/^./, c => c.toUpperCase());
+    tlMsg(failed ? `${name} could not be drawn.`
+      : opts.ensure === false || TL.scrubbing ? `${name} is not drawn yet. Press play to draw it.`
       : `Drawing ${tlName(seg)}…`);
     if (opts.ensure !== false && !TL.scrubbing) tlEnsure([seg.ref], true);
     return;
@@ -117,7 +118,7 @@ async function tlSeek(t, opts = {}) {
   }
   await tlSeekVideo(v, tlFileTime(seg, t));
   if (token !== tlSeekToken) return;
-  tlMsg(seg.ready ? '' : (TL.pending.has(seg.ref) ? `${tlName(seg)} is out of date — redrawing…` : ''));
+  tlMsg(seg.ready ? '' : (TL.pending.has(seg.ref) ? `${tlName(seg).replace(/^./, c => c.toUpperCase())} is out of date — redrawing…` : ''));
   if (!seg.ready && !TL.scrubbing && opts.ensure !== false) tlEnsure([seg.ref], true);
   if (TL.playing && !opts.noplay) tlResume();
 }

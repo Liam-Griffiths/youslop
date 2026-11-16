@@ -104,6 +104,19 @@ def test_only_safe_viewing_media_served(client, tmp_path):
     assert client.get(BASE + '/media/proxies/f1.mp4').status_code == 404
 
 
+def test_missing_original_names_file_while_proxy_remains_available(client):
+    shoot = footage.load('s1')
+    shoot.files[0].source_path = '/offline/camera.mp4'
+    footage._save(shoot)
+    proxy = footage.shoot_dir('s1') / 'proxies/f1.mp4'
+    proxy.parent.mkdir()
+    proxy.write_bytes(b'PROXY')
+    response = client.get(BASE + '/transcripts/f1')
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Original file not found: camera.mp4'
+    assert client.get(BASE + '/media/proxies/f1.mp4').content == b'PROXY'
+
+
 def test_label_confirmation_and_job_identity(client, monkeypatch):
     budget = {'input_tokens': 10, 'output_tokens': 20}
     monkeypatch.setattr(footage_labels, 'estimate', lambda sid: budget)

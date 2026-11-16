@@ -35,7 +35,7 @@ function openJobs() {
       for (const j of rows) {
         const markup = `
         <div class="row"><strong>${esc(jobLabel(j))}</strong><div class="spacer"></div>
-          <span class="mono">${esc(j.state)} · ${j.elapsed}s</span>
+          <span class="mono">${esc(j.state === 'error' ? 'failed' : j.state)} · ${j.elapsed}s</span>
           ${j.state === 'running' && j.cancellable ? `<button type="button" class="btn sm ghost"
             data-cancel-job="${esc(j.id)}" aria-label="Cancel ${esc(j.kind)} for ${esc(j.project_title || j.project_id || 'Library')}">Cancel</button>` : ''}</div>
         <div class="sub mono">${esc(j.project_title || 'Library')}</div>
@@ -82,7 +82,8 @@ function openJobs() {
 }
 
 function jobLabel(j) {
-  return j.kind === 'timeline sound' ? 'Mixing the sound' : j.kind === 'timeline proxy' ? 'Preparing pictures' : j.kind;
+  const label = j.kind === 'timeline sound' ? 'Mixing the sound' : j.kind === 'timeline proxy' ? 'Preparing pictures' : j.kind;
+  return String(label || 'Job').replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 }
 
 function jobProgress(j) {
