@@ -22,10 +22,12 @@ function scriptRuns(p) { return p.slides.map(s => [s]); }
 function check(ok, message) { if (!ok) throw Error(message); }
 function paintBin() {}
 function paintHomeDocs() {}
+function homeAgentPanel() { return '<div id="home-agent-log"></div>'; }
+function homeAgentPaint() {}
 '''
     checks = r'''
 paintDashboard();
-check(body.innerHTML.includes('id="project-bin"') && body.innerHTML.includes('>Materials</h2>'),'materials region');
+check(body.innerHTML.includes('id="project-bin"') && body.innerHTML.includes('>Materials</h2>') && body.innerHTML.includes('class="home-agent"'),'materials region and agent');
 check(!body.innerHTML.includes('dashboard-card') && !body.innerHTML.includes('>Bin<'),'no stage cards, no bin wording');
 check(body.innerHTML.includes('Nothing outstanding'),'nothing needed yet');
 const p = state.project;

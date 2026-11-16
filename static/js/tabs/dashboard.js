@@ -16,6 +16,7 @@ function paintDashboard() {
         || '<span class="sub">Loading status…</span>'}
     </section>
     <div class="home-body">
+      <aside class="home-agent" aria-label="Agent">${homeAgentPanel()}</aside>
       <div class="home-main">
         <section class="home-card" aria-labelledby="home-materials">
           <div class="home-card-head"><h2 id="home-materials">Materials</h2>
@@ -48,6 +49,7 @@ function paintDashboard() {
     </div></div>`;
   paintBin();
   paintHomeDocs();
+  homeAgentPaint();
 }
 
 // What the video still needs, from every stage, each with a way there.

@@ -210,6 +210,46 @@ def apply_facts(project, doc, found):
     return added
 
 
+def fetch_document(pid, url, title=''):
+    """Save a readable copy of a web page or PDF link as a document (not yet listed)."""
+    if not isinstance(url, str) or urlsplit(url).scheme not in ('http', 'https') or not urlsplit(url).netloc:
+        raise HTTPException(400, 'Use an http or https link')
+    try:
+        r = research._client_for_web().get(url)
+        r.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(502, f'Could not fetch that page: {exc}') from exc
+    ctype = r.headers.get('content-type', '')
+    if 'pdf' in ctype:
+        doc = _new('pdf', title or Path(urlsplit(url).path).stem or urlsplit(url).netloc, url=url)
+        doc['file'] = f"docs/{doc['id']}.pdf"
+        dest = store.project_dir(pid) / doc['file']
+        _docs_dir(pid)
+        dest.write_bytes(r.content[:MAX_BYTES])
+        return _store(pid, doc, pdf_pages(dest))
+    if 'html' in ctype or 'text' in ctype:
+        found = re.search(r'<title[^>]*>(.*?)</title>', r.text, re.I | re.S)
+        doc = _new('web', title or (re.sub(r'\s+', ' ', found.group(1)).strip() if found else urlsplit(url).netloc), url=url)
+        return _store(pid, doc, _paginate(research._html_to_text(r.text) if 'html' in ctype else r.text))
+    raise HTTPException(415, 'That link is not a web page or a PDF')
+
+
+def read_into(pid, doc_id, progress=lambda m: None):
+    """Read one listed document for facts and add them. Slow work outside the lock."""
+    with store.lock_for(pid):
+        doc = dict(_find(store.load(pid), doc_id))
+    found = read_facts(pages_of(pid, doc), doc['title'])
+    with store.lock_for(pid):
+        p = store.load(pid)
+        current = next((d for d in documents(p) if d.get('id') == doc_id), None)
+        if current is None:
+            return 0
+        added = apply_facts(p, current, found)
+        store.save(p)
+    progress(f'{added} new fact(s) from {doc["title"]}')
+    return added
+
+
 # -------------------------------------------------------------------- routes
 def register(app):
     base = '/api/projects/{pid}/documents'
@@ -271,29 +311,8 @@ def register(app):
     @app.post(base + '/link')
     def link(pid: str, payload: dict = Body(...)):
         url = payload.get('url')
-        if not isinstance(url, str) or urlsplit(url).scheme not in ('http', 'https') or not urlsplit(url).netloc:
-            raise HTTPException(400, 'Use an http or https link')
         _load(pid)
-        try:
-            r = research._client_for_web().get(url)
-            r.raise_for_status()
-        except Exception as exc:
-            raise HTTPException(502, f'Could not fetch that page: {exc}') from exc
-        ctype = r.headers.get('content-type', '')
-        if 'pdf' in ctype:
-            doc = _new('pdf', Path(urlsplit(url).path).stem or urlsplit(url).netloc, url=url)
-            doc['file'] = f"docs/{doc['id']}.pdf"
-            dest = store.project_dir(pid) / doc['file']
-            _docs_dir(pid)
-            dest.write_bytes(r.content[:MAX_BYTES])
-            _store(pid, doc, pdf_pages(dest))
-        elif 'html' in ctype or 'text' in ctype:
-            title = re.search(r'<title[^>]*>(.*?)</title>', r.text, re.I | re.S)
-            doc = _new('web', re.sub(r'\s+', ' ', title.group(1)).strip() if title else urlsplit(url).netloc, url=url)
-            _store(pid, doc, _paginate(research._html_to_text(r.text) if 'html' in ctype else r.text))
-        else:
-            raise HTTPException(415, 'That link is not a web page or a PDF')
-        return _add(pid, doc)
+        return _add(pid, fetch_document(pid, url))
 
     @app.get(base + '/{ident}')
     def show(pid: str, ident: str):
@@ -342,18 +361,8 @@ def register(app):
     def read(pid: str, ident: str):
         with store.lock_for(pid):
             doc = dict(_find(_load(pid), ident))
-        pages = pages_of(pid, doc)
 
         def work(progress):
             progress(f'Reading {doc["title"]}…')
-            found = read_facts(pages, doc['title'])
-            with store.lock_for(pid):
-                p = store.load(pid)
-                current = next((d for d in documents(p) if d.get('id') == ident), None)
-                if current is None:
-                    return {'added': 0}
-                added = apply_facts(p, current, found)
-                store.save(p)
-            progress(f'{added} new fact(s) from {doc["title"]}')
-            return {'added': added, 'found': len(found)}
+            return {'added': read_into(pid, ident, progress)}
         return {'job': jobs.start('read-document', pid, work)}

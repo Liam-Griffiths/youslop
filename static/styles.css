@@ -1860,6 +1860,7 @@ img.themed-pending { opacity:.45; }
 
 /* Project dashboard: stage progress, bin and project facts. */
 /* Project Home */
+main:has(.home-layout) { max-width:1760px; }
 .home-layout { display:flex; flex-direction:column; gap:16px; }
 .home-status { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; padding:10px 14px; background:var(--panel); border:1px solid var(--line); border-radius:8px; font-size:13px; }
 .home-length { font-size:12px; }
@@ -1872,7 +1873,11 @@ img.themed-pending { opacity:.45; }
 .home-stage.ready .home-dot { background:var(--good); border-color:var(--good); }
 .home-stage.in_progress .home-dot { background:var(--accent); border-color:var(--accent); }
 .home-stage.warn .home-dot { background:var(--warn); border-color:var(--warn); }
-.home-body { display:grid; grid-template-columns:minmax(0, 1fr) minmax(260px, 320px); gap:16px; align-items:start; }
+.home-body { display:grid; grid-template-columns:minmax(280px, 340px) minmax(0, 1fr) minmax(240px, 300px); gap:16px; align-items:start; }
+.home-agent { border:1px solid var(--line); border-radius:10px; background:var(--panel); display:flex; flex-direction:column; position:sticky; top:12px; max-height:calc(100vh - 140px); min-height:420px; overflow:hidden; }
+.home-agent .script-agent-log { flex:1; min-height:160px; overflow:auto; padding:12px 16px; }
+.home-agent .script-agent-compose { padding:10px 16px 14px; border-top:1px solid var(--line); }
+@media (max-width:1279px) { .home-body { grid-template-columns:minmax(280px, 320px) minmax(0, 1fr); } .home-side { grid-column:2; } }
 .home-main, .home-side { display:flex; flex-direction:column; gap:16px; min-width:0; }
 .home-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; min-width:0; }
 .home-card h2 { font-size:16px; margin:0; }
@@ -1920,7 +1925,7 @@ img.themed-pending { opacity:.45; }
 .home-doc-fact { display:flex; gap:12px; justify-content:space-between; align-items:baseline; padding:6px 0; border:0; border-top:1px solid var(--line); background:none; color:var(--ink); text-align:left; font-size:13px; cursor:pointer; }
 .home-doc-fact:first-of-type { border-top:0; }
 .home-doc-fact .mono { flex:none; font-size:11px; color:var(--dim); }
-@media (max-width:1099px) { .home-body { grid-template-columns:1fr; } }
+@media (max-width:1099px) { .home-body { grid-template-columns:1fr; } .home-side { grid-column:auto; } .home-agent { position:static; max-height:none; } }
 @media (max-width:899px) { .home-docs { grid-template-columns:1fr; } }
 .bin-dragging { outline:2px dashed var(--cool); outline-offset:4px; }
 .bin-heading, .bin-actions { display:flex; align-items:center; gap:8px; }
