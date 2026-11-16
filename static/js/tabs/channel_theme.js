@@ -11,7 +11,7 @@ async function pickTheme(key) {
   });
   if (choice === null || state.channel?.id !== channel.id) return;
   const before = JSON.parse(JSON.stringify({
-    style: Object.fromEntries(['theme', 'accent', 'accent2', 'grade'].map(k => [k, channel.style[k]])),
+    style: Object.fromEntries(['theme', 'accent', 'accent2', 'grade', 'block_theme'].map(k => [k, channel.style[k]])),
     frame: channel.frame,
     intro: {template: channel.intro.template}, thumb_template: channel.thumb_template,
     outro: {template: channel.outro.template, slots: channel.outro.slots},

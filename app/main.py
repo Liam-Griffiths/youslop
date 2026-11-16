@@ -571,6 +571,12 @@ def patch_channel(cid: str, payload: dict = Body(...)) -> dict:
                 if value not in themes_mod.theme_keys():
                     raise HTTPException(400, f"No such theme: {value}")
                 ch.style.theme = str(value)
+            elif key == "block_theme":
+                from . import block_theme
+                try:
+                    ch.style.block_theme = {k: block_theme.validate(k, v) for k, v in dict(value or {}).items()}
+                except (ValueError, TypeError) as exc:
+                    raise HTTPException(400, str(exc)) from exc
             elif hasattr(ch.style, key):
                 current = getattr(ch.style, key)
                 setattr(ch.style, key,
@@ -677,6 +683,75 @@ def list_themes() -> list[dict]:
     return themes_mod.all_themes()
 
 
+@app.get("/api/themes/options")
+def theme_options() -> dict:
+    """What the theme builder can choose from."""
+    from . import motifs, user_themes
+    from . import block_theme
+    return dict(icons=motifs.ICON_KEYS, patterns=list(user_themes.PATTERNS), grades=list(user_themes.GRADES),
+                max_icons=user_themes.MAX_ICONS, block_fields=list(user_themes.BLOCK_FIELDS),
+                fonts=list(block_theme.fonts()))
+
+
+@app.get("/api/themes/icon/{key}.png")
+def theme_icon(key: str, color: str = "#FFFFFF") -> Response:
+    from . import user_themes
+    try:
+        return Response(user_themes.icon_png(key, color), media_type="image/png",
+                        headers={"Cache-Control": "max-age=86400"})
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/themes/sample")
+def theme_sample(payload: dict = Body(...)) -> Response:
+    """A picture of a theme that has not been saved yet. Writes nothing."""
+    from . import user_themes
+    try:
+        return Response(user_themes.sample(payload.get("theme") or {}, str(payload.get("name") or "")),
+                        media_type="image/png")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/themes")
+def save_theme(payload: dict = Body(...)) -> dict:
+    """Save a theme built in the app; `key` replaces an existing one."""
+    from . import user_themes
+    try:
+        return user_themes.save(payload.get("theme") or {}, str(payload.get("key") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/themes/uses")
+def theme_uses(key: str) -> dict:
+    names = []
+    for row in channels.list_channels():
+        ch = channels.load_or_none(row["id"])
+        if ch and ch.style.theme == key:
+            names.append(ch.name)
+    return dict(channels=names)
+
+
+@app.delete("/api/themes")
+def delete_theme(key: str) -> dict:
+    """Remove a theme built in the app. Channels keep their colours and fall back to the default ground."""
+    from . import user_themes
+    try:
+        user_themes.delete(key)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    # Channels that used it keep their colours and templates and go back to the default theme.
+    for row in channels.list_channels():
+        with channels.lock_for(row["id"]):
+            ch = channels.load_or_none(row["id"])
+            if ch and ch.style.theme == key:
+                ch.style.theme = themes_mod.DEFAULT
+                channels.save(ch)
+    return {"ok": True}
+
+
 @app.post("/api/channels/{cid}/theme")
 def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
     """Cast a channel in a theme: its two colours, its grade, and its templates.
@@ -695,6 +770,8 @@ def apply_theme(cid: str, payload: dict = Body(...)) -> dict:
         key = choose("theme", [key, *themes_mod.theme_keys()], ch.frame)
         picks = themes_mod.apply_to_style(ch.style, key, bool(take))
         ch.frame = themes_mod.apply_to_frame(ch.frame, key)
+        # A built theme can also say how graphics are drawn: corners, panels, borders, type.
+        ch.style.block_theme = {**ch.style.block_theme, **(themes_mod.theme(key).get("blocks") or {})}
         if picks:
             ch.intro.template = picks["intro"]
             ch.thumb_template = picks["thumb"]

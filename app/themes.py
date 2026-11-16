@@ -120,8 +120,9 @@ DEFAULT = "archive"
 
 
 def all_themes() -> list[dict]:
-    from . import packs
-    return THEMES + [item['value'] for pack in packs.scan() for item in pack.themes()]
+    from . import packs, user_themes
+    return (THEMES + [item['value'] for pack in packs.scan() for item in pack.themes()]
+            + user_themes.all_themes())
 
 
 def theme_keys():

@@ -389,8 +389,16 @@ function themePanel(c) {
                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
             ${themeArt(x)}
             <div class="tpl-name">${esc(x.label)}</div>
-            <div class="tpl-cast">${esc(x.for)}</div>
+            <div class="tpl-cast">${esc(x.for || (x.mine ? 'Your theme' : ''))}</div>
+            ${x.mine ? `<button type="button" class="btn xs ghost tpl-edit" aria-label="Edit ${esc(x.label)}"
+              onkeydown="event.stopPropagation()" onclick="event.stopPropagation();themeBuilderOpen('${x.key}')">Edit</button>` : ''}
           </div>`).join('')}
+        <div class="tpl tpl-new" role="button" tabindex="0" onclick="themeBuilderOpen()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+          <div class="tpl-art tpl-new-art" aria-hidden="true">+</div>
+          <div class="tpl-name">New theme</div>
+          <div class="tpl-cast">Build your own</div>
+        </div>
       </div>
       <div class="mono" style="color:var(--ink-faint);margin:2px 0 14px">
         This channel is currently set in <b>${esc(t.label || cur)}</b> —

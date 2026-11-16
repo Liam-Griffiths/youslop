@@ -489,3 +489,14 @@ shown in Review & publish and the jobs strip) so the cost claim is measured.
 - House sponsor read on new projects: opt-in (current) or opt-out (T10.2).
 - T1.7 mastering: keep single-pass loudnorm or move to two-pass linear.
 - Approval of this guide and the canvas (T9.1).
+
+### Theme builder (2026-11-16)
+
+Channel setup's theme strip ends in a **New theme** tile. It opens one dialog:
+controls on the left (name, four colours, pattern, icons, then how graphics
+are drawn: corner rounding, panel opacity, border width, title font and
+weight), a live sample and the grade and template picks on the right. Built
+themes are saved in the data folder's `themes/`, appear in the strip for
+every channel with an **Edit** button, and apply like any other theme. The
+graphics settings land on the channel's block theme, where they can still be
+changed one by one.

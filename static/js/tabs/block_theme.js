@@ -13,7 +13,7 @@ async function mountBlockTheme(scope, id) {
     let sequence = 0, busy = false, pending = false, timer;
     const label = key => ({bg:'Background', ink:'Text', accent:'Accent', accent2:'Second accent', panel:'Panel',
       line:'Rule line', dim:'Muted text', font_display:'Title font', font_body:'Body font', radius:'Corner radius',
-      weight:'Title weight', pace:'Animation pace'})[key] || key.replaceAll('_',' ');
+      weight:'Title weight', pace:'Animation pace', panel_opacity:'Panel opacity', border:'Border width'})[key] || key.replaceAll('_',' ');
     const colors = ['bg','ink','accent','accent2','panel','line','dim'];
     const faces = Object.keys(data.fonts);
     // Local font files only; option previews use the same faces as the blocks.
@@ -27,7 +27,7 @@ async function mountBlockTheme(scope, id) {
         const field = `block-token-${key}`, value = token.value;
         const control = colors.includes(key) ? `<input type="color" id="${field}" value="${esc(value || '#16181C')}" aria-label="${esc(label(key))}"><output data-hex="${key}" class="mono">${esc(value || 'Derived')}</output>`
           : key.startsWith('font_') || key === 'weight' ? `<select id="${field}">${['',...(key === 'weight' ? ['regular','bold','heavy'] : faces)].map(v => `<option value="${esc(v)}" ${v === value ? 'selected' : ''} ${key.startsWith('font_') && v ? `style="font-family:'${esc(v)}'"` : ''}>${esc(v || 'Family default')}</option>`).join('')}</select>`
-          : `<input type="range" id="${field}" min="${key === 'pace' ? '.7' : '0'}" max="${key === 'pace' ? '1.4' : '32'}" step="${key === 'pace' ? '.05' : '1'}" value="${value}"><output class="mono" data-number="${key}">${value}</output>`;
+          : `<input type="range" id="${field}" min="${({pace:.7,panel_opacity:.2})[key] ?? 0}" max="${({pace:1.4,panel_opacity:1,border:8})[key] ?? 32}" step="${key === 'pace' || key === 'panel_opacity' ? '.05' : '1'}" value="${value}"><output class="mono" data-number="${key}">${value}</output>`;
         return `<div class="block-theme-token"><label for="${field}">${esc(label(key))}</label><div class="row">${control}</div>
           <div class="row"><small data-source="${key}">${esc(token.source)}</small><button type="button" class="btn sm ghost" data-reset-token="${key}">Reset</button>${scope === 'project' ? `<button type="button" class="btn sm ghost" data-override-token="${key}" ${token.source === 'project' ? 'hidden' : ''}>Override here</button>` : ''}</div>
           <small class="block-theme-warning" data-warning="${key}">${esc(token.warning || '')}</small></div>`;
@@ -79,7 +79,7 @@ async function mountBlockTheme(scope, id) {
     for (const key of Object.keys(data.tokens)) {
       const input = host.querySelector(`#block-token-${key}`);
       input.oninput = () => {
-        draft[key] = ['radius','pace'].includes(key) ? Number(input.value) : input.value;
+        draft[key] = ['radius','pace','panel_opacity','border'].includes(key) ? Number(input.value) : input.value;
         const out = input.parentElement.querySelector('output');
         if (out) out.textContent = input.value;
         changed();

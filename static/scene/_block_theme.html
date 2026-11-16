@@ -7,7 +7,8 @@
  --radius:{{ (block_theme.radius ~ 'px') if block_theme_radius_set | default(false) else 'initial' }};
  --weight-display:{{ {'regular':400,'bold':700,'heavy':800}.get(block_theme.weight, 'initial') }};
  --block-pace:{{ block_theme.pace }};
- --panel:{{ block_theme.panel or 'color-mix(in srgb,var(--bg) 95%,var(--ink))' }};
+ --panel-solid:{{ block_theme.panel or 'color-mix(in srgb,var(--bg) 95%,var(--ink))' }};
+ --panel:{% if block_theme.panel_opacity | default(1) < 1 %}color-mix(in srgb,var(--panel-solid) {{ (block_theme.panel_opacity * 100) | round | int }}%,transparent){% else %}var(--panel-solid){% endif %};
  --line:{{ block_theme.line or 'color-mix(in srgb,var(--bg) 90%,var(--ink))' }};
  --dim:{{ block_theme.dim or 'color-mix(in srgb,var(--bg) 35%,var(--ink))' }};
 }
@@ -16,6 +17,8 @@ body { font-family:var(--font-body, Inter),sans-serif; }
 {% if block_theme_radius_set | default(false) %}.intro-copy,.badge,.quiet-subscribe,.plate { border-radius:var(--radius, 0px); }{% endif %}
 {% if block_theme.font_body %}body :where(p,span,div,td,th,text) { font-family:var(--font-body)!important; }{% endif %}
 {% if block_theme.font_display %}body :where(h1,h2,h3,.display,.speaker,.quotation,.heading) { font-family:var(--font-display)!important; }{% endif %}
+{# An outline keeps every block's layout as it was drawn; it is added only when asked for. #}
+{% if block_theme.border | default(0) > 0 %}:where(.panel,.caption-panel,.lower,.nameplate,.flap,.row,.measure,.endpoint,.locator,.clock,.mount,.caption,.map,.milestone,.box,.inset,.subtitle,.stack > *,body > div[style*="--panel"]) { outline:{{ block_theme.border }}px solid var(--line); outline-offset:-{{ block_theme.border }}px; }{% endif %}
 {% if block_theme_explicit | default(false) %}.folio { background:var(--bg);color:var(--ink); }{% endif %}
 {% if block_theme.weight %}body :where(h1,h2,h3,.display,.speaker,.quotation,.heading) { font-weight:var(--weight-display)!important; }{% endif %}
 </style>

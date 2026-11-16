@@ -8,8 +8,9 @@ COLORS = ('bg', 'ink', 'accent', 'accent2', 'panel', 'line', 'dim')
 # Empty faces/weight retain each family's existing typography.
 BLOCK_TOKENS = dict(bg='#0E0F11', ink='#F2F2F2', accent='#FF5A1F', accent2='#6FB7FF',
                     panel='', line='', dim='', font_display='', font_body='',
-                    radius=0, weight='', pace=1.)
+                    radius=0, weight='', pace=1., panel_opacity=1., border=0)
 WEIGHTS = dict(regular=400, bold=700, heavy=800)
+RANGES = dict(radius=(0, 32), pace=(.7, 1.4), panel_opacity=(.2, 1), border=(0, 8))
 
 
 def fonts(include_packs=True):
@@ -33,7 +34,7 @@ def validate(key, value, faces=None):
     elif key == 'weight':
         valid = isinstance(value, str) and value in ('', *WEIGHTS)
     else:
-        lo, hi = (0, 32) if key == 'radius' else (.7, 1.4)
+        lo, hi = RANGES[key]
         valid = type(value) in (int, float) and math.isfinite(value) and lo <= value <= hi
     if not valid:
         raise ValueError(f'Invalid block token: {key}')
