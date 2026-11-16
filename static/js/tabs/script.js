@@ -47,6 +47,7 @@ function paintScript() {
     <button class="btn sm" onclick="suggestChapters(this)">Suggest chapters</button>
     <a class="btn sm" href="/projects/${encodeURIComponent(p.id)}/shot-list" target="_blank" rel="noopener">Shot list for the shoot</a>
     <span class="spacer"></span>
+    <button class="btn sm" id="script-marks-toggle" aria-pressed="false" onclick="scriptToggleMarks()">Shot marks</button>
     <button class="btn sm" id="script-facts-toggle" aria-pressed="false" aria-controls="script-facts" onclick="scriptToggleFacts()">All facts · ${facts.length}</button>
     <button class="btn sm" onclick="scriptFocus()">Focus</button>
     </div><div id="script-find" hidden><label>Find in script <input type="search" oninput="scriptFind(this.value)"></label>
@@ -56,16 +57,13 @@ function paintScript() {
     <aside class="script-agent" aria-label="Script agent">${scriptAgentPanel(p, stage && Object.keys(vflags).length ? castChangedNote(Object.values(vflags).filter(f => f.level === 'warn').length, Object.keys(vflags).length - Object.values(vflags).filter(f => f.level === 'warn').length) : '')}</aside>
     <div class="script-splitter" role="separator" tabindex="0" aria-label="Agent panel width" aria-orientation="vertical" onpointerdown="scriptResize(event,'agent')" onkeydown="scriptResizeKey(event,'agent')"></div>
     <section class="script-main" aria-label="Script document"><div class="script-page">`;
-  let seconds = 0, chapterNo = 0, paragraph = 0;
-  const spokenShots = runs.map((run, i) => run[0].insert?.kind ? -1 : i).filter(i => i >= 0);
+  // Write is the words. Shots stay as quiet wrappers (drag targets, the
+  // current shot) with a margin mark; shot editing lives in the Shots view.
+  let chapterNo = 0, paragraph = 0;
   runs.forEach((run, shot) => {
-    const lead = run[0], start = seconds;
-    run.forEach(s => { seconds += scriptSeconds(s); });
+    const lead = run[0];
     if (lead.chapter) html += `<h2 class="script-chapter" data-chapter="${lead.id}"><span class="mono">Chapter ${++chapterNo}</span> ${esc(lead.chapter)}</h2>`;
-    else if (shot) html += `<div class="script-shot-break">${scriptCanMerge(run, runs[shot - 1])
-      ? `<button class="btn xs ghost" onclick="scriptMergeShot('${lead.id}')">Merge with shot above</button>` : ''}</div>`;
-    html += `<section class="script-shot" data-script-shot="${lead.id}" aria-label="Shot ${shot + 1}"${lead.insert?.kind ? '' : ' ondragover="scriptDragOver(event)" ondragleave="scriptDragLeave(event)" ondrop="scriptDrop(event)"'}>
-      ${scriptShotHeader(p, run, shot, start, seconds)}${scriptShotDescription(p, lead, shot)}`;
+    html += `<section class="script-shot" data-script-shot="${lead.id}" aria-label="Shot ${shot + 1}"${lead.insert?.kind ? '' : ' ondragover="scriptDragOver(event)" ondragleave="scriptDragLeave(event)" ondrop="scriptDrop(event)"'}>`;
     run.forEach((s, k) => {
       const i = p.slides.indexOf(s);
       html += `<div class="script-unit" data-index="${i}">
@@ -77,13 +75,12 @@ function paintScript() {
           <details class="script-insert-chapter"><summary>Chapter</summary><label>Chapter name<input value="${esc(s.chapter)}" onblur="saveChapter('${s.id}',this.value)"></label></details></div>`;
       } else {
         const n = ++paragraph;
-        html += `<div class="script-gutter"><span class="mono script-para-number" draggable="true" title="Drag to move this paragraph, or Alt+↑/↓" ondragstart="scriptDragStart(event,'${s.id}')" ondragend="scriptDragEnd()">${n}</span>
+        html += `<div class="script-gutter">${k === run.findIndex(x => !x.insert?.kind) ? `<a class="mono script-shot-mark" href="#/p/${p.id}/script/shots" onclick="scriptOpenShot('${lead.id}')" title="Shot ${shot + 1}: ${esc(lead.visual_note || 'no description yet')}. Open it in Shots." aria-label="Shot ${shot + 1}, open in Shots">S${shot + 1}</a>` : ''}<span class="mono script-para-number" draggable="true" title="Drag to move this paragraph, or Alt+↑/↓" ondragstart="scriptDragStart(event,'${s.id}')" ondragend="scriptDragEnd()">${n}</span>
           <details class="script-para-menu"><summary aria-label="Paragraph ${n} actions">⋯</summary><div class="script-menu">
             <button class="btn sm ghost" data-toggle="para:${s.id}" aria-expanded="${scriptOpen.has('para:' + s.id)}" onclick="scriptToggle('para:${s.id}'); this.closest('details').open=false">Title, chapter and note</button>
             <button class="btn sm ghost" onclick="scriptAgentRewrite('${s.id}', ${n}); this.closest('details').open=false">Ask the agent to rewrite</button>
             ${k ? `<button class="btn sm ghost" onclick="scriptNewShot('${s.id}')">Start a new shot here</button>` : ''}
-            ${spokenShots[0] < shot ? `<button class="btn sm ghost" onclick="scriptMoveToShot('${s.id}',-1)">Move to shot above</button>` : ''}
-            ${spokenShots.at(-1) > shot ? `<button class="btn sm ghost" onclick="scriptMoveToShot('${s.id}',1)">Move to shot below</button>` : ''}
+            <a class="btn sm ghost" href="#/p/${p.id}/script/shots" onclick="scriptOpenShot('${lead.id}')">Open its shot in Shots</a>
             <button class="btn sm ghost" onclick="splitSlide('${s.id}')">Split</button>
             <button class="btn sm ghost" onclick="startChapter('${s.id}')">Start a chapter</button>
             <button class="btn sm ghost danger" onclick="delSlide('${s.id}')">Delete paragraph</button>
@@ -95,9 +92,9 @@ function paintScript() {
       }
       html += `</article></div>`;
     });
-    html += `<div class="script-shot-facts" data-panel="facts:${lead.id}" ${scriptOpen.has('facts:' + lead.id) ? '' : 'hidden'}></div></section>`;
+    html += `</section>`;
   });
-  html += `<p class="script-keys mono">Enter at the end: new paragraph · Ctrl+Enter: new shot from this paragraph · Alt+↑/↓ or drag the number: move a paragraph, across shots too · Ctrl+↑/↓: previous or next paragraph</p>
+  html += `<p class="script-keys mono">Enter at the end: new paragraph · Ctrl+Enter: start a new shot here · Alt+↑/↓ or drag the number: move a paragraph · Ctrl+↑/↓: previous or next paragraph · S marks open a shot in Shots</p>
     </div></section>
     <aside class="script-facts" id="script-facts" aria-label="All facts" hidden>
     <div class="script-facts-head"><h2 class="kicker">All facts</h2><button class="btn sm ghost" aria-label="Close all facts" onclick="scriptToggleFacts(false)">Close</button></div>
@@ -114,10 +111,13 @@ function paintScript() {
   layout.classList.toggle('script-focus', scriptPreference('focus', false));
   $('#script-typewriter').checked = scriptPreference('typewriter', false);
   scriptToggleFacts(scriptPreference('all-facts', false));
+  scriptToggleMarks(scriptPreference('marks', true));
   scriptAgentTab(scriptPreference('agent-tab', 'agent'));
   scriptAgentPaint();
-  scriptOpen.forEach(key => { if (key.startsWith('facts:')) scriptRenderShotFacts(key.slice(6)); });
-  scriptCurrent(p.slides.some(s => s.id === scriptActive) ? scriptActive : p.slides[0].id);
+  const pending = scriptPendingLocate;
+  scriptPendingLocate = '';
+  scriptCurrent(p.slides.some(s => s.id === pending) ? pending : p.slides.some(s => s.id === scriptActive) ? scriptActive : p.slides[0].id);
+  if (pending && p.slides.some(s => s.id === pending)) scriptAgentShow(pending);
   scriptLoadCheck();
 }
 

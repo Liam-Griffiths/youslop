@@ -148,7 +148,7 @@ def test_page_shots_toolbar_and_caret(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path('static/js/tabs/' + name).read_text() for name in
-                       ('script.js', 'script-writing.js', 'script-check.js', 'script-agent.js'))
+                       ('script.js', 'script-writing.js', 'script-check.js', 'script-agent.js', 'script-shots.js'))
     harness = r"""
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
 const esc=s=>String(s||''), fmtTime=String, isStage=()=>false, thumbUrl=()=>'/t.jpg';
@@ -171,9 +171,10 @@ check(toolbar.children.length===1&&toolbar.children[0]===tools,'repaint replaces
 const html=body.innerHTML;
 check(!html.includes('script-binder')&&!html.includes('Filter binder'),'no binder');
 check(scriptRuns(state.project).map(r=>r.map(s=>s.id).join('+')).join(',')==='a,b+c,d,insert','shots follow description, forced breaks and inserts');
-check((html.match(/data-script-shot=/g)||[]).length===4&&html.includes('SHOT 2')&&html.includes('Engraving'),'one section per shot with its description');
-check(html.includes('Merge with shot above')&&html.includes('id="script-pane-agent"')&&html.includes('id="script-pane-check"'),'merge control and agent/check panel');
-check(html.includes('data-panel="desc:b"')&&html.includes('data-panel="facts:b"')&&html.includes('data-panel="para:c"'),'description, facts and paragraph panels');
+check((html.match(/data-script-shot=/g)||[]).length===4&&(html.match(/class="mono script-shot-mark"/g)||[]).length===3,'one quiet section per shot, a margin mark on each spoken shot');
+check(html.includes('>S2</a>')&&html.includes('href="#/p/p/script/shots"'),'marks open the shot in Shots');
+check(!html.includes('SHOT 2')&&!html.includes('Merge with shot above')&&!html.includes('data-panel="desc:')&&!html.includes('data-panel="facts:'),'no shot editing inside Write');
+check(html.includes('id="script-pane-agent"')&&html.includes('id="script-pane-check"')&&html.includes('data-panel="para:c"'),'agent/check panel and paragraph panels');
 for(const sid of ['a','b','c','d'])check(html.includes(`data-para="${sid}" contenteditable="plaintext-only"`),'stable editable selector '+sid);
 check(!html.includes('data-para="insert"')&&html.split('data-sid="insert"')[1].includes('saveChapter'),'insert stays non-editable and keeps its chapter');
 check(!/\bprompt\(|\bconfirm\(/.test(Function.prototype.toString.call(scriptAgentSend)+scriptAgentApply+scriptNewShot+scriptMergeShot),'agent and shot gestures use no native dialogs');
@@ -190,15 +191,21 @@ const cards=state.project.slides.map(s=>{
 });
 const document={querySelectorAll:sel=>sel==='.script-card'?cards:[],createRange:()=>({
  selectNodeContents(node){this.node=node;},collapse(start){this.start=start;}})};
-const head=html.split('data-script-shot="b"')[1].match(/class="script-shot-select" onclick="([^"]+)"/)[1];
-eval(head);
-check(focused===cards[1].text&&caret.node===focused&&caret.start&&scriptActive==='b','shot header puts the caret in its first paragraph');
-check(!cards[1].unit.hidden&&!cards[1].shot.hidden&&scrolled==='b','header reveals and scrolls paragraph');
+scriptLocate('b');
+check(focused===cards[1].text&&caret.node===focused&&caret.start&&scriptActive==='b','locate puts the caret in the paragraph');
+check(!cards[1].unit.hidden&&!cards[1].shot.hidden&&scrolled==='b','locate reveals and scrolls paragraph');
 scriptWorkspaceKey({key:'ArrowDown',ctrlKey:true,preventDefault(){}});
 check(focused===cards[2].text&&scriptActive==='c','next shortcut sets caret');
 scriptWorkspaceKey({key:'ArrowUp',metaKey:true,preventDefault(){}});
 check(focused===cards[1].text,'previous shortcut sets caret');
 scriptLocate('insert');check(focused===cards[4].link,'insert navigation keeps Edit link reachable');
+document.querySelector=()=>null;
+scriptOpenShot('b');paintScriptShots();
+const shots=body.innerHTML;
+check((shots.match(/class="shots-row"/g)||[]).length===4&&shots.includes('aria-current="true"'),'Shots lists every shot and marks the open one');
+check(shots.includes('What we see')&&shots.includes('id="shots-desc"')&&shots.includes('Engraving')&&shots.includes('What we hear'),'shot description and its paragraphs');
+check(shots.includes('Merge with shot above')&&shots.includes('Start a new shot here')&&shots.includes('Move to shot above')&&!shots.includes('contenteditable'),'shot editing lives in Shots; words are read-only there');
+check(shots.includes('ondrop="scriptShotRowDrop(event,'),'paragraphs can be dropped onto a shot in the list');
 print('page shots, toolbar and caret passed');
 """
     script = tmp_path / 'page-writing.js'

@@ -466,7 +466,7 @@ async function render() {
   }
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = p.kind === 'clip' ? [] : state.stage === 'script'
-    ? [['script', 'Write'], ['outline', 'Outline']]
+    ? [['script', 'Write'], ['outline', 'Outline'], ...(p.slides.length ? [['shots', `Shots · ${scriptRuns(p).length}`]] : [])]
     : state.stage === 'edit' ? [['pictures', 'Pictures'], ['timeline', 'Timeline'],
       ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])] : [];
   // Stage contents are replaced below; give back any slot the last stage borrowed.
@@ -487,7 +487,7 @@ async function render() {
     </nav>` : ''}
     ${state.stage === 'script' ? `${state.tab === 'script' && p.slides.length ? '<div id="script-toolbar" onkeydown="scriptWorkspaceKey(event)"></div>' : ''}</div>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, shots: paintScriptShots, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
   if (state.tab !== 'edit' && typeof tlPause === 'function') tlPause();

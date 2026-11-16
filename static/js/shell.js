@@ -20,7 +20,7 @@ function canonicalHash(hash) {
 }
 
 function stageTab(stage, subtab) {
-  return {clip: 'clip', dashboard: 'dashboard', script: subtab === 'outline' ? 'plan' : 'script',
+  return {clip: 'clip', dashboard: 'dashboard', script: subtab === 'outline' ? 'plan' : subtab === 'shots' ? 'shots' : 'script',
     voice: 'record', edit: {pictures: 'media', cast: 'cast', stage: 'stage'}[subtab] || 'edit',
     publish: 'render'}[stage] || 'dashboard';
 }

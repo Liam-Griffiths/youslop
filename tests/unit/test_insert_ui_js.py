@@ -12,7 +12,7 @@ def test_insert_ui(tmp_path):
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(f'static/js/timeline/{name}.js').read_text() for name in
                        ('inserts', 'insert_sources', 'insert_inspector'))
-    source += '\n' + '\n'.join(Path(f'static/js/tabs/{name}').read_text() for name in ('script.js', 'script-writing.js', 'script-agent.js'))
+    source += '\n' + '\n'.join(Path(f'static/js/tabs/{name}').read_text() for name in ('script.js', 'script-writing.js', 'script-agent.js', 'script-shots.js'))
     harness = r'''
 const check = (v,m) => {if (!v) throw Error(m);};
 const structuredClone = v => JSON.parse(JSON.stringify(v));
@@ -137,7 +137,7 @@ async function run() {
  paintScript();
  check(scriptBody.innerHTML.includes('Insert · card · 4.0 s') && !scriptBody.innerHTML.includes('Narration, paragraph 3'),'non-spoken Script label and count');
  check(!scriptBody.innerHTML.includes('Filter binder') && scriptBody.innerHTML.match(/data-script-shot=/g).length===2,'one page grouped by shot description and picture');
- check(scriptBody.innerHTML.includes('SHOT 2') && scriptBody.innerHTML.includes('Shared shot') && scriptBody.innerHTML.includes('/synthetic.jpg'),'shot numbers and inline lead description');
+ check(scriptBody.innerHTML.includes('>S1</a>') && scriptBody.innerHTML.includes('Shared shot') && !scriptBody.innerHTML.includes('SHOT 2'),'Write marks shots in the margin, description in the mark title');
  check(scriptShotOf('more').run.map(s=>s.id).join(',')==='words,more','an undescribed paragraph stays with its picture');
  const insertHtml=scriptBody.innerHTML.split('data-sid="card"')[1];
  check(scriptBody.innerHTML.includes('On an insert') && insertHtml.includes('saveChapter') && !insertHtml.includes('textarea'),'insert chapters retained without narration fields');

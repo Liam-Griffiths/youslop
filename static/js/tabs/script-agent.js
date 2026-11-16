@@ -148,9 +148,7 @@ function scriptAgentShow(sid) {
   card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
 }
 function scriptAgentFacts(sid) {
-  const lead = scriptShotOf(sid).run[0]?.id;
-  if (!lead) return;
-  scriptToggle('facts:' + lead, true);
+  scriptToggleFacts(true);
   scriptAgentShow(sid);
 }
 function scriptAgentSetText(sid, text) {

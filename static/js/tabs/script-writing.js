@@ -34,43 +34,12 @@ function scriptRuns(p) {
   });
   return runs;
 }
-// Panels opened inside the page survive repaints: 'desc:<lead>', 'facts:<lead>', 'para:<sid>'.
+// Paragraph panels opened inside the page survive repaints: 'para:<sid>'.
 const scriptOpen = new Set();
 function scriptSeconds(s) { return s.insert?.seconds || s.take?.duration || s.word_count / 158 * 60; }
 function scriptShotOf(sid, p = state.project) {
   const runs = scriptRuns(p), index = runs.findIndex(run => run.some(s => s.id === sid));
   return {index, run: runs[index] || []};
-}
-function scriptShotHeader(p, run, index, start, end) {
-  const lead = run[0], chosen = lead.candidates?.find(c => c.id === lead.chosen_id);
-  const kind = lead.insert?.kind || pictureKind(lead, p);
-  const label = lead.insert?.kind ? 'Insert · ' + lead.insert.kind : (lead.visual_note || chosen?.title || pictureKindLabel(kind, lead));
-  const facts = lead.insert?.kind ? 0 : scriptShotFactRows(p, run).filter(r => r.rank >= 3).length;
-  const pictures = run.filter(s => !s.insert?.kind && (p.picture_runs || []).some(r => r[0] === s.id)).length;
-  const toggle = (key, text, icon) => `<button class="btn xs script-shot-toggle" data-toggle="${key}:${lead.id}" aria-expanded="${scriptOpen.has(key + ':' + lead.id)}" onclick="scriptToggle('${key}:${lead.id}')">${icon}${text}</button>`;
-  return `<header class="script-shot-heading">
-    <button class="script-shot-select" onclick="scriptLocate('${run.find(s => !s.insert)?.id || lead.id}')" aria-label="Shot ${index + 1}: go to its first paragraph">
-      <span class="mono script-shot-number">SHOT ${index + 1}</span>
-      ${chosen ? `<img src="${esc(thumbUrl(chosen))}" alt="" loading="lazy">` : '<span class="script-shot-thumb" aria-hidden="true"></span>'}
-      <span class="script-shot-label">${esc(label)}</span></button>
-    <span class="mono script-shot-time">${pictures > 1 ? pictures + ' pictures · ' : ''}${fmtTime(start)}–${fmtTime(end)}</span>
-    ${lead.insert?.kind ? '' : toggle('desc', 'Description', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg>')}
-    ${lead.insert?.kind ? '' : toggle('facts', 'Facts ' + facts, '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/></svg>')}
-    ${p.visual_flags?.[lead.id] ? `<span class="script-visual-flag">${esc(p.visual_flags[lead.id].text)}</span>` : ''}</header>`;
-}
-function scriptShotDescription(p, lead, index) {
-  if (lead.insert?.kind) return '';
-  const chosen = lead.candidates?.find(c => c.id === lead.chosen_id), kind = pictureKind(lead, p);
-  return `<div class="script-shot-desc" data-panel="desc:${lead.id}" ${scriptOpen.has('desc:' + lead.id) ? '' : 'hidden'}>
-    ${chosen ? `<img src="${esc(thumbUrl(chosen))}" alt="Chosen picture for shot ${index + 1}" loading="lazy">` : '<div class="script-shot-thumb large">No picture chosen yet</div>'}
-    <div class="script-shot-desc-body">
-      <label class="kicker" for="script-desc-${lead.id}">What we see</label>
-      <textarea id="script-desc-${lead.id}" rows="3" placeholder="Describe the picture for this shot"
-        onchange="scriptSaveShotNote('${lead.id}',this.value)">${esc(lead.visual_note || '')}</textarea>
-      <div class="script-shot-desc-row"><span class="pill">${esc(pictureKindLabel(kind, lead))}</span>
-        ${isStage(kind) ? `<button class="btn sm ghost" onclick="reviseVisuals(['${lead.id}'])">Revise visuals</button>` : ''}
-        <a href="#/p/${p.id}/edit/pictures">Choose pictures in Edit</a></div>
-    </div></div>`;
 }
 function scriptParagraphDetails(p, s) {
   return `<div class="script-para-details" data-panel="para:${s.id}" ${scriptOpen.has('para:' + s.id) ? '' : 'hidden'}>
@@ -91,8 +60,25 @@ function scriptToggle(key, value) {
   open ? scriptOpen.add(key) : scriptOpen.delete(key);
   document.querySelectorAll(`[data-panel="${key}"]`).forEach(el => { el.hidden = !open; });
   document.querySelectorAll(`[data-toggle="${key}"]`).forEach(el => el.setAttribute('aria-expanded', String(open)));
-  if (open && key.startsWith('facts:')) scriptRenderShotFacts(key.slice(6));
   if (open && key.startsWith('para:')) scriptCurrent(key.slice(5));
+}
+function scriptToggleMarks(value) {
+  const layout = $('.script-layout');
+  if (!layout) return;
+  const on = value ?? layout.classList.contains('no-marks');
+  layout.classList.toggle('no-marks', !on);
+  $('#script-marks-toggle')?.setAttribute('aria-pressed', String(on));
+  scriptRemember('marks', on);
+}
+// Repaint whichever Script view is showing, then return to a paragraph.
+let scriptPendingLocate = '';
+function scriptRepaint(sid) {
+  if (state.tab === 'shots') {
+    if (!scriptRuns(state.project).some(run => run[0].id === scriptShotPicked)) scriptShotPicked = scriptShotOf(sid).run[0]?.id || '';
+    return paintScriptShots();
+  }
+  paintScript();
+  if (sid) scriptAgentShow(sid);
 }
 function scriptToggleFacts(value) {
   const drawer = $('#script-facts');
@@ -110,24 +96,6 @@ function scriptShotFactRows(p, run) {
     rank: Math.max(0, ...spoken.map(s => scriptFactRank(fact, s)))}))
     .sort((a, b) => b.rank - a.rank || a.index - b.index);
 }
-function scriptRenderShotFacts(lead) {
-  const p = state.project, host = document.querySelector(`[data-panel="facts:${lead}"]`);
-  const {run} = scriptShotOf(lead, p);
-  if (!host || !run.length) return;
-  const rows = scriptShotFactRows(p, run).filter(r => r.rank >= 3);
-  host.innerHTML = `<div class="script-shot-facts-head"><span class="kicker">Facts for this shot</span>
-    <button class="btn xs ghost" onclick="scriptToggleFacts(true)">See all ${(p.research?.facts || []).length}</button></div>
-    ${rows.map(({fact: f, index}) => `<div class="script-fact"><p>${esc(f.claim)}</p>
-      <span class="mono">${f.date ? esc(f.date) + ' · ' : ''}${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.source || 'Source')}</a>` : esc(f.source || 'Source')} · ${esc(f.confidence || 'medium')}</span>
-      <button class="btn sm" onclick="scriptInsertShotFact('${lead}',${index})">Insert</button></div>`).join('')
-      || '<p class="sub">No facts match this shot. Search them all in All facts.</p>'}`;
-}
-// Insert at the caret when it is in this shot, otherwise at the end of the shot.
-function scriptInsertShotFact(lead, index) {
-  const {run} = scriptShotOf(lead), spoken = run.filter(s => !s.insert);
-  if (!spoken.some(s => s.id === scriptActive)) { scriptActive = spoken.at(-1).id; scriptCaret = null; }
-  scriptInsertFact(index);
-}
 function scriptCanMerge(run, prev) {
   const lead = run[0], tail = prev.at(-1);
   return !(lead.chapter || '').trim() && !lead.insert?.kind && !tail.insert?.kind;
@@ -140,7 +108,7 @@ async function scriptShotPatch(patches, focus, open = '') {
     if (state.project?.id !== pid) return;
     state.project = await api(`/api/projects/${pid}`);
     if (open) scriptOpen.add(open);
-    paintScript(); scriptLocate(focus);
+    scriptRepaint(focus);
   });
 }
 function scriptMergeShot(lead) {
@@ -150,7 +118,7 @@ function scriptMergeShot(lead) {
 }
 function scriptNewShot(sid) {
   if (scriptShotOf(sid).run[0]?.id === sid) return toast('This paragraph already starts a shot.');
-  return scriptShotPatch([[sid, {picture_mode: 'new'}]], sid, 'desc:' + sid);
+  return scriptShotPatch([[sid, {picture_mode: 'new'}]], sid);
 }
 // Moving a paragraph between shots: one server edit, so Undo restores it.
 async function scriptMovePara(sid, shot, before = '') {
@@ -160,7 +128,7 @@ async function scriptMovePara(sid, shot, before = '') {
     const p = await scriptPauseEditor(() => api(`/api/projects/${pid}/script/move`, {method: 'POST',
       body: JSON.stringify({id: sid, shot, before, version: state.project.updated_at})}));
     if (state.project?.id !== pid) return;
-    state.project = p; paintScript(); scriptAgentShow(sid);
+    state.project = p; scriptRepaint(sid);
   } catch (e) { toast(e.message, true); }
 }
 function scriptNeighbourShot(sid, step) {
@@ -188,7 +156,7 @@ function scriptDragStart(e, sid) {
   scriptDragging = sid;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData(SCRIPT_DRAG_TYPE, sid);
-  e.currentTarget.closest('.script-card')?.classList.add('dragging');
+  e.currentTarget.closest('[data-sid]')?.classList.add('dragging');
 }
 function scriptDropMarks() {
   document.querySelectorAll('.drop-before,.drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
@@ -196,10 +164,10 @@ function scriptDropMarks() {
 function scriptDragEnd() {
   scriptDragging = '';
   scriptDropMarks();
-  document.querySelectorAll('.script-card.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
 }
 function scriptDropSpot(e) {
-  const section = e.currentTarget, cards = [...section.querySelectorAll('.script-card')];
+  const section = e.currentTarget, cards = [...section.querySelectorAll('[data-sid]')];
   const mark = cards.find(card => { const r = card.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
   return {shot: section.dataset.scriptShot, before: mark?.dataset.sid || '', mark: mark || cards.at(-1), after: !mark};
 }
@@ -225,7 +193,7 @@ function scriptDrop(e) {
 // One description per shot: write it to every paragraph so they stay together.
 async function scriptSaveShotNote(lead, value) {
   const patches = scriptShotOf(lead).run.filter(s => (s.visual_note || '') !== value).map(s => [s.id, {visual_note: value}]);
-  if (patches.length) return scriptShotPatch(patches, scriptActive || lead, 'desc:' + lead);
+  if (patches.length) return scriptShotPatch(patches, lead);
 }
 function scriptCurrent(sid) {
   scriptActive = sid;

@@ -360,6 +360,9 @@ layered editing in Edit, project-defined layers, Library like Bridge, no
 | T21.6 | Edit becomes the composing stage: sources panel, Visuals folds in | L | T21.5, T21.2 | todo | supersedes T20.13, folds in T20.4 |
 | T21.4 | Library as an explorer: tree, grid, preview pane | L | — | todo | |
 | T21.4b | Library: ratings, colour labels, filters, batch labels, collections | M | T21.4 | todo | |
-| T21.2b | Bin notes and media feed research, script writing and picture fill | M | T21.2, T21.3 | todo | |
+| T21.2b | Bin notes and media feed research, script writing and picture fill | M | T21.2, T21.3 | folded | 2026-11-16 folded into T21.10 (Claude) |
 | T21.6b | Pictures, clips and 3D on upper layers (picture-in-picture) | L | T21.6 | todo | |
-| T21.7 | Ask the agent for a custom HTML scene, placed on a layer | M | T21.6, T21.5b | todo | |
+| T21.7 | Ask the agent for a custom HTML scene, placed on a layer | M | T21.6, T21.5b | folded | 2026-11-16 superseded by T21.11 (Claude) |
+| T21.9 | Script: Write is just the words; Shots is its own view | M | T21.3d | doing | 2026-11-16 step 1 committed: Write without shot editing (margin S marks), Shots view with list, description, paragraphs, moves, merge; checked on Tube Mail light and dark. Next: shot design (visual beats per shot, kind-specific design, shot agent) per mockup board ShotDesign. Claude builds (owner 2026-11-16); mockup https://claude.ai/artifact/Td2GL7srSW8Y3vSStGhPgY boards Script/Shots |
+| T21.10 | Home: materials with metadata, research documents, agent, status | L | T21.2 | todo | Claude builds (owner 2026-11-16); Bin renamed Materials; folds T21.2b; mockup board Home |
+| T21.11 | Create: agent-made HTML graphics, placed in shots | L | T21.10 | todo | Claude builds (owner 2026-11-16); supersedes T21.7; mockup board Create |
