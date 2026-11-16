@@ -2,26 +2,6 @@
 const commands = new Map();
 function registerCommand(command) { commands.set(command.id, command); }
 
-function studioDialog(className, content, onClose = () => {}) {
-  const opener = document.activeElement;
-  const dialog = document.createElement('dialog');
-  dialog.className = `studio-dialog ${className}`;
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'studio-dialog-title');
-  dialog.innerHTML = content;
-  dialog.addEventListener('keydown', e => e.stopPropagation());
-  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
-  dialog.addEventListener('close', () => {
-    onClose();
-    dialog.remove();
-    if (opener?.isConnected) opener.focus();
-  }, {once: true});
-  document.body.append(dialog);
-  dialog.showModal();
-  return dialog;
-}
-
 function commandScore(label, query) {
   let at = 0, score = 0;
   for (const char of query.toLowerCase().replace(/\s/g, '')) {

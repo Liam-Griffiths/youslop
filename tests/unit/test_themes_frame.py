@@ -49,3 +49,29 @@ def test_channel_theme_and_project_copy(templates):
     assert channel.frame.rules == ['Keep this']
     # Reloading legacy records never implicitly applies Archive's overrides.
     assert main.get_channel(cid)['frame'] == result['frame']
+
+
+@pytest.mark.parametrize('templates', [True, False])
+def test_theme_undo_patch_restores_saved_fields(templates):
+    from app import main
+
+    cid = main.create_channel({'name': 'Theme undo'})['id']
+    before = main.patch_channel(cid, {
+        'style': {'accent': '#123456', 'accent2': '#654321', 'grade': 'mono'},
+        'frame': {'transition_types': ['fade'], 'punch_max': 1.21},
+        'outro': {'template': 'console', 'slots': 3},
+    })
+    undo = {
+        'style': {k: before['style'][k] for k in ('theme', 'accent', 'accent2', 'grade')},
+        'frame': before['frame'], 'intro': {'template': before['intro']['template']},
+        'thumb_template': before['thumb_template'],
+        'outro': {k: before['outro'][k] for k in ('template', 'slots')},
+    }
+    applied = main.apply_theme(cid, {'key': 'arcade', 'templates': templates})
+    assert applied['style']['accent'] != before['style']['accent']
+    if templates:
+        assert applied['outro']['slots'] < before['outro']['slots']
+    restored = main.patch_channel(cid, undo)
+    # Saving updates the modification timestamp, while channel contents return exactly.
+    assert {**restored, 'updated_at': before['updated_at']} == before
+    assert channels.load(cid).to_dict() == restored

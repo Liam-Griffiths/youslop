@@ -54,7 +54,9 @@ def test_classic_script_dependency_order():
     assert all("async" not in tag and "defer" not in tag for tag in scripts)
     sources = [tag["src"].removeprefix("/static/js/") for tag in scripts]
     assert sources[1] == "theme.js"  # Live preference needs core.api before tabs/boot.
+    assert sources[2] == "ui/dialog.js"  # Shared dialogs must precede every caller.
     sources.remove("theme.js")
+    sources.remove("ui/dialog.js")
     assert sources[0] == "core.js"
     assert sources[-1] == "boot.js"
     timeline = sources.index("timeline/core.js")

@@ -384,8 +384,9 @@ function themePanel(c) {
       </div>
       <div class="tpl-strip">
         ${list.map((x) => `
-          <div class="tpl ${x.key === cur ? 'sel' : ''}"
-               onclick="pickTheme('${x.key}')" title="${esc(x.blurb)}">
+          <div class="tpl ${x.key === cur ? 'sel' : ''}" role="button" tabindex="0" aria-pressed="${x.key === cur}"
+               onclick="pickTheme('${x.key}')" title="${esc(x.blurb)}"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
             ${themeArt(x)}
             <div class="tpl-name">${esc(x.label)}</div>
             <div class="tpl-cast">${esc(x.for)}</div>
@@ -995,21 +996,6 @@ function addCast(input) {
   if (!v) return;
   input.value = '';
   saveIntro({ subjects: [...state.channel.intro.subjects, v] });
-}
-
-async function pickTheme(key) {
-  const t = (state.themes || []).find((x) => x.key === key) || {};
-  const takeTemplates = confirm(
-    `Cast this channel in ${t.label || key}?\n\n`
-    + `OK — take its colours and its templates `
-    + `(${t.intro} slate, ${t.thumb} thumbnail, ${t.outro} end screen).\n`
-    + `Cancel — take the colours only and keep the templates you have.`);
-  state.channel = { ...await api(`/api/channels/${state.channel.id}/theme`, {
-    method: 'POST', body: JSON.stringify({ key, templates: takeTemplates }),
-  }), videos: state.channel.videos, has_preview: state.channel.has_preview,
-    has_outro_preview: state.channel.has_outro_preview };
-  paintChannel();
-  toast(takeTemplates ? `cast in ${t.label || key}` : `${t.label || key} colours applied`);
 }
 
 async function castChannel() {

@@ -43,7 +43,7 @@
 </div>
 <footer class="jobs-strip"><button type="button" class="jobs-strip-button" onclick="openJobs()" aria-haspopup="dialog"><span>Jobs</span><span id="jobs-status" aria-live="polite">Idle</span></button></footer>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status"></div>
 
 <!-- three.js for the 3D explainer, loaded on demand (see stage3d() in js/tabs/stage.js) -->
 <script type="importmap">{"imports": {"three": "/static/vendor/three/three.module.js",
@@ -51,6 +51,7 @@
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/js/core.js"></script>
 <script src="/static/js/theme.js"></script>
+<script src="/static/js/ui/dialog.js"></script>
 <script src="/static/js/tabs/home.js"></script>
 <script src="/static/js/tabs/dashboard.js"></script>
 <script src="/static/js/tabs/home-docs.js"></script>
@@ -76,6 +77,7 @@
 <script src="/static/js/tabs/render.js"></script>
 <script src="/static/js/tabs/stage.js"></script>
 <script src="/static/js/tabs/channels.js"></script>
+<script src="/static/js/tabs/channel_theme.js"></script>
 <script src="/static/js/tabs/settings.js"></script>
 <script src="/static/js/tabs/guide.js"></script>
 <script src="/static/js/tabs/setup.js"></script>

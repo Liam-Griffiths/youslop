@@ -247,15 +247,18 @@ function tlOpenTab(tab, sid) {
 // Run one of the app's own editor modals, and refresh the cut when it closes.
 async function tlModal(open) {
   tlPause();
-  const before = new Set(document.querySelectorAll('.modal'));
+  const selector = '.modal, dialog[open]';
+  const before = new Set(document.querySelectorAll(selector));
   await open();
-  const fresh = [...document.querySelectorAll('.modal')].filter((m) => !before.has(m));
+  const fresh = [...document.querySelectorAll(selector)].filter((m) => !before.has(m));
+  const stillOpen = () => fresh.some(m => document.body.contains(m) && m.matches(selector));
+  if (!stillOpen()) return tlRefreshProject();
   const watcher = new MutationObserver(() => {
-    if (fresh.length && fresh.some((m) => document.body.contains(m))) return;
+    if (stillOpen()) return;
     watcher.disconnect();
     tlRefreshProject();
   });
-  watcher.observe(document.body, { childList: true });
+  watcher.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
 }
 
 async function tlRefreshProject() {

@@ -493,24 +493,10 @@ async function editToolsRoute() {
 
 // App confirmations and text entry; migrated tools never use native dialogs.
 function pictureDialog(message, value = null) {
-  return new Promise(resolve => {
-    let result = null;
-    const dialog = studioDialog('picture-dialog', `<h2 id="studio-dialog-title">${value === null ? 'Confirm picture change' : 'Name style'}</h2>
-      <p>${esc(message)}</p><form>${value === null ? '' : `<label>Name<input value="${esc(value)}" required></label>`}
-      <div class="row"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn">Continue</button></div></form>`, () => resolve(result));
-    dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
-    dialog.querySelector('form').onsubmit = e => {
-      e.preventDefault(); result = value === null ? true : dialog.querySelector('input').value.trim(); dialog.close();
-    };
-    (dialog.querySelector('input') || dialog.querySelector('[data-cancel]')).focus();
-  });
+  if (value === null) return appConfirm({title: 'Confirm picture change', body: message})
+    .then(agreed => agreed || null);
+  return appPrompt({title: message, label: 'Name', value, required: true})
+    .then(result => result === null ? null : result.trim());
 }
 
-function editToolKey(e, wrap, close) {
-  if (e.key === 'Escape') { e.stopPropagation(); close(); }
-  if (e.key !== 'Tab') return;
-  const controls = [...wrap.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
-    .filter(el => !el.disabled && el.getClientRects().length);
-  const end = controls.at(e.shiftKey ? 0 : -1);
-  if (document.activeElement === end) { e.preventDefault(); controls.at(e.shiftKey ? -1 : 0)?.focus(); }
-}
+function editToolKey(e, wrap, close) { appDialogKey(e, wrap, close); }

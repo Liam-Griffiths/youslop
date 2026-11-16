@@ -52,12 +52,27 @@ async function api(path, opts = {}) {
 }
 
 let toastTimer;
-function toast(msg, bad = false) {
+function toast(msg, bad = false, action = null) {
   const el = $('#toast');
   el.textContent = msg;
   el.className = 'toast show' + (bad ? ' bad' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.className = 'toast'; }, bad ? 6000 : 3000);
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'btn sm'; button.textContent = action.label;
+    button.onclick = async () => {
+      button.disabled = true;
+      clearTimeout(toastTimer);
+      try { await action.run(); }
+      catch (e) { toast(e.message, true); }
+    };
+    el.append(button);
+  }
+  const expire = () => { el.className = 'toast'; el.textContent = ''; };
+  const schedule = () => { toastTimer = setTimeout(expire, action ? 15000 : bad ? 6000 : 3000); };
+  el.onfocusin = () => clearTimeout(toastTimer);
+  el.onfocusout = () => { clearTimeout(toastTimer); schedule(); };
+  schedule();
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>

@@ -8,14 +8,8 @@ const libDims = a => a.width ? `${a.width}×${a.height}` : '—';
 const libUrl = a => a.url || `/api/library/file/${encodeURIComponent(a.id)}`;
 const libThumb = a => a.thumb ?? `/api/library/thumb/${encodeURIComponent(a.id)}`;
 
-async function libConfirm(message) {
-  return new Promise(resolve => {
-    let agreed = false;
-    const dialog = studioDialog('library-confirm', `<h2 id="studio-dialog-title">Library</h2><p>${esc(message)}</p>
-      <button class="btn" data-yes>Continue</button><button class="btn ghost" data-no>Cancel</button>`, () => resolve(agreed));
-    dialog.querySelector('[data-yes]').onclick = () => { agreed = true; dialog.close(); };
-    dialog.querySelector('[data-no]').onclick = () => dialog.close();
-  });
+function libConfirm(message) {
+  return appConfirm({title: 'Library', body: message});
 }
 
 async function renderLibrary() {
