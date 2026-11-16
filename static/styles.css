@@ -1604,13 +1604,22 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   background: var(--panel); border: 1px solid var(--line); padding: 10px; }
 #tl-sources > .row, #tl-source-query { flex-shrink: 0; }
 .sources-collapsed #tl-sources { display: none; }
-.tl-source-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); flex-shrink: 0; gap: 4px; margin: 6px 0; }
-.tl-source-tabs .btn { min-width: 0; min-height: 34px; padding-inline: 4px; }
+.tl-source-tabs { display: flex; gap: 14px; flex-shrink: 0; margin: -4px -10px 8px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.tl-source-tabs button { border: 0; background: none; padding: 8px 0; min-height: 34px; font: inherit; font-size: 13px; font-weight: 500; color: var(--dim); cursor: pointer; }
+.tl-source-tabs button:hover { color: var(--ink); }
+.tl-source-tabs [aria-pressed=true] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.tl-source-chips { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; margin-bottom: 8px; }
+.tl-source-chips button { border: 1px solid var(--line); background: none; border-radius: 20px; padding: 2px 10px; min-height: 24px;
+  font-family: var(--mono); font-size: 11.5px; color: var(--dim); cursor: pointer; }
+.tl-source-chips [aria-pressed=true] { background: var(--raised); border-color: var(--line-strong); color: var(--ink); }
+.tl-source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-shrink: 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.tl-source-actions .sub { margin: 0; flex-basis: 100%; font-size: 12px; }
+#tl-sources [hidden] { display: none; }
 .tl-source-results { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; margin-top: 6px; }
 .tl-source-results .sub { margin: 8px 0; }
 .tl-source-results [data-source-tools] { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tl-source-results [data-source-status]:empty { display: none; }
-.tl-source-tabs [aria-pressed=true], .tl-source-grid [aria-pressed=true] { background: var(--raised); outline: 1px solid var(--accent); }
+.tl-source-grid [aria-pressed=true] { background: var(--raised); outline: 1px solid var(--accent); }
 .tl-source-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; align-items: start; }
 .tl-source-grid .btn { height: auto; min-height: 44px; display: flex; flex-direction: column;
   align-items: stretch; text-align: left; white-space: normal; overflow-wrap: anywhere; padding: 6px; }
@@ -1877,7 +1886,7 @@ img.themed-pending { opacity:.45; }
 .tl-section-tools .btn { flex: none; min-height: 34px; }
 .tl-section-ghost { position: absolute; top: 22px; bottom: 0; overflow: hidden; z-index: 7;
   pointer-events: none; opacity: .7; border: 2px dashed var(--cool); background: var(--panel); }
-#tl-hover { min-height: 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#tl-hover { min-width: 0; max-width: 34ch; margin-left: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* Small click targets inside Pictures, below the ruler and playhead handle. */
 .tl-pictures .tl-trim-edge { position: absolute; top: 0; bottom: 0; width: 6px;
@@ -2148,7 +2157,6 @@ main:has(.create-layout) .project-tools { padding:0 20px; margin:0; }
 
 /* Migrated picture tools stay inside Edit without taking lane height. */
 .edit-workspace .tl-more > div { max-height: min(65dvh, 540px); overflow: auto; }
-#edit-picture-toolbar .tl-more > div { left: 0; right: auto; }
 #edit-picture-toolbar { display: contents; }
 #edit-picture-tools, #edit-stage-tools { min-height: 0; overflow: auto; }
 #edit-picture-tools .visual-frame { max-height: 240px; }
@@ -2159,3 +2167,36 @@ main:has(.create-layout) .project-tools { padding:0 20px; margin:0; }
 .edit-tool-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex:none; }
 .edit-tool-head h2 { margin:0; font-size:1.05rem; }
 #edit-picture-tools, #edit-stage-tools { overflow:auto; min-height:0; }
+
+/* Edit bar: one Add button, a trim switch and two menus. */
+.tl-trim { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.tl-trim button { border: 0; background: var(--panel); color: var(--ink-2); padding: 0 11px; min-height: 30px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.tl-trim [aria-pressed=true] { background: var(--ink); color: var(--bg); }
+#tl-sources-toggle[aria-expanded=true] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tl-menu > summary { list-style: none; display: inline-flex; align-items: center; color: var(--ink); }
+.tl-source-grid > p { grid-column: 1 / -1; margin: 6px 0; color: var(--dim); }
+.tl-menu > summary::-webkit-details-marker { display: none; }
+.tl-menu > summary::after { content: ''; margin-left: 7px; border: 4px solid transparent; border-top-color: var(--dim); border-bottom-width: 0; }
+.tl-source-length { display: flex; align-items: center; gap: 6px; flex-basis: 100%; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+.tl-source-length input { width: 70px; padding: 4px 6px; }
+.tl-menu[open] > summary { background: var(--raised); }
+.tl-menu > div { width: 290px; padding: 6px; margin-top: 4px; border-color: var(--line-strong); border-radius: 4px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 14%, transparent); }
+.tl-menu > div > * { margin: 0; }
+.tl-menu h4 { margin: 8px 8px 2px; font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.tl-menu h4:not(:first-child) { margin: 6px 0 2px; padding: 10px 8px 0; border-top: 1px solid var(--line); }
+.tl-menu > div > .btn, .tl-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  min-height: 32px; padding: 4px 8px; border: 0; border-radius: 3px; background: none; box-shadow: none; text-align: left; font-size: 13px; font-weight: 400; color: var(--ink); }
+.tl-menu > div > .btn:hover:not(:disabled), .tl-menu-row:hover { background: var(--raised); filter: none; }
+.tl-menu .btn .mono { color: var(--dim); font-size: 11.5px; }
+.tl-menu-row { cursor: pointer; }
+.tl-menu-row select { padding: 2px 6px; min-height: 26px; }
+.tl-menu > div > details { padding: 4px 8px; font-size: 13px; }
+.tl-menu .visual-mix { display: block; padding: 2px 8px 6px; border: 0; }
+.tl-menu .visual-mix-bar { width: 100%; max-width: none; min-width: 0; height: 6px; border-radius: 3px; margin-bottom: 6px; }
+.tl-menu .visual-mix > .mono { display: block; font-size: 11px; line-height: 1.5; }
+.tl-menu .visual-rule { display: block; margin-top: 4px; }
+.edit-workspace .project-tools { display: none; }
+#tl-layer-add { display: block; border: 0; background: none; padding: 6px 8px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--dim); cursor: pointer; }
+#tl-layer-add:hover { color: var(--ink); }

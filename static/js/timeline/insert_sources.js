@@ -12,7 +12,7 @@ async function tlInsertSources() {
     const shoot = result.value;
     const add = (file,a,b,label) => {
       if (file?.kind !== 'video' || file.error || !(b > a)) return;
-      items.push({label, tab:'Materials', payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, seconds:b-a, source_audio:false}});
+      items.push({label, tab:'Footage', payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, seconds:b-a, source_audio:false}});
     };
     shoot.clips.filter(c => !c.rejected).forEach(c => add(shoot.files.find(f => f.id === c.file), c.in_s,c.out_s,
       c.title || c.note || `Clip ${c.id}`));
@@ -31,7 +31,7 @@ async function tlInsertSources() {
 
 function tlInsertSourceList(box, items, onPick, drag = true) {
   box.innerHTML = items.map((item,i) => `<button type="button" class="btn sm ghost" data-source="${i}" draggable="${drag}">${item.thumb ? `<img src="${esc(item.thumb)}" loading="lazy" alt="">` : ''}<span>${esc(item.label)}</span>${item.meta ? `<small>${esc(item.meta)}</small>` : ''}</button>`).join('')
-    || '<p>No sources here. Add footage or files in Library.</p>';
+    || '<p>Nothing here yet.</p>';
   box.querySelectorAll('[data-source]').forEach(button => {
     const item = items[+button.dataset.source];
     button.onclick = () => onPick(item.payload);

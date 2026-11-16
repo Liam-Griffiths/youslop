@@ -144,28 +144,37 @@ function editPictureToolbar() {
     : p.style.format === 'kenburns' ? 'Footage for what you shot, archive for context, scenes for numbers.'
     : 'Use the format’s drawing; archive for context, scenes for numbers.';
   const rule = state.stageStates?.pid === p.id ? state.stageStates.items.find(s => s.id === 'edit')?.rule || fallbackRule : fallbackRule;
-  return `<details class="tl-more"><summary class="btn sm ghost">Picture tools</summary><div>
-    <button type="button" class="btn sm" onclick="openEditPictureTools()">Selected picture tools…</button>
-    <button type="button" class="btn sm" onclick="gatherMedia(visualGroups().filter(g=>!g.s.chosen_id).map(g=>g.s.id))">Fill the rest</button>
-    <button type="button" class="btn sm" onclick="stagePlan()">Plan all shots · 3D</button>
-    <button type="button" class="btn sm ghost" onclick="openStylePicker('project')">Change style</button>
-    <button type="button" class="btn sm ghost" onclick="openProjectLook()">Look and block theme</button>
-        <label class="field"><span>Picture every</span><select onchange="savePictureEvery(+this.value)">
-          ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
-        ${state.visualHasFootage ? '<button type="button" class="btn sm" onclick="fillVisualFootage()">Fill the rest from footage</button>' : ''}
-        <label class="field"><span>Archive licences</span><span><input type="checkbox"
-          ${p.prefer_public_domain ? 'checked' : ''} onchange="saveProject({prefer_public_domain:this.checked})"> Prefer public domain / CC0 at equal relevance</span></label>
-        <button type="button" class="btn sm ghost" onclick="gatherMedia()">Re-search everything</button>
-        ${groups.some(g => pictureKind(g.s) === 'board') ? `<button type="button" class="btn sm" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
-        ${groups.some(g => isCut(pictureKind(g.s))) ? `<button type="button" class="btn sm" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
+  const has = k => groups.some(g => pictureKind(g.s) === k);
+  const mixBar = `<div class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) =>
+    `<span class="visual-kind" data-kind="${esc(k)}" style="flex:${n}"></span>`).join('')}</div>`;
+  // One menu for everything that acts on the whole video; the selected picture's
+  // own tools stay in the inspector.
+  return `<details class="tl-more tl-menu tl-whole"><summary class="btn sm ghost">Whole video</summary><div>
+    <h4>Pictures</h4>
+    <button type="button" class="btn sm ghost" onclick="gatherMedia(visualGroups().filter(g=>!g.s.chosen_id).map(g=>g.s.id))">Fill the empty pictures</button>
+    ${state.visualHasFootage ? '<button type="button" class="btn sm ghost" onclick="fillVisualFootage()">Fill the rest from footage</button>' : ''}
+    <button type="button" class="btn sm ghost" onclick="gatherMedia()">Search everything again</button>
+    ${has('board') ? `<button type="button" class="btn sm ghost" onclick="planBoards(false)">Write the boards</button><button type="button" class="btn sm ghost" onclick="planBoards(true)">Rewrite all boards</button>` : ''}
+    ${groups.some(g => isCut(pictureKind(g.s))) ? `<button type="button" class="btn sm ghost" onclick="planCues(false)">Write the cues</button><button type="button" class="btn sm ghost" onclick="planCues(true)">Rewrite all cues</button>` : ''}
+    ${isStage(p.style.format) || groups.some(g => isStage(pictureKind(g.s))) ? '<button type="button" class="btn sm ghost" onclick="stagePlan()">Plan all 3D shots</button>' : ''}
+    <label class="tl-menu-row"><span>A new picture every</span><select style="width:auto" onchange="savePictureEvery(+this.value)">
+      ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (p.style.picture_every || 1) ? 'selected' : ''}>${n === 1 ? 'paragraph' : n+' paragraphs'}</option>`).join('')}</select></label>
+    <label class="tl-menu-row" title="When two archive results are equally relevant, take the public domain or CC0 one"><span>Prefer public domain</span><input type="checkbox" style="width:auto"
+      ${p.prefer_public_domain ? 'checked' : ''} onchange="saveProject({prefer_public_domain:this.checked})"></label>
+    <h4>Look</h4>
+    <button type="button" class="btn sm ghost" onclick="openStylePicker('project')">Change style…</button>
+    <button type="button" class="btn sm ghost" onclick="openProjectLook()">Look and graphic theme…</button>
     ${visualKindSettings(groups)}
-    </div></details><details class="tl-more"><summary class="btn sm ghost">Visual mix <span class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) => `<span class="visual-kind" data-kind="${esc(k)}" style="flex:${n}"></span>`).join('')}</span></summary><div>
-    <div class="visual-mix"><span class="micro-label">Visual mix</span>
-      <div class="visual-mix-bar" aria-hidden="true">${Object.entries(kinds).map(([k,n]) =>
-        `<span class="visual-kind" data-kind="${esc(k)}" style="flex:${n}"></span>`).join('')}</div>
+    <h4>Mix</h4>
+    <div class="visual-mix">${mixBar}
       <span class="mono">${Object.entries(kinds).map(([k,n]) => `<span class="visual-chip visual-kind" data-kind="${esc(k)}">${esc(pictureKindLabel(k))} ${groups.filter(g => pictureKind(g.s) === k).length} · ${Math.round(100*n/denominator)}%</span>`).join(' · ')}${total ? ' · by voiced duration' : ' · by group count (unvoiced)'}</span>
       <span class="visual-rule">Style rule: ${esc(rule)}</span>
     </div>
+    <h4>Also</h4>
+    <button type="button" class="btn sm ghost" onclick="tlLayerSuggest(this)">Suggest layers</button>
+    ${p.slides.some(s => s.on_camera) ? `<button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit camera paragraphs</button>
+    <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>` : ''}
+    <button type="button" class="btn sm ghost" onclick="saveProjectFile()" title="Everything in this video as one file, to open on another computer">Save project file…</button>
     </div></details>`;
 }
 function openEditPictureTools(sid = '') {

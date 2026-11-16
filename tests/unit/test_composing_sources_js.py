@@ -83,7 +83,7 @@ async function run(){
     tlSourceView={pid:'p',tab,query:'',items:[{label:tab,tab,payload}]};
     toolNodes['#tl-source-seconds']={value:'5.5'};
     tlSourcesPaint();
-    check(use.textContent==='Use on selected picture' && grid.buttons[0].draggable,'3D/Create can place and drag');
+    check(grid.buttons[0].draggable,'3D/Create can place and drag');
     grid.buttons[0].onclick();
     // The length box edits only the chosen source; it starts at the source's own length.
     toolNodes['#tl-source-seconds'].value='5.5'; toolNodes['#tl-source-seconds'].oninput();

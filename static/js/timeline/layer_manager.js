@@ -22,18 +22,19 @@ function tlLayerReorder(id, before) {
   return tlLayerRequest({op:'reorder', ids}, '', 'reorder layers');
 }
 
+async function tlLayerSuggest(button) {
+  const pid = TL.pid;
+  if (button) button.disabled = true;
+  try {
+    const result = await api(`/api/projects/${pid}/layers/suggest`, {method:'POST'});
+    if (TL.pid === pid) watchJob(result.job, 'suggest layers');
+  } catch (error) { tlMsg(error.message); }
+  finally { if (button) button.disabled = false; }
+}
+
 function tlWireLayerManager(track) {
   $('#tl-layer-add').onclick = () => tlLayerDialog();
-  const suggest = $('#tl-layer-suggest'), proposal = $('#tl-layer-proposal');
-  if (suggest) suggest.onclick = async () => {
-    const pid = TL.pid;
-    suggest.disabled = true;
-    try {
-      const result = await api(`/api/projects/${pid}/layers/suggest`, {method:'POST'});
-      if (TL.pid === pid) watchJob(result.job, 'suggest layers');
-    } catch (error) { tlMsg(error.message); }
-    finally { suggest.disabled = false; }
-  };
+  const proposal = $('#tl-layer-proposal');
   if (proposal) {
     const plan = state.project.layer_proposal;
     proposal.hidden = !plan?.id;

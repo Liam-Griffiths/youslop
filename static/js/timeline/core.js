@@ -79,31 +79,29 @@ async function tlMount() {
   host.tabIndex = -1;
   host.innerHTML = `
     <div class="tl-head">
-      ${p.kind === 'clip' ? '<h3>Timeline</h3>' : '<span id="edit-picture-toolbar">'+editPictureToolbar()+'</span>'}
-      <button type="button" class="btn sm ghost" id="tl-sources-toggle" aria-controls="tl-sources" aria-keyshortcuts="\\" ${p.kind === 'clip' ? 'hidden' : ''}>Sources</button>
+      ${p.kind === 'clip' ? '<h3>Timeline</h3>' : ''}
+      <button type="button" class="btn sm" id="tl-sources-toggle" aria-controls="tl-sources" aria-keyshortcuts="\\"
+        title="Pictures, clips, graphics, 3D and sponsor reads (\\)" ${p.kind === 'clip' ? 'hidden' : ''}>+ Add</button>
       <span class="mono tl-note" id="tl-note"></span>
       <div class="spacer"></div>
-      <details class="tl-more"><summary class="btn sm ghost">More</summary><div>
-      <label class="row" style="gap:6px"><span class="mono tl-note">speed</span>
+      <div class="tl-trim" role="group" aria-label="Trim mode" title="How dragging an edge behaves · Shift while dragging also rolls">
+        ${['Ripple', 'Roll'].map((name, i) => `<button type="button" data-trim="${i}" aria-pressed="${!!TL.trimRoll === !!i}">${name}</button>`).join('')}</div>
+      ${p.kind === 'clip' ? '' : '<span id="edit-picture-toolbar">'+editPictureToolbar()+'</span>'}
+      <details class="tl-more tl-menu"><summary class="btn sm ghost">View</summary><div>
+      <label class="tl-menu-row"><span>Speed</span>
         <select id="tl-speed" style="width:auto">
           ${[0.5, 1, 1.5, 2].map((x) => `<option value="${x}" ${x === TL.speed ? 'selected' : ''}>${x}×</option>`).join('')}
         </select></label>
-      <label class="row" style="gap:6px;cursor:pointer" title="keep replaying the entry under the playhead">
-        <input type="checkbox" id="tl-loop" style="width:auto" ${TL.loop ? 'checked' : ''}>
-        <span class="mono tl-note">loop picture</span></label>
-      ${p.slides.some(s => s.on_camera) ? `<button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
-      <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>` : ''}
-      <label class="row" title="Apply hidden layers to exported video">
-        <input type="checkbox" id="tl-hide-render" ${p.hide_in_render ? 'checked' : ''}> Hide in render</label>
+      <label class="tl-menu-row" title="Keep replaying the picture under the playhead (L)"><span>Loop this picture</span>
+        <input type="checkbox" id="tl-loop" style="width:auto" ${TL.loop ? 'checked' : ''}></label>
+      <label class="tl-menu-row" title="Leave hidden layers out of the exported video too"><span>Hidden layers stay out of the render</span>
+        <input type="checkbox" id="tl-hide-render" style="width:auto" ${p.hide_in_render ? 'checked' : ''}></label>
       <button type="button" class="btn sm ghost" id="tl-all"
-        title="draw every picture's proxy now instead of as you reach it">draw all</button>
-      <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>
+        title="Draw every picture's preview now instead of as you reach it">Draw all previews</button>
+      ${p.kind === 'clip' && p.slides.some(s => s.on_camera) ? `<button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit camera paragraphs</button>
+      <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>` : ''}
+      <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts <span class="mono">?</span></button>
       </div></details>
-      <button type="button" class="btn sm ghost" id="tl-add-sponsor">Add sponsor</button>
-      <button type="button" class="btn sm ghost" id="tl-add-graphic" ${p.kind === 'clip' ? 'disabled' : ''}
-        title="Add at the playhead, or drop an overlay block here">Add graphic</button>
-      <button type="button" class="btn sm" id="tl-trim-mode" aria-pressed="${!!TL.trimRoll}"
-        title="Trim mode · Shift while dragging also rolls">${TL.trimRoll ? 'Roll' : 'Ripple'}</button>
     </div>
     <div class="tl-main">
       <section class="tl-player" aria-label="Player">
@@ -117,16 +115,15 @@ async function tlMount() {
           <button type="button" class="btn sm ghost" id="tl-fwd" aria-label="Forward one frame" title="forward one frame (→)">▸</button>
           <button type="button" class="btn sm ghost" id="tl-next" aria-label="Next paragraph" title="next paragraph (Shift+→)">▸|</button>
           <span class="mono tl-clock" id="tl-clock"></span>
+          <span id="tl-hover" class="mono tl-note" aria-live="off"></span>
           <div class="spacer"></div>
           <label class="row" style="gap:6px"><span class="mono tl-note">zoom</span>
             <input type="range" id="tl-zoom" min="0.01" max="240" step="0.01" value="${TL.zoom}" style="width:110px"></label><button type="button" class="btn sm" id="tl-fit" aria-keyshortcuts="Shift+Z">Fit</button>
         </div>
       </section>
     </div>
-    <div id="tl-hover" class="mono tl-note" aria-live="off">Hover over the timeline for time and item.</div>
     <div class="tl-scroll" aria-label="Timeline lanes" id="tl-scroll"><div class="tl-track" id="tl-track"></div></div>
-    <button type="button" class="btn sm ghost" id="tl-layer-add">+ Layer</button>
-    <button type="button" class="btn sm ghost" id="tl-layer-suggest">Suggest layers</button>
+    <button type="button" id="tl-layer-add" title="Add a lane for graphics, media, titles or notes">+ Layer</button>
     <div id="tl-layer-proposal" class="tl-fix-proposal"></div>
     <details class="tl-check"><summary id="tl-check-summary">Check</summary>
       <div class="tl-problems" id="tl-problems"></div></details>
@@ -143,10 +140,14 @@ async function tlMount() {
   $('#tl-loop').onchange = (e) => { TL.loop = e.target.checked; };
   $('#tl-all').onclick = tlDrawAll;
   $('#tl-shortcuts').onclick = tlShortcuts;
-  $('#tl-trim-mode').onclick = e => {
-    TL.trimRoll = !TL.trimRoll; e.currentTarget.textContent = TL.trimRoll ? 'Roll' : 'Ripple';
-    e.currentTarget.setAttribute('aria-pressed', String(TL.trimRoll));
-  };
+  host.querySelectorAll('[data-trim]').forEach(b => b.onclick = () => {
+    TL.trimRoll = !!+b.dataset.trim;
+    host.querySelectorAll('[data-trim]').forEach(n => n.setAttribute('aria-pressed', String(n === b)));
+  });
+  // Menus close when a choice inside them opens something else, or on a click outside.
+  if (!TL.menuGuard) document.addEventListener('pointerdown', TL.menuGuard = e => {
+    document.querySelectorAll('.tl-more[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+  });
   $('#tl-play').onclick = tlToggle;
   $('#tl-back').onclick = () => tlStep(-1);
   $('#tl-fwd').onclick = () => tlStep(1);
@@ -196,6 +197,7 @@ async function tlRefresh(redrawCurrent = false, mediaEdit = false) {
   });
   TL.cur = Math.min(TL.cur, Math.max(0, data.total - 1 / data.fps));
   tlDraw();
+  if (tlSourceView.tab === 'Sponsor') tlSourcesPaint(); // The list of reads follows the project.
   tlSeek(TL.cur, { ensure: redrawCurrent });
   if (redrawCurrent) {
     const seg = tlSegAt(TL.cur);

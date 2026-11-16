@@ -23,9 +23,12 @@ function tlPaintNote() {
     : TL.mixFailed ? 'sound failed to mix'
     : (mix.music ? `with the “${mix.music.replace(/\.[^.]+$/, '')}” bed` : 'narration only, no music bed')
       + (mix.sting ? (mix.stings && mix.stings.length > 1 ? ' and both stings' : ' and the ' + ((mix.stings || [''])[0] === 'outro' ? 'end card' : 'slate') + ' sting') : '');
-  note.textContent = `${fmtTime(d.total)} · ${pics} pictures · ${d.width}×${d.height} at ${d.fps}fps · ${sound}`
+  // The bar says only what needs attention; the rest is one hover away.
+  const quiet = mix.audible && !TL.mixBusy && !TL.mixFailed;
+  note.textContent = `${fmtTime(d.total)} · ${pics} pictures` + (quiet ? '' : ' · ' + sound)
     + (d.estimated ? ' · some lengths estimated' : '')
     + (mix.ready && mix.warnings?.length ? ' · ' + mix.warnings.join(' ') : '');
+  note.title = `Preview ${d.width}×${d.height} at ${d.fps}fps · ${sound}`;
 }
 
 function tlDraw() {

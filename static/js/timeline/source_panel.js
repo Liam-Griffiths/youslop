@@ -1,5 +1,13 @@
-// The former Add panel lives here; opening it only reads local indexes.
-const TL_SOURCE_TABS = ['Materials','Library','Search','Blocks','3D','Graphics'];
+// The Add panel: everything that can go on the timeline comes from here.
+// Opening it only reads local indexes. Groups are the tabs people see; the
+// names inside each group are the item kinds, shown as chips when there are several.
+const TL_SOURCE_GROUPS = [['Media',['Materials','Library','Footage']], ['Search',['Search']],
+  ['Graphics',['Blocks','Graphics']], ['3D',['3D']], ['Sponsor',['Sponsor']]];
+const TL_SOURCE_CHIPS = {Materials:'This video', Library:'Library', Footage:'Footage', Blocks:'Overlays', Graphics:'Made in Create'};
+const TL_SOURCE_EMPTY = {Materials:'Nothing collected for this video yet. Add pictures and clips on Home.',
+  Library:'The Library has no pictures or clips yet.', Footage:'No footage has been brought in yet.',
+  Blocks:'No overlay blocks fit this video’s shape.', Graphics:'No graphics yet. Design one in Create.',
+  '3D':'No models or 3D shots yet.'};
 let tlSourceView = {pid:'', tab:'Materials', items:[], query:'', choice:null};
 function tlSourcesRoute() {
   const routeTab = ['pictures','search'].includes(state.subtab) ? 'Search' : ['cast','stage','3d'].includes(state.subtab) ? '3D' : '';
@@ -12,25 +20,27 @@ async function tlSourcesMount() {
   const pid = TL.pid, panel = document.createElement('aside');
   if (tlSourceView.pid !== pid) tlSourceView = {pid, tab:'Materials', items:[], query:'', choice:null};
   tlSourcesRoute();
-  panel.id = 'tl-sources'; panel.setAttribute('aria-label','Sources');
-  panel.innerHTML = `<div class="row"><strong>Sources</strong><button type="button" class="btn sm ghost" data-close aria-label="Collapse sources">Close</button></div>
-    <div class="tl-source-tabs" role="group" aria-label="Source type">${TL_SOURCE_TABS.map(t => `<button type="button" class="btn sm ghost" data-tab="${t}">${t}</button>`).join('')}</div>
-    <label class="sr-only" for="tl-source-query">Find a source</label><input id="tl-source-query" type="search" placeholder="Find a source" value="${esc(tlSourceView.query)}">
-    <div class="tl-source-results" tabindex="0" role="region" aria-label="Source results">
+  panel.id = 'tl-sources'; panel.setAttribute('aria-label','Add to the video');
+  panel.innerHTML = `<div class="tl-source-tabs" role="group" aria-label="What to add">${TL_SOURCE_GROUPS.map(([g]) => `<button type="button" data-group="${g}">${g}</button>`).join('')}</div>
+    <div class="tl-source-chips" role="group" aria-label="Where from" data-chips></div>
+    <label class="sr-only" for="tl-source-query">Find</label><input id="tl-source-query" type="search" placeholder="Find…" value="${esc(tlSourceView.query)}">
+    <div class="tl-source-results" tabindex="0" role="region" aria-label="Results">
       <div class="tl-source-grid" data-source-grid></div><div data-source-tools></div>
-      <p class="sub">Drop on a picture to replace; on + to insert; on Graphics for blocks; on Media for pictures, clips and 3D. Double-click to use the selected picture.</p>
       <p data-source-status role="status"></p>
-      <button type="button" class="btn sm" data-use>Use on selected picture</button>
-      <button type="button" class="btn sm" data-media>Put on a layer above</button>
+    </div>
+    <div class="tl-source-actions" data-actions><span class="sub"
+        title="Drop on a picture to replace it, on + to insert between pictures, on a Graphics lane for overlays, or on a Media lane to sit above the picture.">Drag to the timeline, or:</span>
+      <button type="button" class="btn sm" data-use>Replace selected</button>
+      <button type="button" class="btn sm ghost" data-media>Layer above</button>
     </div>`;
   $('.tl-main').prepend(panel);
-  panel.querySelector('[data-close]').onclick = tlSourcesToggle;
   $('#tl-sources-toggle').onclick = tlSourcesToggle;
   TL.host.classList.toggle('sources-collapsed', !!TL.sourcesCollapsed);
   $('#tl-sources-toggle').setAttribute('aria-expanded', String(!TL.sourcesCollapsed));
-  panel.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
-    tlSourceView.tab = b.dataset.tab; tlSourceView.choice = null; tlSourcesPaint();
-    panel.querySelector('.tl-source-results').scrollTop = 0;
+  panel.querySelectorAll('[data-group]').forEach(b => b.onclick = () => {
+    // Coming back to a group returns to the kind last used inside it.
+    const kinds = TL_SOURCE_GROUPS.find(([g]) => g === b.dataset.group)[1];
+    tlSourcePick((tlSourceView.last ||= {})[b.dataset.group] || kinds[0]);
   });
   $('#tl-source-query').oninput = e => {
     tlSourceView.query = e.target.value; tlSourcesPaint();
@@ -58,6 +68,14 @@ async function tlSourcesMount() {
   view.error = results.some(r => r.status === 'rejected') ? 'Some sources failed to load. Reopen Sources to retry.' : '';
   tlSourcesPaint();
 }
+function tlSourcePick(tab) {
+  const v = tlSourceView;
+  v.tab = tab; v.choice = null;
+  (v.last ||= {})[TL_SOURCE_GROUPS.find(([, kinds]) => kinds.includes(tab))[0]] = tab;
+  tlSourcesPaint();
+  const results = $('#tl-sources')?.querySelector('.tl-source-results');
+  if (results) results.scrollTop = 0;
+}
 function tlSourcesToggle() {
   TL.sourcesCollapsed = !TL.sourcesCollapsed;
   TL.host.classList.toggle('sources-collapsed', TL.sourcesCollapsed);
@@ -69,29 +87,45 @@ function tlSourcesPaint() {
   const panel = $('#tl-sources');
   if (!panel) return;
   const v = tlSourceView, tab = v.tab;
-  panel.querySelector('[data-use]').textContent = 'Use on selected picture';
-  panel.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
+  const [group, kinds] = TL_SOURCE_GROUPS.find(([, kinds]) => kinds.includes(tab)) || TL_SOURCE_GROUPS[0];
+  panel.querySelectorAll('[data-group]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.group === group)));
+  const chips = panel.querySelector('[data-chips]'), actions = panel.querySelector('[data-actions]');
+  if (chips) {
+    chips.hidden = kinds.length < 2;
+    chips.innerHTML = kinds.length < 2 ? '' : kinds.map(k =>
+      `<button type="button" data-tab="${k}" aria-pressed="${k === tab}">${TL_SOURCE_CHIPS[k]}</button>`).join('');
+    chips.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => tlSourcePick(b.dataset.tab));
+  }
+  const query = $('#tl-source-query');
+  if (query) { query.hidden = tab === 'Sponsor'; query.placeholder = tab === 'Search' ? 'Search archives for…' : 'Find…'; }
+  if (actions) actions.hidden = tab === 'Sponsor';
+  const media = panel.querySelector('[data-media]');
+  if (media) media.hidden = ['Blocks','Graphics'].includes(tab);
   const tools = panel.querySelector('[data-source-tools]');
+  if (tab === 'Sponsor') return tlSourceSponsors(panel, tools);
   tools.innerHTML = tab === 'Search' ? `<label for="tl-source-kind">Archive type</label>
       <select id="tl-source-kind">${[['image','Photos'],['video','Clips'],['reaction','Reaction GIFs']].map(([k,label]) =>
         `<option value="${k}" ${(v.searchKind || 'image') === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
       <button type="button" class="btn sm" data-search ${v.searching ? 'disabled' : ''}>Search archives</button>`
     : tab === 'Graphics' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/create">Open Create</a>`
     : tab === '3D' ? `<button type="button" class="btn sm ghost" data-intake>Model intake…</button><button type="button" class="btn sm ghost" onclick="openEditStageTools('cast')">Cast and models</button><button type="button" class="btn sm ghost" onclick="openEditStageTools('stage')">Shot planning</button>`
-    : tab === 'Blocks' ? '<button type="button" class="btn sm ghost" data-browse>Browse blocks…</button>' : '';
+    : tab === 'Blocks' ? '<button type="button" class="btn sm" data-overlay>Add at the playhead</button><button type="button" class="btn sm ghost" data-browse>Browse blocks…</button>' : '';
   if (tools.querySelector('[data-search]')) {
     tools.querySelector('[data-search]').onclick = tlSourceSearch;
     tools.querySelector('select').onchange = e => { v.searchKind = e.target.value; };
   }
   if (tools.querySelector('[data-browse]')) tools.querySelector('[data-browse]').onclick = () => tlInsertBlock(tlInsertNearest());
+  // A chosen overlay lands at the playhead; with nothing chosen the picker opens.
+  if (tools.querySelector('[data-overlay]')) tools.querySelector('[data-overlay]').onclick = () =>
+    v.choice?.kind === 'block' ? tlGraphicDrop(v.choice, TL.cur, '') : tlGraphicAdd();
   if (tab === '3D') tools.querySelector('[data-intake]').onclick = () => {
     const id = v.choice?.model_id;
     if (id) openModelIntake(id); else toast('Select a model for intake.', true);
   };
   if (['3D','Graphics'].includes(tab)) {
-    tools.insertAdjacentHTML('beforeend', `<label for="tl-source-seconds">Insert length (seconds)</label>
+    tools.insertAdjacentHTML('beforeend', `<div class="tl-source-length"><label for="tl-source-seconds">Length, seconds</label>
       <input id="tl-source-seconds" type="number" min="0.05" step="0.05" value="${esc(v.choice?.seconds ?? 4)}">
-      <button type="button" class="btn sm" data-insert-source>Insert at nearest boundary</button>`);
+      <button type="button" class="btn sm" data-insert-source title="Add it as its own shot at the nearest cut to the playhead">Insert at the playhead</button></div>`);
     const length = tools.querySelector('#tl-source-seconds');
     // The box shows the chosen source's own length (a graphic's is set in
     // Create); editing it changes only that source.
@@ -120,8 +154,18 @@ function tlSourcesPaint() {
       if (length && item.payload.seconds) length.value = item.payload.seconds;
     };
   });
-  if (tab === 'Search' && !items.length) grid.innerHTML = '<p>Select a picture, enter a query and search archives. Results can replace pictures or be inserted at +.</p>';
+  if (tab === 'Search' && !items.length) grid.innerHTML = '<p>Select a picture, type what you are looking for and search. Results can replace it or be dragged in.</p>';
+  else if (!items.length) grid.innerHTML = `<p>${v.query ? 'Nothing matches.' : TL_SOURCE_EMPTY[tab] || ''}</p>`;
   panel.querySelector('[data-source-status]').textContent = tab === 'Search' ? v.searchStatus || v.error || '' : v.error || '';
+}
+function tlSourceSponsors(panel, tools) {
+  const slots = state.project.sponsors || [], grid = panel.querySelector('[data-source-grid]');
+  grid.innerHTML = slots.map((slot, i) => `<button type="button" class="btn sm ghost" data-sponsor="${i}"><span>${esc(slot.vars?.name || 'Sponsor read')}</span><small>${slot.enabled === false ? 'Off' : esc(slot.placement || 'mid')}</small></button>`).join('')
+    || '<p>No sponsor reads in this video.</p>';
+  grid.querySelectorAll('[data-sponsor]').forEach(b => b.onclick = () => tlSelect(tlSponsorItems()[+b.dataset.sponsor]));
+  tools.innerHTML = '<button type="button" class="btn sm" data-add-sponsor>Add a sponsor read</button>';
+  tools.querySelector('[data-add-sponsor]').onclick = () => tlSponsorAdd();
+  panel.querySelector('[data-source-status]').textContent = 'A new read lands at the suggested spot. Drag it on the timeline to move it; its details open on the right.';
 }
 function tlSourceArchiveItems(sid = null, candidates = null) {
   const p = state.project;

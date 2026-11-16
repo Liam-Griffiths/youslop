@@ -319,8 +319,12 @@ Each entry: purpose · layout · data · states · ticket. Mockup names in brack
   copy, Turn off.
 - Project layers provide lane names, token swatches and order; unused lanes
   are omitted. Pictures and Voice stay available. The role dictionary remains
-  the inspector/check contract. Add sponsor and Add graphic stay in the toolbar
-  when their lanes are absent; overlay blocks can be dropped on Add graphic.
+  the inspector/check contract. The Edit bar holds one + Add button
+  (the left panel: Media, Search, Graphics, 3D, Sponsor), the Ripple/Roll trim
+  switch, a Whole video menu (pictures, look, mix, layers, project file) and a
+  View menu (speed, loop, previews, shortcuts). Things you add come from the
+  left, the selected item is edited on the right, and whole-video actions live
+  in the one menu. New toolbar buttons are a last resort.
 - Graphics composite bottom to top in increasing layer order: a later lane
   (lower in the timeline) paints over an earlier one. Within a layer, existing
   paragraph/list order is retained. Word anchors resolve before this ordering.

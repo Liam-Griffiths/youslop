@@ -50,7 +50,7 @@ function tlWireZoom() {
       (e.clientX - $('#tl-track').getBoundingClientRect().left - 104) / TL.zoom));
     const node = e.target.closest('[data-layer], [data-seg], [data-para]');
     const item = node && tlItemForNode(node);
-    $('#tl-hover').textContent = `${tlClock(t)}${item ? ' · ' + (item.text || node.title || item.kind) : ''}`;
+    $('#tl-hover').textContent = `pointer ${tlClock(t)}${item ? ' · ' + (item.text || node.title || item.kind) : ''}`;
   });
 }
 
