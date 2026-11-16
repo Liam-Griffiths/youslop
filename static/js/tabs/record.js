@@ -695,8 +695,9 @@ function hearVoice(id) {
 
 async function voiceWholeScript(redo) {
   const p = state.project;
-  if (redo && !confirm(`Read every paragraph again in ${trackLabel(narratorEngine(p))}, `
-      + 'replacing the reads already made in that voice? Your other voices are not touched.')) return;
+  if (redo && !await appConfirm({title: 'Read every paragraph again?', body: `Read every paragraph again in ${trackLabel(narratorEngine(p))}, `
+      + 'replacing the reads already made in that voice? Your other voices are not touched.',
+    ok: 'Read again', danger: true})) return;
   if (narratorEngine(p) !== 'kokoro') {
     // A hosted voice is billed by the character: say how many first.
     let est;
@@ -706,9 +707,10 @@ async function voiceWholeScript(redo) {
     } catch (e) { return toast(e.message, true); }
     if (!est.paragraphs) return toast('Everything is already read in this voice.');
     const label = engineInfo(narratorEngine(p)).label || 'the voice service';
-    if (!confirm(`Send ${est.paragraphs} paragraph${est.paragraphs === 1 ? '' : 's'} `
+    if (!await appConfirm({title: 'Send to voice service?', body: `Send ${est.paragraphs} paragraph${est.paragraphs === 1 ? '' : 's'} `
       + `(${est.characters.toLocaleString()} characters) to ${label}? `
-      + 'It is billed to your account.')) return;
+      + 'It is billed to your account.',
+      ok: 'Send'})) return;
   }
   const r = await api(`/api/projects/${p.id}/voice-over`,
     { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
@@ -1046,9 +1048,10 @@ async function useVoiceTrack(track) {
   const p = state.project;
   const n = p.slides.length;
   const c = (p.voice_tracks || {})[track] || 0;
-  if (c < n && !confirm(`Only ${c} of ${n} paragraphs are read in ${trackLabel(track)}. `
+  if (c < n && !await appConfirm({title: 'Use this voice?', body: `Only ${c} of ${n} paragraphs are read in ${trackLabel(track)}. `
       + 'The rest will be silent until they are. Use it for the video anyway?\n\n'
-      + 'Nothing is deleted — you can switch back at any time.')) return;
+      + 'Nothing is deleted — you can switch back at any time.',
+    ok: 'Use voice'})) return;
   try {
     state.project = await api(`/api/projects/${p.id}/voice-track`,
       { method: 'POST', body: JSON.stringify({ track }) });
@@ -1062,8 +1065,9 @@ async function useVoiceTrack(track) {
 // change to the processing reaches a script that is already read.
 async function recleanTakes() {
   const p = state.project;
-  if (!confirm(`Clean all ${p.recorded_count} takes again from the raw recordings?`
-             + '\nNothing is re-recorded; the takes are rebuilt.')) return;
+  if (!await appConfirm({title: 'Clean takes again?', body: `Clean all ${p.recorded_count} takes again from the raw recordings?`
+             + '\nNothing is re-recorded; the takes are rebuilt.',
+    ok: 'Clean takes'})) return;
   toast('cleaning takes…');
   try {
     const res = await api(`/api/projects/${p.id}/takes/reprocess`, { method: 'POST' });

@@ -288,7 +288,7 @@ body:has(.jobs-live-status) .app-shell { padding-bottom: 48px; }
 .app-dialog { width: min(520px, 90vw); }
 .app-dialog p { white-space: pre-line; }
 .app-dialog label { display: block; margin-top: 16px; }
-.app-dialog input { width: 100%; margin-top: 8px; }
+.app-dialog input, .app-dialog textarea { width: 100%; margin-top: 8px; }
 .app-dialog-actions { justify-content: flex-end; flex-wrap: wrap; margin-top: 20px; }
 .studio-dialog :focus-visible, .jobs-strip-button:focus-visible, .tpl[role=button]:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .command-palette { width: min(560px, 90vw); }

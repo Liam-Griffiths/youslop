@@ -9,7 +9,7 @@ const libUrl = a => a.url || `/api/library/file/${encodeURIComponent(a.id)}`;
 const libThumb = a => a.thumb ?? `/api/library/thumb/${encodeURIComponent(a.id)}`;
 
 function libConfirm(message) {
-  return appConfirm({title: 'Library', body: message});
+  return appConfirm({title: 'Library', body: message, ok: 'Remove', danger: true});
 }
 
 async function renderLibrary() {

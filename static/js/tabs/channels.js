@@ -600,7 +600,8 @@ function youtubePanel(c) {
 }
 
 async function disconnectYoutube() {
-  if (!confirm('Disconnect this channel from YouTube? Uploading a video will ask you to reconnect.')) return;
+  if (!await appConfirm({title: 'Disconnect YouTube?', body: 'Uploading a video will ask you to reconnect.',
+    ok: 'Disconnect'})) return;
   await api(`/api/channels/${state.channel.id}/youtube/disconnect`, { method: 'POST' });
   await refreshChannel();
 }
@@ -901,7 +902,8 @@ function editCast(i, value) {
 
 async function removeCast(i) {
   const who = state.channel.intro.subjects[i] || 'this cast member';
-  if (!confirm(`Remove ${who} from the slate?`)) return;
+  if (!await appConfirm({title: `Remove ${who} from the slate?`,
+    ok: 'Remove', danger: true})) return;
   const r = await api(`/api/channels/${state.channel.id}/cast/${i}`, { method: 'DELETE' });
   applyChannel(r.channel);
   toast('removed');
@@ -1097,14 +1099,15 @@ function auditionSting() {
 }
 
 async function delChannel() {
-  if (!confirm('Delete this channel? Its videos are kept, just unlinked.')) return;
+  if (!await appConfirm({title: 'Delete channel?', body: 'Its videos are kept, just unlinked.',
+    ok: 'Delete', danger: true})) return;
   await api(`/api/channels/${state.channel.id}`, { method: 'DELETE' });
   go('#/');
 }
 
 
 async function saveProjectFormat() {
-  const name = prompt('Format name');
+  const name = await appPrompt({title: 'Save format', label: 'Format name', ok: 'Save'});
   if (!name) return;
   try {
     await api(`/api/channels/${state.project.channel_id}/formats`, {
@@ -1157,13 +1160,14 @@ async function paintChannelBlocks(c) {
           return;
         }
         if (button.dataset.action === 'rename') {
-          const name = prompt('Preset name',value.name);
+          const name = await appPrompt({title: 'Rename preset', label: 'Preset name', value: value.name, ok: 'Rename'});
           if (name === null) return;
           await api(url,{method:'PATCH',body:JSON.stringify({name})});
         } else if (button.dataset.action === 'remove') {
           if (preset) {
             const count = await api(url+'/slides');
-            if (!confirm(`Delete ${value.name}? ${count.slides} slides use this preset. Slides keep their values.`)) return;
+            if (!await appConfirm({title: 'Delete preset?', body: `Delete ${value.name}? ${count.slides} slides use this preset. Slides keep their values.`,
+              ok: 'Delete', danger: true})) return;
           }
           await api(preset ? url : `/api/channels/${c.id}/blocks/${value}`,{method:'DELETE'});
         } else {

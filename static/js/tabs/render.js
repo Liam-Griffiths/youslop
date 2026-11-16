@@ -516,7 +516,8 @@ async function doYoutubeUpload() {
     return toast('The cut has changed. Render and verify it first.', true);
   const u = state.upload;
   if (u.privacy !== 'private'
-      && !confirm(`This will be ${u.privacy} on YouTube as soon as it finishes uploading. Continue?`)) {
+      && !await appConfirm({title: 'Upload to YouTube?', body: `This will be ${u.privacy} on YouTube as soon as it finishes uploading.`,
+        ok: 'Upload'})) {
     return;
   }
   const r = await api(`/api/projects/${state.project.id}/youtube/upload`, {
@@ -568,7 +569,8 @@ function descriptionPanel(p) {
 
 async function writeDescription() {
   const p = state.project;
-  if (p.description && !confirm('Write the description again? Your edits to it will be replaced.')) return;
+  if (p.description && !await appConfirm({title: 'Write description again?', body: 'Your edits to it will be replaced.',
+    ok: 'Write again', danger: true})) return;
   try {
     const r = await api(`/api/projects/${p.id}/description`, { method: 'POST' });
     watchJob(r.job, 'description', (j) => {
@@ -699,7 +701,8 @@ async function savePresenter(patch) {
 }
 
 async function removePresenter() {
-  if (!confirm('Remove the talking-head clip from this video?')) return;
+  if (!await appConfirm({title: 'Remove the talking-head clip from this video?',
+    ok: 'Remove', danger: true})) return;
   await api(`/api/projects/${state.project.id}/presenter`, { method: 'DELETE' });
   state.project = await api(`/api/projects/${state.project.id}`);
   render();
@@ -726,7 +729,8 @@ async function doRender(preview) {
   let r = await api(path,
     { method: 'POST', body: JSON.stringify({ preview }) });
   if (r.check && r.check.counts.P0) {
-    if (!confirm(`${r.check.counts.P0} P0 issues. Render anyway?`)) return;
+    if (!await appConfirm({title: 'Render with issues?', body: `${r.check.counts.P0} P0 issues. Render anyway?`,
+      ok: 'Render anyway'})) return;
     r = await api(path,
       { method: 'POST', body: JSON.stringify({ preview, force: true }) });
   }

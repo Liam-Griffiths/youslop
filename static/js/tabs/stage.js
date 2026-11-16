@@ -85,7 +85,8 @@ async function uploadModel(file, toCast) {
 }
 
 async function deleteModel(mid) {
-  if (!confirm('Delete this model from the library?')) return;
+  if (!await appConfirm({title: 'Delete this model from the library?',
+    ok: 'Delete', danger: true})) return;
   try {
     await api(`/api/models/${mid}`, { method: 'DELETE' });
     refreshModelViews();

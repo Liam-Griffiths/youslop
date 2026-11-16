@@ -392,9 +392,12 @@ function tlAsk() {
 
 
 async function tlMakeRule(problem) {
-  const text = prompt('House rule (up to 200 characters)', problem || '');
+  const text = await appPrompt({title: 'Make this a rule',
+    label: 'House rule (up to 200 characters)', value: problem || '', ok: 'Next'});
   if (!text) return;
-  const scope = prompt('Scope: project or channel', 'project');
+  const scope = await appChoose({title: 'Rule scope', body: 'Scope: project or channel', choices: [
+    {id: 'project', label: 'Project', primary: true}, {id: 'channel', label: 'Channel'},
+  ]});
   if (!scope) return;
   try {
     await api(`/api/projects/${TL.pid}/frame/rules`, {

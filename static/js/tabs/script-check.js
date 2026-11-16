@@ -78,7 +78,8 @@ async function scriptEditRules() {
     // The channel list contains summaries, without frame/rules.
     const channel = p.channel_id ? await api(`/api/channels/${p.channel_id}`) : null;
     const owner = channel || p;
-    const text = prompt(`${channel ? 'Channel' : 'Project'} writing rules, one per line`, (owner.frame?.rules || []).join('\n'));
+    const text = await appPrompt({title: `${channel ? 'Channel' : 'Project'} writing rules`,
+      label: 'Writing rules, one per line', value: (owner.frame?.rules || []).join('\n'), multiline: true, ok: 'Save'});
     if (text === null) return;
     const frame = {...owner.frame, rules: text.split('\n').map(s => s.trim()).filter(Boolean)};
     const saved = await api(channel ? `/api/channels/${channel.id}` : `/api/projects/${p.id}`, {method: 'PATCH', body: JSON.stringify({frame})});

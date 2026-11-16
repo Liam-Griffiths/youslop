@@ -266,12 +266,13 @@ function tlPaintStatus() {
   });
 }
 
-function tlDrawAll() {
+async function tlDrawAll() {
   const segs = tlSegs().filter((s) => !s.ready);
   if (!segs.length) { toast('every picture is already drawn'); return; }
-  if (!confirm(`Draw ${segs.length} entr${segs.length > 1 ? 'ies' : 'y'} (pictures, slate and end card) at `
+  if (!await appConfirm({title: 'Draw all pictures?', body: `Draw ${segs.length} entr${segs.length > 1 ? 'ies' : 'y'} (pictures, slate and end card) at `
     + `${TL.data.width}×${TL.data.height}? It runs one after another in the background and uses a good `
-    + 'share of this computer while it does.')) return;
+    + 'share of this computer while it does.',
+    ok: 'Draw'})) return;
   tlEnsure(segs.map((s) => s.ref));
 }
 

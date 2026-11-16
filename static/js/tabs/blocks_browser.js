@@ -583,7 +583,8 @@ async function blockPresetTarget(b, aspect, values) {
     try {
       if (remove) {
         const count = await api(`/api/${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}/block-presets/${current.id}/slides`);
-        if (!confirm(`Delete ${current.name}? ${count.slides} slides use this preset. Slides keep their values.`)) return;
+        if (!await appConfirm({title: 'Delete preset?', body: `Delete ${current.name}? ${count.slides} slides use this preset. Slides keep their values.`,
+          ok: 'Delete', danger: true})) return;
       }
       const target = $('#preset-scope').value;
       const targets = update || remove ? [`${current.scope === 'project' ? 'projects' : 'channels'}/${current.owner}`]

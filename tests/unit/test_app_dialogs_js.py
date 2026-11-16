@@ -2,8 +2,19 @@
 from pathlib import Path
 import shutil
 import subprocess
+import re
 
 import pytest
+
+
+def test_no_native_dialog_calls():
+    root = Path(__file__).resolve().parents[2] / 'static/js'
+    calls = re.compile(r'\b(?:prompt|confirm|alert)\s*\(')
+    found = [f'{path.relative_to(root)}:{number}: {line.strip()}'
+             for path in sorted(root.rglob('*.js')) if path != root / 'ui/dialog.js'
+             for number, line in enumerate(path.read_text().splitlines(), 1)
+             if calls.search(line)]
+    assert not found, 'Use shared app dialogs:\n' + '\n'.join(found)
 
 
 def run_gjs(tmp_path, source):
@@ -29,9 +40,10 @@ class Element {
  emit(k,e={}){for(const fn of this.listeners[k]||[])fn(e);}
  set innerHTML(html){
   this.html=html; this.parts=[];
-  for(const match of html.matchAll(/<(h2|input|button|form|p)\b([^>]*)>/g)){
+  for(const match of html.matchAll(/<(h2|input|textarea|button|form|p)\b([^>]*)>/g)){
    const el=new Element();el.tag=match[1];el.markup=match[2];
    el.value=el.markup.match(/value="([^"]*)"/)?.[1]||'';
+   if(el.tag==='textarea')el.value=html.slice(match.index+match[0].length).split('</textarea>')[0];
    el.id=el.markup.match(/id="([^"]*)"/)?.[1]||'';
    const choice=el.markup.match(/data-choice="([^"]*)"/);
    if(choice)el.dataset.choice=choice[1];
@@ -39,7 +51,7 @@ class Element {
   }
  }
  get innerHTML(){return this.html;}
- querySelectorAll(s){return this.parts.filter(el=>s.includes(',')?['button','input'].includes(el.tag):
+ querySelectorAll(s){return this.parts.filter(el=>s.includes(',')?s.split(',').map(v=>v.trim()).includes(el.tag):
   s.startsWith('[')?el.markup.includes(s.slice(1,-1)):el.tag===s);}
  querySelector(s){return this.querySelectorAll(s)[0]||null;}
  contains(el){return this===el||this.parts?.includes(el);}
@@ -95,6 +107,27 @@ async function run(){
  check(await promise==='  Exact text  ','prompt preserves text');
  promise=appPrompt({title:'Name',label:'Name'});last().querySelector('[data-cancel]').onclick();
  check(await promise===null,'prompt Cancel');
+ promise=appPrompt({title:'Rules',label:'One per line',value:'First\nSecond',multiline:true});dialog=last();
+ const textarea=dialog.querySelector('textarea');
+ check(textarea.value==='First\nSecond'&&document.activeElement===textarea,'multiline value and initial focus');
+ check(dialog.html.includes(`for="${textarea.id}"`),'textarea labelled');
+ const enter=key(dialog,'Enter');check(!enter.prevented&&dialog.open,'Enter remains available for newlines');
+ dialog.querySelectorAll('button').at(-1).focus();key(dialog,'Tab');
+ check(document.activeElement===textarea,'Tab wraps back to textarea');
+ textarea.value=' First\n\n Second ';dialog.querySelector('form').onsubmit({preventDefault(){}});
+ check(await promise===' First\n\n Second ','multiline text preserved exactly');
+ promise=appPrompt({title:'Rules',label:'Rules',value:'</textarea><script>bad</script>',multiline:true});
+ check(last().html.includes('&lt;/textarea&gt;')&&!last().html.includes('<script>'),'textarea value escaped');
+ key(last(),'Escape');check(await promise===null,'textarea Escape cancels');
+ promise=appPrompt({title:'Channel',fields:[{name:'name',label:'Name',value:'Old'},
+  {name:'concept',label:'Concept'}]});dialog=last();
+ const fields=dialog.querySelectorAll('input');
+ check(fields.length===2&&fields[0].selected&&document.activeElement===fields[0],'two fields, first selected');
+ check(fields.every(el=>dialog.html.includes(`for="${el.id}"`))&&fields[0].id!==fields[1].id,'unique field labels');
+ fields[0].value='Channel';fields[1].value='';dialog.querySelector('form').onsubmit({preventDefault(){}});
+ check(JSON.stringify(await promise)===JSON.stringify({name:'Channel',concept:''}),'named fields preserve blank concept');
+ promise=appPrompt({title:'Channel',fields:[{name:'name',label:'Name'},{name:'concept',label:'Concept'}]});
+ key(last(),'Escape');check(await promise===null&&document.activeElement===opener,'multi-field Escape cancels and returns focus');
  promise=pictureDialog('Name style','Old');last().querySelector('input').value='  Style  ';
  last().querySelector('form').onsubmit({preventDefault(){}});check(await promise==='Style','picture adapter trims');
  promise=pictureDialog('Change?');key(last(),'Escape');check(await promise===null,'picture adapter retains null Cancel');
@@ -107,6 +140,81 @@ async function run(){
  editToolKey({key:'Escape',preventDefault(){},stopPropagation(){}},legacy,()=>legacy.close());
  check(!legacy.isConnected&&document.activeElement===opener,'legacy key adapter');
  print('dialog values, keyboard, focus and adapters passed');
+}
+run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
+'''
+    run_gjs(tmp_path, DOM + source + checks)
+
+
+def test_converted_flows_wait_for_dialog_and_preserve_payloads(tmp_path):
+    source = Path('static/js/ui/dialog.js').read_text()
+    for filename, start, end in [
+        ('tabs/home.js', 'async function newChannel(', 'async function delProject('),
+        ('tabs/script.js', 'async function delSlide(', 'async function reimport('),
+        ('tabs/script-check.js', 'async function scriptEditRules(', 'async function runFactcheck('),
+        ('tabs/settings.js', 'async function removePack(', 'async function checkSpeechEngines('),
+        ('timeline/inspect.js', 'async function tlMakeRule(', 'async function tlRejectLook('),
+        ('timeline/draw.js', 'async function tlDrawAll(', '// Preview only'),
+    ]:
+        text = (Path('static/js') / filename).read_text()
+        source += text[text.index(start):text.index(end)]
+    checks = r'''
+const state={project:{id:'p1',frame:{rules:['First','Second']}}},TL={pid:'p1',data:{width:480,height:270}};
+let calls=[],checks=0,refreshes=0,draws=0;
+const api=async(path,options={})=>{
+ calls.push({path,...options});
+ if(path.endsWith('/uses'))return {channels:[],projects:[]};
+ if(path==='/api/channels')return {id:'c1'};
+ if(path==='/api/channels/c1')return {id:'c1',frame:{rules:['Channel rule']}};
+ return {id:'p1',updated_at:7};
+};
+const go=()=>{},route=async()=>{},render=async()=>{},toast=(msg,bad)=>{if(bad)throw Error(msg);};
+const scriptFlush=async()=>true,scriptPauseEditor=async fn=>fn(),scriptLoadCheck=()=>checks++;
+const refreshPackPickers=async()=>refreshes++,renderPacks=async()=>{};
+const tlSegs=()=>[{ref:'pic',ready:false}],tlEnsure=refs=>{check(refs[0]==='pic','drawing refs');draws++;};
+const tick=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+const writes=()=>calls.filter(c=>c.method&&c.method!=='GET');
+const submit=()=>last().querySelector('form').onsubmit({preventDefault(){}});
+const choose=()=>last().querySelector('[data-choice]').onclick();
+async function run(){
+ let pending=newChannel();check(writes().length===0,'channel waits');
+ key(last(),'Escape');await pending;check(writes().length===0,'channel cancel writes nothing');
+ pending=newChannel();let fields=last().querySelectorAll('input');fields[0].value='Name';fields[1].value='Concept';
+ submit();await pending;
+ check(JSON.stringify(JSON.parse(writes()[0].body))===JSON.stringify({name:'Name',concept:'Concept'}),'single channel creation with both fields');
+ calls=[];pending=delSlide('s1');await tick();
+ check(last().html.includes('danger')&&writes().length===0,'delete waits with danger');
+ key(last(),'Escape');await pending;check(writes().length===0,'paragraph cancel writes nothing');
+ pending=delSlide('s1');await tick();choose();await pending;
+ check(writes().length===1&&writes()[0].method==='DELETE'&&writes()[0].path.endsWith('/slides/s1'),'paragraph deletes once after approval');
+ calls=[];state.project={id:'p1',frame:{rules:['First','Second']}};
+ pending=scriptEditRules();check(last().querySelector('textarea').value==='First\nSecond','writing rules use textarea');
+ key(last(),'Escape');await pending;check(writes().length===0,'rules cancel writes nothing');
+ pending=scriptEditRules();last().querySelector('textarea').value=' New first\n\nNew second ';submit();await pending;
+ check(JSON.parse(writes()[0].body).frame.rules.join('|')==='New first|New second','line splitting and trimming unchanged');
+ check(state.project.updated_at===7&&checks===1,'project version and checks refresh');
+ calls=[];state.project.channel_id='c1';pending=scriptEditRules();await tick();
+ check(last().querySelector('textarea').value==='Channel rule','channel rules loaded from full channel');
+ last().querySelector('textarea').value='';submit();await pending;
+ check(writes()[0].path==='/api/channels/c1'&&JSON.parse(writes()[0].body).frame.rules.length===0,'channel rules can be cleared');
+ calls=[];pending=removePack('test/pack');await tick();
+ check(writes().length===0&&last().html.includes('danger'),'pack waits with danger');
+ key(last(),'Escape');await pending;check(writes().length===0&&refreshes===0,'pack cancel preserves state');
+ pending=removePack('test/pack');await tick();choose();await pending;
+ check(writes().length===1&&writes()[0].path==='/api/packs/test%2Fpack'&&refreshes===1,'pack removal endpoint and refresh unchanged');
+ calls=[];pending=tlMakeRule('Suggested');key(last(),'Escape');await pending;
+ check(writes().length===0,'rule text cancel');
+ pending=tlMakeRule('Suggested');submit();await tick();
+ check(!last().querySelector('input')&&last().querySelectorAll('[data-choice]').length===2,'scope is a fixed choice');
+ key(last(),'Escape');await pending;check(writes().length===0,'scope cancel writes nothing');
+ for(const scope of ['project','channel']){
+  pending=tlMakeRule('Suggested');submit();await tick();
+  last().querySelectorAll('[data-choice]').find(b=>b.dataset.choice===scope).onclick();await pending;
+  check(JSON.stringify(JSON.parse(writes().at(-1).body))===JSON.stringify({text:'Suggested',scope}),'rule scope payload');
+ }
+ pending=tlDrawAll();check(draws===0,'draw waits');key(last(),'Escape');await pending;check(draws===0,'draw cancel');
+ pending=tlDrawAll();choose();await pending;check(draws===1,'draw starts once after confirmation');
+ print('converted dialog cancellation, waits and payloads passed');
 }
 run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
 '''

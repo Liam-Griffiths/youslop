@@ -214,7 +214,8 @@ async function installPackFile(file, replace = false) {
     if ($('#packs-screen')) await renderPacks();
     else go('#/settings');
   } catch (e) {
-    if (e.status === 409 && e.detail?.replace_required && confirm(e.message)) {
+    if (e.status === 409 && e.detail?.replace_required && await appConfirm({title: 'Replace pack?', body: e.message,
+      ok: 'Replace', danger: true})) {
       return installPackFile(file, true);
     }
     toast(e.message, true);
@@ -225,7 +226,8 @@ async function removePack(id) {
   try {
     const uses = await api(`/api/packs/${encodeURIComponent(id)}/uses`);
     const lines = [...uses.channels.map(c => `Channel: ${c.name}`), ...uses.projects.map(p => `Project: ${p.name}`)];
-    if (!confirm(`${lines.length ? lines.join('\n') : 'No channels or projects use this pack.'}\n\nRemove ${id}? Its folder will be kept. Missing items fall back to defaults.`)) return;
+    if (!await appConfirm({title: 'Remove pack?', body: `${lines.length ? lines.join('\n') : 'No channels or projects use this pack.'}\n\nRemove ${id}? Its folder will be kept. Missing items fall back to defaults.`,
+      ok: 'Remove', danger: true})) return;
     await api(`/api/packs/${encodeURIComponent(id)}`, {method: 'DELETE'});
     await refreshPackPickers();
     await renderPacks();

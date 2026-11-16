@@ -457,8 +457,9 @@ async function importSlideStyle(file) {
 }
 
 async function deleteSlideStyle(id) {
-  if (!await pictureDialog('Delete this slide style? Videos already using it keep their look '
-    + 'until you pick another.')) return;
+  if (!await appConfirm({title: 'Delete slide style?',
+    body: 'Videos already using it keep their look until you pick another.',
+    ok: 'Delete', danger: true})) return;
   try {
     await api(`/api/slide-styles/${id}`, { method: 'DELETE' });
     state.slideStyles = null;

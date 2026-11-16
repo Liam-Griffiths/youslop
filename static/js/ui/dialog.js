@@ -43,21 +43,28 @@ function studioDialog(className, content, onClose = () => {}) {
 }
 
 function appValueDialog({title, body = '', choices, cancel = 'Cancel', label,
-  value = '', required = false, danger = false}) {
+  value = '', required = false, danger = false, multiline = false, fields}) {
   return new Promise(resolve => {
     let result = null;
     const inputId = `app-dialog-input-${++appDialogId}`;
+    const inputs = fields || (label === undefined ? [] : [{label, value, required, multiline}]);
+    const controls = inputs.map((field, index) => {
+      const id = `${inputId}-${index}`;
+      return `<label class="micro-label" for="${id}">${esc(field.label)}</label>
+        ${field.multiline
+          ? `<textarea id="${id}" rows="6" ${field.required ? 'required' : ''}>${esc(field.value ?? '')}</textarea>`
+          : `<input id="${id}" value="${esc(field.value ?? '')}" ${field.required ? 'required' : ''}>`}`;
+    }).join('');
     const primary = Math.max(0, choices.findIndex(choice => choice.primary));
     const buttons = choices.map((choice, index) => {
       const accent = index === primary;
-      return `<button type="${label === undefined ? 'button' : 'submit'}"
+      return `<button type="${inputs.length ? 'submit' : 'button'}"
         class="btn${accent ? ' primary' : ''}${danger ? ' danger' : ''}"
         data-choice="${esc(choice.id)}">${esc(choice.label)}</button>`;
     }).join('');
     const dialog = studioDialog('app-dialog', `<h2>${esc(title)}</h2>
       ${body ? `<p data-body>${esc(body)}</p>` : ''}<form>
-      ${label === undefined ? '' : `<label class="micro-label" for="${inputId}">${esc(label)}</label>
-        <input id="${inputId}" value="${esc(value)}" ${required ? 'required' : ''}>`}
+      ${controls}
       <div class="row app-dialog-actions"><button type="button" class="btn ghost" data-cancel>${esc(cancel)}</button>
       ${buttons}</div></form>`, () => resolve(result));
     const description = dialog.querySelector('[data-body]');
@@ -66,10 +73,13 @@ function appValueDialog({title, body = '', choices, cancel = 'Cancel', label,
       dialog.setAttribute('aria-describedby', description.id);
     }
     dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
-    const input = dialog.querySelector('input');
+    const elements = [...dialog.querySelectorAll('input, textarea')];
+    const input = elements[0];
     if (input) {
       dialog.querySelector('form').onsubmit = e => {
-        e.preventDefault(); result = input.value; dialog.close();
+        e.preventDefault();
+        result = fields ? Object.fromEntries(fields.map((field, index) => [field.name, elements[index].value])) : input.value;
+        dialog.close();
       };
     } else {
       dialog.querySelector('form').onsubmit = e => e.preventDefault();
@@ -87,7 +97,8 @@ function appConfirm({title, body, ok = 'Continue', cancel = 'Cancel', danger = f
   return appChoose({title, body, cancel, danger,
     choices: [{id: 'ok', label: ok, primary: true}]}).then(value => value === 'ok');
 }
-function appPrompt({title, label, value = '', ok = 'Continue', required = false}) {
-  return appValueDialog({title, label, value, required,
+// A single field resolves to text; named fields resolve to an object. Cancel is null.
+function appPrompt({title, body, label, value = '', ok = 'Continue', required = false, multiline = false, fields}) {
+  return appValueDialog({title, body, label, value, required, multiline, fields,
     choices: [{id: 'ok', label: ok, primary: true}]});
 }

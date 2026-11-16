@@ -218,7 +218,8 @@ async function reviseVisuals(ids) {
 
 async function rewrite(sid) {
   if (!(await scriptFlush())) return;
-  const instruction = prompt('How should this paragraph change?\n(blank = tighten and make it more concrete)');
+  const instruction = await appPrompt({title: 'Rewrite paragraph',
+    label: 'How should this paragraph change?', body: 'Blank = tighten and make it more concrete.', ok: 'Rewrite'});
   if (instruction === null) return;
   const r = await api(`/api/projects/${state.project.id}/slides/${sid}/rewrite`,
     { method: 'POST', body: JSON.stringify({ instruction }) });
@@ -289,7 +290,8 @@ async function splitSlide(sid) {
 
 async function delSlide(sid) {
   if (!(await scriptFlush())) return;
-  if (!confirm('Delete this paragraph?')) return;
+  if (!await appConfirm({title: 'Delete this paragraph?',
+    ok: 'Delete', danger: true})) return;
   return scriptPauseEditor(async () => {
     await api(`/api/projects/${state.project.id}/slides/${sid}`, { method: 'DELETE' });
     state.project = await api(`/api/projects/${state.project.id}`);
@@ -301,8 +303,9 @@ async function delSlide(sid) {
 async function reimport(fidelity) {
   if (!(await scriptFlush())) return;
   const label = fidelity || state.project.fidelity;
-  if (!confirm(`Re-split your pasted script as "${label}"?\n`
-    + 'Recorded takes are kept but will no longer line up with the new paragraphs.')) return;
+  if (!await appConfirm({title: 'Re-split script?', body: `Re-split your pasted script as "${label}"?\n`
+    + 'Recorded takes are kept but will no longer line up with the new paragraphs.',
+    ok: 'Re-split', danger: true})) return;
   const r = await api(`/api/projects/${state.project.id}/reimport`,
     { method: 'POST', body: JSON.stringify(fidelity ? { fidelity } : {}) });
   watchJob(r.job, 're-import');
@@ -317,10 +320,12 @@ async function regenScript(fresh) {
   const p = state.project;
   const written = Object.keys((p.draft || {}).sections || {}).length;
   if (p.slides.length
-      && !confirm('Rewrite the whole script? Recorded takes will be kept but will no longer match.')) return;
+      && !await appConfirm({title: 'Rewrite whole script?', body: 'Recorded takes will be kept but will no longer match.',
+        ok: 'Rewrite', danger: true})) return;
   if (fresh && written
-      && !confirm(`Throw away the ${written} section${written === 1 ? '' : 's'} `
-                  + 'already written and start from a new outline?')) return;
+      && !await appConfirm({title: 'Start a new outline?', body: `Throw away the ${written} section${written === 1 ? '' : 's'} `
+                  + 'already written and start from a new outline?',
+        ok: 'Start again', danger: true})) return;
   const r = await api(`/api/projects/${p.id}/script`,
     { method: 'POST', body: JSON.stringify({ fresh: !!fresh }) });
   watchJob(r.job, 'script');

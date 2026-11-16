@@ -198,10 +198,10 @@ async function openProjectFile(file, onConflict = '') {
     go(`#/p/${r.id}`);
   } catch (e) {
     if (e.status === 409 && e.detail && e.detail.already_here) {
-      const replace = confirm(`“${e.detail.title}” is already on this computer.\n\n`
-        + 'OK replaces it with the version in this file.\n'
-        + 'Cancel keeps both, opening the file as a copy.');
-      return openProjectFile(file, replace ? 'replace' : 'copy');
+      const choice = await appChoose({title: 'This project is already here',
+        body: `“${e.detail.title}” is already on this computer. Replace it with the version in this file, or keep both and open the file as a copy.`,
+        choices: [{id: 'copy', label: 'Keep both', primary: true}, {id: 'replace', label: 'Replace'}]});
+      return choice ? openProjectFile(file, choice) : undefined;
     }
     toast(e.message, true);
   }
@@ -293,10 +293,12 @@ async function createProject(btn) {
 }
 
 async function newChannel() {
-  const name = prompt('Channel name\n(this is the title on the opening slate)', 'Your channel name');
-  if (!name) return;
-  const concept = prompt('What does this channel cover?\nThis steers the scripts and who appears in the opening titles.',
-    '') || '';
+  const values = await appPrompt({title: 'New channel', ok: 'Create channel', fields: [
+    {name: 'name', label: 'Channel name (this is the title on the opening slate)', value: 'Your channel name'},
+    {name: 'concept', label: 'What does this channel cover? This steers the scripts and who appears in the opening titles.'},
+  ]});
+  if (!values?.name) return;
+  const {name, concept} = values;
   try {
     const c = await api('/api/channels', { method: 'POST', body: JSON.stringify({ name, concept }) });
     state.channels = null;   // the sidebar's cache — force it to pick up the new one
@@ -306,7 +308,8 @@ async function newChannel() {
 }
 
 async function delProject(id) {
-  if (!confirm('Delete this project and everything in it?')) return;
+  if (!await appConfirm({title: 'Delete this project?', body: 'Everything in it is deleted.',
+    ok: 'Delete', danger: true})) return;
   await api(`/api/projects/${id}`, { method: 'DELETE' });
   renderHome();
 }
