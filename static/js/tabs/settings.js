@@ -6,8 +6,15 @@ function setDisplayFace(value) {
 }
 
 
+const SETTINGS_SECTIONS = [
+  ['writing', 'Writing model'], ['voices', 'Voices'], ['research', 'Research'],
+  ['archives', 'Archives'], ['speech', 'Speech-to-text'], ['publishing', 'Publishing'],
+  ['rendering', 'Rendering'], ['appearance', 'Appearance'], ['packs', 'Packs'], ['general', 'General'],
+];
+
 function settingsFieldRow(f) {
-  const id = `set_${f.key}`;
+  // OpenAI's key also appears in Voices. Both controls edit the same setting.
+  const id = `set_${f.key}${f.group === 'Voices' ? '_voices' : ''}`;
   const placeholder = f.secret
     ? (f.set ? '•••••••••••••• (set — leave blank to keep)' : 'not set')
     : '';
@@ -23,21 +30,97 @@ function settingsFieldRow(f) {
   // not just whichever option happens to be listed first.
   const effective = f.value || f.default;
   const control = f.options.length
-    ? `<select id="${id}" ${f.locked ? 'disabled' : ''}
-         onchange="settingsDirty.add('${f.key}')">
+    ? `<select id="${id}" data-setting-key="${f.key}" data-original-value="${esc(effective || '')}" ${f.locked ? 'disabled' : ''}
+         onchange="settingsFieldChanged(this)">
          ${f.options.map((o) => `<option value="${esc(o.value)}"
            ${o.value === effective ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
        </select>`
-    : `<input id="${id}" type="${f.secret ? 'password' : 'text'}"
+    : `<input id="${id}" data-setting-key="${f.key}" data-original-value="${value}" type="${f.secret ? 'password' : 'text'}"
          value="${value}" placeholder="${esc(placeholder)}"
          ${f.locked ? 'disabled' : ''}
-         oninput="settingsDirty.add('${f.key}')">`;
+         oninput="settingsFieldChanged(this)">`;
   return `
     <label class="field">
       <span>${esc(f.label)} ${badge}</span>
       ${control}
       ${f.help ? `<div class="mono" style="color:var(--ink-faint);margin-top:5px;font-size:12px">${esc(f.help)}</div>` : ''}
     </label>`;
+}
+
+function settingsFieldChanged(control) {
+  const key = control.dataset.settingKey;
+  if (control.value === control.dataset.originalValue) settingsDirty.delete(key);
+  else settingsDirty.add(key);
+  document.querySelectorAll(`[data-setting-key="${key}"]`).forEach(el => {
+    if (el !== control) el.value = control.value;
+  });
+  const status = $('#settings-state');
+  if (status) status.textContent = settingsDirty.size ? 'Unsaved changes' : '';
+  if (key === 'llm_backend' || key === 'stt_engine') settingsUpdateProviders();
+}
+
+function settingsFieldBackends(key) {
+  if (key.startsWith('lmstudio_')) return ['lmstudio'];
+  if (key.startsWith('llm_ollama_')) return ['ollama'];
+  return {
+    ollama_context: ['lmstudio', 'ollama'], anthropic_api_key: ['auto', 'api'],
+    model_script: ['auto', 'cli', 'api'], model_utility: ['auto', 'cli', 'api'], effort: ['auto', 'cli', 'api'],
+    openai_api_key: ['openai'], deepseek_api_key: ['deepseek'], xai_api_key: ['grok'],
+    stt_folder: ['whisper.cpp'], stt_executable: ['whisper.cpp'], stt_whisper_cache: ['openai-whisper'],
+    stt_hub_cache: ['faster-whisper', 'mlx-whisper'], stt_device: ['faster-whisper'],
+  }[key];
+}
+
+function settingsProviderFields(fields, section) {
+  const shared = fields.filter(f => !settingsFieldBackends(f.key));
+  const providers = fields.filter(f => settingsFieldBackends(f.key));
+  return `${shared.map(settingsFieldRow).join('')}
+    <div id="settings-${section}-selected"></div>
+    <details id="settings-${section}-other" ${section === 'speech' ? 'ontoggle="settingsUpdateSpeechStatus()"' : ''}>
+      <summary>Other ${section === 'writing' ? 'providers' : 'engines'}</summary>
+      <div id="settings-${section}-alternatives">
+        ${providers.map((f, i) => `<div data-settings-provider="${section}"
+          data-backends="${settingsFieldBackends(f.key).join(' ')}" data-order="${i}">${settingsFieldRow(f)}</div>`).join('')}
+      </div>
+    </details>`;
+}
+
+function settingsUpdateProviders() {
+  for (const [section, key] of [['writing', 'llm_backend'], ['speech', 'stt_engine']]) {
+    const selected = $(`#set_${key}`)?.value;
+    const host = $(`#settings-${section}-selected`);
+    if (!host) continue; // The first-run wizard also uses settingsFieldRow.
+    const alternatives = $(`#settings-${section}-alternatives`);
+    const rows = [...document.querySelectorAll(`[data-settings-provider="${section}"]`)]
+      .sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
+    rows.forEach(row => (row.dataset.backends.split(' ').includes(selected) ? host : alternatives).append(row));
+    $(`#settings-${section}-other`).hidden = !alternatives.children.length;
+    if (section === 'writing') $('#settings-local-check').hidden = selected !== 'lmstudio';
+  }
+  settingsUpdateSpeechStatus();
+}
+
+function settingsUpdateSpeechStatus() {
+  const selected = $('#set_stt_engine')?.value;
+  const showAll = $('#settings-speech-other')?.open;
+  document.querySelectorAll('[data-stt-engine]').forEach(row => {
+    row.hidden = !!selected && !showAll && row.dataset.sttEngine !== selected;
+  });
+}
+
+function settingsSelectSection(section, scroll = true) {
+  const id = SETTINGS_SECTIONS.some(([id]) => id === section) ? section : 'writing';
+  const select = $('#settings-section-select');
+  if (select) select.value = id;
+  document.querySelectorAll('.settings-nav a').forEach(link => {
+    if (link.hash === `#/settings/${id}`) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  });
+  if (scroll) {
+    const heading = $(`#settings-${id}-heading`);
+    heading?.focus({preventScroll: true});
+    heading?.scrollIntoView({block: 'start'});
+  }
 }
 
 async function renderSettings() {
@@ -47,26 +130,28 @@ async function renderSettings() {
   catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
   settingsDirty.clear();
 
-  const groups = [];
-  for (const f of data.fields) {
-    if (f.group === 'Internal') continue;
-    let g = groups.find((x) => x.name === f.group);
-    if (!g) { g = { name: f.group, fields: [] }; groups.push(g); }
-    g.fields.push(f);
-  }
-
   view.innerHTML = `
+    <div id="settings-screen">
     <h1>Settings</h1>
     <p><a class="btn" href="#/setup">Run first-run setup again</a></p>
     <p class="sub">Set up writing, narration, research and rendering.
       Changes take effect the next time the app starts.</p>
     <p class="mono" style="color:var(--ink-faint);margin:-8px 0 22px">
       Data folder: ${esc(data.data_dir)}</p>
-    <p class="mono">New-channel cards: ${esc(data.card_engine)}. Channel preview templates
-      marked “scene” use Chromium; other templates use Pillow.</p>
-
-    <h2 class="micro">Appearance</h2>
-    <div class="panel">
+    <div class="settings-layout">
+      <nav class="settings-nav" aria-label="Settings sections">
+        ${SETTINGS_SECTIONS.map(([id, name]) => `<a href="#/settings/${id}">${name}</a>`).join('')}
+      </nav>
+      <label class="field settings-section-picker" for="settings-section-select"><span>Settings section</span>
+        <select id="settings-section-select" onchange="go('#/settings/' + this.value)">
+          ${SETTINGS_SECTIONS.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
+        </select>
+      </label>
+      <div id="settings-groups">
+        ${SETTINGS_SECTIONS.map(([id, name]) => {
+          const fields = data.fields.filter(f => f.group === name);
+          let content;
+          if (id === 'appearance') content = `
       <div class="micro">Theme · applies immediately</div>
       <div class="theme-options" role="group" aria-label="Theme">
         ${themeModes.map(mode => `<button type="button" class="btn" data-theme-choice="${mode}"
@@ -78,25 +163,29 @@ async function renderSettings() {
           <option value="grotesk" ${document.documentElement.dataset.display === 'grotesk' ? 'selected' : ''}>Space Grotesk</option>
         </select>
       </label>
+      `;
+          else if (id === 'packs') content = '<div id="packs-screen"></div>';
+          else if (id === 'writing' || id === 'speech') {
+            const key = id === 'writing' ? 'llm_backend' : 'stt_engine';
+            content = fields.filter(f => f.key === key).map(settingsFieldRow).join('') +
+              settingsProviderFields(fields.filter(f => f.key !== key), id);
+            content += id === 'writing' ? `<div id="settings-local-check">${localModelCheckRow()}</div>` :
+              '<button class="btn" onclick="checkSpeechEngines(true)">Re-check engines</button><div id="stt-engines" role="status"></div>';
+          } else content = fields.map(settingsFieldRow).join('');
+          return `<section class="settings-section" aria-labelledby="settings-${id}-heading">
+            <h2 id="settings-${id}-heading" tabindex="-1">${name}</h2><div class="panel">${content}</div></section>`;
+        }).join('')}
+      </div>
     </div>
-    <h2>Packs</h2>
-    <div id="packs-screen"></div>
-    <div id="settings-groups">
-      ${groups.map((g) => `
-        <h2 style="font-size:15px;margin:26px 0 10px">${esc(g.name)}</h2>
-        <div class="panel">
-          ${g.fields.map(settingsFieldRow).join('')}
-          ${g.name === 'Writing model' ? localModelCheckRow() : ''}
-          ${g.name === 'Speech-to-text' ? '<button class="btn" onclick="checkSpeechEngines(true)">Re-check engines</button><div id="stt-engines" role="status"></div>' : ''}
-        </div>`).join('')}
-    </div>
-
-    <div class="row" style="margin-top:22px;position:sticky;bottom:18px">
+    <div class="settings-save-bar">
       <button class="btn primary" onclick="saveSettingsForm()">Save settings</button>
-      <span class="mono" id="settings-state" style="color:var(--ink-faint)"></span>
-    </div>`;
+      <span class="mono" id="settings-state" role="status"></span>
+    </div></div>`;
+  settingsUpdateProviders();
   await renderPacks();
   await checkSpeechEngines();
+  const section = location.hash.split('/')[2];
+  settingsSelectSection(section, !!section);
 }
 
 // LM Studio check: one request to the local server when clicked, never on load.
@@ -151,7 +240,7 @@ async function testLocalModelSpeed() {
 async function saveSettingsForm() {
   const payload = {};
   for (const key of settingsDirty) {
-    const el = $(`#set_${key}`);
+    const el = document.querySelector(`[data-setting-key="${key}"]`);
     if (el) payload[key] = el.value;
   }
   if (!Object.keys(payload).length) return toast('Nothing changed');
@@ -243,7 +332,7 @@ async function checkSpeechEngines(refresh = false) {
     const engines = await api(`/api/stt/engines?refresh=${refresh}`);
     if (!host.isConnected) return;
     host.innerHTML = `<p class="sub">Optional. Save settings and restart to use changed paths or defaults.</p>` +
-      Object.entries(engines).map(([name, info], index) => `<div class="field" style="margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--line)"><strong>${esc(name)} · ${info.installed ? 'Installed' : 'Not found'}</strong>
+      Object.entries(engines).map(([name, info], index) => `<div class="field" data-stt-engine="${esc(name)}" style="margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--line)"><strong>${esc(name)} · ${info.installed ? 'Installed' : 'Not found'}</strong>
         <p class="mono">${esc([info.version, info.device, info.notes].filter(Boolean).join(' · '))}</p>
         <p class="mono">Last runtime: ${esc(info.runtime ? `${info.runtime.version || 'Version unknown'} · ${info.runtime.device || 'Device unknown'}` : 'Not run in this session')}</p>
         <p class="mono">Models: ${esc(info.models.join(', ') || 'No local models found')}</p>
@@ -252,6 +341,7 @@ async function checkSpeechEngines(refresh = false) {
     host.querySelectorAll('[data-stt-download]').forEach(button => {
       button.onclick = () => downloadSpeechModel(button);
     });
+    settingsUpdateSpeechStatus();
   } catch (e) { host.textContent = e.message; }
 }
 

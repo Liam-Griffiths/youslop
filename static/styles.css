@@ -319,7 +319,7 @@ body:has(.jobs-live-status) .app-shell { padding-bottom: 48px; }
   .shell-inspector { flex: 1 1 100%; width: auto; border-left: 0; border-top: 1px solid var(--line); }
 }
 /* Status is configuration only (Settings has it); drop it before the nav wraps. */
-@media (max-width: 1279px) { .topbar-right { display: none; } }
+@media (max-width: 1399px) { .topbar-right { display: none; } }
 @media (max-width: 800px) { #app-nav { order: 3; width: 100%; } }
 
 /* ------------------------------------------------------------------- type */
@@ -1729,6 +1729,33 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   .publish-workspace { flex-direction: column; }
   .finish-list { position: static; flex-basis: auto; width: 100%; border-right: 0; padding-right: 0; }
   .publish-main { width: 100%; }
+}
+
+/* Settings: section links keep one form; reserve space for both bottom bars. */
+html:has(#settings-screen) { scroll-padding-bottom: 160px; }
+#settings-screen { padding-bottom: 120px; }
+.settings-layout { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 28px; align-items: start; }
+.settings-nav { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 4px;
+  max-height: calc(100dvh - 200px); overflow-y: auto; }
+.settings-nav a { padding: 8px 10px; color: var(--dim); text-decoration: none; border-radius: 4px; }
+.settings-nav a[aria-current], .settings-nav a:hover { color: var(--ink); background: var(--raised); }
+label.settings-section-picker { display: none; }
+.settings-section { margin-bottom: 28px; }
+.settings-section h2 { margin: 0 0 12px; scroll-margin-top: 100px; }
+.settings-section .panel { min-width: 0; }
+.settings-section details { margin: 16px 0; }
+.settings-section summary { cursor: pointer; color: var(--dim); }
+.settings-section details[open] > div { margin-top: 16px; }
+.settings-save-bar { position: fixed; bottom: 32px; left: 0; right: 0; z-index: 35;
+  display: flex; align-items: center; gap: 18px; padding: 12px 22px;
+  background: var(--bg); border-top: 1px solid var(--line); }
+.settings-save-bar #settings-state { color: var(--dim); }
+body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .settings-nav { display: none; }
+  label.settings-section-picker { display: block; }
+  .settings-section h2 { scroll-margin-top: 160px; }
 }
 
 /* First run follows the same panels, controls and tokens as Settings. */

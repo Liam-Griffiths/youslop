@@ -308,12 +308,17 @@ async function route() {
 async function routeView() {
   const hash = canonicalHash(location.hash || '#/');
   if (hash !== (location.hash || '#/')) { location.replace(hash); return; }
+  const settingsPage = /^#\/settings(?:\/[^/]+)?$/.test(hash);
+  // Section links keep the live form (including unsaved secrets) in place.
+  if (settingsPage && $('#settings-screen')) {
+    settingsSelectSection(hash.split('/')[2]);
+    return;
+  }
   resetShell();
   if (typeof footageStop === 'function') footageStop();
   const proj = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(\w+))?/);
   const chan = hash.match(/^#\/channels\/([^/]+)(?:\/(\w+))?/);
   const lib = hash === '#/library';
-  const settingsPage = hash === '#/settings';
   const guidePage = hash === '#/guide';
   stopStream();
   if (typeof tlPause === 'function' && !(proj && proj[2] === 'edit')) tlPause();

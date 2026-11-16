@@ -500,6 +500,85 @@ def capture(base, out, theme="dark"):
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route == '#/settings':
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
+                _evaluate(cdp, session, """(() => {
+                  const visible = el => !!el.getClientRects().length;
+                  if (!visible(document.querySelector('.settings-nav')) ||
+                      visible(document.querySelector('#settings-section-select')))
+                    throw Error('Wide Settings section navigation missing');
+                  const backend = document.querySelector('#set_llm_backend');
+                  backend.value = 'lmstudio'; settingsFieldChanged(backend);
+                  if (['openai_api_key','deepseek_api_key','xai_api_key'].some(key =>
+                      visible(document.querySelector('#set_' + key))))
+                    throw Error('Unselected writing provider fields are visible');
+                  if (!visible(document.querySelector('#set_lmstudio_model')))
+                    throw Error('Selected writing provider fields missing');
+                  const other = document.querySelector('#settings-writing-other');
+                  other.open = true;
+                  if (!visible(document.querySelector('#set_openai_api_key')))
+                    throw Error('Other provider fields cannot be opened');
+                  const secret = document.querySelector('#set_openai_api_key');
+                  secret.value = 'snapshot-only'; settingsFieldChanged(secret);
+                  other.open = false;
+                  window.scrollTo(0, 0);
+                  return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+                })()""")
+                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                path = out / 'settings--top--1280.png'
+                path.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(path),'t':0,'why':'Settings top, LM Studio, at 1280×720'})
+                _evaluate(cdp, session, """(async () => {
+                  const form = document.querySelector('#settings-screen');
+                  const engine = document.querySelector('#set_stt_engine');
+                  engine.value = 'whisper.cpp'; settingsFieldChanged(engine);
+                  history.replaceState(null, '', '#/settings/speech');
+                  await route();
+                  if (document.querySelector('#settings-screen') !== form ||
+                      document.querySelector('#set_openai_api_key').value !== 'snapshot-only' ||
+                      !document.querySelector('#settings-state').textContent.includes('Unsaved changes'))
+                    throw Error('Section routing discarded unsaved settings');
+                  if (document.querySelector('#set_stt_device').getClientRects().length ||
+                      !document.querySelector('#set_stt_executable').getClientRects().length)
+                    throw Error('Speech engine fields do not follow the selection');
+                  // Exercise the taller jobs strip without starting any real job.
+                  const live = document.createElement('span'); live.className = 'jobs-live-status';
+                  live.textContent = 'Snapshot job'; document.querySelector('.jobs-strip').append(live);
+                  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+                  const bar = document.querySelector('.settings-save-bar').getBoundingClientRect();
+                  const jobs = document.querySelector('.jobs-strip').getBoundingClientRect();
+                  const heading = document.querySelector('#settings-speech-heading').getBoundingClientRect();
+                  if (bar.bottom > jobs.top + 1 || heading.bottom > bar.top ||
+                      heading.top < document.querySelector('.topbar').getBoundingClientRect().bottom)
+                    throw Error('Settings navigation or save bar overlaps fixed chrome');
+                  return true;
+                })()""")
+                png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                path = out / 'settings--speech--1280.png'
+                path.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(path),'t':0,'why':'Settings scrolled to Speech with live jobs at 1280×720'})
+                _evaluate(cdp, session, """(async () => {
+                  history.replaceState(null, '', '#/settings/general'); await route();
+                  window.scrollTo(0, document.documentElement.scrollHeight);
+                  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+                  if (document.querySelector('#set_user_agent').getBoundingClientRect().bottom >
+                      document.querySelector('.settings-save-bar').getBoundingClientRect().top)
+                    throw Error('Last setting cannot scroll clear of the save bar');
+                  document.querySelector('.jobs-strip > .jobs-live-status').remove();
+                  history.replaceState(null, '', '#/settings'); await route();
+                  window.scrollTo(0, 0);
+                  return true;
+                })()""")
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':760, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
+                _evaluate(cdp, session, """(() => {
+                  if (document.querySelector('.settings-nav').getClientRects().length ||
+                      !document.querySelector('#settings-section-select').getClientRects().length)
+                    throw Error('Narrow Settings section picker missing');
+                  return true;
+                })()""")
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
                 _evaluate(cdp, session, """(async () => {
                   const host = document.querySelector('#stt-engines');
                   if (!host.textContent.includes('Not found') ||
