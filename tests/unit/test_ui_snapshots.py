@@ -8,7 +8,7 @@ from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 107
+    assert len(paths) == len(set(paths)) == 109
     assert paths[:5] == ['#/', '#/setup', '#/library', '#/settings', '#/guide']
     assert '#/footage/ssnapshot' in paths and '#/footage/saudio' in paths
     assert '#/footage/saudio/clips/a1' in paths  # T14.3 adds the clip-finder route.
@@ -24,7 +24,7 @@ def test_routes_match_current_tabs_and_families():
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 107
+    assert len(set(paths)) == 109
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)

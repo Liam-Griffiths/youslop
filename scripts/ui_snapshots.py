@@ -43,6 +43,7 @@ def routes():
     result.append('#/p/psnaplong/edit')
     result.extend(['#/p/psnapinserts/edit', '#/p/psnapinserts/script'])
     result.extend(f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS)
+    result.extend(f'#/p/psnapwrite{size}/script' for size in ('short', 'long'))
     return result
 
 
@@ -67,6 +68,27 @@ def console_error(event):
         message = details.get('exception', {}).get('description') or details.get('text', 'JavaScript exception')
         return f"exception: {message} ({details.get('url', '')}:{details.get('lineNumber', 0) + 1})"
     return None
+
+
+def seed_writing():
+    """Manuscript fixtures: no generated media, recordings, or model work."""
+    from app import store
+    from app.schema import Project, Slide
+    for size, count in [('short', 2), ('long', 32)]:
+        p = Project(id=f'psnapwrite{size}', idea='Synthetic writing workspace', target_minutes=8,
+            slides=[Slide(id=f'write{i}', narration='The station wakes before the city. '
+                'Light crosses the empty platform as the first train arrives.',
+                chapter=f'Chapter {i // 8 + 1}' if i % 8 == 0 else '',
+                visual_note='An archive photograph of the platform before sunrise.') for i in range(count)])
+        p.style.picture_every = 1 if size == 'short' else 3
+        p.research = {'facts': [{'claim': 'The synthetic station opened in 1920.',
+            'date': '1920', 'source': 'Fixture archive', 'url': 'https://example.test/archive'}],
+            'flags': [{'slide_id': 'write1', 'severity': 'high', 'claim': 'Opening date',
+                'issue': 'Confirm the date against the archive.'}]}
+        if size == 'long':
+            p.set_take(p.slides[0], 'mic', {'path': 'takes/synthetic.wav',
+                'duration': 5, 'narration': p.slides[0].narration})
+        store.save(p)
 
 
 def seed():
@@ -258,6 +280,7 @@ def seed():
         Slide(id='insertcard', insert=dict(kind='card', seconds=4, text='The next chapter'))]
     shutil.copytree(source, store.project_dir(inserts.id), dirs_exist_ok=True)
     store.save(inserts)
+    seed_writing()
 
 
 @contextmanager
@@ -554,6 +577,40 @@ def capture(base, out):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route == '#/p/psnapwritelong/script':
+                for phase, width, height, expression in [
+                    ('review', 1440, 900, 'scriptFocus(false); true'),
+                    ('writing', 1280, 720, 'scriptFocus(false); true'),
+                    ('focus', 1280, 720, 'scriptFocus(true); true'),
+                    ('narrow', 900, 720, 'scriptFocus(false); true')]:
+                    cdp.send('Emulation.setDeviceMetricsOverride', {
+                        'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
+                    _evaluate(cdp, session, expression)
+                    _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+                    if phase == 'review':
+                        _evaluate(cdp, session, """(() => {
+                          const tabs = document.querySelector('.stage-subtabs');
+                          const tools = document.querySelector('.script-tools');
+                          const shot = document.querySelector('.script-shot-heading');
+                          if (Math.abs(tabs.getBoundingClientRect().top - tools.getBoundingClientRect().top) > 8 ||
+                              shot.getBoundingClientRect().top - document.querySelector('.stage-bar').getBoundingClientRect().bottom > 180)
+                            throw Error('Writing toolbar or first shot is too low');
+                          document.querySelector('[data-binder-sid="write1"]').click();
+                          const text = document.querySelector('[data-para="write1"][contenteditable]');
+                          if (document.activeElement !== text || !text.contains(getSelection().anchorNode))
+                            throw Error('Binder click did not place narration caret');
+                          scriptWorkspaceKey({key:'ArrowUp', ctrlKey:true, preventDefault(){}});
+                          if (document.activeElement.dataset.para !== 'write0')
+                            throw Error('Previous paragraph did not focus narration');
+                          document.querySelector('.script-main').scrollTop = 0;
+                          return true;
+                        })()""")
+                    png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                    extra = path.with_stem(f'{path.stem}--{phase}')
+                    extra.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(extra), 't':0, 'why':phase})
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route in [f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS]:
                 for width, height in DASHBOARD_SIZES:
                     cdp.send('Emulation.setDeviceMetricsOverride', {

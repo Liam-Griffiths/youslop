@@ -379,6 +379,7 @@ const fetch = async (path,opts) => {
 };
 let tlInspectorQueue = Promise.resolve();
 const tlPause = () => {};
+const scriptFlush = async () => true;
 const tlRefreshProject = async () => {refreshed++;};
 const paintProjectShell = () => {};
 const loadStageStates = () => {};

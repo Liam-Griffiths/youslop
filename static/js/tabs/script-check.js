@@ -26,7 +26,7 @@ async function scriptLoadCheck() {
     });
     document.querySelectorAll('[data-findings]').forEach(el => {
       el.innerHTML = (bySlide.get(el.dataset.findings) || []).join('');
-      el.closest('.script-card').classList.toggle('has-finding', !!el.innerHTML);
+      document.querySelector(`[data-binder-sid="${el.dataset.findings}"]`)?.classList.toggle('has-finding', !!el.innerHTML);
     });
     $('#script-check-results').innerHTML = `<div class="script-counts mono">${['P0','P1','P2','P3'].map(l => `<span class="${l}">${l} ${result.counts[l]}</span>`).join('')}</div>
       ${findings.map((f, i) => `<div class="script-check-item"><button class="btn sm ghost mono" onclick="scriptLocate('${f.slide_id}')">${f.level} · ${f.slide_id ? '¶' + (state.project.slides.findIndex(s => s.id === f.slide_id) + 1) : 'Script'}</button>${row(f, i)}</div>`).join('') || '<p>No open word findings.</p>'}
@@ -42,13 +42,27 @@ async function scriptLoadCheck() {
 }
 function scriptLocate(sid) {
   const el = [...document.querySelectorAll('.script-card')].find(el => el.dataset.sid === sid);
-  if (el) { el.focus(); el.scrollIntoView({block: 'center'}); }
+  if (!el) return;
+  el.closest('.script-unit').hidden = false;
+  el.closest('[data-script-shot]').hidden = false;
+  scriptCurrent(sid);
+  const text = el.querySelector('[data-para][contenteditable]');
+  (text || el.querySelector('a') || el).focus({preventScroll: true});
+  if (text) {
+    const range = document.createRange(), selection = window.getSelection();
+    range.selectNodeContents(text);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  el.scrollIntoView({block: 'center'});
 }
 function scriptFixFinding(i) {
   const f = state.scriptFindings[i];
   if (!f.slide_id) return go(`#/p/${state.project.id}/plan`);
   scriptLocate(f.slide_id);
-  document.activeElement.querySelector('textarea')?.focus();
+  const section = document.querySelector(`[data-script-inspector="${f.slide_id}"] [data-script-detail="findings"]`);
+  if (section) section.open = true;
   toast('Edit the narration to address the finding; Check facts refreshes researched claims.');
 }
 async function scriptDismiss(id) {
@@ -66,14 +80,16 @@ async function scriptEditRules() {
     const text = prompt(`${channel ? 'Channel' : 'Project'} writing rules, one per line`, (owner.frame?.rules || []).join('\n'));
     if (text === null) return;
     const frame = {...owner.frame, rules: text.split('\n').map(s => s.trim()).filter(Boolean)};
-    await api(channel ? `/api/channels/${channel.id}` : `/api/projects/${p.id}`, {method: 'PATCH', body: JSON.stringify({frame})});
+    const saved = await api(channel ? `/api/channels/${channel.id}` : `/api/projects/${p.id}`, {method: 'PATCH', body: JSON.stringify({frame})});
     owner.frame = frame;
+    if (!channel) p.updated_at = saved.updated_at;
     if (state.project?.id === p.id) scriptLoadCheck();
   } catch (e) { toast(e.message, true); }
 }
 
 
 async function runFactcheck() {
+  if (!(await scriptFlush())) return;
   const r = await api(`/api/projects/${state.project.id}/factcheck`, { method: 'POST' });
   watchJob(r.job, 'fact check');
   render();

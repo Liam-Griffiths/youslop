@@ -127,8 +127,11 @@ function watchJob(id, kind, onDone) {
       paintJobsStrip();
       if (j.state === 'error') toast(j.error || 'Job failed', true);
       if (state.project) {
-        state.project = await api(`/api/projects/${state.project.id}`);
-        render();
+        if (!(await scriptFlush())) return;
+        await scriptPauseEditor(async () => {
+          state.project = await api(`/api/projects/${state.project.id}`);
+          await render();
+        });
       } else if (state.channel) {
         state.channel = await api(`/api/channels/${state.channel.id}`);
         paintChannel();
@@ -180,6 +183,10 @@ function jobPanel() {
 
 // ------------------------------------------------------------------ routing
 async function route() {
+  if (!(await scriptFlush())) return;
+  return scriptPauseEditor(routeView);
+}
+async function routeView() {
   const hash = canonicalHash(location.hash || '#/');
   if (hash !== (location.hash || '#/')) { location.replace(hash); return; }
   resetShell();
@@ -447,6 +454,7 @@ async function deleteSlideStyle(id) {
 
 // ----------------------------------------------------------------- project
 async function render() {
+  if (!(await scriptFlush())) return;
   const p = state.project;
   if (!p) return;
   state.stage = state.stage || 'dashboard';
@@ -455,7 +463,7 @@ async function render() {
   }
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = p.kind === 'clip' ? [] : state.stage === 'script'
-    ? [['script', 'Script'], ['outline', 'Outline']]
+    ? [['script', 'Write'], ['outline', 'Outline']]
     : state.stage === 'edit' ? [['pictures', 'Pictures'], ['timeline', 'Timeline'],
       ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])] : [];
   // Stage contents are replaced below; give back any slot the last stage borrowed.
@@ -468,11 +476,13 @@ async function render() {
       <button class="btn ghost sm" onclick="saveProjectFile()"
         title="everything in this video as one file, to open on another computer">save project file…</button>
     </div>` : ''}
+    ${state.stage === 'script' ? '<div class="script-stage-toolbar">' : ''}
     ${tabs.length > 1 ? `<nav class="tabs stage-subtabs" aria-label="${esc(state.stage)} tools">
       ${tabs.map(([id, label]) => `<a class="tab ${(state.subtab || (state.stage === 'edit' ? 'timeline' : 'script')) === id ? 'active' : ''}"
         ${(state.subtab || (state.stage === 'edit' ? 'timeline' : 'script')) === id ? 'aria-current="page"' : ''}
         href="#/p/${p.id}/${state.stage}/${id}">${label}</a>`).join('')}
     </nav>` : ''}
+    ${state.stage === 'script' ? `${state.tab === 'script' && p.slides.length ? '<div id="script-toolbar" onkeydown="scriptWorkspaceKey(event)"></div>' : ''}</div>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
   await ({ dashboard: paintDashboard, clip: paintClip, plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();

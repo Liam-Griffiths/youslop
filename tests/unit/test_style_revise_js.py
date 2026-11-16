@@ -10,9 +10,10 @@ def test_proposal_review(tmp_path):
     runtime = shutil.which('gjs')
     if not runtime:
         pytest.skip('GJS required')
-    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
+    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-writing.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
     script = tmp_path / 'style.mjs'
     script.write_text('''
+const window={addEventListener(){}};
 const check = (ok, msg) => { if (!ok) throw Error(msg); };
 const esc = s => String(s).replaceAll('<','&lt;');
 let calls = [], messages = [], pending, result, refreshes = 0, watched;
@@ -28,16 +29,18 @@ const $ = () => summary;
 const fmtTime = n => String(n);
 const toast = msg => messages.push(msg);
 function host(sid) {
-  const fields = Object.fromEntries(['textarea','.script-word-count','.script-voice'].map(k => [k,{style:{}}]));
+  const fields = Object.fromEntries(['.script-text','.script-word-count','.script-voice'].map(k => [k,{style:{}}]));
   return {dataset:{styleProposal:sid},innerHTML:'', buttons:[{},{}],
     querySelectorAll(){return this.buttons;},
     closest(){return {querySelector:k => fields[k]};},
     replaceChildren(){this.innerHTML='';}};
 }
 const hosts = [host('one'),host('two')];
-const document = {querySelectorAll:() => hosts};
+const text = {};
+const document = {querySelectorAll:() => hosts,querySelector:()=>text};
 ''' + source + '''
 scriptLoadCheck = () => { refreshes++; };
+scriptStats = () => {};
 const proposals = ['one','two'].map(slide_id => ({slide_id,before:'<old>',after:'<new>',reasons:['Reason']}));
 const button = {textContent:'Smooth flagged lines'};
 result = {job:'j1'};
@@ -70,6 +73,7 @@ state.project = {id:'p'};
 let release;
 pending = new Promise(r => release = r);
 const request = smoothFlaggedLines(null,button);
+for(let i=0;i<10;i++) await Promise.resolve();
 state.project = {id:'another'};
 result = proposals;
 release(); await request;
@@ -83,9 +87,10 @@ def test_style_actions_refresh_with_findings(tmp_path):
     runtime = shutil.which('gjs')
     if not runtime:
         pytest.skip('GJS required')
-    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
+    source = Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-writing.js').read_text() + Path('static/js/tabs/script-check.js').read_text()
     script = tmp_path / 'findings.mjs'
     script.write_text('''
+const window={addEventListener(){}};
 const check = (ok, msg) => { if (!ok) throw Error(msg); };
 const state = {project:{id:'p',slides:[{id:'one'},{id:'two'}]},tab:'script'};
 const esc = String;

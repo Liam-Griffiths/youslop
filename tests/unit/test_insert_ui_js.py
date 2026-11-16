@@ -12,7 +12,7 @@ def test_insert_ui(tmp_path):
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(f'static/js/timeline/{name}.js').read_text() for name in
                        ('inserts', 'insert_sources', 'insert_inspector'))
-    source += '\n' + Path('static/js/tabs/script.js').read_text()
+    source += '\n' + Path('static/js/tabs/script.js').read_text() + Path('static/js/tabs/script-writing.js').read_text()
     harness = r'''
 const check = (v,m) => {if (!v) throw Error(m);};
 const structuredClone = v => JSON.parse(JSON.stringify(v));
@@ -53,7 +53,8 @@ const plus = {dataset:{insertPoint:'1'},setPointerCapture(){}};
 const lane = {querySelectorAll:() => [plus],contains:() => false};
 const track = {getBoundingClientRect:() => ({left:0})};
 const scriptBody = {};
-const $ = s => s==='#tabbody' ? scriptBody : s.includes('.tl-pictures') ? lane : track;
+let $ = s => s==='#tabbody' ? scriptBody : s.includes('.tl-pictures') ? lane : track;
+const pictureKind = () => 'image', thumbUrl = () => '/synthetic.jpg';
 const isStage = () => false, fmtTime = t => String(t), presenterPanel = () => '', scriptLoadCheck = () => {};
 const document = {querySelectorAll:() => []};
 const blockTrialField = (key,spec) => key+':'+spec.default;
@@ -125,15 +126,24 @@ async function run() {
  check(!tlInsertInspector({kind:'chapter',sid:row.id},body),'attached layer inspector retained');
  tlInsertSave=save;
  state.project.style={format:'kenburns'};
- state.project.slides=[{id:'words',narration:'Spoken',title:'',word_count:1},
+ state.project.picture_runs=[['words','more'],['card']];
+ state.project.slides=[{id:'words',narration:'Spoken',title:'',visual_note:'Shared shot',word_count:1,candidates:[{id:'pic'}],chosen_id:'pic'},
+   {id:'more',narration:'More spoken words',word_count:3},
    {id:'card',chapter:'On an insert',insert:{kind:'card',text:'A card',seconds:4},word_count:0}];
+ const workspace = {classList:{toggle(){}},style:{setProperty(){}}};
+ const select = $; $ = s => s === '#script-toolbar' ? null : s === '.script-layout' ? workspace : select(s);
+ scriptCurrent = () => {};
  paintScript();
- check(scriptBody.innerHTML.includes('Insert · card · 4.0 s') && scriptBody.innerHTML.includes('1 paragraphs'),'non-spoken Script label and count');
- const insertHtml=scriptBody.innerHTML.split('data-index="1"')[1];
- check(insertHtml.includes('On an insert') && insertHtml.includes('saveChapter') && !insertHtml.includes('textarea'),'insert chapters retained without narration fields');
+ check(scriptBody.innerHTML.includes('Insert · card · 4.0 s') && !scriptBody.innerHTML.includes('Narration, paragraph 3'),'non-spoken Script label and count');
+ check(!scriptBody.innerHTML.includes('Filter binder') && scriptBody.innerHTML.match(/data-script-shot=/g).length===2,'one page grouped by server picture runs');
+ check(scriptBody.innerHTML.includes('SHOT 2') && scriptBody.innerHTML.includes('Shared shot') && scriptBody.innerHTML.includes('/synthetic.jpg'),'shot numbers and inline lead description');
+ check(scriptSection('words','shot').join(',')==='words,more','whole-shot reorder preserves its paragraphs');
+ const insertHtml=scriptBody.innerHTML.split('data-script-inspector="card"')[1];
+ check(scriptBody.innerHTML.includes('On an insert') && insertHtml.includes('saveChapter') && !insertHtml.includes('textarea'),'insert chapters retained without narration fields');
  let focused=false;
  const insertCard={querySelector:()=>({focus(){focused=true;}})};
- scriptKey({key:'Enter',preventDefault(){},target:insertCard,currentTarget:insertCard},0);
+ insertCard.matches = () => true;
+ scriptWorkspaceKey({key:'Enter',preventDefault(){},target:insertCard});
  check(focused,'Enter on an insert reaches Edit link');
  state.project.kind='clip';check(tlInsertPoints().length===0 && !tlInsertKey(key('.')),'clip projects excluded');
  tlInsertMenu=menu;
@@ -142,7 +152,7 @@ async function run() {
 run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
 '''
     script = tmp_path / 'insert-ui.js'
-    script.write_text(source + '\n' + harness)
+    script.write_text('const window={addEventListener(){}};\n' + source + '\n' + harness)
     result = subprocess.run([runtime, str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'insert UI gestures and transport passed' in result.stdout

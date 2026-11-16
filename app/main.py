@@ -1772,7 +1772,7 @@ def apply_style_revision(pid: str, payload: dict = Body(...)) -> dict:
         # Takes retain their original narration: the mismatch marks them stale.
         edits.patch_slide_fields(s, {'narration': after})
         store.save(p)
-        return s.to_dict()
+        return {**s.to_dict(), "project_version": p.updated_at}
 
 
 @app.post("/api/projects/{pid}/factcheck")
@@ -1929,7 +1929,7 @@ def patch_slide(pid: str, sid: str, payload: dict = Body(...)) -> dict:
         from .block_library import preferences
         for cue in s.cues['blocks']:
             preferences(cue['block'], used=True)
-    return s.to_dict()
+    return {**s.to_dict(), "project_version": p.updated_at}
 
 
 @app.get('/api/projects/{pid}/slides/{sid}/block-suggestions')
@@ -2006,6 +2006,15 @@ def split_slide(pid: str, sid: str, payload: dict = Body(default={})) -> dict:
         p = _load(pid)
         s = _slide(p, sid)
         before = p.to_dict()
+        # Enter at the document boundary appends a blank writing paragraph.
+        # The razor only accepts interior word gaps; leave every take untouched.
+        if payload.get('append') is True:
+            if s.insert:
+                raise HTTPException(400, 'Inserts have no editable narration')
+            tail = Slide(section=s.section, beat=s.beat, picture_mode='hold')
+            p.slides.insert(p.slides.index(s) + 1, tail)
+            store.save(p)
+            return p.to_dict()
     root = project_dir(pid)
     # Same filesystem for exclusive hard links: no existing file can be replaced.
     with tempfile.TemporaryDirectory(prefix=".razor-", dir=root) as folder:
