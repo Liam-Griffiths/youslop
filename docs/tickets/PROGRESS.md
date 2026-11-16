@@ -327,7 +327,7 @@ and writes ranked findings plus fix tickets. See `20-ux-review/T20.1-ux-self-rev
 | T20.8 | Settings: sections in order, only the fields that apply | M | — | done | UX-11, UX-28; 2026-11-16 Codex + review (inline fix: the top bar's status text hides below 1400 px so the bar stays on one row at 1280); sections in the ticket's order with a sticky section list and link targets, only the chosen backend's fields with Other providers folded, save bar above the jobs strip with Unsaved changes; checked at 1280×720 light and dark |
 | T20.9 | Focus ring everywhere, and a label on every field | S | — | done | UX-13, UX-14; 2026-11-16 Codex + review; one global 2 px focus ring replacing the local copies, labels on the thumbnail kicker, description, Library add-file fields and the newer panels, a label audit in the snapshot harness; audit clean on Home, Publish, Library, Settings, Edit with the agent open and the theme builder; ring confirmed by tabbing through Settings and the theme builder |
 | T20.10 | Plan board fit, readable Check findings | M | — | dropped | superseded by T21.3b; UX-16, UX-17, UX-19, UX-29; G3 stays an owner question |
-| T20.11 | Timeline polish from the Phase 17 reviews | M | T20.4 | todo | UX-20, UX-30 |
+| T20.11 | Timeline polish from the Phase 17 reviews | M | T20.4 | doing | UX-20, UX-30 |
 | T20.12 | Copy pass: sentence case and wrong empty states | S | — | todo | UX-10, UX-12, UX-15, UX-21, UX-25, UX-27; G2 asked in log |
 | T20.13 | Visuals list and sources, Channels index cards | S | — | todo | Visuals part superseded by T21.6; Channels cards remain; UX-24, UX-26 |
 | T20.14 | A period faces pack (mid-century and other eras) | S | — | todo | G4; owner approves the font list before download |
