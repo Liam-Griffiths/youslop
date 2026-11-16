@@ -21,7 +21,9 @@ const state = {
 
 // ------------------------------------------------------------------- plumbing
 const studioWrites = new Set();
+const jobOrigins = new Map();
 async function api(path, opts = {}) {
+  const origin = location.hash || '#/';
   const {editLabel, editGesture, ...fetchOpts} = opts;
   const headers = {...(opts.body instanceof FormData ? {} : {'Content-Type': 'application/json'}), ...opts.headers};
   const editing = /^(POST|PATCH|PUT|DELETE)$/.test(opts.method || 'GET');
@@ -46,15 +48,89 @@ async function api(path, opts = {}) {
       || `HTTP ${res.status}`);
     err.status = res.status;
     err.detail = detail;
+    err.reason = detail?.reason || data?.reason || '';
     throw err;
   }
+  if (editing && data?.job) {
+    jobOrigins.set(data.job, origin);
+    if (jobOrigins.size > 60) jobOrigins.delete(jobOrigins.keys().next().value);
+  }
   return data;
+}
+
+function friendlyError(err, context = {}) {
+  const raw = String(err?.error || err?.message || err?.last_log_line || err || 'Unknown error');
+  const name = err?.name || '';
+  const reason = context.reason || err?.reason || '';
+  const pid = context.project_id || err?.project_id || state.project?.id;
+  const voice = pid ? `#/p/${pid}/voice` : '#/settings';
+  const link = (label, hash) => ({label, hash, run: () => runErrorAction(hash, label === 'Voice options')});
+  let message, action, known = true;
+  if (reason === 'model' || /LLM(?:Unavailable|Error)|The agent could not answer|(?:writing model|Claude|Ollama|LM Studio).*(?:failed|error|unavailable|answer|reach|exited|blocked)/i.test(raw)) {
+    message = "The writing model didn't answer. Check Settings → Writing model, then Retry.";
+    action = link('Open Settings', '#/settings');
+  } else if (name === 'NotAllowedError' || /Microphone blocked:.*(?:denied|not allowed)/i.test(raw)) {
+    message = 'The microphone is blocked. Allow it in your system settings, or use a draft voice for now.';
+    action = link('Voice options', voice);
+  } else if (name === 'NotFoundError' || /\bNotFoundError\b/.test(raw)) {
+    message = 'No microphone found. Connect one, or use a draft voice for now.';
+    action = link('Voice options', voice);
+  } else if (reason === 'missing_file' || /FileNotFoundError|no such file|file not found|error opening input file/i.test(raw)) {
+    const match = raw.match(/Error opening input file\s+([^\n]+)/i)
+      || raw.match(/(?:No such file or directory|file not found):\s*['"]([^'"]+)['"]/i);
+    const path = match?.[1]?.trim().replace(/\.$/, '').replace(/^['"]|['"]$/g, '').replaceAll('\\', '/');
+    const relative = path?.includes('/projects/') ? path.split(/\/projects\/[^/]+\//).at(-1)
+      : path?.startsWith('/') ? path.split('/').at(-1) : path;
+    message = `A file this needs is missing${relative ? ': ' + relative : ''}. Restore it, then try again.`;
+    action = link('Check files', pid ? `#/p/${pid}/${/takes\/|raw\//.test(path || raw) ? 'voice' : 'edit/pictures'}` : '#/library');
+  } else if (reason === 'network' || /NetworkError|Failed to fetch|connection refused|timed out/i.test(raw)) {
+    message = "The connection didn't answer. Check the connection, then try again.";
+  } else if (reason === 'disk' || /no space left|disk quota|read-only file system/i.test(raw)) {
+    message = "The file couldn't be saved. Check free space and folder permissions, then try again.";
+  } else if (/StageError|FFError|ffmpeg failed|window\.__seek/i.test(raw)) {
+    message = "The preview couldn't be made. Check its pictures and recordings, then try again.";
+  } else {
+    const first = raw.replace(/^(?:(?:FAILED|[\w.]*Error|Exception):\s*)+/i, '')
+      .split(/\n|(?<=[.!?])\s/)[0].slice(0, 180).replace(/[.!?]+$/, '');
+    message = `That didn't work: ${first || 'something went wrong'}. Try again.`;
+    known = false;
+  }
+  const what = context.what || err?.what;
+  if (what) message = `${what}: ${message}`;
+  return {message, details: raw, action, known};
+}
+
+function runErrorAction(hash, voiceOptions = false) {
+  if (voiceOptions) {
+    state.rec.openDraft = true;
+    if (state.mic.el) closeMicPanel();
+    const options = $('.voice-options');
+    if (options) { options.open = true; $('summary', options)?.focus(); }
+  }
+  go(hash);
+}
+
+function errorDetails(raw) {
+  return `<details class="error-details" onkeydown="event.stopPropagation()"><summary>Details</summary><pre>${esc(raw)}</pre></details>`;
+}
+
+// Inline errors share the same copy and diagnostic fold as toasts and jobs.
+function errorMarkup(err, context = {}) {
+  const f = friendlyError(err, context);
+  const details = f.details + (context.lines?.length ? '\n\n' + context.lines.join('\n') : '');
+  return `<p>${esc(f.message)}</p>${f.action ? `<button type="button" class="btn sm ghost" onkeydown="event.stopPropagation()"
+    onclick="runErrorAction(${esc(JSON.stringify(f.action.hash))},${f.action.label === 'Voice options'})">${esc(f.action.label)}</button>` : ''}${errorDetails(details)}`;
 }
 
 let toastTimer;
 function toast(msg, bad = false, action = null) {
   const el = $('#toast');
-  el.textContent = msg;
+  // A sentence the app wrote itself is shown as written; only raw errors are reworded.
+  let friendly = bad ? friendlyError(msg) : null;
+  if (friendly && typeof msg === 'string' && !friendly.known) friendly = null;
+  el.textContent = friendly ? friendly.message : msg;
+  if (friendly) el.insertAdjacentHTML('beforeend', errorDetails(friendly.details));
+  action = action || friendly?.action;
   el.className = 'toast show' + (bad ? ' bad' : '');
   clearTimeout(toastTimer);
   if (action) {
@@ -63,15 +139,21 @@ function toast(msg, bad = false, action = null) {
     button.onclick = async () => {
       button.disabled = true;
       clearTimeout(toastTimer);
-      try { await action.run(); }
+      try {
+        await action.run();
+        if (button.parentElement === el) { el.className = 'toast'; el.textContent = ''; }
+      }
       catch (e) { toast(e.message, true); }
     };
     el.append(button);
   }
-  const expire = () => { el.className = 'toast'; el.textContent = ''; };
+  const expire = () => { if (!el.querySelector('details[open]')) { el.className = 'toast'; el.textContent = ''; } };
   const schedule = () => { toastTimer = setTimeout(expire, action ? 15000 : bad ? 6000 : 3000); };
   el.onfocusin = () => clearTimeout(toastTimer);
+  el.onkeydown = e => e.stopPropagation();
   el.onfocusout = () => { clearTimeout(toastTimer); schedule(); };
+  el.onmouseenter = () => clearTimeout(toastTimer);
+  el.onmouseleave = schedule;
   schedule();
 }
 
@@ -122,8 +204,10 @@ const settingsDirty = new Set();
 const loadingLine = () => 'Loading…';
 
 // ---------------------------------------------------------------------- jobs
-function watchJob(id, kind, onDone) {
-  state.job = { id, kind, since: 0, lines: [], done: null, tagline: 'Working…' };
+function watchJob(id, kind, onDone, resumed = null) {
+  state.job = { id, kind, since: 0, lines: [], done: null, tagline: 'Working…',
+    origin: jobOrigins.get(id) || (resumed ? '' : location.hash || '#/'),
+    project_id: resumed?.project_id || state.project?.id || '', writes: resumed?.writes };
   paintJobsStrip();
   clearInterval(state.poll);
   const step = async () => {
@@ -135,12 +219,14 @@ function watchJob(id, kind, onDone) {
     state.job.lines.push(...j.log.map((l) => l.m));
     state.job.elapsed = j.elapsed;
     state.job.status = j.status || "";
+    Object.assign(state.job, {writes: j.writes ?? state.job.writes, project_id: j.project_id ?? state.job.project_id,
+      error: j.error, reason: j.reason, done: j.state === 'running' ? null : j.state});
     paintJob();
     if (j.state !== 'running') {
       clearInterval(state.poll);
       state.job.done = j.state;
       paintJobsStrip();
-      if (j.state === 'error') toast(j.error || 'Job failed', true);
+      if (j.state === 'error') toast(j, true);
       if (state.project) {
         if (!(await scriptFlush())) return;
         if (typeof outlineFlush === 'function' && !(await outlineFlush())) return;
@@ -163,6 +249,9 @@ function paintJob() {
   paintJobsStrip();
   paintPublishProgress();
   if (!state.job) return;
+  if (!jobCardVisible()) { $('#jobcard')?.remove(); return; }
+  const failure = $('#joberror');
+  if (failure && state.job.done === 'error') failure.innerHTML = errorMarkup(state.job, state.job);
   const box = $('#joblog');
   if (box) {
     box.textContent = state.job.lines.join('\n');
@@ -170,29 +259,42 @@ function paintJob() {
   }
   const status = $('#jobstatus');
   if (status) { status.textContent = state.job.status || ''; status.hidden = !state.job.status; }
+  const progress = $('#jobprogress');
+  if (progress) progress.textContent = state.job.done ? '' : state.job.lines.at(-1) || 'Working…';
   const el = $('#jobstate');
   if (el) el.textContent = state.job.done ? state.job.done : `${state.job.elapsed || 0}s`;
   // The rendering placeholder says what the renderer last said, so a slate that
   // takes four seconds is visibly doing something rather than just sitting.
   const line = $('#renderline');
   if (line) {
-    const last = (state.job.lines || []).slice(-1)[0];
+    const last = state.job.done === 'error' ? friendlyError(state.job).message : (state.job.lines || []).slice(-1)[0];
     line.textContent = last || `${state.job.tagline} ${state.job.elapsed || 0}s`;
   }
 }
 
+function jobCardVisible() {
+  const j = state.job, hash = location.hash || '#/';
+  if (!j || j.writes === false) return false;
+  const project = hash.match(/^#\/p\/([^/]+)(?:\/([^/]+))?/);
+  if (project && project[1] !== j.project_id) return false;
+  const sameStage = project && j.origin && hash.split('/').slice(0, 4).join('/') === j.origin.split('/').slice(0, 4).join('/');
+  return hash === j.origin || !!sameStage || !!(project && project[1] === j.project_id && (!project[2] || project[2] === 'dashboard'));
+}
+
 function jobPanel() {
-  if (!state.job) return '';
+  if (!jobCardVisible()) return '';
   const running = !state.job.done;
-  return `<div class="panel" style="margin-bottom:18px">
+  return `<div class="panel" id="jobcard" style="margin-bottom:18px">
     <div class="row" style="margin-bottom:10px">
       ${running ? '<span class="spin"></span>' : ''}
       <strong>${esc(state.job.kind)}</strong>
       <span class="mono" id="jobstate" style="color:var(--ink-faint)"></span>
       <div class="spacer"></div>
-      ${running ? '' : `<button class="btn sm ghost" onclick="state.job=null;render()">dismiss</button>`}
+      ${running ? '' : `<button class="btn sm ghost" onclick="state.job=null;render()">Dismiss</button>`}
     </div>
-    <div class="joblog" id="joblog"></div>
+    <div id="joberror">${state.job.done === 'error' ? errorMarkup(state.job, state.job) : ''}</div>
+    <p id="jobprogress"></p>
+    ${state.job.done === 'error' ? '' : '<details><summary>Details</summary><div class="joblog" id="joblog"></div></details>'}
     <div class="sub mono" id="jobstatus" hidden></div>
   </div>`;
 }
@@ -276,9 +378,9 @@ async function routeView() {
       state.project = null;
       view.innerHTML = `<div class="empty-note">${loadingLine()}</div>`;
       try { state.project = await api(`/api/projects/${proj[1]}`); }
-      catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
+      catch (e) { view.innerHTML = `<div class="empty-note">${errorMarkup(e)}</div>`; return; }
       const live = (state.project.jobs || [])[0];
-      if (live) watchJob(live.id, live.kind);
+      if (live) watchJob(live.id, live.kind, null, live);
     }
     if ([state.project.style.format,...state.project.slides.map(s => s.kind || '')].some(k => k.startsWith('custom:')))
       await ensureSlideStyles();
@@ -308,9 +410,9 @@ async function routeView() {
       state.channel = null;
       view.innerHTML = `<div class="empty-note">${loadingLine()}</div>`;
       try { state.channel = await api(`/api/channels/${chan[1]}`); }
-      catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
+      catch (e) { view.innerHTML = `<div class="empty-note">${errorMarkup(e)}</div>`; return; }
       const live = (state.channel.jobs || [])[0];
-      if (live) watchJob(live.id, live.kind, refreshChannel);
+      if (live) watchJob(live.id, live.kind, refreshChannel, live);
     }
     paintChannel();
   } else {

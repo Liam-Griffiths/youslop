@@ -4595,6 +4595,8 @@ def job_status(jid: str, since: int = 0) -> dict:
     return {
         "id": job["id"], "kind": job["kind"], "state": job["state"],
         "error": job["error"], "result": job["result"], "status": job["status"],
+        "reason": job.get("reason", ""), "writes": job.get("writes", True),
+        "project_id": job["project_id"],
         "log": job["log"][since:], "log_total": len(job["log"]),
         "elapsed": round((job["finished_at"] or time.time()) - job["started_at"], 1),
     }

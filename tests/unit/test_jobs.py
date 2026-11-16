@@ -1,12 +1,14 @@
 """Synthetic jobs only: no media, renderers or model requests."""
 import asyncio
+import errno
 import threading
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from app import jobs, store
+from app import jobs, llm, store
+from app.ffutil import FFError
 from app.main import app
 from app.schema import Project
 
@@ -145,3 +147,40 @@ def test_status_replaces_without_logging_and_clears(workers, end):
     assert jobs.get(jid)['state'] == end
     assert jobs.get(jid)['status'] == ''
     assert all('tokens' not in row['m'] for row in jobs.get(jid)['log'])
+
+
+@pytest.mark.parametrize('exc,reason', [
+    (llm.LLMUnavailable('synthetic model blocked'), 'model'),
+    (llm.LLMError('synthetic invalid answer'), 'model'),
+    (FileNotFoundError(2, 'No such file or directory', 'takes/missing.wav'), 'missing_file'),
+    (FFError('ffmpeg failed: Error opening input file takes/missing.wav.'), 'missing_file'),
+    (OSError(errno.ENOSPC, 'No space left on device'), 'disk'),
+    (PermissionError(errno.EACCES, 'Permission denied'), 'disk'),
+    (ConnectionError('synthetic offline'), 'network'),
+    (TimeoutError('synthetic timeout'), 'network'),
+    (ValueError('synthetic other failure'), ''),
+])
+def test_failure_reason_in_detail_and_summary(workers, exc, reason):
+    def fail(progress):
+        progress('Starting synthetic work')
+        raise exc
+
+    jid = jobs.start('script', 'synthetic', fail, writes=False)
+    workers[0].join(1)
+    detail = request('GET', f'/api/jobs/{jid}').json()
+    summary = request('GET', '/api/jobs').json()[0]
+    for row in (detail, summary):
+        assert row['reason'] == reason
+        assert row['error'] == f'{type(exc).__name__}: {exc}'
+        assert row['writes'] is False and row['project_id'] == 'synthetic'
+    assert detail['state'] == 'error' and detail['log'][-1]['m'] == f'FAILED: {exc}'
+    assert 'log' not in summary and 'result' not in summary
+
+
+def test_legacy_job_without_reason_or_writes(workers):
+    jid = jobs.start('script', '', lambda progress: None)
+    workers[0].join(1)
+    jobs._JOBS[jid].pop('reason')
+    jobs._JOBS[jid].pop('writes')
+    detail = request('GET', f'/api/jobs/{jid}').json()
+    assert detail['reason'] == '' and detail['writes'] is True

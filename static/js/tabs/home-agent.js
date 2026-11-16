@@ -41,7 +41,7 @@ function homeAgentMessage(m, i) {
       <div class="agent-card-actions">${a.state === 'done' ? `<span class="agent-note">${a.type === 'search' ? 'Searching; pages arrive in Research documents.' : 'Done.'}</span>`
         : a.type === 'search' && m.can_search === false ? '<span class="agent-note">Set up a web search in Settings to run this.</span>'
         : `<button class="btn sm primary" onclick="homeAgentApply(${i},${j})">${HOME_ACTION[a.type][1]}</button>`}</div></div>`).join('');
-  return `<div class="agent-msg${m.error ? ' error' : ''}">${esc(m.text)}</div>${actions}`;
+  return `<div class="agent-msg${m.error ? ' error' : ''}">${m.error ? errorMarkup(m.text, {project_id: state.project?.id}) : esc(m.text)}</div>${actions}`;
 }
 function homeAgentPaint() {
   const log = $('#home-agent-log');

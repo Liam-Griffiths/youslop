@@ -1880,7 +1880,7 @@ def _master_audio_graph(project: Project, inputs: list[str], graph: str,
     measure_graph = re.sub(r"\[(\d+):a\]",
                            lambda m: f"[{int(m[1]) - n_video}:a]", before)
     measure_graph += f"loudnorm=I={target:.1f}:TP=-1.0:LRA=20:print_format=json[aout]"
-    progress("Measuring the audio for linear master normalization")
+    progress("Mixing the sound")
     started = time.monotonic()
     try:
         _, log = ffutil.capture([

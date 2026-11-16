@@ -873,7 +873,7 @@ async function openMic() {
     await ensureMic();
     paintRecord();
     toast('Microphone open — say something and watch the level.');
-  } catch (e) { toast('Microphone blocked: ' + e.message, true); }
+  } catch (e) { toast(e, true); }
 }
 
 async function chooseMic(deviceId) {
@@ -884,7 +884,7 @@ async function chooseMic(deviceId) {
     await ensureMic();
     const mic = (state.rec.mics || []).find((m) => m.deviceId === deviceId);
     toast(mic ? `recording from ${mic.label}` : 'using the default microphone');
-  } catch (e) { toast('Microphone blocked: ' + e.message, true); }
+  } catch (e) { toast(e, true); }
   state.rec.index = wasIndex;
   paintRecord();
   if (state.mic.el) micRefresh();
@@ -907,7 +907,7 @@ async function toggleRec() {
   if (r.recording) { r.recorder.stop(); return; }
   let stream;
   try { stream = await ensureMic(); }
-  catch (e) { return toast('Microphone blocked: ' + e.message, true); }
+  catch (e) { return toast(e, true); }
 
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
     .find((t) => MediaRecorder.isTypeSupported(t)) || '';
@@ -1136,7 +1136,7 @@ async function openMicPanel() {
   micRefresh();
   wrap.querySelector('#micclose').focus();
   if (micAvailable()) {
-    try { await ensureMic(); } catch (e) { toast('Microphone blocked: ' + e.message, true); }
+    try { await ensureMic(); } catch (e) { toast(e, true); }
     micRefresh();
   }
 }
@@ -1263,7 +1263,7 @@ function micReportHtml() {
 async function setBrowserCleanup(on) {
   await saveVoice({ browser_cleanup: !!on }, false);
   stopStream();                       // the constraint only applies to a new stream
-  try { await ensureMic(); } catch (e) { toast('Microphone blocked: ' + e.message, true); }
+  try { await ensureMic(); } catch (e) { toast(e, true); }
   micRefresh();
   if (state.mic.report) micPreview();
 }
@@ -1372,7 +1372,7 @@ async function saveVoiceToChannel() {
 async function micTestRecord() {
   let stream;
   try { stream = await ensureMic(); }
-  catch (e) { return toast('Microphone blocked: ' + e.message, true); }
+  catch (e) { return toast(e, true); }
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
     .find((t) => MediaRecorder.isTypeSupported(t)) || '';
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 128000 } : {});

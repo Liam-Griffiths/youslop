@@ -300,12 +300,13 @@ run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
 
 def test_undo_toast_action_and_keyboard_lifetime(tmp_path):
     source = Path('static/js/core.js').read_text()
-    source = source[source.index('let toastTimer;'):source.index('const esc =')]
+    source = source[source.index('function friendlyError('):source.index('function fmtTime(')]
     checks = r'''
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
 let timer, delay, runs=0, cleared=0;
 const setTimeout=(fn,ms)=>{timer=fn;delay=ms;return 1;},clearTimeout=()=>cleared++;
-const el={append(button){this.button=button;},set textContent(v){this.message=v;this.button=null;}};
+const state={},el={append(button){this.button=button;},insertAdjacentHTML(){},querySelector(){return null;},
+ set textContent(v){this.message=v;this.button=null;}};
 const $=()=>el,document={createElement:()=>({})};
 async function run(){
  toast('Applied',false,{label:'Undo',run:async()=>{runs++;toast('Undone');}});
@@ -315,7 +316,7 @@ async function run(){
  const button=el.button;await button.onclick();
  check(runs===1&&button.disabled&&el.message==='Undone'&&!el.button,'action runs once and new toast clears button');
  toast('Applied',false,{label:'Undo',run:async()=>{throw Error('Offline');}});
- await el.button.onclick();check(el.message==='Offline'&&el.className==='toast show bad','failed undo reports error');
+ await el.button.onclick();check(el.message.includes('Offline')&&el.className==='toast show bad','failed undo reports friendly error');
  timer();check(el.className==='toast'&&!el.button,'expiry removes hidden tab target');
  print('Undo toast action, focus lifetime and errors passed');
 }

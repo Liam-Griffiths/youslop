@@ -4,6 +4,7 @@ async function paintRender() {
   const p = state.project;
   const st = p.style;
   const failedRender = state.job?.done === 'error'
+    && (!state.job.project_id || state.job.project_id === p.id)
     && ['render', 'preview render'].includes(state.job.kind);
   const kept = failedRender ? (state.job.lines || []).findLast(
     (line) => /^resumable: \d+ segments kept$/.test(line)) : null;
@@ -816,13 +817,13 @@ function paintPublishProgress() {
   const box = $('#publish-progress');
   if (!box) return;
   const j = state.job;
-  if (!j || !['render', 'preview render'].includes(j.kind)) {
+  if (!j || (j.project_id && j.project_id !== state.project?.id) || !['render', 'preview render'].includes(j.kind)) {
     box.textContent = 'Render starts only when you click Render the video.';
     return;
   }
   const matches = (j.lines || []).map(l => l.match(/(?:segments |reused )(\d+)(?:\/| of )(\d+)/)).filter(Boolean);
   const m = matches.at(-1), done = m ? +m[1] : 0, total = m ? +m[2] : 0;
-  box.innerHTML = `<p class="mono">${esc(j.lines?.at(-1) || 'Starting render…')} · ${esc(j.done || `${j.elapsed || 0}s`)}</p>
+  box.innerHTML = `${j.done === 'error' ? errorMarkup(j, j) : `<p class="mono">${esc(j.lines?.at(-1) || 'Starting render…')} · ${esc(j.done || `${j.elapsed || 0}s`)}</p>`}
     <progress aria-label="Render progress" ${total ? `value="${done}" max="${total}"` : ''}></progress>
     <div class="render-segments">${Array.from({length: total}, (_, i) => `<span class="${i < done ? 'done' : ''}" title="Segment ${i+1}"></span>`).join('')}</div>
     <p class="sub">Finished segments are kept for the next render.</p>`;

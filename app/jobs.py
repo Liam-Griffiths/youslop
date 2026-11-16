@@ -1,6 +1,8 @@
 """Background job runner with a progress log the UI can poll."""
 from __future__ import annotations
 
+import errno
+import re
 import threading
 import time
 import traceback
@@ -19,13 +21,27 @@ class JobCancelled(Exception):
     """A cooperative cancellation at a job's progress checkpoint."""
 
 
+def error_reason(exc: Exception) -> str:
+    """Small UI hint; keep the original exception in error/log for reports."""
+    if isinstance(exc, llm.LLMError):
+        return "model"
+    if isinstance(exc, FileNotFoundError) or re.search(
+            r"no such file|file not found|error opening input file", str(exc), re.I):
+        return "missing_file"
+    if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, errno.EDQUOT, errno.EACCES, errno.EROFS):
+        return "disk"
+    if isinstance(exc, (ConnectionError, TimeoutError)):
+        return "network"
+    return ""
+
+
 def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any],
           *, cancellable: bool = False, writes: bool = True) -> str:
     """Run `fn(progress)` on a worker thread; writers block project undo/redo."""
     jid = f"j{uuid.uuid4().hex[:10]}"
     job = {
         "id": jid, "kind": kind, "project_id": project_id, "state": "running",
-        "log": [], "status": "", "error": "", "result": None,
+        "log": [], "status": "", "error": "", "reason": "", "result": None,
         "started_at": time.time(), "finished_at": 0.0,
         "cancellable": cancellable, "cancel_requested": False, "writes": writes,
     }
@@ -67,6 +83,7 @@ def start(kind: str, project_id: str, fn: Callable[[Callable[[str], None]], Any]
             traceback.print_exc()
             with _LOCK:
                 job["error"] = f"{type(exc).__name__}: {exc}"
+                job["reason"] = error_reason(exc)
                 job["state"] = "error"
                 job["log"].append({"t": time.time(), "m": f"FAILED: {exc}"})
         finally:
@@ -105,6 +122,9 @@ def recent() -> list[dict]:
         now = time.time()
         return [{key: j[key] for key in
                  ("id", "kind", "project_id", "state", "cancellable", "status")} | {
+                     "writes": j.get("writes", True),
+                     **({"error": j["error"], "reason": j.get("reason", "")}
+                        if j["state"] == "error" else {}),
                      "last_log_line": j["log"][-1]["m"] if j["log"] else "",
                      "elapsed": round((j["finished_at"] or now) - j["started_at"], 1),
                  } for j in sorted(_JOBS.values(), key=lambda j: j["started_at"], reverse=True)]

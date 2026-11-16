@@ -25,13 +25,13 @@ async function tlEnsureMix() {
     const r = await api(`/api/projects/${pid}/timeline/mix${query}`, { method: 'POST' });
     const j = await tlWaitJob(r.job);
     if (TL.pid !== pid) return;
-    if (j.state === 'error') throw new Error(j.error);
+    if (j.state === 'error') throw j;
     TL.mixBusy = false;
     await tlRefresh();            // picks the new file up and re-checks it is current
     return;
   } catch (e) {
     TL.mixFailed = true;
-    toast('Sound could not be mixed. Check the recordings in Voice and try again.', true);
+    toast(Object.assign(e, {what: 'Sound'}), true);
   }
   TL.mixBusy = false;
   tlPaintNote();
@@ -256,7 +256,7 @@ async function tlPump() {
       const j = await tlWaitJob(r.job);
       if (TL.pid !== pid) break;
       if (query !== tlHideQuery()) { TL.drawing = ''; continue; }
-      if (j.state === 'error') throw new Error(j.error);
+      if (j.state === 'error') throw j;
       const out = (j.result.segments || [])[0];
       const seg = tlSegs().find((x) => x.ref === ref);
       if (seg && out) {
@@ -267,7 +267,7 @@ async function tlPump() {
     } catch (e) {
       if (query !== tlHideQuery()) { TL.drawing = ''; continue; }
       TL.failed.add(ref);
-      toast(`${ref === 'intro' ? 'Slate' : ref === 'outro' ? 'End card' : 'Picture ' + (+ref + 1)}: ${e.message}`, true);
+      toast(Object.assign(e, {what: ref === 'intro' ? 'Slate' : ref === 'outro' ? 'End card' : 'Picture ' + (+ref + 1)}), true);
       learned = ref === 'intro' || ref === 'outro';
     }
     TL.pending.delete(ref);

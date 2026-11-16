@@ -169,9 +169,9 @@ function paintJobsStrip() {
   const j = state.job;
   const rows = jobsSummary.filter(row => row.state === 'running' && row.id !== j?.id);
   if (j && !j.done) rows.unshift({kind: j.kind, elapsed: j.elapsed || 0,
-    last_log_line: j.lines?.at(-1) || '', status: j.status});
+    last_log_line: j.lines?.at(-1) || '', status: j.status, writes: j.writes});
   $('#jobs-status').innerHTML = rows.map(row => `<span class="jobs-strip-item">
-    <span>${esc(row.kind)} · ${row.elapsed}s · ${esc(row.last_log_line)}</span>
+    <span>${esc(jobLabel(row))} · ${row.elapsed}s · ${esc(jobProgress(row))}</span>
     ${row.status ? `<span class="jobs-live-status">${esc(row.status)}</span>` : ''}
     </span>`).join('') || 'Idle';
 }

@@ -369,6 +369,7 @@ def test_shortcuts_and_request_labels_without_browser(tmp_path):
     shell = Path('static/js/shell.js').read_text().split('let projectHistoryBusy')[1].split('function paintStageBar')[0]
     harness = r'''
 const FormData = class {};
+const location = {hash:'#/p/p/edit'};
 const state = {project:{id:'p'},stage:'edit',tab:'edit',rec:{recording:false}};
 const TL = {};
 let key, calls=[], refreshed=0, message='';

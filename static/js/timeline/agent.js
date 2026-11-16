@@ -77,7 +77,7 @@ function editAgentMessage(m, i) {
         <button type="button" class="btn sm ghost" onclick="editAgentGo('${esc(a.sid)}')">Go there</button></div></div>`;
   }).join('');
   const went = m.goto ? `<p class="agent-note"><button type="button" class="btn xs ghost" onclick="editAgentGo('${esc(m.goto)}')">Playhead → ¶${m.goto_paragraph}</button></p>` : '';
-  return `<div class="agent-msg${m.error ? ' error' : ''}">${esc(m.text)}</div>${went}${cards}`;
+  return `<div class="agent-msg${m.error ? ' error' : ''}">${m.error ? errorMarkup(m.text, {project_id: state.project?.id}) : esc(m.text)}</div>${went}${cards}`;
 }
 function editAgentPaint() {
   const log = $('#edit-agent-log');

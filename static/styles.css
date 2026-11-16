@@ -726,9 +726,15 @@ kbd {
   transition: opacity .22s, transform .22s; z-index: 90; max-width: 76vw;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.bad { border-color: var(--bad); }
+.toast.bad { border-color: var(--bad); pointer-events: auto; }
+.error-details { margin-top: 8px; }
+.error-details summary { cursor: pointer; }
+.error-details pre { user-select: text; white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 240px; overflow: auto; font-size: 12px; }
+.error-details summary:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
 .toast:has(button) { pointer-events: auto; }
 .toast button { margin-left: 12px; }
+.toast .error-details + button { margin: 10px 0 0; }
 
 video { width: 100%; border-radius: var(--radius); background: #000; display: block; }
 
