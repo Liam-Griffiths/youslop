@@ -1,6 +1,7 @@
 """Research documents: add, paginate, read for facts with checked quotes. No real LLM."""
 import asyncio
 import shutil
+import subprocess
 
 import httpx
 import pytest
@@ -67,7 +68,16 @@ def test_upload_rejects_unknown_files(project):
     assert r.status_code == 400
 
 
-@pytest.mark.skipif(not shutil.which('pdftotext'), reason='pdftotext unavailable')
+def _pdftotext_runs():
+    # Sandboxes can install poppler but block running it; skip rather than hang.
+    try:
+        return bool(shutil.which('pdftotext')) and subprocess.run(
+            ['pdftotext', '-v'], capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+@pytest.mark.skipif(not _pdftotext_runs(), reason='pdftotext unavailable or blocked')
 def test_pdf_pages(project, tmp_path):
     pdf = (b'%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
            b'2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n'
