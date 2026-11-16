@@ -74,9 +74,9 @@ def apply(project, payload):
     if project.kind == 'clip':
         raise EditError('Source-linked clips have no editable main track.')
     op, ids, to = (payload.get(k) for k in ('op', 'ids', 'to'))
-    if op not in ('move', 'delete', 'cut', 'copy', 'paste', 'duplicate'):
+    if op not in ('move', 'delete', 'cut', 'copy', 'paste', 'duplicate', 'add'):
         raise EditError('Unknown section operation.')
-    if op != 'paste' and (not isinstance(ids, list) or not ids or any(
+    if op not in ('paste', 'add') and (not isinstance(ids, list) or not ids or any(
             not isinstance(sid, str) for sid in ids) or len(set(ids)) != len(ids)):
         raise EditError('Expected unique main-track ids.')
     if type(payload.get('version')) not in (int, float):
@@ -84,7 +84,7 @@ def apply(project, payload):
     if payload['version'] != project.updated_at:
         raise EditError('Project changed; select the section again.', 409)
     order = [s.id for s in project.slides]
-    if op != 'paste':
+    if op not in ('paste', 'add'):
         if any(sid not in order for sid in ids):
             raise EditError('Main track changed; select the section again.', 409)
         start = order.index(ids[0])
@@ -92,10 +92,25 @@ def apply(project, payload):
             raise EditError('Select a contiguous section in timeline order.')
     if op == 'copy':
         return '', ''  # The route returns capture() without saving.
-    if op in ('move', 'paste') and (not isinstance(to, str) or to and to not in order):
+    if op in ('move', 'paste', 'add') and (not isinstance(to, str) or to and to not in order):
         raise EditError('Unknown destination boundary.')
+    chapter = payload.get('chapter')
+    if chapter is not None and (op not in ('move', 'add') or not isinstance(chapter, str)):
+        raise EditError('Chapter must be text on a move or add.')
+    if op == 'add' and chapter is None:
+        raise EditError('New shot needs a chapter.')
+    labels, label = {}, ''
+    for row in project.slides:
+        label = row.chapter or label
+        labels[row.id] = label
     runs = group_slides(project.slides, project.style.picture_every)
-    if op in ('paste', 'duplicate'):
+    if op == 'add':
+        new = Slide(picture_mode='new')
+        index = order.index(to) if to else len(order)
+        rows = project.slides[:index] + [new] + project.slides[index:]
+        runs += [[new]]
+        chosen = {new.id}
+    elif op in ('paste', 'duplicate'):
         snapshot = capture(project, ids) if op == 'duplicate' else payload.get('clipboard')
         copies, slots = _copies(project, snapshot)
         if op == 'duplicate':
@@ -108,7 +123,11 @@ def apply(project, payload):
         chosen = set(ids)
     remaining = [s for s in project.slides if s.id not in chosen]
     if op == 'move':
-        if to in chosen or (order[start + len(ids):] or [''])[0] == to:
+        if to in chosen:
+            if chapter is None:
+                return '', ''
+            to = (order[start + len(ids):] or [''])[0]
+        if chapter is None and (order[start + len(ids):] or [''])[0] == to:
             return '', ''
         index = next((i for i, s in enumerate(remaining) if s.id == to), len(remaining))
         rows = remaining[:index] + project.slides[start:start + len(ids)] + remaining[index:]
@@ -131,12 +150,18 @@ def apply(project, payload):
                             if s.placement != 'mid' or s.after_slide_id not in chosen]
     if op in ('paste', 'duplicate'):
         project.sponsors.extend(slots)
+    if chapter is not None:
+        previous = None
+        for row in rows:
+            current = chapter if row.id in chosen else labels[row.id]
+            row.chapter = current if current != previous else ''
+            previous = current
     split = _fragments(rows, runs)
     project.slides = rows
     paragraphs = sum(not s.insert for run in runs for s in run if s.id in chosen)
     inserts = len(chosen) - paragraphs
     counts = [f'{n} {name}{"s" if n != 1 else ""}' for n, name in
               ((paragraphs, 'paragraph'), (inserts, 'insert')) if n]
-    verb = dict(move='Moved', delete='Deleted', cut='Cut', paste='Pasted', duplicate='Duplicated')[op]
+    verb = dict(add='Added', move='Moved', delete='Deleted', cut='Cut', paste='Pasted', duplicate='Duplicated')[op]
     label = verb + ' ' + ' and '.join(counts)
     return label, 'Picture group split; each fragment keeps its picture.' if split else ''

@@ -128,6 +128,7 @@ function watchJob(id, kind, onDone) {
       if (j.state === 'error') toast(j.error || 'Job failed', true);
       if (state.project) {
         if (!(await scriptFlush())) return;
+        if (typeof outlineFlush === 'function' && !(await outlineFlush())) return;
         await scriptPauseEditor(async () => {
           state.project = await api(`/api/projects/${state.project.id}`);
           await render();
@@ -184,6 +185,7 @@ function jobPanel() {
 // ------------------------------------------------------------------ routing
 async function route() {
   if (!(await scriptFlush())) return;
+  if (typeof outlineFlush === 'function' && !(await outlineFlush())) return;
   return scriptPauseEditor(routeView);
 }
 async function routeView() {
@@ -455,6 +457,7 @@ async function deleteSlideStyle(id) {
 // ----------------------------------------------------------------- project
 async function render() {
   if (!(await scriptFlush())) return;
+  if (typeof outlineFlush === 'function' && !(await outlineFlush())) return;
   const p = state.project;
   if (!p) return;
   state.stage = state.stage || 'dashboard';
@@ -484,7 +487,7 @@ async function render() {
     </nav>` : ''}
     ${state.stage === 'script' ? `${state.tab === 'script' && p.slides.length ? '<div id="script-toolbar" onkeydown="scriptWorkspaceKey(event)"></div>' : ''}</div>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintPlan, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
+  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
   if (state.tab !== 'edit' && typeof tlPause === 'function') tlPause();
@@ -499,6 +502,7 @@ function focusPendingSlide() {
   state.focusSlide = '';
   const el = document.querySelector(`#tabbody [data-sid="${sid}"]`);
   if (!el) return;
+  if (state.tab === 'script') scriptLocate(sid);
   el.scrollIntoView({ block: 'center' });
   el.classList.add('flash');
   setTimeout(() => el.classList.remove('flash'), 1800);

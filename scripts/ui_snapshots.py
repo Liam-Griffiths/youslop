@@ -44,6 +44,7 @@ def routes():
     result.extend(['#/p/psnapinserts/edit', '#/p/psnapinserts/script'])
     result.extend(f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS)
     result.extend(f'#/p/psnapwrite{size}/script' for size in ('short', 'long'))
+    result.extend(f'#/p/{pid}/script/outline' for pid in ('psnapoutline','psnapbeatonly'))
     return result
 
 
@@ -97,6 +98,31 @@ def seed_writing():
             p.set_take(p.slides[0], 'mic', {'path': 'takes/synthetic.wav',
                 'duration': 5, 'narration': p.slides[0].narration})
         store.save(p)
+        if size == 'long':
+            p = Project.from_dict({**p.to_dict(), 'id': 'psnapbeatonly'})
+            # Legacy scripts link every paragraph to an outline beat, without
+            # chapter markers. Exercise fallback placement on the corkboard.
+            p.outline = {'thesis': 'The station wakes before the city.',
+                'hook': {'first_line': 'Watch the station.', 'muted_image': 'An empty platform.'},
+                'sections': [{'id': f'writingbeat{i}', 'heading': f'Station beat {i+1}',
+                    'chapter': f'Chapter {i+1}', 'summary': 'The station before sunrise.',
+                    'words': 100, 'kind': 'main'} for i in range(4)]}
+            for i, slide in enumerate(p.slides):
+                slide.chapter = ''
+                slide.beat = p.outline['sections'][i // 8]['heading']
+            store.save(p)
+
+
+def seed_outline():
+    from app import store
+    from app.schema import Project
+    p = Project(id='psnapoutline', idea='Synthetic outline-only corkboard')
+    p.outline = {'thesis':'Six chapters with wrapping beat headings.',
+        'hook':{'first_line':'Watch the station.', 'muted_image':'An empty platform.'},
+        'sections':[{'id':f'beat{i}', 'heading':f'A full beat title for chapter {i+1}',
+            'summary':'The station opens before sunrise.', 'chapter':f'Chapter {i+1}',
+            'words':100, 'kind':'main'} for i in range(6)]}
+    store.save(p)
 
 
 def seed():
@@ -289,6 +315,7 @@ def seed():
     shutil.copytree(source, store.project_dir(inserts.id), dirs_exist_ok=True)
     store.save(inserts)
     seed_writing()
+    seed_outline()
 
 
 @contextmanager
@@ -589,6 +616,14 @@ def capture(base, out, theme="dark"):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route in ('#/p/psnapoutline/script/outline', '#/p/psnapbeatonly/script/outline'):
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
+                _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                path = path.with_name(path.stem + '--1280.png')
+                path.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(path), 't':0, 'why':route + ' at 1280×720'})
             if route == '#/p/psnapwritelong/script':
                 for phase, width, height, expression in [
                     ('review', 1440, 900, 'scriptFocus(false); true'),

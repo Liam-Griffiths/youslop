@@ -8,8 +8,10 @@ from scripts.ui_snapshots import FORMATS, PROJECT_STAGES, console_error, output_
 
 def test_routes_match_current_tabs_and_families():
     paths = routes()
-    assert len(paths) == len(set(paths)) == 109
+    assert len(paths) == len(set(paths)) == 111
     assert paths[:5] == ['#/', '#/setup', '#/library', '#/settings', '#/guide']
+    assert '#/p/psnapoutline/script/outline' in paths
+    assert '#/p/psnapbeatonly/script/outline' in paths
     assert '#/footage/ssnapshot' in paths and '#/footage/saudio' in paths
     assert '#/footage/saudio/clips/a1' in paths  # T14.3 adds the clip-finder route.
     assert '#/c/csnapshot' in paths and '#/c/csnapshot/setup' in paths
@@ -24,7 +26,7 @@ def test_routes_match_current_tabs_and_families():
 
 def test_output_paths_are_unique_and_contained(tmp_path):
     paths = [output_path(tmp_path, route) for route in routes()]
-    assert len(set(paths)) == 109
+    assert len(set(paths)) == 111
     assert paths[0] == tmp_path / 'home.png'
     assert output_path(tmp_path, '#/p/psnapstage/stage').name == 'p--psnapstage--stage.png'
     assert all(p.parent == tmp_path and p.suffix == '.png' for p in paths)
@@ -90,6 +92,9 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
     from app.render import _slide_durations
     assert sum(d for _, d in _slide_durations(long, True)) == 1200
     assert '#/p/psnaplong/edit' in routes()
+    writing = store.load('psnapbeatonly')
+    assert not any(s.chapter for s in writing.slides)
+    assert {s.beat for s in writing.slides} == {b['heading'] for b in writing.outline['sections']}
     mixed = store.load('psnapmixed')
     from app.kinds import kind_for
     assert [kind_for(mixed,s) for s in mixed.slides] == ['kenburns','board','casefile','block']

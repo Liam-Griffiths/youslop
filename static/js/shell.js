@@ -99,6 +99,7 @@ async function restoreProjectEdit(direction) {
   const pid = state.project.id;
   try {
     if (!(await scriptFlush())) return;
+    if (typeof outlineFlush === 'function' && !(await outlineFlush())) return;
     await tlInspectorQueue;
     if (typeof binWrites !== 'undefined') await binWrites;
     await Promise.allSettled([...studioWrites]);

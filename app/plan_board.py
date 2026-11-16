@@ -101,6 +101,9 @@ def write(pid, progress):
                       for p in paragraphs]
             if not slides:
                 raise ValueError('Beat produced no paragraphs.')
+            previous_chapter = outline['sections'][i - 1].get('chapter', '') if i else ''
+            slides[0].chapter = (existing[0].chapter if existing else
+                section.get('chapter', '') if section.get('chapter', '') != previous_chapter else '')
             # Keep all retired voices, camera takes and history attached to the new beat.
             for old in existing:
                 slides[0].history.extend(deepcopy(old.history))

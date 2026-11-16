@@ -1769,3 +1769,45 @@ img.themed-pending { opacity:.45; }
 #theme-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; }
 #theme-toggle svg { width: 16px; height: 16px; }
 .theme-options :focus-visible, #theme-toggle:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+
+/* Script corkboard: the page stays fixed; chapters and sources scroll inside it. */
+.plan-layout { flex-wrap: nowrap; height: max(320px, calc(100dvh - 290px)); overflow: hidden; }
+.plan-sources { flex: 0 0 auto; width: 30px; padding: 12px; overflow-y: auto; }
+.plan-sources[open] { width: 240px; }
+.plan-sources > summary { cursor: pointer; color: var(--dim); }
+.plan-sources:not([open]) > summary { writing-mode: vertical-rl; }
+.plan-outline { padding: 12px; gap: 8px; overflow: hidden; }
+.plan-premise { flex: none; }
+.plan-premise > summary { cursor: pointer; color: var(--dim); }
+.plan-premise > label { margin: 8px 0; }
+.plan-premise textarea { max-height: 70px; overflow-y: auto; resize: vertical; }
+.plan-outline h1 { font-size: 18px; }
+.plan-columns { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; border-right: 2px solid var(--line-strong); }
+.plan-column { flex: 0 0 var(--outline-card-width, 240px); min-width: 0; display: block; }
+.plan-column h2 { position: sticky; top: 0; background: var(--bg); margin: 0 0 8px; z-index: 1; }
+.plan-beat { margin-bottom: 10px; overflow-wrap: anywhere; }
+.plan-beat h3 { margin: 0; font-size: 14px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.plan-beat p { margin: 0; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.outline-shot { cursor: grab; }
+.outline-shot > span { color: var(--dim); font-size: 11px; }
+.outline-unwritten, .outline-add { border: 1px dashed var(--line-strong); }
+.outline-size { flex-direction: row !important; align-items: center; font-size: 11px; }
+.outline-size input { width: 65px; }
+.plan-layout[data-card-size="0"] { --outline-card-width: 190px; }
+.plan-layout[data-card-size="2"] { --outline-card-width: 310px; }
+.plan-layout[data-card-size="2"] .plan-beat p { -webkit-line-clamp: 6; }
+.plan-hook { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; }
+.plan-hook label { flex: 1; min-width: 0; font-size: 11px; }
+@media (max-width: 800px) {
+  .plan-sources[open] { width: 170px; }
+  .plan-hook { flex-wrap: wrap; max-height: 130px; overflow-y: auto; }
+  .plan-outline > .row { flex-wrap: wrap; }
+}
+@media (min-width: 1100px) {
+  body:has(.plan-layout) { height: 100dvh; display: flex; flex-direction: column; }
+  .app-shell:has(.plan-layout) { flex: 1; min-height: 0; }
+  main:has(.plan-layout) { padding: 0; min-height: 0; display: flex; flex-direction: column; }
+  main:has(.plan-layout) .project-tools { padding: 0 20px; margin: 0; }
+  main:has(.plan-layout) #tabbody { flex: 1; min-height: 0; display: flex; }
+  .plan-layout { flex: 1; height: auto; min-height: 0; }
+}
