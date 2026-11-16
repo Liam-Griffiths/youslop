@@ -86,4 +86,5 @@ def test_block_css_only_changes_when_asked():
     plain = html({})
     assert 'outline:' not in plain and '--panel:var(--panel-solid)' in plain
     styled = html({'panel_opacity': .5, 'border': 4})
-    assert 'var(--panel-solid) 50%,transparent' in styled and 'outline:4px solid var(--line)' in styled
+    assert 'var(--panel-solid) 50%,transparent)!important' in styled and 'outline:4px solid ' in styled
+    assert 'outline:4px solid #112233' in html({'border': 4, 'line': '#112233'})
