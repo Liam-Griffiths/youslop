@@ -306,6 +306,8 @@ def seed():
     asset = library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
     inserts = store.load('psnapkenburns')
     inserts.id, inserts.title = 'psnapinserts', 'Snapshot · main-track inserts'
+    inserts.bin = [BinItem(id='editphoto', kind='image', title='Station photo',
+                          source='library:'+asset['id'], shows='Station entrance', licence='CC0')]
     inserts.slides[1:1] = [
         Slide(id='insertclip', insert=dict(kind='clip', seconds=2, shoot_id='ssnapshot',
             source_id='f1', in_s=0, out_s=2, source_audio=False)),
@@ -714,8 +716,48 @@ def capture(base, out, theme="dark"):
                     rows.append({'path':str(extra), 't':0, 'why':phase})
                 _evaluate(cdp, session, "document.querySelector('dialog[open]').close(); true")
             if route == '#/p/psnapinserts/edit':
+                for width, height in ((1280, 720), (1920, 1080)):
+                    cdp.send('Emulation.setDeviceMetricsOverride', {
+                        'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
+                    for tab in ('Materials', 'Library', 'Search', 'Blocks', '3D', 'Graphics'):
+                        _evaluate(cdp, session, "tlSelect(tlItems('picture')[0]); tlSourceView.tab=" + json.dumps(tab) + "; tlSourcesPaint(); document.querySelector('.tl-source-results').scrollTop=0; true")
+                        _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                        _evaluate(cdp, session, """(() => {
+                          for (const selector of ['#tl-stage','.tl-pictures','.tl-lane.para','.tl-playhead-handle']) {
+                            const r=document.querySelector(selector).getBoundingClientRect();
+                            if (r.height <= 0 || r.top < 0 || r.bottom > innerHeight-32) throw Error(selector+' outside viewport');
+                          }
+                          const panel=document.querySelector('#tl-sources').getBoundingClientRect();
+                          for (const tab of document.querySelectorAll('.tl-source-tabs button')) {
+                            const r=tab.getBoundingClientRect();
+                            if (r.width <= 0 || r.height < 34 || r.left < panel.left || r.right > panel.right ||
+                                r.top < panel.top || r.bottom > panel.bottom) throw Error(tab.textContent+' tab clipped');
+                          }
+                          const results=document.querySelector('.tl-source-results');
+                          const r=results.getBoundingClientRect();
+                          const items=[...document.querySelectorAll('[data-source-grid] [data-source]')];
+                          if (tlSourceView.tab === 'Materials' && !items.length) throw Error('Materials fixture has no sources');
+                          if (items.length) {
+                            const first=items[0].getBoundingClientRect();
+                            const visible=Math.min(first.bottom,r.bottom,panel.bottom)-Math.max(first.top,r.top,panel.top);
+                            if (r.height < 32 || visible < 32) throw Error('Sources grid has no usable visible height');
+                            if (!['auto','scroll'].includes(getComputedStyle(results).overflowY)) throw Error('Sources cannot scroll');
+                            results.scrollTop+=items.at(-1).getBoundingClientRect().top-r.top;
+                            const last=items.at(-1).getBoundingClientRect();
+                            if (Math.min(last.bottom,r.bottom)-Math.max(last.top,r.top) <= 0)
+                              throw Error('Last source cannot be scrolled into view');
+                            results.scrollTop=0;
+                          }
+                          return true;
+                        })()""")
+                        png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                        extra = out / f'p--psnapinserts--sources-{tab.lower()}--{width}.png'
+                        extra.write_bytes(base64.b64decode(png['data']))
+                        rows.append({'path':str(extra), 't':0, 'why':f'{tab} at {width}×{height}'})
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
                 for phase, expression in [
-                    ('insert-panel', "(async () => { const panel=document.querySelector('#tl-insert-add'); panel.open=true; await panel.ontoggle(); return true; })()"),
+                    ('insert-panel', "tlSourceView.tab='Materials'; tlSourcesPaint(); true"),
                     ('insert-inspector', "tlInsertSelect('insertclip'); true"),
                     ('insert-drop', "tlInsertGhost(tlInsertNearest(), 4); true"),
                     ('insert-menu', "tlInsertClearGhost(); tlInsertMenu(); true")]:

@@ -316,6 +316,7 @@ function tlShortcuts() {
       <dt>Selection: ← / →</dt><dd>Nudge movable items one frame together</dd>
       <dt>Drag selection / Delete</dt><dd>Move / delete editable items together</dd>
       <dt>Lane arrow</dt><dd>Collapse or expand lane (also Enter / Space)</dd>
+      <dt>&#92;</dt><dd>Collapse or expand Sources</dd>
       <dt>?</dt><dd>Open this sheet</dd>
     </dl></section>`;
   const previous = document.activeElement;

@@ -510,6 +510,7 @@ function focusPendingSlide() {
 
 // ------------------------------------------------------------------- media
 function thumbUrl(c) {
+  if (['materials','library'].includes(c.provider) && c.thumb?.startsWith('/api/')) return c.thumb;
   // A local video's own file can't sit in an <img> tag — a generated
   // establishing shot carries a project-relative poster frame in `thumb` for
   // exactly this (see app/maps.py), the same convention `local_path` uses.

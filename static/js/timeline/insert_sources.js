@@ -12,7 +12,7 @@ async function tlInsertSources() {
     const shoot = result.value;
     const add = (file,a,b,label) => {
       if (file?.kind !== 'video' || file.error || !(b > a)) return;
-      items.push({label, payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, source_audio:false}});
+      items.push({label, tab:'Materials', payload:{kind:'clip', shoot_id:shoot.id, source_id:file.id, in_s:a, out_s:b, source_audio:false}});
     };
     shoot.clips.filter(c => !c.rejected).forEach(c => add(shoot.files.find(f => f.id === c.file), c.in_s,c.out_s,
       c.title || c.note || `Clip ${c.id}`));
@@ -20,23 +20,24 @@ async function tlInsertSources() {
   });
   blocks.filter(b => b.aspects.includes(tlInsertAspect())).sort((a,b) => (b.recent || 0)-(a.recent || 0)).forEach(b => {
     const vars = Object.fromEntries(Object.entries(b.variables).map(([key,spec]) => [key,spec.default]));
-    items.push({label:b.name, overlay:!!b.overlay, payload:{kind:'block', block:b.ref, vars, seconds:4}});
+    items.push({label:b.name, tab:'Blocks', thumb:b.posters?.[tlInsertAspect()], overlay:!!b.overlay, payload:{kind:'block', block:b.ref, vars, seconds:4}});
   });
-  assets.filter(a => ['image','video'].includes(a.kind)).forEach(a => items.push({label:a.title || a.id,
+  assets.filter(a => ['image','video'].includes(a.kind)).forEach(a => items.push({label:a.title || a.id, tab:'Library', thumb:`/api/library/thumb/${a.id}`,
     payload:{kind:'picture', asset_id:a.id, seconds:4}}));
   if (results.some(r => r.status === 'rejected') || manifests.some(r => r.status === 'rejected'))
-    toast('Some insert sources could not be loaded. Reopen Add to retry.', true);
+    toast('Some sources could not be loaded. Reopen Sources to retry.', true);
   return items;
 }
 
 function tlInsertSourceList(box, items, onPick, drag = true) {
-  box.innerHTML = items.map((item,i) => `<button type="button" class="btn sm ghost" data-source="${i}" draggable="${drag}">${esc(item.label)}</button>`).join('')
+  box.innerHTML = items.map((item,i) => `<button type="button" class="btn sm ghost" data-source="${i}" draggable="${drag}">${item.thumb ? `<img src="${esc(item.thumb)}" loading="lazy" alt="">` : ''}<span>${esc(item.label)}</span>${item.meta ? `<small>${esc(item.meta)}</small>` : ''}</button>`).join('')
     || '<p>No sources here. Add footage or files in Library.</p>';
   box.querySelectorAll('[data-source]').forEach(button => {
     const item = items[+button.dataset.source];
     button.onclick = () => onPick(item.payload);
     if (!drag) return;
     button.ondragstart = e => {
+      if (['model','graphic'].includes(item.payload.kind)) { e.preventDefault(); return; }
       tlPause(); TL.insertDrag = {pid:TL.pid, payload:structuredClone(item.payload)};
       e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', item.label);
     };
@@ -46,22 +47,5 @@ function tlInsertSourceList(box, items, onPick, drag = true) {
 
 function tlInsertPanel() {
   if (state.project.kind === 'clip') return;
-  const panel = document.createElement('details'); panel.className = 'tl-insert-add'; panel.id = 'tl-insert-add';
-  panel.innerHTML = '<summary>Add</summary><p>Drag onto Pictures to insert, or onto Graphics to overlay. Click to insert nearest the playhead.</p><button type="button" class="btn sm" data-browse>Browse blocks…</button><div data-add-sources></div>';
-  $('#inspector').append(panel);
-  panel.querySelector('[data-browse]').onclick = () => tlInsertBlock(tlInsertNearest());
-  panel.ontoggle = async () => {
-    if (!panel.open) return;
-    const box = panel.querySelector('[data-add-sources]'); box.textContent = 'Loading…';
-    const items = await tlInsertSources();
-    if (!panel.isConnected || !panel.open) return;
-    box.replaceChildren();
-    for (const [kind,label] of [['clip','Recent clips and sources'], ['block','Blocks for this aspect'], ['overlay','Overlay blocks · drag onto Graphics'], ['picture','Library pictures']]) {
-      const title = document.createElement('h4'); title.textContent = label;
-      const list = document.createElement('div'); list.className = 'tl-insert-options'; box.append(title,list);
-      const sources = items.filter(i => kind === 'overlay' ? i.overlay : i.payload.kind === kind);
-      tlInsertSourceList(list, kind === 'overlay' ? sources : sources.slice(0,12), payload =>
-        payload.kind === 'block' ? tlInsertBlock(tlInsertNearest(), payload) : tlInsertSave('', {...payload, after:tlInsertNearest().after}));
-    }
-  };
+  return tlSourcesMount();
 }

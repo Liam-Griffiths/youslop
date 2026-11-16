@@ -80,25 +80,27 @@ async function tlMount() {
   host.innerHTML = `
     <div class="tl-head">
       <h3>Timeline</h3>
+      <button type="button" class="btn sm ghost" id="tl-sources-toggle" aria-controls="tl-sources" aria-keyshortcuts="\\" ${p.kind === 'clip' ? 'hidden' : ''}>Sources</button>
       <span class="mono tl-note" id="tl-note"></span>
       <div class="spacer"></div>
       <label class="row" style="gap:6px"><span class="mono tl-note">speed</span>
         <select id="tl-speed" style="width:auto">
           ${[0.5, 1, 1.5, 2].map((x) => `<option value="${x}" ${x === TL.speed ? 'selected' : ''}>${x}×</option>`).join('')}
         </select></label>
+      <details class="tl-more"><summary class="btn sm ghost">More</summary><div>
       <label class="row" style="gap:6px;cursor:pointer" title="keep replaying the entry under the playhead">
         <input type="checkbox" id="tl-loop" style="width:auto" ${TL.loop ? 'checked' : ''}>
         <span class="mono tl-note">loop picture</span></label>
-      <button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
-      <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>
+      ${p.slides.some(s => s.on_camera) ? `<button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
+      <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>` : ''}
+      <label class="row" title="Apply hidden layers to exported video">
+        <input type="checkbox" id="tl-hide-render" ${p.hide_in_render ? 'checked' : ''}> Hide in render</label>
+      <button type="button" class="btn sm ghost" id="tl-all"
+        title="draw every picture's proxy now instead of as you reach it">draw all</button>
+      </div></details>
       <button type="button" class="btn sm ghost" id="tl-add-sponsor">Add sponsor</button>
       <button type="button" class="btn sm ghost" id="tl-add-graphic" ${p.kind === 'clip' ? 'disabled' : ''}
         title="Add at the playhead, or drop an overlay block here">Add graphic</button>
-      <label class="row" title="Apply hidden layers to exported video">
-        <input type="checkbox" id="tl-hide-render" ${p.hide_in_render ? 'checked' : ''}>
-        Hide in render</label>
-      <button type="button" class="btn sm ghost" id="tl-all"
-        title="draw every picture's proxy now instead of as you reach it">draw all</button>
       <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>
       <button type="button" class="btn sm" id="tl-trim-mode" aria-pressed="${!!TL.trimRoll}"
         title="Trim mode · Shift while dragging also rolls">${TL.trimRoll ? 'Roll' : 'Ripple'}</button>
@@ -171,7 +173,7 @@ async function tlMount() {
   }
   await tlInspectorLoad();
   await tlVariablesLoad();
-  tlInsertPanel();
+  await tlInsertPanel();
 }
 
 // Re-read the layout. After an edit the changed entries come back not-ready,

@@ -10,7 +10,7 @@ function tlInsertInspector(sel, body) {
       <label for="insert-audio"><input type="checkbox" id="insert-audio" ${item.source_audio ? 'checked' : ''}> Source audio</label>`
       : number('seconds','Length (seconds)',item.seconds)}
     ${item.kind === 'card' ? `<label for="insert-text">Text</label><input id="insert-text" data-insert-field="text" value="${esc(item.text)}" maxlength="400" required>` : ''}
-    ${item.kind === 'picture' ? `<p>Library · ${esc(item.asset_id)}</p>` : ''}
+    ${item.kind === 'picture' ? `<p>${item.bin_id ? 'Materials' : 'Library'} · ${esc(item.bin_id || item.asset_id)}</p>` : ''}
     <div data-insert-vars></div><button type="submit" class="btn sm">Save insert</button></form>
     <button type="button" class="btn sm ghost" data-insert-delete>Delete insert</button><p role="status"></p>`;
   const form = body.querySelector('form');

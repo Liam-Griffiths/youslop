@@ -65,7 +65,7 @@ function tlInspector() {
   const sel = TL.selection, p = state.project;
   const kinds = ['picture', 'paragraph', 'title', 'cue', 'chapter', 'slate', 'music', 'sting', 'note', 'sponsor', 'overlay'];
   box.innerHTML = `<label for="tl-kind">Inspect</label><select id="tl-kind">
-    <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask">Ask</button><div id="tl-fields"></div>`;
+    <option value="">Select an item</option>${kinds.map((k) => `<option ${sel?.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><button class="btn sm" id="tl-ask" title="Sends the selected paragraph and your instruction">Ask Claude about this</button><div id="tl-fields"></div>`;
   $('#tl-ask').onclick = tlAsk;
   $('#tl-kind').onchange = (e) => e.target.value ? tlSelectKind(e.target.value) : tlSelect(null);
   const body = $('#tl-fields');

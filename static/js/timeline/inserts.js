@@ -46,18 +46,30 @@ function tlWireInserts() {
     if (!TL.insertDrag || TL.insertDrag.pid !== TL.pid || TL.drag) return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
     const t = (e.clientX - $('#tl-track').getBoundingClientRect().left - 104) / TL.zoom;
+    const node = e.target?.closest?.('[data-seg]'), seg = node && tlSegs()[+node.dataset.seg];
+    tlInsertClearGhost();
+    if (seg?.type === 'picture' && !e.target.closest('[data-insert-point]')
+        && Math.min(Math.abs(t-seg.start), Math.abs(t-seg.start-seg.duration))*TL.zoom > 6) {
+      if (typeof tlCanEdit === 'function' && !tlCanEdit([], ['pictures'])) { e.dataTransfer.dropEffect = 'none'; return; }
+      TL.insertReplace = tlItems('picture').find(s => s.id === seg.ref);
+      node.classList.add('tl-source-replace'); return;
+    }
     tlInsertGhost(tlInsertNearest(t), TL.insertDrag.payload.seconds || TL.insertDrag.payload.out_s - TL.insertDrag.payload.in_s);
   };
   lane.ondragleave = e => { if (!lane.contains(e.relatedTarget)) tlInsertClearGhost(); };
   lane.ondrop = e => {
-    if (!TL.insertDrag || TL.insertDrag.pid !== TL.pid || !TL.insertDrop) return;
+    if (!TL.insertDrag || TL.insertDrag.pid !== TL.pid || (!TL.insertDrop && !TL.insertReplace)) return;
     e.preventDefault(); e.stopPropagation();
-    const {payload} = TL.insertDrag, point = TL.insertDrop;
-    TL.insertDrag = null; tlInsertClearGhost(); tlInsertSave('', {...payload, after:point.after});
+    const {payload} = TL.insertDrag, point = TL.insertDrop, replace = TL.insertReplace;
+    TL.insertDrag = null; tlInsertClearGhost();
+    if (replace) tlSourceUse(payload, replace);
+    else if (typeof tlCanEdit !== 'function' || tlCanEdit([], ['pictures'])) tlInsertSave('', {...payload, after:point.after});
   };
 }
 
 function tlInsertClearGhost() {
+  document.querySelectorAll('.tl-source-replace').forEach(n => n.classList.remove('tl-source-replace'));
+  TL.insertReplace = null;
   document.querySelectorAll('.tl-insert-ghost, .tl-insert-ripple').forEach(n => n.remove());
   TL.insertDrop = null;
 }

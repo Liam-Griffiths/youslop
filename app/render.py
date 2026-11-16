@@ -504,11 +504,12 @@ def _chosen(project: Project, slide: Slide, *, preview: bool = False) -> tuple[P
                 return inserts.source(meta, preview=preview), 'video', []
             except (OSError, ValueError):
                 return None, 'video', []
-        if meta['kind'] == 'picture':
+        if meta['kind'] == 'picture' and not meta.get('bin_id'):
             from . import library
             asset, path = library.get(meta['asset_id']), library.file_path(meta['asset_id'])
             return (path if path and path.is_file() else None), (asset or {}).get('kind', 'image'), []
-        return None, 'image', []
+        if meta['kind'] != 'picture':
+            return None, 'image', []
     cand = next((c for c in slide.candidates if c["id"] == slide.chosen_id), None)
     if cand and cand.get("provider") == "footage":
         from .media.footage import resolve

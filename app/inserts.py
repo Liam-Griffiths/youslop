@@ -7,7 +7,7 @@ from .schema import Slide
 FIELDS = {
     'clip': {'shoot_id', 'source_id', 'in_s', 'out_s', 'source_audio'},
     'block': {'block', 'vars'},
-    'picture': {'asset_id'},
+    'picture': {'asset_id', 'bin_id'},
     'card': {'text'},
 }
 
@@ -62,6 +62,13 @@ def prepare(project, payload, slide=None):
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds <= 0:
             raise ValueError('seconds must be finite and greater than zero')
         if kind == 'picture':
+            if data.get('bin_id'):
+                from .picture_sources import candidate
+                found = candidate(project, data)
+                row.candidates, row.chosen_id = [found], found['id']
+                row.insert = deepcopy(data)
+                row.narration = ''
+                return row, after
             from . import library
             ident = _text(data, 'asset_id')
             asset, path = library.get(ident), library.file_path(ident)

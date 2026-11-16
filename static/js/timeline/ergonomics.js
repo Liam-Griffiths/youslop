@@ -258,7 +258,8 @@ function tlMultiInspector(box) {
 }
 
 function tlErgonomicsKey(e) {
-  if (e.shiftKey && e.key.toLowerCase() === 'z') tlFit();
+  if (e.key === '\\' && $('#tl-sources')) tlSourcesToggle();
+  else if (e.shiftKey && e.key.toLowerCase() === 'z') tlFit();
   else if (['+', '=', '-', '_'].includes(e.key)) tlZoomAt(TL.zoom * (['+', '='].includes(e.key) ? 1.25 : .8));
   else if (['Delete', 'Backspace'].includes(e.key) && TL.selections?.length) {
     if (TL.selections.every(tlDeletable)) tlGroupSave([...TL.selections], 'delete');
