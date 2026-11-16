@@ -63,7 +63,7 @@ ensure_dirs()
 packs.scan()
 
 app = FastAPI(title=brand.NAME)
-from . import block_presets, style_kits, project_bin, script_agent, script_shots, shot_agent, research_docs, home_agent, graphics
+from . import block_presets, style_kits, project_bin, script_agent, script_shots, shot_agent, research_docs, home_agent, graphics, library_metadata
 block_presets.register(app)
 style_kits.register(app)
 project_bin.register(app)
@@ -73,6 +73,7 @@ shot_agent.register(app)
 research_docs.register(app)
 home_agent.register(app)
 graphics.register(app)
+library_metadata.register(app)
 
 # Stopgap export page until the footage logger (T11.5). Registered as plain
 # routes: an included router breaks code that walks app.routes for `.path`.
@@ -4269,6 +4270,8 @@ def edit_library_asset(asset_id: str, payload: dict = Body(default={})) -> dict:
         return library.update(asset_id, **payload)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
 
 
 @app.delete("/api/library/{asset_id}")

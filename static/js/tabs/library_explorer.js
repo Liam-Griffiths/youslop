@@ -24,19 +24,21 @@ async function renderLibrary() {
   view.innerHTML = `<div class="row"><h1>Library</h1><div class="spacer"></div><a href="#/blocks">Blocks</a></div>
     ${jobPanel()}<section class="library-explorer" aria-label="Library explorer">
       <nav class="library-tree" aria-label="Media folders"><div id="libtree"></div><div class="library-tree-tools">
-        <button class="btn sm" id="liblink">+ Link a folder</button><button class="btn sm" id="libscan">Rescan</button>
+        <button class="btn sm" id="libcollection">+ Collection</button><button class="btn sm" id="liblink">+ Link a folder</button><button class="btn sm" id="libscan">Rescan</button>
         <label for="libtreewidth">Tree width</label><input id="libtreewidth" type="range" min="180" max="400" value="260"></div></nav>
       <div class="library-center"><div id="libcrumb" aria-label="Breadcrumb"></div><div class="library-toolbar">
         <label for="libq">Search</label><input id="libq" type="search" placeholder="Title, tags or filename" value="${esc(state.library.q)}">
         <div id="libkinds" role="group" aria-label="Kind"></div>
         <label for="libsize">Thumbnails</label><input id="libsize" type="range" min="80" max="320" step="10">
         <button class="btn sm" id="libmode">Details</button><span id="libcount" class="mono" role="status"></span></div>
-        <div id="libcolumns"></div><div id="libgrid" class="library-grid" role="listbox" aria-label="Media" aria-multiselectable="true" tabindex="0"></div></div>
+        <details class="library-filters-wrap"><summary>Filters</summary><div id="libfilters" class="library-filters" aria-label="Media filters"></div></details><div id="libcolumns"></div><div id="libgrid" class="library-grid" role="listbox" aria-label="Media" aria-multiselectable="true" tabindex="0"></div></div>
       <aside id="libpreview" class="library-preview" aria-label="Media preview"></aside></section>`;
   view.append(tools); paintModelLibrary();
   $('#liblink').onclick = () => { tools.open = true; $('#libfolderpath').scrollIntoView(); browseForLibraryFolder(); };
   $('#libscan').onclick = () => rescanLibraryFolder(LX.nodes.find(n=>n.id===LX.node)?.folder);
-  $('#libq').oninput = () => { state.library.q = $('#libq').value; libPaint(); };
+  $('#libq').oninput = () => { state.library.q = $('#libq').value; libRemember(); libPaint(); };
+  $('#libcollection').onclick=libCollectionDialog;
+  await libMetadataInit();
   $('#libmode').onclick = () => { LX.mode = LX.mode === 'grid' ? 'list' : 'grid'; libPaint(); };
   let size = 160; try { size = +localStorage.getItem('library-thumb-size') || size; } catch {}
   $('#libsize').value = Math.min(320, Math.max(80,size));
@@ -72,6 +74,7 @@ function libTree() {
   add('footage','Footage',()=>false); add('projects','Projects',()=>false);
   (LX.shoots || []).forEach(s=>add(`shoot:${s.id}`,s.name,()=>false,'footage'));
   (LX.projects || []).forEach(p=>add(`project:${p.id}`,p.title || p.id,()=>false,'projects'));
+  libCollectionNodes(add);
   if (!nodes.some(n=>n.id===LX.node)) { LX.node='all'; LX.extra=[]; }
   const opened = new Set([...document.querySelectorAll('#libtree details[open]')].map(el=>el.dataset.node));
   const branch = parent => nodes.filter(n=>n.parent===parent).map(n=>{
@@ -82,6 +85,7 @@ function libTree() {
   }).join('');
   $('#libtree').innerHTML = branch('');
   $('#libtree').querySelectorAll('button').forEach(b=>b.onclick=e=>{ e.preventDefault(); libNode(b.dataset.node).catch(err=>toast(err.message,true)); });
+  libCollectionDrops();
   $('#libtree').onkeydown = e => {
     const d=e.target.closest('details'); if (!d || !['ArrowLeft','ArrowRight'].includes(e.key)) return;
     e.preventDefault(); d.open=e.key==='ArrowRight';
@@ -89,7 +93,7 @@ function libTree() {
 }
 
 async function libNode(id) {
-  LX.node=id; LX.extra=[]; LX.selected.clear(); LX.focus=0; LX.anchor=0; libTree(); libPaint();
+  libRemember(); LX.node=id; libRestore(); LX.extra=[]; LX.selected.clear(); LX.focus=0; LX.anchor=0; libTree(); libPaint();
   if (id.startsWith('shoot:')) {
     const s=await api(`/api/footage/shoots/${encodeURIComponent(id.slice(6))}`); if (LX.node!==id) return;
     LX.extra=s.clips.map(c=>{ const f=s.files.find(f=>f.id===c.file) || {}, base=`/api/footage/shoots/${s.id}/media/`;
@@ -110,7 +114,7 @@ function libVisible() {
   const node=LX.nodes.find(n=>n.id===LX.node), q=state.library.q.trim().toLowerCase();
   const items=LX.node.startsWith('shoot:') || LX.node.startsWith('project:') ? LX.extra : state.library.items.filter(node?.match || (()=>true));
   const values={name:libName,filename:libFile,dimensions:libDims,tags:a=>(a.tags||[]).join(', ')};
-  return items.filter(a=>(!state.library.kind || a.kind===state.library.kind) && [libName(a),libFile(a),...(a.tags||[])].join(' ').toLowerCase().includes(q))
+  return items.filter(a=>libMatches(a,libFilters()) && (!state.library.kind || a.kind===state.library.kind) && [libName(a),libFile(a),...(a.tags||[])].join(' ').toLowerCase().includes(q))
     .sort((a,b)=>{ const x=(values[LX.sort] || (a=>a[LX.sort]))(a) ?? '', y=(values[LX.sort] || (a=>a[LX.sort]))(b) ?? '';
       return LX.direction*(typeof x==='number' ? x-y : String(x).localeCompare(String(y))); });
 }
@@ -126,8 +130,8 @@ function libPaint() {
   $('#libcount').textContent=`${items.length} items`; $('#libmode').textContent=LX.mode==='grid'?'Details':'Grid';
   $('#libmode').setAttribute('aria-pressed',String(LX.mode==='list'));
   $('#libkinds').innerHTML=['','image','video','audio'].map((k,i)=>`<button class="btn xs ghost" data-kind="${k}" aria-pressed="${state.library.kind===k}">${['All','Images','Clips','Audio'][i]}</button>`).join('');
-  $('#libkinds').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.library.kind=b.dataset.kind;libPaint();});
-  $('#libcolumns').innerHTML=LX.mode==='list' ? ['name','kind','size','dimensions','duration','added_at','tags'].map(k=>`<button class="btn xs ghost" data-sort="${k}">${{added_at:'Added',tags:'Labels'}[k] || k}${LX.sort===k ? LX.direction===1?' ↑':' ↓' : ''}</button>`).join('') : '';
+  $('#libkinds').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.library.kind=b.dataset.kind;libRemember();libPaint();});
+  $('#libcolumns').innerHTML=LX.mode==='list' ? ['name','kind','size','dimensions','duration','added_at','tags','rating','color'].map(k=>`<button class="btn xs ghost" data-sort="${k}">${{added_at:'Added',tags:'Labels'}[k] || k}${LX.sort===k ? LX.direction===1?' ↑':' ↓' : ''}</button>`).join('') : '';
   if(LX.mode==='list') $('#libcolumns').innerHTML='<div class="library-columns-row">'+$('#libcolumns').innerHTML+'</div>';
   $('#libcolumns').querySelectorAll('button').forEach(b=>b.onclick=()=>{LX.direction=LX.sort===b.dataset.sort?-LX.direction:1;LX.sort=b.dataset.sort;libPaint();});
   grid.classList.toggle('details',LX.mode==='list'); grid.style.setProperty('--thumb',`${$('#libsize').value}px`);
@@ -135,7 +139,7 @@ function libPaint() {
     <div class="library-poster">${libThumb(a) ? `<img data-src="${esc(libThumb(a))}" loading="lazy" alt="">` : `<span>${esc(a.kind)}</span>`}</div>
     <span class="library-name" title="${esc(libName(a))}">${esc(libName(a))}</span><span class="mono">${esc(a.kind)}</span>
     ${LX.mode==='list'?`<span class="mono">${libSize(a)}</span><span class="mono">${libDims(a)}</span>`:''}
-    <span class="mono">${a.duration?fmtTime(a.duration):'—'}</span>${LX.mode==='list'?`<span class="mono">${libDate(a)}</span><span>${esc((a.tags||[]).join(', '))}</span>`:''}</div>`).join('') || '<p class="empty-note">No media here. Upload a file or link a folder below.</p>';
+    <span class="mono">${a.duration?fmtTime(a.duration):'—'}</span>${LX.mode==='list'?`<span class="mono">${libDate(a)}</span><span>${esc((a.tags||[]).join(', '))}</span>`:''}${libCulling(a)}</div>`).join('') || '<p class="empty-note">No media here. Upload a file or link a folder below.</p>';
   LX.observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){const img=e.target;img.src=img.dataset.src;LX.observer.unobserve(img);}}),{root:grid,rootMargin:'250px'});
   grid.querySelectorAll('img').forEach(img=>LX.observer.observe(img));
   grid.querySelectorAll('[data-index]').forEach(el=>{
@@ -161,6 +165,7 @@ function libSelection() {
 }
 function libKey(e) {
   if(e.target.closest('input,textarea,button'))return;
+  if(libRateKey(e))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){e.preventDefault();LX.visible.forEach(a=>LX.selected.add(a.id));libSelection();return;}
   if(e.key===' '||e.key==='Enter'){e.preventDefault();if(LX.visible.length)libOpen(LX.focus);return;}
   const el=$('#libgrid [data-index]'), cols=LX.mode==='list'?1:Math.max(1,Math.floor($('#libgrid').clientWidth/((el?.offsetWidth||160)+8)));
@@ -193,13 +198,14 @@ function libPreview() {
     <button class="btn sm">Save</button></form>`;
   if(!readonly&&selected.length===1) controls+=`<button class="btn sm ghost" id="libedit">Edit credit and licence</button><button class="btn sm ghost" id="libdelete">Delete</button>${a.source_path?'<button class="btn sm ghost" id="libreveal">Show in folder</button>':''}`;
   pane.innerHTML=`<h2>${selected.length>1?`${selected.length} selected`:esc(libName(a))}</h2>
-    ${selected.length===1 ? `<div class="library-media">${libMedia(a)}</div><dl class="mono">${Object.entries({'File':libFile(a),'Path':a.source_path,'Dimensions':libDims(a),'Duration':a.duration?fmtTime(a.duration):'—','Size':libSize(a),'Added':libDate(a),'Source':a.source_page || (a.readonly?'Reference':a.folder_id?'Linked folder':'Uploaded'),'Licence':a.license,'Credit':a.author}).filter(([,v])=>v).map(([k,v])=>`<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join('')}</dl>`:''}${controls}`;
+    ${selected.length===1 ? `<div class="library-media">${libMedia(a)}</div><dl class="mono">${Object.entries({'File':libFile(a),'Path':a.source_path,'Dimensions':libDims(a),'Duration':a.duration?fmtTime(a.duration):'—','Size':libSize(a),'Added':libDate(a),'Source':a.source_page || (a.readonly?'Reference':a.folder_id?'Linked folder':'Uploaded'),'Licence':a.license,'Credit':a.author}).filter(([,v])=>v).map(([k,v])=>`<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join('')}</dl>`:''}${controls}${readonly?'':libMetadataControls(selected,shared)}`;
   if(readonly)return;
   $('#libedit')?.addEventListener('click',()=>editLibraryAsset(a.id)); $('#libdelete')?.addEventListener('click',()=>deleteLibraryAsset(a.id));
   $('#libreveal')?.addEventListener('click',()=>api('/api/reveal',{method:'POST',body:JSON.stringify({scope:'library',id:a.id})}).catch(e=>toast(e.message,true)));
   $('#libmetadata').onsubmit=async e=>{e.preventDefault();const tags=$('#libedit-tags').value.split(',').map(t=>t.trim()).filter(Boolean), title=$('#libedit-title')?.value;
-    try {for(const a of selected){const patch={tags:[...new Set([...(a.tags||[]).filter(t=>!shared.includes(t)),...tags])]};if(title!==undefined)patch.title=title;
-      Object.assign(a,await api(`/api/library/${a.id}`,{method:'PATCH',body:JSON.stringify(patch)}));}libTree();libPaint();toast('Metadata saved.');}catch(err){toast(err.message,true);}};
+    const patch={ids:selected.map(a=>a.id),add:tags,remove:shared.filter(t=>!tags.includes(t))};if(title!==undefined)patch.title=title;
+    try{await libWrite('batch',patch);toast('Metadata saved.');}catch{}};
+  libBindMetadata(selected);
   if(selected.length===1&&!a.infoLoaded){a.infoLoaded=true;api(`/api/library/info/${a.id}`).then(info=>{a.size=info.size;if(LX.selected.size===1&&LX.selected.has(a.id)&&$('#libpreview')&&!$('#libpreview').contains(document.activeElement))libPreview();}).catch(()=>{});}
 }
 function libOpen(index) {

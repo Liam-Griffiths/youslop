@@ -65,6 +65,8 @@ class LibraryAsset:
     duration: float = 0.0
     added_at: float = 0.0
     size: int = 0
+    rating: int = 0
+    color: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -119,8 +121,9 @@ def _load_folders() -> list[LibraryFolder]:
 
 
 def _save_both(assets: list[LibraryAsset], folders: list[LibraryFolder]) -> None:
+    from .library_metadata import read_extras
     payload = json.dumps(
-        {"assets": [a.to_dict() for a in assets],
+        {**read_extras(), "assets": [a.to_dict() for a in assets],
          "folders": [f.to_dict() for f in folders]},
         indent=2, ensure_ascii=False)
     fd, tmp = tempfile.mkstemp(dir=LIBRARY_DIR, suffix=".tmp")
@@ -268,7 +271,7 @@ def add(data: bytes, filename: str, title: str = "", tags: list[str] | None = No
     return asset.to_dict()
 
 
-_EDITABLE = {"title", "tags", "author", "license", "source_page"}
+_EDITABLE = {"title", "tags", "author", "license", "source_page", "rating", "color"}
 
 
 def update(asset_id: str, **fields: Any) -> dict:
@@ -282,6 +285,13 @@ def update(asset_id: str, **fields: Any) -> dict:
                     continue
                 if k == "tags":
                     v = sorted({t.strip() for t in (v or []) if t.strip()})
+                elif k == "rating":
+                    if type(v) is not int or not 0 <= v <= 5:
+                        raise ValueError("Rating must be 0–5")
+                elif k == "color":
+                    from .library_metadata import COLORS
+                    if v not in COLORS:
+                        raise ValueError("Unknown colour")
                 elif isinstance(v, str):
                     v = v.strip()
                 setattr(a, k, v)

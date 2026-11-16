@@ -73,10 +73,10 @@ def evaluate_js(source):
 
 
 def test_tree_search_range_selection_and_keyboard():
-    source = Path('static/js/tabs/media.js').read_text() + '\n' + Path('static/js/tabs/library_explorer.js').read_text()
+    source = '\n'.join(Path('static/js/tabs/'+name+'.js').read_text() for name in ('media', 'library_metadata', 'library_explorer'))
     evaluate_js('''const document={addEventListener(){},querySelectorAll(){return []}};
       const window={addEventListener(){}};
-      const tree={querySelectorAll(){return []},focus(){},scrollIntoView(){},addEventListener(){}}, $=()=>tree, esc=String;
+      const tree={querySelectorAll(){return []},focus(){},scrollIntoView(){},addEventListener(){}}, uses={}, $=s=>s==='#libuses'?uses:tree, esc=String;
       const state={library:{q:'',kind:'',folders:[{id:'f',path:'/photos',label:'Photos'}],items:[]}};
       const assert=(ok,message)=>{if(!ok)throw Error(message)};
     ''' + source + '''
@@ -87,7 +87,7 @@ def test_tree_search_range_selection_and_keyboard():
       LX.node='folder:f/inside'; assert(libVisible().length===1,'Subfolder boundary leaked');
       LX.node='all';state.library.q='upload21.png';assert(libVisible()[0].id==='a21','Filename search failed');
       state.library.q='';LX.visible=libVisible();libSelection=()=>{};
-      LX.selected.add('a0');LX.visible[0].infoLoaded=true;libPreview();
+      LM.used={};LX.selected.add('a0');LX.visible[0].infoLoaded=true;libPreview();
       assert(tree.innerHTML.includes('libedit-title'),'Single title editor missing');
       LX.visible[0].readonly=true;libPreview();
       assert(tree.innerHTML.includes('Read-only reference')&&!tree.innerHTML.includes('libmetadata'),'Reference is editable');

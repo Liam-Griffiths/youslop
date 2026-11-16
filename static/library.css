@@ -51,3 +51,29 @@ main:has(.library-explorer) h1 { margin:0 0 10px; font-size:28px; }
 .library-tools { margin-top:12px; }
 .library-tools summary { cursor:pointer; margin-bottom:12px; }
 @media(max-width:1000px) { .library-explorer { grid-template-columns:180px minmax(200px,1fr) 260px; } }
+.library-filters { display:flex; flex-wrap:wrap; align-items:end; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); }
+.library-filters label { display:flex; flex-direction:column; font-size:11px; color:var(--dim); }
+.library-filters input,.library-filters select { max-width:140px; padding:4px; }
+.library-culling { display:block; font-size:11px; color:var(--ink); white-space:nowrap; }
+.library-culling [data-color=red] { color:var(--bad); }
+.library-culling [data-color=yellow] { color:var(--warn); }
+.library-culling [data-color=green] { color:var(--good); }
+.library-culling [data-color=blue] { color:var(--cool); }
+.library-culling [data-color=purple] { color:color-mix(in srgb,var(--cool),var(--bad)); }
+.library-item { height:calc(var(--thumb)*.65 + 76px); contain-intrinsic-size:auto calc(var(--thumb)*.65 + 76px); }
+.library-grid.details .library-item,.library-columns-row { grid-template-columns:minmax(140px,2fr) repeat(5,minmax(72px,1fr)) minmax(100px,1fr) 60px 65px; min-width:860px; }
+.library-grid.details .library-culling { display:contents; }
+.library-preview select { width:100%; }
+
+/* Review polish: stars and colour dots, filters folded away until wanted. */
+.library-culling { display:flex; align-items:center; gap:6px; font-size:12px; }
+.library-stars { color:var(--accent); letter-spacing:1px; }
+.library-stars > span { color:var(--line); }
+.library-dot { width:10px; height:10px; border-radius:50%; background:var(--dim); flex:none; }
+.library-dot[data-color=red] { background:var(--bad); } .library-dot[data-color=yellow] { background:var(--warn); }
+.library-dot[data-color=green] { background:var(--good); } .library-dot[data-color=blue] { background:var(--cool); }
+.library-dot[data-color=purple] { background:color-mix(in srgb,var(--cool),var(--bad)); }
+.library-filters-wrap { border-bottom:1px solid var(--line); flex-shrink:0; }
+.library-filters-wrap > summary { cursor:pointer; padding:6px 12px; font-size:12px; color:var(--dim); }
+.library-filters-wrap .library-filters { border-bottom:0; padding-top:0; }
+.library-filters select { min-width:72px; }
