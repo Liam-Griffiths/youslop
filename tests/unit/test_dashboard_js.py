@@ -21,6 +21,7 @@ const pictureKind = () => 'kenburns';
 function scriptRuns(p) { return p.slides.map(s => [s]); }
 function check(ok, message) { if (!ok) throw Error(message); }
 function paintBin() {}
+function paintHomeDocs() {}
 '''
     checks = r'''
 paintDashboard();
@@ -37,7 +38,7 @@ state.stageStates = {pid:'p',items:[{id:'dashboard',label:'Home',status:'todo',r
 paintDashboard();
 check(body.innerHTML.includes('href="#/p/p/voice"><span class="home-dot"') && !body.innerHTML.includes('>Home <'),'status line links stages, not Home itself');
 check(body.innerHTML.includes('1 visual has no picture') && body.innerHTML.includes('1 recording is out of date') && body.innerHTML.includes('1 paragraph not recorded'),'still needed from every stage');
-check(body.innerHTML.includes('When did it close?'),'open questions listed');
+check(body.innerHTML.includes('When did it close?') && body.innerHTML.includes('id="home-docs"'),'documents and open questions');
 binView = {...binInitial('p'), items:[{id:'m',kind:'image',title:'Map',labels:[],used_in:['b'],licence:''}]};
 check(homeNeeds(p).includes('1 material in the video with no licence noted'),'rights gap from materials');
 binView.items[0].licence = 'Public domain';

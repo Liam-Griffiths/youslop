@@ -24,10 +24,11 @@ function paintDashboard() {
           <div id="project-bin"><p class="sub">Loading materials…</p></div>
         </section>
         <section class="home-card" aria-labelledby="home-research">
-          <div class="home-card-head"><h2 id="home-research">Research</h2>
-            <span class="mono sub">${research.facts?.length || 0} facts · ${research.sources?.length || 0} sources · ${questions.length} open questions</span>
+          <div class="home-card-head"><h2 id="home-research">Research documents</h2>
+            <span class="mono sub">${(research.documents || []).length} documents · ${research.facts?.length || 0} facts · ${questions.length} open questions</span>
             <span class="spacer"></span><a class="btn sm" href="#/p/${p.id}/script">Facts beside the script</a></div>
-          ${questions.length ? `<h3 class="kicker home-q-head">Open questions</h3><ul class="home-questions">${questions.slice(0, 8).map(q => `<li>${esc(typeof q === 'string' ? q : q.question || q.text || '')}</li>`).join('')}</ul>` : ''}
+          <div id="home-docs"><p class="sub">Loading documents…</p></div>
+          ${questions.length ? `<details class="home-questions-box"><summary class="kicker home-q-head">Open questions · ${questions.length}</summary><ul class="home-questions">${questions.map(q => `<li>${esc(typeof q === 'string' ? q : q.question || q.text || '')}</li>`).join('')}</ul></details>` : ''}
         </section>
         <section class="home-card" aria-labelledby="home-needed">
           <div class="home-card-head"><h2 id="home-needed">Still needed</h2></div>
@@ -46,6 +47,7 @@ function paintDashboard() {
       </aside>
     </div></div>`;
   paintBin();
+  paintHomeDocs();
 }
 
 // What the video still needs, from every stage, each with a way there.
