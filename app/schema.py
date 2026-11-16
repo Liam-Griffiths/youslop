@@ -155,7 +155,9 @@ class Slide:
     locked_media: bool = False            # user picked; don't auto-overwrite
     # auto = follow the channel's picture_every rule; hold = keep the picture
     # already on screen; new = always start a fresh picture here.
-    picture_mode: str = "auto"            # auto | hold | new
+    # cut = a fresh picture inside the same Script shot (new also starts a
+    # new shot on the Script page; for the picture grouping they are the same).
+    picture_mode: str = "auto"            # auto | hold | new | cut
     # What the handwritten board format draws for this paragraph. All of it is
     # optional: a slide with none of it set gets a lead and some points derived
     # from its own narration, and "auto" picks the template that fits whatever
@@ -231,7 +233,7 @@ def group_slides(slides: list["Slide"], every: int) -> list[list["Slide"]]:
         if (not runs or slide.insert or runs[-1][-1].insert
                 or slide.on_camera or runs[-1][-1].on_camera
                 or (slide.cues or {}).get('blocks') or (runs[-1][-1].cues or {}).get('blocks')
-                or mode == "new" or (mode != "hold" and n >= every)):
+                or mode in ("new", "cut") or (mode != "hold" and n >= every)):
             runs.append([])
             n = 0
         runs[-1].append(slide)

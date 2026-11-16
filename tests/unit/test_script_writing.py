@@ -148,7 +148,7 @@ def test_page_shots_toolbar_and_caret(tmp_path):
     if not gjs:
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path('static/js/tabs/' + name).read_text() for name in
-                       ('script.js', 'script-writing.js', 'script-check.js', 'script-agent.js', 'script-shots.js'))
+                       ('script.js', 'script-writing.js', 'script-check.js', 'script-agent.js', 'script-shots.js', 'script-shot-design.js'))
     harness = r"""
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
 const esc=s=>String(s||''), fmtTime=String, isStage=()=>false, thumbUrl=()=>'/t.jpg';
@@ -203,8 +203,12 @@ document.querySelector=()=>null;
 scriptOpenShot('b');paintScriptShots();
 const shots=body.innerHTML;
 check((shots.match(/class="shots-row"/g)||[]).length===4&&shots.includes('aria-current="true"'),'Shots lists every shot and marks the open one');
-check(shots.includes('What we see')&&shots.includes('id="shots-desc"')&&shots.includes('Engraving')&&shots.includes('What we hear'),'shot description and its paragraphs');
-check(shots.includes('Merge with shot above')&&shots.includes('Start a new shot here')&&shots.includes('Move to shot above')&&!shots.includes('contenteditable'),'shot editing lives in Shots; words are read-only there');
+check(shots.includes('Describe it')&&shots.includes('id="shots-desc"')&&shots.includes('Engraving')&&shots.includes('Visuals against the words'),'describe the shot, then its visuals against the words');
+check((shots.match(/class="shots-word( starts)?"/g)||[]).length===2&&(shots.match(/class="shots-beat /g)||[]).length===2,'both paragraphs, each its own visual here');
+check(shots.includes('One visual for the whole shot')&&shots.includes('Join the visual before')&&shots.includes('role="radiogroup" aria-label="Kind of visual"')&&shots.includes('Preview with narration'),'visual breaks, kind chooser and a cheap preview');
+check(['Photo','Clip','Map','3D','Diagram','Scene'].every(k=>shots.includes('<strong>'+k+'</strong>')),'every kind of visual offered');
+check(shots.includes('id="shot-agent-input"')&&shots.includes('Plan the visuals'),'shot agent beside the design');
+check(shots.includes('Merge with shot above')&&shots.includes('Start a new shot here')&&!shots.includes('contenteditable')&&!shots.includes('Facts behind'),'shot editing lives in Shots; words read-only; no facts panel');
 check(shots.includes('ondrop="scriptShotRowDrop(event,'),'paragraphs can be dropped onto a shot in the list');
 print('page shots, toolbar and caret passed');
 """

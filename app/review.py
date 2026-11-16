@@ -574,7 +574,7 @@ def act(pid, nid, action, *, finding=None):
 def patch_schema():
     """Generate the agent's JSON schema from storyboard's editable contract."""
     fields = {name: {'type': 'string'} for name in storyboard.EDITABLE}
-    fields['picture_mode'] = {'enum': ['auto', 'hold', 'new']}
+    fields['picture_mode'] = {'enum': ['auto', 'hold', 'new', 'cut']}
     fields['cues'] = {'type': 'object', 'additionalProperties': False,
                       'properties': {key: {'type': 'array', 'items': {'type': 'object'}}
                                      for key in sorted(cuts.BY_KEY)}}

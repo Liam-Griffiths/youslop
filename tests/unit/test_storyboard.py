@@ -78,7 +78,7 @@ def test_api(project):
     assert result['candidates'][0]['focal'] == [1.0, 0.0]
     with pytest.raises(main.HTTPException) as exc:
         main.patch_slide(project.id, 's1', {'picture_mode': 'bad'})
-    assert (exc.value.status_code, exc.value.detail) == (400, 'picture_mode is auto, hold or new')
+    assert (exc.value.status_code, exc.value.detail) == (400, 'picture_mode is auto, hold, new or cut')
 
 
 def test_cli(project, tmp_path, monkeypatch, capsys):

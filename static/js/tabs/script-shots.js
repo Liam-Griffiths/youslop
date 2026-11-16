@@ -52,7 +52,9 @@ function paintScriptShots() {
     <nav class="shots-list" aria-label="Shots">
       <p class="sub shots-hint">A shot is the paragraphs that play over one picture or graphic. Drag a paragraph onto a shot here to move it.</p>
       ${list}</nav>
-    <section class="shots-detail" id="shots-detail" aria-label="Shot ${row.index + 1}">${scriptShotDetail(p, row, rows)}</section></div>`;
+    <section class="shots-detail" id="shots-detail" aria-label="Shot ${row.index + 1}">${scriptShotDetail(p, row, rows)}</section>
+    ${row.lead.insert?.kind ? '' : `<aside class="shots-agent" aria-label="Shot agent">${shotAgentPanel(row)}</aside>`}</div>`;
+  shotAgentPaint();
   document.querySelector(`.shots-row[data-shot="${row.lead.id}"]`)?.scrollIntoView({block: 'nearest'});
 }
 
@@ -65,37 +67,30 @@ function scriptShotDetail(p, row, rows) {
   if (lead.insert?.kind) return `${head}<div class="shots-card"><p><strong>Insert · ${esc(lead.insert.kind)}</strong> · ${lead.insert.seconds.toFixed(1)} s</p>
     <p>${esc(lead.insert.text || lead.insert.block || lead.insert.asset_id || lead.insert.source_id || '')}</p>
     <a class="btn sm" href="#/p/${p.id}/edit">Edit in timeline</a></div>`;
-  const kind = pictureKind(lead, p);
-  const spoken = run.filter(s => !s.insert?.kind);
-  const up = scriptNeighbourShot(lead.id, -1), down = scriptNeighbourShot(lead.id, 1);
-  const paras = spoken.map((s, k) => `<article class="shots-para" data-sid="${s.id}">
-      <span class="mono shots-para-grip" draggable="true" title="Drag onto a shot in the list, or within this shot"
-        ondragstart="scriptDragStart(event,'${s.id}')" ondragend="scriptDragEnd()">⋮⋮ ¶${row.first + k}</span>
-      <div class="shots-para-body"><p>${esc(s.narration)}</p>
-        <div class="shots-para-actions"><span class="mono">${scriptVoice(s)}</span>
-          ${up && k === 0 ? `<button class="btn xs ghost" onclick="scriptMoveToShot('${s.id}',-1)">Move to shot above</button>` : ''}
-          ${k ? `<button class="btn xs ghost" onclick="scriptNewShot('${s.id}')">Start a new shot here</button>` : ''}
-          ${down && k === spoken.length - 1 ? `<button class="btn xs ghost" onclick="scriptMoveToShot('${s.id}',1)">Move to shot below</button>` : ''}
-          <button class="btn xs ghost" onclick="scriptShowInWrite('${s.id}')">Edit words</button></div></div></article>`).join('');
+  const beats = shotBeats(p, row);
+  const beat = beats.find(b => b.lead.id === shotBeatPicked) || beats[0];
+  shotBeatPicked = beat.lead.id;
   return `${head}
-    <div class="shots-columns">
-      <section class="shots-card" aria-labelledby="shots-see"><h2 id="shots-see">What we see</h2>
-        ${row.chosen ? `<img class="shots-picture" src="${esc(thumbUrl(row.chosen))}" alt="Chosen picture for shot ${index + 1}">` : '<div class="shots-picture empty">No picture chosen yet</div>'}
-        <label class="kicker" for="shots-desc">Shot description</label>
-        <textarea id="shots-desc" rows="3" placeholder="Describe the picture for this shot"
-          onchange="scriptSaveShotNote('${lead.id}',this.value)">${esc(lead.visual_note || '')}</textarea>
-        <div class="shots-row-actions"><span class="pill">${esc(pictureKindLabel(kind, lead))}</span>
-          ${isStage(kind) ? `<button class="btn sm ghost" onclick="reviseVisuals(['${lead.id}'])">Revise visuals</button>` : ''}
-          <a class="btn sm" href="#/p/${p.id}/edit/pictures">Choose pictures in Edit</a></div>
-        ${p.visual_flags?.[lead.id] ? `<p class="script-visual-flag">${esc(p.visual_flags[lead.id].text)}</p>` : ''}
-      </section>
-      <section class="shots-card" aria-labelledby="shots-hear" data-script-shot="${lead.id}"
-        ondragover="scriptDragOver(event)" ondragleave="scriptDragLeave(event)" ondrop="scriptDrop(event)">
-        <h2 id="shots-hear">What we hear</h2>${paras}
-        <p class="sub">The words are edited in Write.</p></section>
-    </div>`;
+    <section class="shots-card" aria-labelledby="shots-describe">
+      <div class="shots-step"><span class="mono">1</span><h2 id="shots-describe">Describe it</h2>
+        <span class="sub">What the viewer should see and feel. The agent and the tools below work from this.</span></div>
+      <label class="sr-only" for="shots-desc">Shot description</label>
+      <textarea id="shots-desc" rows="2" placeholder="Describe what this shot shows"
+        onchange="scriptSaveShotNote('${lead.id}',this.value)">${esc(lead.visual_note || '')}</textarea>
+      ${p.visual_flags?.[lead.id] ? `<p class="script-visual-flag">${esc(p.visual_flags[lead.id].text)}</p>` : ''}
+    </section>
+    <section class="shots-card" aria-labelledby="shots-beats" data-script-shot="${lead.id}"
+      ondragover="scriptDragOver(event)" ondragleave="scriptDragLeave(event)" ondrop="scriptDrop(event)">
+      <div class="shots-step"><span class="mono">2</span><h2 id="shots-beats">Visuals against the words</h2>
+        <span class="sub">A shot can hold several visuals. Pick one to design it; start a new visual on any paragraph.</span></div>
+      ${shotStrip(p, row, beats, beat)}
+    </section>
+    <section class="shots-card" aria-labelledby="shots-design">
+      <div class="shots-step"><span class="mono">3</span><h2 id="shots-design">Design visual ${beats.indexOf(beat) + 1}${beats.length > 1 ? ' of ' + beats.length : ''}</h2>
+        <span class="mono sub">${fmtTime(beat.start)}–${fmtTime(beat.end)} · ¶${beat.first}${beat.paras.length > 1 ? '–¶' + (beat.first + beat.paras.length - 1) : ''}</span></div>
+      ${shotDesign(p, beat)}
+    </section>`;
 }
-
 async function scriptPickShot(lead) {
   if (!(await scriptFlush())) return;
   scriptShotPicked = lead;

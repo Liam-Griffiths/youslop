@@ -12,7 +12,7 @@ def test_insert_ui(tmp_path):
         pytest.skip('GJS unavailable')
     source = '\n'.join(Path(f'static/js/timeline/{name}.js').read_text() for name in
                        ('inserts', 'insert_sources', 'insert_inspector'))
-    source += '\n' + '\n'.join(Path(f'static/js/tabs/{name}').read_text() for name in ('script.js', 'script-writing.js', 'script-agent.js', 'script-shots.js'))
+    source += '\n' + '\n'.join(Path(f'static/js/tabs/{name}').read_text() for name in ('script.js', 'script-writing.js', 'script-agent.js', 'script-shots.js', 'script-shot-design.js'))
     harness = r'''
 const check = (v,m) => {if (!v) throw Error(m);};
 const structuredClone = v => JSON.parse(JSON.stringify(v));

@@ -111,8 +111,8 @@ def patch_slide_fields(s, payload: dict) -> list[str]:
                 raise EditError(f"That diagram spec won't draw: {exc}")
     if "picture_mode" in payload:
         mode = str(payload["picture_mode"])
-        if mode not in ("auto", "hold", "new"):
-            raise EditError("picture_mode is auto, hold or new")
+        if mode not in ("auto", "hold", "new", "cut"):
+            raise EditError("picture_mode is auto, hold, new or cut")
         s.picture_mode = mode
     if isinstance(payload.get("cues"), dict):
         # {"<cut key>": [cues]} — a list replaces that cut's cues, an
