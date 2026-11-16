@@ -1,14 +1,33 @@
-// Drag feedback lives beside the edit, even when the player is off-screen.
+// One fixed row below the ticks holds commands; drag feedback covers it while dragging. Try the other
+// side of the selection/playhead before clamping to a narrow viewport.
+function tlPositionTrackTool(node, time, end = time, origin = 0, inset = 4) {
+  const sc = $('#tl-scroll');
+  if (!sc) return;
+  const lo = sc.scrollLeft+inset, right = sc.scrollLeft+sc.clientWidth-4;
+  node.style.maxWidth = `${Math.max(0, right-lo)}px`;
+  const width = node.offsetWidth, hi = Math.max(lo, right-width);
+  const head = 104+TL.cur*TL.zoom, clamp = x => Math.max(lo, Math.min(x, hi));
+  const candidates = [104+time*TL.zoom, 104+end*TL.zoom-width, head+12, head-12-width].map(clamp);
+  let left = candidates.find(x => x+width <= head-12 || x >= head+12);
+  if (left === undefined) {
+    // Long command bars scroll within the larger free side of the viewport.
+    const useRight = right-head-12 >= head-12-lo;
+    const a = useRight ? Math.max(lo, head+12) : lo, b = useRight ? right : Math.min(right, head-12);
+    node.style.maxWidth = `${Math.max(0, b-a)}px`;
+    left = useRight ? a : Math.max(lo, b-node.offsetWidth);
+  }
+  node.style.left = `${left-origin}px`;
+}
+
+// Drag feedback stays in its own reserved row, clear of tools and the handle.
 function tlTrackHint(track) {
   const label = document.createElement('div'), sc = $('#tl-scroll');
   label.className = 'tl-track-hint'; label.hidden = true; track.append(label);
   let time = 0;
   const position = () => {
     if (!sc) return;
-    label.style.maxWidth = `${Math.max(0, sc.clientWidth-8)}px`;
-    const lo = sc.scrollLeft+4, hi = lo+sc.clientWidth-8-label.offsetWidth;
-    label.style.left = `${Math.max(lo, Math.min(104+time*TL.zoom+8, hi))}px`;
-    label.style.top = `${Math.max(0, track.querySelector('.tl-pictures').offsetTop-label.offsetHeight)}px`;
+    tlPositionTrackTool(label, time);
+    label.style.top = '24px'; label.style.zIndex = '9';
   };
   sc?.addEventListener('scroll', position);
   return {
@@ -75,10 +94,8 @@ function tlSectionPositionTools() {
   const sc = $('#tl-scroll'), tools = $('#tl-track')?.querySelector('.tl-section-tools');
   const bounds = tlSectionBounds();
   if (!sc || !tools) return;
-  tools.style.maxWidth = `${Math.max(0, sc.clientWidth-8)}px`;
   // The ruler starts after the 104px lane headers; scrollLeft is track-relative.
-  const lo = sc.scrollLeft-104+4, hi = lo+sc.clientWidth-8-tools.offsetWidth;
-  tools.style.left = `${Math.max(lo, Math.min((bounds?.a ?? TL.cur)*TL.zoom, hi))}px`;
+  tlPositionTrackTool(tools, bounds?.a ?? TL.cur, bounds?.b ?? TL.cur, 104);
 }
 
 function tlSectionNudge(dir) {

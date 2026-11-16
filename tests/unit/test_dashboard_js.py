@@ -69,7 +69,7 @@ def test_dashboard_direct_entry_loads_channel_and_next_stage(tmp_path):
     setup = r'''
 const state = {stage:'dashboard', thumbStyles:[], boardTemplates:[], cuts:[]};
 const nodes = {}, $ = selector => nodes[selector] ||= {};
-const document = {addEventListener(){}};
+const document = {addEventListener(){},querySelectorAll:()=>[]};
 const registerCommand = () => {}, paintSidebar = () => {};
 const esc = String, FORMAT_INFO = [], view = {}, loadingLine = () => 'Loading';
 let stageFetches = 0;

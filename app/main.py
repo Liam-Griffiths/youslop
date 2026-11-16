@@ -277,7 +277,15 @@ async def _studio_edit_history(request: Request, call_next):
             source = (label, gesture)
     token = undo.edit_source.set(source)
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        parts = request.url.path.strip('/').split('/')
+        if (request.method in {'POST', 'PATCH', 'PUT', 'DELETE'} and response.status_code < 400
+                and parts[:2] == ['api', 'projects'] and len(parts) >= 3):
+            pid = parts[2]
+            with store.lock_for(pid):
+                if (project_dir(pid) / 'project.json').exists():
+                    response.headers['X-Edit-History'] = json.dumps({'pid': pid, **undo.status(project_dir(pid))})
+        return response
     finally:
         undo.edit_source.reset(token)
 
@@ -1295,6 +1303,9 @@ def create_project(payload: dict = Body(...)) -> dict:
 def get_project(pid: str) -> dict:
     p = _load(pid)
     d = p.to_dict()
+    from . import undo
+    with store.lock_for(pid):
+        d['edit_history'] = undo.status(project_dir(pid))
     from .recording_health import missing
     d['missing_recordings'] = missing(p)
     d["jobs"] = [{"id": j["id"], "kind": j["kind"]} for j in jobs.active_for(pid)]

@@ -30,7 +30,7 @@ const hint=()=>track.children.find(n=>n.className==='tl-track-hint');
 const visible=()=>{
  const n=hint(),left=parseFloat(n.style.left);
  check(n.parent===track&&left>=sc.scrollLeft+4&&left+n.offsetWidth<=sc.scrollLeft+sc.clientWidth-4,'hint clamped inside visible track');
- check(parseFloat(n.style.top)===2,'hint above pictures lane');
+ check(parseFloat(n.style.top)===24,'hint covers the command row, above pictures');
 };
 const q={id:'s1',start:0,duration:6,timing:{gap:{value:2}},word_times:[]};
 const next={id:'s2',start:6,duration:6,timing:{gap:{value:1}},word_times:[]};

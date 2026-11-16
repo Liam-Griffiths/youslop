@@ -349,13 +349,23 @@ def test_http_history_context_and_labels(saved, monkeypatch):
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://127.0.0.1') as client:
             path = f'/api/projects/{saved.id}'
+            assert (await client.get(path)).json()['edit_history'] == {'undo': None, 'redo': None}
             response = await client.patch(path + '/slides/sundo', json={'title_at': 1},
                                           headers={'X-Edit-Label': 'move title'})
             assert response.status_code == 200
+            assert json.loads(response.headers['X-Edit-History']) == {
+                'pid': saved.id, 'undo': 'move title', 'redo': None}
             response = await client.post(path + '/undo')
             assert response.status_code == 200 and response.json()['edit_label'] == 'move title'
             assert response.json()['slides'][0]['title_at'] is None
-            assert (await client.post(path + '/redo')).json()['slides'][0]['title_at'] == 1
+            assert response.json()['edit_history'] == {'undo': None, 'redo': 'move title'}
+            response = await client.post(path + '/redo')
+            assert response.json()['slides'][0]['title_at'] == 1
+            assert response.json()['edit_history'] == {'undo': 'move title', 'redo': None}
+            await client.post(path + '/undo')
+            response = await client.patch(path + '/slides/sundo', json={'title_at': 2},
+                                          headers={'X-Edit-Label': 'new branch'})
+            assert json.loads(response.headers['X-Edit-History'])['redo'] is None
             assert (await client.post('/api/projects/missing/undo')).status_code == 404
     asyncio.run(run())
     assert undo.edit_source.get() is None
@@ -366,17 +376,18 @@ def test_shortcuts_and_request_labels_without_browser(tmp_path):
     if not gjs:
         pytest.skip('GJS is unavailable')
     source = Path('static/js/core.js').read_text().split('const studioWrites')[1].split('let toastTimer')[0]
-    shell = Path('static/js/shell.js').read_text().split('let projectHistoryBusy')[1].split('function paintStageBar')[0]
+    shell = Path('static/js/shell.js').read_text().split('function paintProjectHistory()')[1].split('function paintStageBar')[0]
     harness = r'''
 const FormData = class {};
 const location = {hash:'#/p/p/edit'};
 const state = {project:{id:'p'},stage:'edit',tab:'edit',rec:{recording:false}};
 const TL = {};
-let key, calls=[], refreshed=0, message='';
-const document = {addEventListener(type,fn){key=fn;}};
+let key, calls=[], refreshed=0, message='', history={pid:'p',undo:'move title',redo:null};
+const buttons=['undo','redo'].map(direction=>({dataset:{projectHistory:direction}}));
+const document = {addEventListener(type,fn){key=fn;},querySelectorAll:()=>buttons};
 const fetch = async (path,opts) => {
  calls.push({path,...opts});
- return {ok:true,text:async()=>JSON.stringify({id:'p',edit_label:'move title'})};
+ return {ok:true,headers:{get:()=>JSON.stringify(history)},text:async()=>JSON.stringify({id:'p',edit_label:'move title'})};
 };
 let tlInspectorQueue = Promise.resolve();
 const tlPause = () => {};
@@ -391,17 +402,27 @@ function event(editable=false,shift=false) {
  preventDefault(){this.prevented=true;}};
 }
 async function run() {
+ paintProjectHistory();check(buttons.every(b=>b.disabled),'fresh project disables both buttons');
  await api('/api/projects/p/slides/s',{method:'PATCH',body:'{"title":"a"}'});
+ check(!buttons[0].disabled&&buttons[1].disabled&&buttons[0].title==='Undo: move title','edit response enables Undo with label');
+ history={pid:'other',undo:'wrong',redo:'wrong'};
+ await api('/api/projects/other/slides/s',{method:'PATCH',body:'{}'});
+ check(buttons[0].title==='Undo: move title'&&buttons[1].disabled,'other project response cannot replace history');
+ history={pid:'p',undo:null,redo:'move title'};
  check(calls[0].headers['X-Edit-Label']==='edit title','field label');
  check(calls[0].headers['X-Edit-Gesture'].includes('/slides/s'),'coalesce target');
- let e=event(true); key(e); check(!e.prevented && calls.length===1,'native text undo');
+ let e=event(true); key(e); check(!e.prevented && calls.length===2,'native text undo');
  e=event(); key(e);
+ check(buttons.every(b=>b.disabled),'pending restore disables both buttons');
  for(let i=0;i<50 && projectHistoryBusy;i++) await Promise.resolve();
  check(e.prevented && calls.at(-1).path.endsWith('/undo'),'Ctrl Z');
  check(refreshed===1 && message==='Undid: move title','refresh and toast');
+ check(buttons[0].disabled&&!buttons[1].disabled&&buttons[1].title==='Redo: move title','undo updates button state');
+ history={pid:'p',undo:'move title',redo:null};
  e=event(false,true); key(e);
  for(let i=0;i<50 && projectHistoryBusy;i++) await Promise.resolve();
  check(calls.at(-1).path.endsWith('/redo') && message==='Redid: move title','redo');
+ check(!buttons[0].disabled&&buttons[1].disabled,'redo updates state');
  state.rec.recording=true;
  const count=calls.length;
  await restoreProjectEdit('undo'); check(calls.length===count,'recording guard');
@@ -411,7 +432,7 @@ run().catch(e=>{printerr(String(e)+e.stack);imports.system.exit(1);});
 '''
     script = tmp_path / 'undo.js'
     script.write_text(harness.split('async function run()')[0] + '\nconst studioWrites' + source
-                      + '\nlet projectHistoryBusy' + shell + '\nasync function run()' + harness.split('async function run()')[1])
+                      + '\nfunction paintProjectHistory()' + shell + '\nasync function run()' + harness.split('async function run()')[1])
     result = subprocess.run([gjs, str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'undo UI runtime passed' in result.stdout

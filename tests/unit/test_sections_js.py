@@ -119,7 +119,7 @@ def test_scrub_and_section_drag_routing(tmp_path):
     harness = r'''
 const check=(v,m)=>{if(!v)throw Error(m);};
 class El {
- constructor(selector='',dataset={}){this.selector=selector;this.dataset=dataset;this.style={};this.handlers={};}
+ constructor(selector='',dataset={}){this.selector=selector;this.dataset=dataset;this.style={};this.handlers={};this.classList={toggle(){}};}
  closest(s){return s.split(',').map(q=>q.trim()).includes(this.selector)?this:null;}
  append(){} remove(){} setAttribute(){} cloneNode(){return new El();}
  querySelectorAll(){return [];}
@@ -193,7 +193,9 @@ def test_section_toolbar_scroll_clamping(tmp_path):
     harness = r'''
 const check=(v,m)=>{if(!v)throw Error(m);};
 class El {
- constructor(){this.style={};this.children=[];this.offsetWidth=320;}
+ constructor(){this.style={};this.children=[];this.naturalWidth=320;}
+ get offsetWidth(){return this.style.maxWidth===undefined?this.naturalWidth:Math.min(this.naturalWidth,parseFloat(this.style.maxWidth));}
+ set offsetWidth(width){this.naturalWidth=width;}
  append(n){this.children.push(n);n.parent=this;}
  remove(){this.parent.children=this.parent.children.filter(n=>n!==this);}
  setAttribute(){}
@@ -204,7 +206,7 @@ const track=new El(),ruler=new El(),sc={clientWidth:600,scrollLeft:0};
 ruler.className='tl-ruler';track.append(ruler);
 const $=s=>s==='#tl-track'?track:s==='#tl-scroll'?sc:null;
 const document={createElement:()=>new El()};
-const TL={zoom:10,section:{ids:['a']}};
+const TL={zoom:10,cur:0,section:{ids:['a']}};
 const tlParas=()=>[{id:'a',start:80,duration:5},{id:'b',start:85,duration:5}];
 tlSectionPaint();
 const tools=ruler.querySelector('.tl-section-tools');
@@ -218,6 +220,17 @@ sc.scrollLeft=800;sc.onscroll();checkVisible();
 sc.scrollLeft=1600;sc.onscroll();checkVisible();
 sc.scrollLeft=650;sc.onscroll();
 check(parseFloat(tools.style.left)===800,'toolbar follows selection when it fits');
+// A handle at the start of the band sends the tools to its right.
+sc.scrollLeft=700;TL.cur=80;sc.onscroll();
+check(104+parseFloat(tools.style.left)>=104+TL.cur*TL.zoom+12,'tools avoid handle on right');
+// Near the right edge, flip to the left; recompute after scrolling.
+TL.cur=110;sc.onscroll();
+check(104+parseFloat(tools.style.left)+tools.offsetWidth<=104+TL.cur*TL.zoom-12,'tools flip left of handle');
+TL.cur=90;sc.onscroll();checkVisible();
+check(tools.offsetWidth===288&&104+parseFloat(tools.style.left)+tools.offsetWidth===104+TL.cur*TL.zoom-12,
+ 'long toolbar scrolls on one side instead of covering centered playhead');
+sc.clientWidth=200;tools.offsetWidth=192;sc.onscroll();checkVisible();
+check(tools.style.maxWidth==='192px','narrow tools scroll within viewport');
 TL.section=null;tlSectionPaint();
 check(!track.querySelector('.tl-section-tools'),'clearing selection removes toolbar');
 print('section toolbar passed');

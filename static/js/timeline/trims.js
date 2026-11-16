@@ -78,7 +78,7 @@ function tlWireTrims() {
     for (const edge of rows[0]?.insert ? ['start','end'] : ['end']) {
       const handle = document.createElement('span'); handle.className = `tl-trim-edge ${edge}`;
       handle.dataset.trimEdge = edge; handle.title = `Trim ${edge} · Shift rolls · Alt disables snapping`;
-      node.append(handle);
+      tlResizeHandle(node, handle);
     }
     node.addEventListener('pointerdown', e => {
       const edge = e.target.closest('[data-trim-edge]')?.dataset.trimEdge;

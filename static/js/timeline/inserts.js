@@ -26,18 +26,28 @@ function tlWireInserts() {
     let start, moved = false;
     button.onpointerdown = e => {
       e.stopPropagation();
-      if (e.button !== 0) return;
+      if (e.button !== 0 || TL.drag) return;
       start = {x:e.clientX, y:e.clientY}; moved = false; button.setPointerCapture(e.pointerId);
     };
     button.onpointermove = e => {
-      if (start && Math.hypot(e.clientX-start.x, e.clientY-start.y) > 3) moved = true;
+      if (!start || TL.drag) return;
+      if (Math.hypot(e.clientX-start.x, e.clientY-start.y) > 3) moved = true;
+      if (moved) {
+        if (!TL.scrubbing) tlPause();
+        TL.scrubbing = true;
+        tlSeek(Math.max(0, (e.clientX-$('#tl-track').getBoundingClientRect().left-104)/TL.zoom), {ensure:false});
+      }
     };
-    button.onpointerup = e => { button.onpointermove(e); start = null; };
-    button.onpointercancel = () => { start = null; moved = true; };
-    button.onlostpointercapture = () => { if (start) { start = null; moved = true; } };
+    const finish = () => {
+      if (!start) return;
+      start = null;
+      if (TL.scrubbing) { TL.scrubbing = false; tlSeek(TL.cur); }
+    };
+    button.onpointerup = e => { button.onpointermove(e); finish(); };
+    button.onpointercancel = button.onlostpointercapture = () => { if (start) { moved = true; finish(); } };
     button.onclick = e => {
       e.stopPropagation();
-      if (e.detail && moved) return;
+      if (TL.drag || (e.detail && moved)) return;
       tlInsertMenu(tlInsertPoints()[+button.dataset.insertPoint]);
     };
     button.ondragstart = e => e.preventDefault();

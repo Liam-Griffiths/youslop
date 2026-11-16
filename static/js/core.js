@@ -55,6 +55,18 @@ async function api(path, opts = {}) {
     jobOrigins.set(data.job, origin);
     if (jobOrigins.size > 60) jobOrigins.delete(jobOrigins.keys().next().value);
   }
+  const history = res.headers?.get('X-Edit-History');
+  if (history && typeof paintProjectHistory === 'function') {
+    const update = JSON.parse(history);
+    if (state.project?.id === update.pid) {
+      state.projectHistory = update;
+      paintProjectHistory();
+    }
+  }
+  if (!editing && data?.edit_history && data.id === state.project?.id && typeof paintProjectHistory === 'function') {
+    state.projectHistory = {pid:data.id, ...data.edit_history};
+    paintProjectHistory();
+  }
   return data;
 }
 

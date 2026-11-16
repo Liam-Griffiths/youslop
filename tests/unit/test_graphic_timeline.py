@@ -106,6 +106,15 @@ async function run(){
  tlSelect(tlItems()[0]);const at=TL.selection.t0;
  tlGraphicKey(key('ArrowRight',{ctrlKey:false,shiftKey:true}));await tlInspectorQueue;
  check(near(TL.selection.t0,at+10/30)&&tlGraphic(TL.selection).dur===1,'Shift arrow moves ten frames without resizing');
+ const beforeResize={...TL.selection};TL.cur=TL.selection.t0+.2;
+ tlGraphicKey(key('[',{ctrlKey:false}));await tlInspectorQueue;
+ check(near(TL.selection.t0,TL.cur)&&near(tlGraphic(TL.selection).dur,.8),'start bracket resizes to playhead');
+ TL.cur=TL.selection.t1-.2;tlGraphicKey(key(']',{ctrlKey:false}));await tlInspectorQueue;
+ check(near(TL.selection.t1,TL.cur)&&near(tlGraphic(TL.selection).dur,.6),'end bracket resizes to playhead');
+ tlGraphicKey(key('{',{ctrlKey:false,shiftKey:true}));await tlInspectorQueue;
+ tlGraphicKey(key('}',{ctrlKey:false,shiftKey:true}));await tlInspectorQueue;
+ check(near(tlGraphic(TL.selection).dur,.6+2/30),'Shift brackets expand by one frame per edge');
+ await tlGraphicCommand('resize',[TL.selection],{time:beforeResize.t0,dur:1});
  tlGraphicCommand('copy',tlItems());await tlGraphicCommand('paste',[],0);
  check(TL.selections.length===3,'multi-graphic paste selects all copies');
  await tlGraphicCommand('delete');check(tlItems().length===3,'delete selected copies only');
@@ -159,7 +168,8 @@ async function run(){
   :s.includes('data-eye')?{closest:()=>lane}:pic;
  for(const scroll of [0,800]){
   sc.scrollLeft=scroll;tlGraphicTools();const tools=track.querySelector('.tl-graphic-tools');
-  check(parseFloat(tools.style.top)>pic.offsetTop&&parseFloat(tools.style.left)>=scroll+108,'toolbar stays below ruler and inside visible track');
+  check(parseFloat(tools.style.top)===24&&parseFloat(tools.style.top)+tools.offsetHeight<86
+    &&parseFloat(tools.style.left)>=scroll+108,'toolbar stays in reserved row above every lane and inside visible track');
  }
  TL.section={};tlGraphicTools();check(!track.querySelector('.tl-graphic-tools'),'section hides graphic toolbar');TL.section=null;
  state.project.slides[0].on_camera=true;

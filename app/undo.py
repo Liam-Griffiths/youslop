@@ -29,6 +29,14 @@ def snapshot_path(root, state):
     return root / 'history' / f"{int(state['seq'])}.json.gz"
 
 
+def status(root):
+    """Only read the small index; never decompress snapshots to paint buttons."""
+    history = read(root)
+    states, cursor = history['states'], history['cursor']
+    return {'undo': states[cursor]['label'] if 0 < cursor < len(states) else None,
+            'redo': states[cursor + 1]['label'] if cursor + 1 < len(states) else None}
+
+
 def snapshot(root, state):
     return json.loads(gzip.decompress(snapshot_path(root, state).read_bytes()))
 

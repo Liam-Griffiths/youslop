@@ -27,6 +27,12 @@ const TL = {
   raf: 0, wait: '', lastPara: '', scrubbing: false,
   audio: null, mixStamp: 0, mixBusy: false, mixFailed: false,
   wall: { base: 0, t0: 0 },
+  _drag: null,
+  get drag() { return this._drag; },
+  set drag(value) {
+    this._drag = value;
+    $('#tl-track')?.classList.toggle('dragging', !!value);
+  },
 };
 
 const tlFps = () => (TL.data && TL.data.fps) || 15;

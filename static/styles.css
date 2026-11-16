@@ -988,8 +988,8 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 
 .tl-scroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel-2); }
 .tl-track { position: relative; height: auto; cursor: col-resize; user-select: none; touch-action: none; }
-.tl-ruler { position: relative; height: 22px; border-bottom: 1px solid var(--line-soft); }
-.tl-ruler i { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); }
+.tl-ruler { position: relative; height: 56px; border-bottom: 1px solid var(--line-soft); }
+.tl-ruler i { position: absolute; top: 0; height: 22px; border-left: 1px solid var(--line); }
 .tl-ruler b { position: absolute; left: 4px; top: 3px; font: 10.5px var(--mono); color: var(--ink-faint); font-weight: 400; }
 .tl-lane { position: relative; height: 62px; }
 .tl-lane.para { height: 44px; }
@@ -1001,6 +1001,8 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-pic.bad { border-color: var(--bad); }
 .tl-pic.drawing { border-color: var(--cool); }
 .tl-tag { position: absolute; z-index: 1; left: 5px; top: 3px; font: 11px var(--mono); color: #fff; text-shadow: 0 1px 2px #000; }
+.tl-card-text { position: absolute; z-index: 1; inset: 20px 6px 3px; overflow: hidden;
+  color: var(--ink); font-size: 12px; text-align: left; line-height: 1.25; }
 .tl-dot { position: absolute; z-index: 1; right: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--ink-faint); }
 .tl-pic.ready .tl-dot { background: var(--good); border-color: var(--good); }
 .tl-pic.stale .tl-dot { background: var(--cool); border-color: var(--cool); }
@@ -1119,7 +1121,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-layer-item.editable { cursor: grab; padding-right: 9px; touch-action: none; }
 .tl-layer-item.user::after, .tl-gap.user::after { content: '•'; color: var(--accent-ink);
   position: absolute; left: 1px; top: -2px; pointer-events: none; }
-.tl-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px;
+.tl-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; box-sizing: border-box;
   cursor: ew-resize; border-right: 2px solid var(--dim); }
 .tl-resize.left { left: 0; right: auto; border-right: 0; border-left: 2px solid var(--dim); }
 .tl-gap { position: absolute; top: 23px; height: 20px; width: 18px; padding: 0;
@@ -1947,18 +1949,17 @@ body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
   background: var(--cool-tint); opacity: .6; pointer-events: none; }
 .tl-section { position: absolute; top: 0; bottom: 0; z-index: 4; pointer-events: none;
   border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.tl-ruler:has(.tl-section-tools) { height: 44px; }
-.tl-section-tools { position: absolute; top: 2px; z-index: 8; display: flex; align-items: center;
+.tl-section-tools { position: absolute; top: 24px; z-index: 8; display: flex; align-items: center;
   box-sizing: border-box; height: 40px; overflow-x: auto; gap: 6px; white-space: nowrap;
   padding: 2px; background: var(--panel); border: 1px solid var(--accent); cursor: default; }
 .tl-section-tools span { font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; }
-.tl-section-tools .btn { flex: none; min-height: 34px; }
+.tl-section-tools .btn { flex: none; min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
 .tl-section-ghost { position: absolute; top: 22px; bottom: 0; overflow: hidden; z-index: 7;
   pointer-events: none; opacity: .7; border: 2px dashed var(--cool); background: var(--panel); }
 #tl-hover { min-width: 0; max-width: 34ch; margin-left: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* Small click targets inside Pictures, below the ruler and playhead handle. */
-.tl-pictures .tl-trim-edge { position: absolute; top: 0; bottom: 0; width: 6px;
+.tl-pictures .tl-trim-edge { position: absolute; top: 0; bottom: 0; width: 6px; box-sizing: border-box;
   cursor: ew-resize; z-index: 2; }
 .tl-trim-edge.start { left: 0; }
 .tl-trim-edge.end { right: 0; }
@@ -1967,6 +1968,7 @@ body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
   padding: 0; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--panel);
   color: var(--ink); opacity: 0; pointer-events: none; cursor: pointer; }
 .tl-pictures:hover .tl-insert-plus, .tl-insert-plus.nearest, .tl-insert-plus:focus-visible { opacity: 1; pointer-events: auto; }
+.tl-track.dragging .tl-insert-plus { visibility: hidden; pointer-events: none; }
 .tl-insert-options { display: flex; flex-direction: column; gap: 4px; }
 .tl-insert-options .btn { text-align: left; white-space: normal; }
 .tl-insert-dialog { width: min(480px, 90vw); }
@@ -2002,7 +2004,7 @@ body:has(.jobs-live-status) .settings-save-bar { bottom: 48px; }
 .tl-graphic-tools { position: absolute; z-index: 8; display: flex; gap: 4px; padding: 2px;
   box-sizing: border-box; overflow-x: auto; white-space: nowrap; cursor: default;
   background: var(--panel); border: 1px solid var(--line-strong); border-radius: 4px; }
-.tl-graphic-tools .btn { flex: none; min-height: 34px; }
+.tl-graphic-tools .btn { flex: none; min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
 
 /* Project dashboard: stage progress, bin and project facts. */
 /* Project Home */

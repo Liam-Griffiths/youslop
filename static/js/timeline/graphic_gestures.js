@@ -38,7 +38,7 @@ function tlWireGraphics() {
     const sel = tlItemForNode(node), click = node.onclick;
     for (const edge of ['start','end']) {
       const handle = document.createElement('span'); handle.className = `tl-resize ${edge === 'start' ? 'left' : ''}`;
-      handle.dataset.graphicEdge = edge; handle.title = `Resize graphic ${edge} · Alt disables snapping`; node.append(handle);
+      handle.dataset.graphicEdge = edge; handle.title = `Resize graphic ${edge} · Alt disables snapping`; tlResizeHandle(node, handle);
     }
     node.onpointerdown = e => {
       e.stopPropagation();
@@ -121,11 +121,9 @@ function tlGraphicTools() {
     button.hidden = i === 3 && sel.kind === 'media';
     button.onclick = () => i === 3 ? tlGraphicReplace(sel) : tlGraphicCommand(['split','duplicate','delete'][i],items,TL.playing ? tlNow() : TL.cur);
   });
-  const sc = $('#tl-scroll');
   const lane = [...track.querySelectorAll(`[data-role="${sel.kind === 'media' ? 'media' : 'graphics'}"]`)].find(lane =>
     [...lane.querySelectorAll('[data-layer]')].some(node => tlSameItem(sel, tlItemForNode(node))));
   if (!lane || lane.classList.contains('collapsed')) {tools.remove(); return;}
-  tools.style.maxWidth = `${sc.clientWidth-112}px`;
-  tools.style.left = `${Math.max(sc.scrollLeft+108,Math.min(104+sel.t0*TL.zoom,sc.scrollLeft+sc.clientWidth-tools.offsetWidth-4))}px`;
-  tools.style.top = `${Math.max(track.querySelector('.tl-pictures').offsetTop+4,lane.offsetTop-tools.offsetHeight-4)}px`;
+  tlPositionTrackTool(tools, sel.t0, sel.t1, 0, 108);
+  tools.style.top = '24px';
 }

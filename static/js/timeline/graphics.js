@@ -86,6 +86,20 @@ function tlGraphicKey(e) {
   else if (['ArrowLeft','ArrowRight'].includes(e.key)) {
     const delta = (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) / tlFps();
     tlGraphicCommand('move', [sel], live => ({time:Math.max(tlParas()[0].start, live.t0 + delta)}));
+  } else if (['[',']','{','}'].includes(e.key)) {
+    const start = ['[','{'].includes(e.key), time = TL.cur;
+    tlGraphicCommand('resize', [sel], (live, item) => {
+      const q = tlParas().find(q => q.id === live.sid);
+      if (start) {
+        const a = Math.max(q.start, live.t1-tlGraphicMax(live),
+          sel.kind === 'media' ? live.t0-(item.in || 0) : q.start,
+          Math.min(live.t1-.05, e.shiftKey ? live.t0-1/tlFps() : time));
+        return {time:a, dur:live.t1-a, ...(sel.kind === 'media' ? {in:(item.in || 0)+a-live.t0} : {})};
+      }
+      return {dur:Math.max(.05, Math.min(q.start+q.duration-live.t0,
+        tlGraphicMax(live)-(sel.kind === 'media' ? item.in || 0 : 0),
+        (e.shiftKey ? live.t1+1/tlFps() : time)-live.t0))};
+    });
   } else if (e.key.toLowerCase() === 's') tlGraphicCommand('split', [sel], TL.cur);
   else return false;
   return true;

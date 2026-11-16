@@ -68,6 +68,14 @@ function tlResetTiming(sel) {
   tlSaveTiming(sel, patch);
 }
 
+// Keep a move target between the edges, even at fit zoom.
+function tlResizeHandle(node, handle) {
+  const width = parseFloat(node.style.width);
+  if (width < 16) return;
+  if (width < 40) handle.style.width = '4px';
+  node.append(handle);
+}
+
 function tlWireTiming() {
   const track = $('#tl-track');
   track.querySelectorAll('[data-layer], [data-gap]').forEach((el) => {
@@ -82,7 +90,7 @@ function tlWireTiming() {
       const handle = document.createElement('span');
       handle.className = `tl-resize ${kind === 'chapter' ? 'left' : ''}`;
       handle.title = 'Resize hold';
-      el.append(handle);
+      tlResizeHandle(el, handle);
     }
     const click = el.onclick;
     let suppressClick = false;

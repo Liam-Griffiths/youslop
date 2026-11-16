@@ -12,7 +12,7 @@ def test_project_bar_actions_and_title(tmp_path):
     setup = r'''
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
 const nodes={}, $=selector=>nodes[selector] ||= {innerHTML:''};
-const document={addEventListener(){}}, registerCommand=()=>{};
+const document={addEventListener(){},querySelectorAll:()=>[]}, registerCommand=()=>{};
 const esc=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const FORMAT_INFO=[{key:'essay',label:'Essay'}];
 const title='A long "title" <with markup> '+ 'many words '.repeat(30);

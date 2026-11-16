@@ -44,12 +44,14 @@ function tlDraw() {
   }
   const pics = d.segments.map((s) => {
     const img = s.type === 'picture' ? tlThumb(s) : '';
+    const insert = s.paragraphs?.[0]?.insert;
     const bad = s.problems.some((x) => x.startsWith('no picture'));
     return `<button type="button" aria-label="${esc(tlName(s))}" title="${esc(tlName(s))}" class="tl-pic ${s.type !== 'picture' ? 'slate' : ''} ${s.ready ? 'ready' : s.have ? 'stale' : ''}
         ${bad ? 'bad' : ''}" data-seg="${s.index}"
         style="left:${s.start * z}px;width:${Math.max(2, s.duration * z - 2)}px;
         ${img ? `background-image:url('${esc(img)}')` : ''}">
         <span class="tl-tag">${s.kind === 'camera' ? '📹 ' : ''}${tlLabel(s)}${s.problems.length ? ' ⚠' : ''}${s.estimated ? ' ~' : ''}</span>
+        ${insert?.kind === 'card' ? `<span class="tl-card-text">${esc(insert.text)}</span>` : ''}
         <i class="tl-dot" title="${s.ready ? 'proxy drawn' : s.have ? 'out of date' : 'not drawn yet'}"></i>
       </button>`;
   }).join('');
@@ -249,6 +251,7 @@ function tlPaintHead() {
   $('#tl-play').textContent = TL.playing ? '❚❚' : '▶';
   tlSelectionPaint();
   tlInsertPaint();
+  tlSectionPositionTools();
   // Keep the playhead on screen while it plays or is stepped.
   const sc = $('#tl-scroll'), x = 104 + TL.cur * TL.zoom;
   if (sc && !TL.scrubbing && !TL.zooming && (x < sc.scrollLeft + 124 || x > sc.scrollLeft + sc.clientWidth - 40)) {
@@ -296,8 +299,8 @@ function tlShortcuts() {
       <dt>← / →</dt><dd>Step one frame</dd>
       <dt>Shift + ← / →</dt><dd>Previous / next paragraph</dd>
       <dt>Home / End</dt><dd>Start / end of timeline</dd>
-      <dt>[ / ]</dt><dd>Trim selected main-track start / end to playhead; other lanes: previous / next item</dd>
-      <dt>Shift + [ / ]</dt><dd>Trim start in / extend end by one frame</dd>
+      <dt>[ / ]</dt><dd>Trim selected main-track or graphic start / end to playhead; other lanes: previous / next item</dd>
+      <dt>Shift + [ / ]</dt><dd>Main track: trim start in / extend end by one frame; graphics: extend start / end by one frame</dd>
       <dt>Picture edge drag</dt><dd>Trim tail or insert; Shift rolls with neighbour</dd>
       <dt>Alt + clip body drag</dt><dd>Slip source without changing length</dd>
       <dt>L</dt><dd>Loop picture</dd>

@@ -94,18 +94,31 @@ function paintProjectShell() {
   if (more) more.innerHTML = secondary;
   bar.innerHTML = `<span class="project-title" title="${esc(title)}">/ ${esc(title)}</span>
     <span class="project-meta" title="${esc(meta)}">${esc(meta)}</span>
-    <button type="button" class="btn sm" onclick="restoreProjectEdit('undo')" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl+Z)">Undo</button>
-    <button type="button" class="btn sm" onclick="restoreProjectEdit('redo')" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <button type="button" class="btn sm" data-project-history="undo" disabled onclick="restoreProjectEdit('undo')" aria-keyshortcuts="Control+Z Meta+Z">Undo</button>
+    <button type="button" class="btn sm" data-project-history="redo" disabled onclick="restoreProjectEdit('redo')" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">Redo</button>
     ${secondary}
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;
   $('#topbar-right').innerHTML = '';
+  paintProjectHistory();
   paintStageBar();
+}
+
+function paintProjectHistory() {
+  const p = state.project;
+  const history = state.projectHistory?.pid === p?.id ? state.projectHistory : p?.edit_history;
+  document.querySelectorAll('[data-project-history]').forEach(button => {
+    const direction = button.dataset.projectHistory, label = history?.[direction];
+    button.disabled = !label || projectHistoryBusy;
+    const name = direction === 'undo' ? 'Undo' : 'Redo';
+    button.title = label ? `${name}: ${label}` : `Nothing to ${direction}`;
+  });
 }
 
 let projectHistoryBusy = false;
 async function restoreProjectEdit(direction) {
   if (!state.project || projectHistoryBusy || state.rec.recording || TL.drag) return;
   projectHistoryBusy = true;
+  paintProjectHistory();
   const pid = state.project.id;
   try {
     if (!(await scriptFlush())) return;
@@ -123,7 +136,7 @@ async function restoreProjectEdit(direction) {
     loadStageStates(state.project);
     toast(`${direction === 'undo' ? 'Undid' : 'Redid'}: ${project.edit_label}`);
   } catch (e) { toast(e.message, true); }
-  finally { projectHistoryBusy = false; }
+  finally { projectHistoryBusy = false; paintProjectHistory(); }
 }
 
 document.addEventListener('keydown', e => {
