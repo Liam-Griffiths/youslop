@@ -131,8 +131,9 @@ async function tlMount() {
       <div class="tl-problems" id="tl-review"></div></details>`;
   $('.app-shell').classList.add('edit-workspace');
   const inspector = $('#inspector');
-  inspector.innerHTML = '<div class="tl-inspector" id="tl-inspector"></div><div class="tl-inspector" id="tl-variables"></div>';
+  inspector.innerHTML = tlSideHtml();
   host.querySelector('.tl-main').append(inspector);
+  tlSide();
   const stage = $('#tl-stage');
   TL.vids.forEach((v, i) => { v.className = i === TL.active ? 'on' : ''; stage.prepend(v); });
 

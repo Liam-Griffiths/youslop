@@ -63,7 +63,7 @@ ensure_dirs()
 packs.scan()
 
 app = FastAPI(title=brand.NAME)
-from . import block_presets, style_kits, project_bin, script_agent, script_shots, shot_agent, research_docs, home_agent, graphics, library_metadata
+from . import block_presets, style_kits, project_bin, script_agent, script_shots, shot_agent, research_docs, home_agent, graphics, library_metadata, edit_agent
 block_presets.register(app)
 style_kits.register(app)
 project_bin.register(app)
@@ -72,6 +72,7 @@ script_shots.register(app)
 shot_agent.register(app)
 research_docs.register(app)
 home_agent.register(app)
+edit_agent.register(app)
 graphics.register(app)
 library_metadata.register(app)
 

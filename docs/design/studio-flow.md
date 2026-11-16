@@ -325,6 +325,10 @@ Each entry: purpose · layout · data · states · ticket. Mockup names in brack
   View menu (speed, loop, previews, shortcuts). Things you add come from the
   left, the selected item is edited on the right, and whole-video actions live
   in the one menu. New toolbar buttons are a last resort.
+- The right column has two tabs: Selected (the inspector) and Agent. The agent
+  finds a part of the video and proposes graphics, titles and chapter cards as
+  cards; a card applies as one ordinary undoable edit. It fills only a block's
+  text fields, never its sample words, tables or pictures.
 - Graphics composite bottom to top in increasing layer order: a later lane
   (lower in the timeline) paints over an earlier one. Within a layer, existing
   paragraph/list order is retained. Word anchors resolve before this ordering.
