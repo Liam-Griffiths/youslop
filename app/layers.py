@@ -3,12 +3,16 @@
 Derived tracks and resolved item references are views, never migrations. The
 legacy role dictionary remains available to check and inspector consumers.
 """
-from .schema import Layer, LAYER_ROLES
+from .schema import Layer, LAYER_ROLES, Slide
 
 
 _COLORS = dict(zip(LAYER_ROLES, (
     'ink-2', 'cool', 'cool', 'accent', 'accent', 'ink',
     'good', 'warn', 'good', 'warn', 'dim')))
+
+
+class LockedLayerError(RuntimeError):
+    """Separate from validation errors so legacy ValueError handlers keep 409."""
 
 
 def note_items(total, findings, report):
@@ -89,7 +93,7 @@ def resolve(layers, role, ident=''):
                 candidates[0] if candidates else None)
 
 
-def rows(project, timeline):
+def rows(project, timeline=None):
     """Additive API view; do not mutate stored items or the legacy dictionary."""
     items = role_items(project, timeline)
     layers = effective(project, items=items)
@@ -104,6 +108,7 @@ def rows(project, timeline):
         while layer.id in used:
             layer.id = f'derived:{layer.id}'
         used.add(layer.id)
+        layer.order = max((track.order for track in layers), default=-1) + 1
         layers.append(layer)
     result = [dict(layer.to_dict(), items=[]) for layer in layers]
     by_id = {row['id']: row for row in result}
@@ -136,3 +141,123 @@ def graphics_cache_order(project, group):
     order = graphics_order(project, group)
     original = [(i, j) for i, (slide, _) in enumerate(group) for j in range(len(slide.overlays))]
     return order if order != original else []
+
+
+def patch_flags(project, ident, patch):
+    """Materialize the drawing view only on an explicit layer edit."""
+    from .edits import EditError
+    if not patch or set(patch) - {'hidden', 'locked'} or any(type(v) is not bool for v in patch.values()):
+        raise EditError('Layer hidden and locked settings must be booleans.')
+    tracks = [Layer.from_dict(row) for row in rows(project)]
+    target = next((layer for layer in tracks if layer.id == ident), None)
+    if target is None:
+        raise EditError('No such layer.', 404)
+    for key, value in patch.items():
+        setattr(target, key, value)
+    project.layers = tracks
+
+
+def _locked_message(layer):
+    return f'{layer.role.capitalize()} layer “{layer.name}” is locked. Unlock it in Edit before editing.'
+
+
+def require_unlocked(project, role, ident=''):
+    """Preflight only the role(s) an operation changes, including external writes."""
+    tracks = effective(project, items={})
+    for kind in (role,) if isinstance(role, str) else role:
+        track = resolve(tracks, kind, ident)
+        if track and track.locked:
+            raise LockedLayerError(_locked_message(track))
+
+
+def assert_unlocked(before, after):
+    """Check the complete proposed save, including both ends of item moves.
+
+    The persistence boundary covers HTTP, tools and background jobs equally.
+    No file or history entry is published until every locked track passes.
+    Unlocking is a separate edit: a payload cannot unlock and edit its items.
+    """
+    locked = [layer for layer in before.layers if layer.locked]
+    if not locked:
+        return
+    old, new = before.to_dict(), after.to_dict()
+    for raw in (old, new):
+        for slide in raw['slides']:
+            for take in [slide['take'], *slide['takes'].values()]:
+                if take:
+                    take.pop('cutaway_cache', None)  # proposals aren't an applied edit
+    old_tracks, new_tracks = effective(before, items={}), effective(after, items={})
+
+    defaults = Slide().to_dict()
+    original_sids = {slide.id for slide in before.slides}
+
+    def contents(raw, tracks, layer):
+        role, result = layer.role, []
+        def belongs(ident=''):
+            track = resolve(tracks, role, ident)
+            return track and track.id == layer.id
+        for slide in raw['slides']:
+            sid = slide['id']
+            if role == 'graphics':
+                result += [(sid, item) for item in slide['overlays'] if belongs(item.get('layer', ''))]
+            elif role == 'cues':
+                for kind, cues in slide['cues'].items():
+                    if kind not in {'blocks', 'inactive_blocks'}:
+                        result += [(sid, kind, item) for item in cues if belongs(item.get('layer', ''))]
+            elif role == 'titles' and belongs(slide['title_layer']):
+                if slide['title'] or slide['title_at'] is not None or slide['title_hold'] is not None:
+                    result.append((sid, [slide[k] for k in ('title', 'title_at', 'title_hold')]))
+            elif belongs():
+                fields = {
+                    'pictures': ('kind', 'chosen_id', 'picture_mode', 'on_camera', 'insert',
+                                 'prefer_kind', 'map_place', 'map_lat', 'map_lon', 'map_zoom',
+                                 'map_kind', 'map_style', 'visual_note', 'diagram', 'custom',
+                                 'custom_html', 'shot', 'board_template',
+                                 'board_lead', 'board_points', 'board_note'),
+                    'voice': ('narration', 'take', 'takes', 'on_camera', 'gap_override'),
+                    'chapters': ('chapter', 'chapter_hold'),
+                }.get(role, ())
+                # Blank writing paragraphs have no authored picture/chapter to
+                # lock. Captions and automatic cues derive from Voice's inputs.
+                if fields and (role == 'voice' or any(
+                        slide.get(k) != defaults.get(k) for k in fields
+                        if not (k == 'picture_mode' and slide[k] == 'hold' and sid not in original_sids))):
+                    result.append((sid, {k: slide.get(k) for k in fields}))
+                if role == 'pictures':
+                    blocks = {k: v for k, v in slide['cues'].items()
+                              if k in {'blocks', 'inactive_blocks'}}
+                    if blocks:
+                        result.append((sid, blocks))
+                    # Downloads may add local_path without changing the chosen source.
+                    chosen = [{k: v for k, v in c.items() if k != 'local_path'}
+                              for c in slide['candidates'] if c['id'] == slide['chosen_id']]
+                    if chosen:
+                        result.append((sid, chosen))
+                    if slide['on_camera']:
+                        result.append((sid, slide['take']))
+        if role == 'music' and belongs(raw.get('music_layer', '')):
+            result += [raw['music'], raw['style']['music_db']]
+        if role == 'sponsors' and belongs():
+            result += [raw['sponsors'], raw['style']['sponsor_music_db']]
+        if role == 'stings':
+            for spec, prefix, ref in ((raw['intro'], 'music', 'music_layer'),
+                                      (raw['outro'], 'sting', 'sting_layer')):
+                if belongs(spec.get(ref, '')):
+                    result.append({k: v for k, v in spec.items() if k.startswith(prefix)})
+        if role in {'pictures', 'captions', 'cues', 'titles', 'chapters'}:
+            result += [{k: v for k, v in raw['style'].items()
+                        if k not in {'music_db', 'sponsor_music_db'}}, raw['frame'], raw['cast']]
+        if role == 'voice':
+            result += [raw['voice'], raw['voice_track'], raw['narrator']]
+        if role in {'pictures', 'voice'}:
+            result += [raw['presenter'], raw['clip']]
+        if role == 'pictures':
+            result += [raw['intro'], raw['outro'], raw['title'], raw['subtitle'],
+                       raw['channel_id'], raw['use_intro'], raw['use_outro']]
+        return result
+
+    for layer in locked:
+        target = next((track for track in new_tracks if track.id == layer.id), None)
+        if (target is None or target.role != layer.role or target.order != layer.order
+                or contents(old, old_tracks, layer) != contents(new, new_tracks, layer)):
+            raise LockedLayerError(_locked_message(layer))

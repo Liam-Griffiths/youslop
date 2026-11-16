@@ -40,6 +40,8 @@ function tlTrimPlan(rows, edge, delta, roll) {
 }
 function tlTrimSave(plan, version = state.project.updated_at) {
   if (!plan.q || Math.abs(plan.delta) < .000001) return;
+  if (typeof tlCanEdit === 'function' && !tlCanEdit([], (plan.changes?.length ? plan.changes.map(c => c.q) : [plan.q])
+      .map(q => q.insert ? 'pictures' : 'voice'))) return;
   const pid = TL.pid, gesture = crypto.randomUUID();
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;

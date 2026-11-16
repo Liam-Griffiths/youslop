@@ -47,6 +47,7 @@ function tlGraphicCommand(action, items = tlGraphicSelection(), value = null) {
     if (items.length) { tlGraphicClipboard = tlGraphicSnapshot(items); tlMsg('Graphics copied.'); }
     return;
   }
+  if (typeof tlCanEdit === 'function' && !tlCanEdit(items)) return;
   const clipboard = action === 'paste' ? tlGraphicClipboard : null;
   if (action === 'paste' ? clipboard?.pid !== TL.pid : !items.length) return;
   return tlGraphicBatch(`${action} graphic${items.length > 1 ? 's' : ''}`, (list, ids) => {

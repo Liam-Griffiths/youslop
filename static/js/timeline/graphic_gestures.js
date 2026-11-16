@@ -9,6 +9,9 @@ function tlWireGraphics() {
   lanes.forEach(lane => {
     lane.ondragover = e => {
       if (TL.insertDrag?.pid !== TL.pid || TL.insertDrag.payload.kind !== 'block') return;
+      if (TL.data?.project_layers?.find(row => row.id === lane.dataset.track)?.locked) {
+        TL.graphicDrop = null; e.dataTransfer.dropEffect = 'none'; return;
+      }
       e.preventDefault(); e.stopPropagation(); tlInsertClearGhost();
       const t = lane === add ? TL.cur : (e.clientX-track.getBoundingClientRect().left-104)/TL.zoom;
       try {

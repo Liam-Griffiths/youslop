@@ -37,6 +37,7 @@ class El {
  constructor(dataset={}){this.dataset=dataset;this.children=[];this.style={};this.classList={add(){},toggle:(k,v)=>{this[k]=v;}};}
  append(n){this.children.push(n);} prepend(n){this.children.unshift(n);} setAttribute(k,v){this[k]=v;} querySelectorAll(){return [];}
  contains(){return false;}
+ addEventListener(k,fn){this[k]=fn;} removeEventListener(k){delete this[k];}
  getBoundingClientRect(){return {left:0};}
 }
 const label=new El(),name={textContent:'Names'};
@@ -49,6 +50,7 @@ track.querySelector=()=>pic;
 const $=s=>({'#tl-track':track,'#tl-add-graphic':addGraphic,'#tl-add-sponsor':addSponsor}[s]);
 const document={createElement:()=>new El()};
 const tlPause=()=>{},tlGraphicAdd=()=>{},tlSponsorAdd=()=>{};
+let message='';const tlMsg=v=>{message=v;};
 const tlSelect=s=>{selected=s;},tlSeek=()=>{};
 tlWireLaneCollapse();
 let collapse=label.children[0];collapse.onclick({stopPropagation(){}});
@@ -60,12 +62,29 @@ const node=new El({layer:'graphics',item:'1'});nodes=[node];
 tlWireLayers();node.onclick({stopPropagation(){}});
 check(selected===b,'named lane selects original role item');
 check(typeof addSponsor.onclick==='function','Add sponsor wired without sponsor lane');
+TL.data.project_layers=[{...row('names','graphics',[b]),locked:true},row('maps','graphics',[a])];
+check(tlCanEdit([a]),'same id on an unlocked paragraph stays editable');
+check(!tlCanEdit([a,b])&&message.includes('Unlock'),'mixed selection rejected');
+check(tlCanEdit([],['voice']),'locked graphics allow upstream voice ripple');
+check(!tlCanEdit([],['pictures','graphics']),'only changed roles block a multi-role edit');
+TL.data.project_layers.push({...row('notes','notes'),locked:true});
+check(tlCanEdit([],['pictures','voice']),'locked Notes allow camera edits');
+html=tlLayerRows();check(html.includes('data-lock="names" aria-pressed="true"')&&
+ html.includes('aria-label="Unlock names"'),'accessible persistent lock control');
+let stopped=false;
+TL.lockGuard({target:{closest:s=>s.includes('data-lock')?null:lane},
+ stopImmediatePropagation(){stopped=true;}});
+check(stopped,'locked pointer gesture stopped before timeline handlers');
+node.onclick({stopPropagation(){}});check(selected===b,'locked item remains selectable');
 const tlInsertClearGhost=()=>{},tlGraphicTarget=t=>({sid:'s',at:t});
 let tlGraphicBlocks=[{ref:'lower',overlay:{max_dur:10}}];
 const tlGraphicDrop=(payload,t,layer)=>{dropped={payload,t,layer};};
 const payload={kind:'block',block:'lower'};
 const event={clientX:144,dataTransfer:{},preventDefault(){},stopPropagation(){}};
 nodes=[];
+TL.insertDrag={pid:'p',payload};tlWireGraphics();lane.ondragover(event);
+check(event.dataTransfer.dropEffect==='none'&&TL.graphicDrop===null,'locked destination refuses drops');
+TL.data.project_layers[0].locked=false;
 TL.insertDrag={pid:'p',payload};tlWireGraphics();lane.ondragover(event);lane.ondrop(event);
 check(dropped.layer==='names'&&dropped.t===2,'drop resolves track id and time by role');
 lanes=[];TL.insertDrag={pid:'p',payload};tlWireGraphics();

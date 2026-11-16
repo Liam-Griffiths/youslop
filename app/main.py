@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from . import kinds
+from .layers import LockedLayerError, require_unlocked
 from . import brand, check, edits, ops, review, storyboard, razor, packs
 from .audio_files import next_raw_path, next_take_path
 from . import camera
@@ -1384,6 +1385,26 @@ def patch_variables(pid: str, payload: dict = Body(...)) -> dict:
             return variables(p, ch)
 
 
+@app.exception_handler(edits.EditError)
+async def edit_error(_request: Request, exc: edits.EditError) -> JSONResponse:
+    return JSONResponse({'detail': str(exc)}, status_code=exc.status)
+
+
+@app.exception_handler(LockedLayerError)
+async def locked_layer_error(_request: Request, exc: LockedLayerError) -> JSONResponse:
+    return JSONResponse({'detail': str(exc)}, status_code=409)
+
+
+@app.patch('/api/projects/{pid}/layers/{ident:path}')
+def patch_layer_flags(pid: str, ident: str, payload: dict = Body(...)) -> dict:
+    from . import layers
+    with store.lock_for(pid):
+        p = _load(pid)
+        layers.patch_flags(p, ident, payload)
+        store.save(p)
+    return p.to_dict()
+
+
 @app.patch("/api/projects/{pid}")
 def patch_project(pid: str, payload: dict = Body(...)) -> dict:
     with store.lock_for(pid):
@@ -1637,6 +1658,7 @@ def draft_sponsor(pid: str, slot_id: str, payload: dict = Body(default={})) -> d
 @app.post("/api/projects/{pid}/sponsors/{slot_id}/voice")
 def voice_sponsor(pid: str, slot_id: str) -> dict:
     p = _load(pid)
+    require_unlocked(p, 'sponsors')
     slot = _sponsor_slot(p, slot_id)
     if not slot.script.strip():
         raise HTTPException(400, 'That sponsor read has no words.')
@@ -1660,6 +1682,7 @@ def voice_sponsor(pid: str, slot_id: str) -> dict:
 @app.post("/api/projects/{pid}/sponsors/{slot_id}/take")
 async def upload_sponsor_take(pid: str, slot_id: str, file: UploadFile) -> dict:
     p = _load(pid)
+    require_unlocked(p, 'sponsors')
     slot = _sponsor_slot(p, slot_id)
     body = await file.read()
     if len(body) < 1024:
@@ -1985,7 +2008,9 @@ def camera_overlay_media(pid: str, sid: str, cid: str) -> dict:
 @app.post("/api/projects/{pid}/camera-auto-edit")
 def camera_auto_edit(pid: str, payload: dict = Body(default={})) -> dict:
     from . import camera_auto
-    _load(pid)
+    p = _load(pid)
+    if not payload.get('suggest'):
+        require_unlocked(p, ('pictures', 'voice'))
     return {"job": jobs.start("camera auto-edit", pid,
                              lambda progress: camera_auto.edit(pid, payload, progress))}
 
@@ -2868,6 +2893,7 @@ def _provider_of(url: str) -> str:
 async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
     with store.lock_for(pid):
         p = _load(pid)
+        require_unlocked(p, 'voice')
         s = _slide(p, sid)
         root = project_dir(pid)
         raw = next_raw_path(root, sid)
@@ -2898,6 +2924,7 @@ async def upload_take(pid: str, sid: str, file: UploadFile) -> dict:
 
 @app.post("/api/projects/{pid}/slides/{sid}/camera")
 async def upload_camera(pid: str, sid: str, file: UploadFile) -> dict:
+    require_unlocked(_load(pid), ('pictures', 'voice'))
     body = await file.read()
     with store.lock_for(pid):
         p = _load(pid)
@@ -2950,6 +2977,7 @@ async def add_camera_paragraph(pid: str, file: UploadFile | None = None,
                                position: str = Form("after_intro"),
                                convert_presenter: bool = Form(False)) -> dict:
     """Add a camera beat; keep the source and legacy presenter on failure."""
+    require_unlocked(_load(pid), ('pictures', 'voice'))
     if position not in {"start", "after_intro", "end"} and not position.startswith("before:"):
         raise HTTPException(400, "Choose a camera paragraph position")
     with store.lock_for(pid):
@@ -3279,6 +3307,7 @@ def voice_over(pid: str, payload: dict = Body(default={})) -> dict:
     `redo` is asked for, so changing one line does not re-read the video.
     """
     p0 = _load(pid)
+    require_unlocked(p0, 'voice')
     if not p0.slides:
         raise HTTPException(400, "There is no script to read yet.")
     _engine_ready(_engine(p0))
@@ -3351,6 +3380,7 @@ def voice_over_one(pid: str, sid: str) -> dict:
     """Re-read one paragraph, after an edit or a change of mind."""
     with store.lock_for(pid):
         p = _load(pid)
+        require_unlocked(p, 'voice')
         s = _slide(p, sid)
         if s.insert:
             raise HTTPException(400, "Inserts are non-spoken; they cannot be voiced.")
@@ -3392,6 +3422,7 @@ def reprocess_takes(pid: str) -> dict:
     """
     with store.lock_for(pid):
         p = _load(pid)
+        require_unlocked(p, 'voice')
         root = project_dir(pid)
         done, failed = 0, []
         for n, s in enumerate(p.slides, 1):
@@ -3563,6 +3594,7 @@ async def upload_presenter(pid: str, file: UploadFile) -> dict:
     """Attach a piece of camera footage of you to this video."""
     with store.lock_for(pid):
         p = _load(pid)
+        require_unlocked(p, ('pictures', 'voice'))
         suffix = Path(file.filename or "clip.mp4").suffix.lower()
         if suffix not in {".mp4", ".mov", ".m4v", ".webm", ".mkv"}:
             raise HTTPException(400, "That is not a video file I can read.")
@@ -4367,7 +4399,9 @@ _STING_TYPES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
 def _sting_spec(p, role: str):
     if role not in ("intro", "outro"):
         raise HTTPException(404, "A sting goes on the intro or the outro")
-    return p.intro if role == "intro" else p.outro
+    spec = p.intro if role == 'intro' else p.outro
+    require_unlocked(p, 'stings', getattr(spec, 'music_layer' if role == 'intro' else 'sting_layer'))
+    return spec
 
 
 @app.post("/api/projects/{pid}/sting/{role}")

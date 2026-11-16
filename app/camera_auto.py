@@ -29,6 +29,9 @@ def plan(project, slides):
 
 def edit(pid, payload, progress=lambda message: None):
     project = store.load(pid)
+    if not payload.get('suggest'):
+        from .layers import require_unlocked
+        require_unlocked(project, ('pictures', 'voice'))
     slides = [s for s in project.slides if s.on_camera and s.takes.get('camera')
               and (not payload.get('sid') or s.id == payload['sid'])]
     undo, suggest = payload.get('undo', False), payload.get('suggest', False)

@@ -89,6 +89,7 @@ function tlSectionNudge(dir) {
 }
 
 function tlSectionSave(op, to = '') {
+  // Defer whole-section validation to the atomic API; upstream ripple is allowed.
   const pid = TL.pid, section = TL.section && JSON.parse(JSON.stringify(TL.section));
   if (op === 'paste' ? tlSectionClipboard?.project_id !== pid : !section) return;
   const clipboard = op === 'paste' ? JSON.parse(JSON.stringify(tlSectionClipboard)) : null;

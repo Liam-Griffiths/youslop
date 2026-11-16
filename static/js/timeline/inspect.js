@@ -164,6 +164,7 @@ function tlInspector() {
 // Serialize requests so a slow response cannot overwrite a later edit.
 let tlInspectorQueue = Promise.resolve();
 function tlInspectorSave(sel, key, raw, el) {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit([sel])) return;
   const pid = TL.pid;
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
@@ -435,6 +436,7 @@ function tlCanSplit(slide) {
 }
 
 async function tlSplitHere() {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit([], ['voice'])) return;
   if (state.project?.kind === 'clip') { location.hash = `#/p/${state.project.id}/clip`; return; }
   if (tlSplitting) return;
   const {t, para} = tlRazorTarget();

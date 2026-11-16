@@ -31,11 +31,14 @@ function tlGapItems() {
 
 // Reuse the inspector queue: exactly one timing PATCH on drop or reset.
 function tlSaveTiming(sel, patch) {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit([sel])) return;
   const pid = TL.pid;
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
     try {
       const fields = typeof patch === 'function' ? patch() : patch;
+      if (typeof tlCanEdit === 'function' && !tlCanEdit([sel],
+          Object.keys(fields).some(k => k.startsWith('camera_')) ? ['pictures', 'voice'] : 'gap_override' in fields ? ['voice'] : [])) return;
       const action = Object.values(fields).every(v => v === null) ? 'reset'
         : 'title_at' in fields || 'cues' in fields ? 'move' : 'resize';
       const kind = 'gap_override' in fields ? 'gap' : sel.kind;

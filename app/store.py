@@ -52,6 +52,9 @@ def save(project: Project) -> Project:
         previous = json.loads(before) if before else None
         project.sync_takes()
         data = project.to_dict()
+        if previous:
+            from .layers import assert_unlocked
+            assert_unlocked(Project.from_dict(previous), project)
         if previous and undo.retain_recordings(data, previous):
             project.retired_takes = data.get('retired_takes', [])
             for kind in ('slides', 'sponsors'):

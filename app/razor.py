@@ -91,6 +91,8 @@ def boundary(text, items, at):
 
 
 def prepare(project, slide, root: Path, temp: Path, at):
+    from .layers import require_unlocked
+    require_unlocked(project, 'voice')
     original = slide.narration
     active = timings(root, slide.take, original) if slide.take else None
     index, approximate = boundary(original, active, at)

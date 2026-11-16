@@ -109,6 +109,7 @@ function tlWireCamera() {
 }
 
 async function tlCameraAuto(sid = '', undo = false, suggest = false) {
+  if (!suggest && typeof tlCanEdit === 'function' && !tlCanEdit([], ['pictures', 'voice'])) return;
   const pid = TL.pid;
   tlPause();
   try {

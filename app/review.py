@@ -422,6 +422,9 @@ def read_notes(pid):
 
 
 def _write_notes(pid, result):
+    from .layers import require_unlocked
+    if store.exists(pid):
+        require_unlocked(store.load(pid), 'notes')
     path = project_dir(pid) / 'review/notes.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix('.tmp')
@@ -497,6 +500,8 @@ def route_fix(project, fix, *, apply=False, proposal=None):
         return result
     with store.lock_for(project.id):
         current = store.load(project.id)
+        from .layers import require_unlocked
+        require_unlocked(current, 'notes')
         field = proposal['field']
         if field == 'rejected_looks':
             from .learning import validate_look
@@ -525,6 +530,8 @@ def act(pid, nid, action, *, finding=None):
     if action not in ('fix', 'apply', 'dismiss', 'keep'):
         raise ValueError('Action must be fix, apply, dismiss or keep')
     with store.lock_for(pid):
+        from .layers import require_unlocked
+        require_unlocked(store.load(pid), 'notes')
         result = read_notes(pid)
         notes = result.setdefault('notes', [])
         note = next((n for n in notes if n.get('id') == nid), None)

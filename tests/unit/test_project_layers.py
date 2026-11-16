@@ -57,7 +57,8 @@ def test_essay_uses_caption_lane(project):
     assert timeline == original
 
 
-def test_schema_round_trip_unknown_keys_defaults_and_flags(project):
+def test_schema_round_trip_unknown_keys_defaults_and_flags(project, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, 'PROJECTS_DIR', tmp_path)
     raw = project.to_dict()
     raw['layers'] = [dict(id='maps', name='Maps', role='graphics', color='cool',
                           order=9, hidden=True, locked=True, future='ignored'), dict(id='other')]

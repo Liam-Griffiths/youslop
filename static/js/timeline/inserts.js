@@ -94,6 +94,7 @@ function tlInsertDialog(title, html) {
 }
 
 function tlInsertMenu(point = tlInsertNearest()) {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit([], ['pictures'])) return;
   if (!point) return;
   const {dialog, close} = tlInsertDialog(`Insert at ${tlClock(point.t)}`, `<div class="tl-insert-options">${[
     ['clip','Clip from footage'], ['block','Block'], ['picture','Picture from Library'], ['card','Title card']

@@ -158,6 +158,7 @@ function tlGroupMove(items, requested) {
 }
 
 function tlGroupDrag(e, el, sel) {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit(TL.selections?.length ? TL.selections : [sel])) return true;
   const items = [...(TL.selections || [])];
   if (items.length < 2 || !items.some(s => tlSameItem(s, sel)) || e.target.closest('.tl-resize')) return false;
   if (!items.every(tlMovable)) return true;
@@ -220,6 +221,7 @@ function tlGroupPatches(items, action, delta) {
 }
 
 function tlGroupSave(items, action, delta = 0) {
+  if (typeof tlCanEdit === 'function' && !tlCanEdit(items)) return;
   const pid = TL.pid;
   tlInspectorQueue = tlInspectorQueue.then(async () => {
     if (TL.pid !== pid || state.project?.id !== pid) return;
