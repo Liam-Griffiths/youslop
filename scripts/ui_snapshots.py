@@ -41,6 +41,7 @@ def routes():
     result.extend(f'#/p/{pid}/{tab}' for pid in ('psnapclip','psnapmanual')
                   for tab in ('clip','edit','publish','plan','script','voice'))
     result.append('#/p/psnaplong/edit')
+    result.append('#/p/psnapinspector/edit')
     result.extend(['#/p/psnapinserts/edit', '#/p/psnapinserts/script'])
     result.extend(f'#/p/{pid}/dashboard' for pid in DASHBOARD_PROJECTS)
     result.extend(f'#/p/psnapwrite{size}/script' for size in ('short', 'long'))
@@ -316,6 +317,21 @@ def seed():
         Slide(id='insertcard', insert=dict(kind='card', seconds=4, text='The next chapter'))]
     shutil.copytree(source, store.project_dir(inserts.id), dirs_exist_ok=True)
     store.save(inserts)
+    # A held paragraph and a cut share one Script description, with local candidates.
+    inspector = store.load('psnapkenburns')
+    inspector.id, inspector.title = 'psnapinspector', 'Snapshot · picture inspector'
+    inspector.style.picture_every = 3
+    candidate = inspector.slides[0].candidates[0]
+    for i, slide in enumerate(inspector.slides):
+        slide.chapter = ''
+        slide.visual_note = 'The station before sunrise.'
+        slide.picture_mode = ('auto', 'hold', 'cut')[i]
+        slide.queries = ['station before sunrise', 'empty platform']
+        slide.candidates = [{**candidate, 'id':f'option{j}', 'title':title}
+                            for j, title in enumerate(('Station entrance', 'Empty platform', 'First train'))]
+        slide.chosen_id = 'option0'
+    shutil.copytree(source, store.project_dir(inspector.id), dirs_exist_ok=True)
+    store.save(inspector)
     seed_writing()
     seed_outline()
 
@@ -715,6 +731,35 @@ def capture(base, out, theme="dark"):
                     extra.write_bytes(base64.b64decode(png['data']))
                     rows.append({'path':str(extra), 't':0, 'why':phase})
                 _evaluate(cdp, session, "document.querySelector('dialog[open]').close(); true")
+            if route == '#/p/psnapinspector/edit':
+                for width, height in ((1280, 720), (1920, 1080)):
+                    cdp.send('Emulation.setDeviceMetricsOverride', {
+                        'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
+                    _evaluate(cdp, session, "tlSelect(tlItems('picture')[0]); true")
+                    _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                    _evaluate(cdp, session, """(() => {
+                      for (const selector of ['#tl-stage','.tl-pictures','.tl-lane.para','.tl-playhead-handle']) {
+                        const r=document.querySelector(selector).getBoundingClientRect();
+                        if (r.height <= 0 || r.top < 0 || r.bottom > innerHeight-32) throw Error(selector+' outside viewport');
+                      }
+                      const tools=document.querySelector('.tl-picture-tools');
+                      if (tools.querySelectorAll('[data-candidate]').length !== 3 ||
+                          tools.querySelectorAll('[data-picture-mode]').length !== 2 ||
+                          !tools.querySelector('[data-candidate][aria-pressed=true]')) throw Error('Picture fixture missing');
+                      const side=document.querySelector('.tl-side');
+                      const strip=tools.querySelector('.tl-picture-candidates');
+                      side.scrollTop+=strip.getBoundingClientRect().top-side.getBoundingClientRect().top;
+                      const r=strip.getBoundingClientRect(), bounds=side.getBoundingClientRect();
+                      if (Math.min(r.bottom,bounds.bottom)-Math.max(r.top,bounds.top) < 34)
+                        throw Error('Candidates cannot be scrolled into view');
+                      return true;
+                    })()""")
+                    png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                    extra = out / f'p--psnapinspector--candidates--{width}.png'
+                    extra.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(extra), 't':0, 'why':f'Picture candidates at {width}×{height}'})
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route == '#/p/psnapinserts/edit':
                 for width, height in ((1280, 720), (1920, 1080)):
                     cdp.send('Emulation.setDeviceMetricsOverride', {

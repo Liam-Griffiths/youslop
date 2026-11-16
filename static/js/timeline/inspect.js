@@ -80,7 +80,8 @@ function tlInspector() {
     if (slot) { body.innerHTML = tlSponsorFields(slot); tlSponsorWire(slot); tlItemLayerSelect(sel, body); }
     return;
   }
-  const slide = p.slides.find((s) => s.id === sel.sid);
+  const picture = tlPictureContext(sel);
+  const slide = sel.kind === 'picture' ? picture?.lead : p.slides.find((s) => s.id === sel.sid);
   const para = tlParas().find((q) => q.id === sel.sid);
   const seg = tlSegs().find((s) => s.ref === sel.id);
   const field = (key, label, value, unit = '', options = null) => {
@@ -109,6 +110,7 @@ function tlInspector() {
     const candidate = slide.candidates.find((c) => c.id === slide.chosen_id);
     if (candidate?.focal?.length === 2) html += field('focal_x', 'Focal X', candidate.focal[0], '0–1') + field('focal_y', 'Focal Y', candidate.focal[1], '0–1');
   }
+  if (picture) html += tlPictureFields(picture);
   if (sel.kind === 'cue' && slide) {
     const cues = (slide.cues || {})[pictureKind(slide)]?.length ? slide.cues[pictureKind(slide)] : para.effective_cues;
     const cue = cues[sel.cue];
@@ -150,7 +152,7 @@ function tlInspector() {
       clearTimeout(timer);
       if (sent === el.value) return;
       sent = el.value;
-      tlInspectorSave({...sel}, el.dataset.field, el.value, el);
+      tlInspectorSave({...sel, sid:sel.kind === 'picture' ? slide.id : sel.sid}, el.dataset.field, el.value, el);
     };
     el.oninput = () => { clearTimeout(timer); timer = setTimeout(send, 300); };
     el.onchange = send;
@@ -158,6 +160,7 @@ function tlInspector() {
       if (e.key === 'Enter') { e.preventDefault(); send(); TL.host.focus(); }
     };
   });
+  if (picture) tlPictureWire(sel, picture, body);
   tlItemLayerSelect(sel, body);
   const remove = body.querySelector('[data-remove]');
   if (remove) remove.onclick = () => tlInspectorSave({...sel}, 'remove', '', remove);
@@ -240,10 +243,10 @@ function tlOpenTab(tab, sid) {
 }
 
 // Run one of the app's own editor modals, and refresh the cut when it closes.
-function tlModal(open) {
+async function tlModal(open) {
   tlPause();
   const before = new Set(document.querySelectorAll('.modal'));
-  open();
+  await open();
   const fresh = [...document.querySelectorAll('.modal')].filter((m) => !before.has(m));
   const watcher = new MutationObserver(() => {
     if (fresh.length && fresh.some((m) => document.body.contains(m))) return;

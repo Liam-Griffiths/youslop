@@ -119,6 +119,7 @@ function paintMedia() {
   // Shared picture tools (choose, upload, focus, editors) repaint through here;
   // when they run from Script › Shots, Shots repaints instead.
   if (state.tab === 'shots') return paintScriptShots();
+  if (state.tab === 'edit' && $('#tl-inspector')) return tlInspector();
   const p = state.project, slides = p.slides;
   loadVisualFootage(p);
   const runs = p.picture_runs || slides.map(s => [s.id]);
