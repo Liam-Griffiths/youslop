@@ -64,6 +64,7 @@ class LibraryAsset:
     height: int = 0
     duration: float = 0.0
     added_at: float = 0.0
+    size: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -258,7 +259,7 @@ def add(data: bytes, filename: str, title: str = "", tags: list[str] | None = No
         title=title.strip() or filename, tags=clean_tags, author=author.strip(),
         license=license.strip(), source_page=source_page.strip(),
         width=width, height=height, duration=round(duration, 2),
-        added_at=time.time(),
+        added_at=time.time(), size=len(data),
     )
     with _LOCK:
         assets = _load_index()
@@ -421,9 +422,10 @@ def scan_folder(folder_id: str, progress: Callable[[str], None] = lambda m: None
 
             asset_id = _uid()
             src = Path(file_path_)
-            width = height = 0
+            width = height = size = 0
             duration = 0.0
             try:
+                size = src.stat().st_size
                 if kind == "video":
                     width, height = ffutil.dimensions(src)
                     duration = ffutil.duration(src)
@@ -438,7 +440,7 @@ def scan_folder(folder_id: str, progress: Callable[[str], None] = lambda m: None
             added.append(LibraryAsset(
                 id=asset_id, kind=kind, source_path=file_path_, folder_id=folder_id,
                 thumb_filename=thumb_name, title=title, width=width, height=height,
-                duration=round(duration, 2), added_at=time.time(),
+                duration=round(duration, 2), added_at=time.time(), size=size,
             ))
             if len(added) % 25 == 0:
                 progress(f"  found {len(added)} new file(s) so far…")

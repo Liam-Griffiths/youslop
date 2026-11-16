@@ -4388,6 +4388,14 @@ def import_project(file: UploadFile, on_conflict: str = Form("")) -> dict:
         tmp.unlink(missing_ok=True)
 
 
+@app.get("/api/library/info/{asset_id}")
+def library_info(asset_id: str) -> dict:
+    asset, path = library.get(asset_id), library.file_path(asset_id)
+    if not asset or not path or not path.is_file():
+        raise HTTPException(404, "No such asset")
+    return dict(asset, size=path.stat().st_size)
+
+
 @app.get("/api/library/file/{asset_id}")
 def library_file(asset_id: str, request: Request) -> Response:
     path = library.file_path(asset_id)
@@ -4424,19 +4432,25 @@ def reveal_file(payload: dict = Body(...)) -> dict:
     The escape hatch behind every player in the app: the file is on disk and
     is fine, so when the window cannot decode it the creator can still watch
     it in their own player. Only ever a path inside a project or channel
-    folder — the same join the file routes use, for the same reason.
+    folder, or an indexed Library asset. Library reveals resolve the asset id
+    server-side and ignore caller-supplied paths.
     """
     scope = str(payload.get("scope") or "project")
     ident = str(payload.get("id") or "")
     rel = str(payload.get("rel") or "")
-    if scope not in ("project", "channel", "music"):
-        raise HTTPException(400, "scope must be project, channel or music")
-    if scope == "music":
+    if scope not in ("project", "channel", "music", "library"):
+        raise HTTPException(400, "scope must be project, channel, music or library")
+    if scope == "library":
+        path = library.file_path(ident)
+        if not path or not path.is_file():
+            raise HTTPException(404, "No such asset")
+    elif scope == "music":
         # The shared bed folder, so a creator can drop tracks into it.
         root = MUSIC_DIR
     else:
         root = project_dir(ident) if scope == "project" else channels.channel_dir(ident)
-    path = _safe_join(root, rel)
+    if scope != "library":
+        path = _safe_join(root, rel)
     try:
         opened, folder = playback_mod.reveal(path)
     except playback_mod.RevealError as exc:

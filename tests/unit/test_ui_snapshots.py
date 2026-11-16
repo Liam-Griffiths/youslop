@@ -116,7 +116,9 @@ def test_seed_uses_only_fixture_data(monkeypatch, tmp_path):
             assert project.outline['hook']['first_line'] == project.slides[0].narration
             assert len(project.to_dict()['log']) == 10
     assets = library.list_all()
-    assert len(assets) == 1 and assets[0]['title'] == 'Fixture picture'
+    assert len(assets) == 61 and assets[0]['title'] == 'Fixture picture'
+    assert {a['kind'] for a in assets} == {'image', 'video'}
+    assert sum(a['folder_id'] == 'explorerfolder' for a in assets) == 60
 
 
 def test_insert_snapshot_routes():

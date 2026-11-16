@@ -108,6 +108,7 @@ def list_projects(*, include_stage: bool = False) -> list[dict]:
                 **({"stage": home_summary(Project.from_dict(raw))} if include_stage else {}),
                 "updated_at": raw.get("updated_at", 0),
                 "slides": len(raw.get("slides", [])),
+                "bin_count": len(raw.get("bin", [])),
                 "recorded": sum(1 for s in raw.get("slides", []) if s.get("take")),
                 "est_seconds": raw.get("est_seconds", 0),
                 "has_output": bool(raw.get("render", {}).get("output")),

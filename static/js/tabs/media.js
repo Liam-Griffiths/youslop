@@ -1,18 +1,13 @@
 
-async function renderLibrary() {
+async function renderLibraryManagement() {
   const [items, folders] = await Promise.all([
     api('/api/library'), api('/api/library/folders'),
   ]);
   state.library.items = items;
   state.library.folders = folders;
-  view.innerHTML = `
-    <h1>Library</h1>
-    <p class="sub">Your own royalty-free stock — downloaded by hand, tagged here,
-      and searched alongside the archives for every slide in every project.</p>
-
-    ${jobPanel()}
-    <p>Browse, create and pin <a href="#/blocks">Blocks</a>.</p>
-
+  const tools = document.createElement('details');
+  tools.className = 'library-tools';
+  tools.innerHTML = `<summary>Upload, linked folders and 3D models</summary>
     <div class="card" style="margin-bottom:22px">
       <h3>Linked folders</h3>
       <p class="mono" style="color:var(--ink-faint);margin:-4px 0 14px">
@@ -61,34 +56,20 @@ async function renderLibrary() {
       <button class="btn sm" id="libadd" onclick="uploadLibraryAsset()">add to library</button>
     </div>
 
-    <div class="row" style="margin-bottom:16px">
-      <input type="text" id="libq" placeholder="search title or tags…"
-        style="flex:1;min-width:220px" value="${esc(state.library.q)}" oninput="filterLibrary()">
-      <select id="libkind" style="width:auto" onchange="filterLibrary()">
-        <option value="" ${state.library.kind === '' ? 'selected' : ''}>photos & clips</option>
-        <option value="image" ${state.library.kind === 'image' ? 'selected' : ''}>photos only</option>
-        <option value="video" ${state.library.kind === 'video' ? 'selected' : ''}>clips only</option>
-      </select>
-      <span class="mono" id="libcount" style="color:var(--ink-faint)"></span>
-    </div>
-    <div class="lib-grid" id="libgrid"></div>
-
     <div class="card" style="margin-top:28px" id="models3d"></div>
   `;
-  paintLibraryGrid();
-  paintModelLibrary();
+  return tools;
 }
 
 // --------------------------------------------------------------- folders
 async function browseForLibraryFolder() {
-  try {
-    const r = await api('/api/pick-folder', { method: 'POST' });
-    $('#libfolderpath').value = r.path;
-  } catch (e) {
-    // 501 here just means "not running inside the desktop app" — the text
-    // field below is the fallback, not an error worth a toast over.
-    if (!String(e.message).includes('501')) toast(e.message, true);
-  }
+  const dialog = studioDialog('library-folder', `<h2 id="studio-dialog-title">Link a folder</h2>
+    <label for="library-path">Folder path</label><input id="library-path" type="text">
+    <button class="btn" data-choose>Use path</button><button class="btn ghost" data-close>Cancel</button>`);
+  dialog.querySelector('[data-close]').onclick = () => dialog.close();
+  dialog.querySelector('[data-choose]').onclick = () => {
+    $('#libfolderpath').value = dialog.querySelector('input').value; dialog.close();
+  };
 }
 
 async function addLibraryFolder() {
@@ -112,8 +93,7 @@ async function rescanLibraryFolder(folderId) {
 }
 
 async function removeLibraryFolder(folderId) {
-  if (!confirm('Stop tracking this folder? Its entries leave the library — ' +
-               'the files on disk are never touched.')) return;
+  if (!(await libConfirm('Stop tracking this folder? Its entries leave the library. The files on disk are never touched.'))) return;
   await api(`/api/library/folders/${folderId}`, { method: 'DELETE' });
   toast('Folder removed from the library.');
   await renderLibrary();
@@ -147,43 +127,6 @@ async function uploadLibraryAsset() {
     toast(e.message, true);
     btn.disabled = false;
   }
-}
-
-function filterLibrary() {
-  state.library.q = $('#libq').value;
-  state.library.kind = $('#libkind').value;
-  paintLibraryGrid();
-}
-
-function paintLibraryGrid() {
-  const grid = $('#libgrid');
-  if (!grid) return;
-  const q = state.library.q.trim().toLowerCase();
-  const kind = state.library.kind;
-  const items = state.library.items.filter((a) => {
-    if (kind && a.kind !== kind) return false;
-    if (!q) return true;
-    return a.title.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q));
-  });
-  $('#libcount').textContent = `${items.length} asset${items.length === 1 ? '' : 's'}`;
-  grid.innerHTML = items.map((a) => `
-    <div class="lib-card">
-      <div class="lib-thumb">
-        <img src="/api/library/thumb/${a.id}" loading="lazy" onerror="this.parentNode.style.opacity=.25">
-        ${a.kind === 'video' ? `<span class="kindtag num">clip · ${fmtTime(a.duration)}</span>` : ''}
-      </div>
-      <div class="lib-body">
-        <div class="lib-title" title="${esc(a.title)}">${esc(a.title)}</div>
-        <div class="lib-meta">${a.width || '?'}×${a.height || '?'}${esc(a.author ? ' · ' + a.author : '')}</div>
-        <div class="lib-tags">
-          ${a.tags.map((t) => `<span class="pill">${esc(t)}</span>`).join('') || ''}
-        </div>
-        <div class="row">
-          <button class="btn xs ghost" onclick="editLibraryAsset('${a.id}')">edit</button>
-          <button class="btn xs ghost danger" onclick="deleteLibraryAsset('${a.id}')">delete</button>
-        </div>
-      </div>
-    </div>`).join('') || '<div class="empty-note">No downloads yet. Add a file above.</div>';
 }
 
 function editLibraryAsset(id) {
@@ -230,11 +173,11 @@ function editLibraryAsset(id) {
 }
 
 async function deleteLibraryAsset(id) {
-  if (!confirm('Remove this asset from the library? Projects that already used it keep their own copy.')) return;
+  if (!(await libConfirm('Remove this asset from the library? Projects that already used it keep their own copy.'))) return;
   try {
     await api(`/api/library/${id}`, { method: 'DELETE' });
     state.library.items = state.library.items.filter((a) => a.id !== id);
-    paintLibraryGrid();
+    await renderLibrary();
   } catch (e) { toast(e.message, true); }
 }
 

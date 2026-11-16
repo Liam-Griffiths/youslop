@@ -305,6 +305,21 @@ def seed():
     shutil.copytree(source, store.project_dir(long.id), dirs_exist_ok=True)
     store.save(long)
     asset = library.add((source / 'media/pic.jpg').read_bytes(), 'snapshot.jpg', title='Fixture picture')
+    # Explorer fixtures reuse existing viewing bytes; no additional media render.
+    media, folders = library._load_both()
+    linked = config.DATA / 'explorer-linked'
+    linked.mkdir()
+    folders.append(library.LibraryFolder('explorerfolder', str(linked), 'Station archive'))
+    for i in range(60):
+        clip = i % 3 == 0
+        path = linked / ('Morning/Street' if i % 2 else 'Evening') / f'station-{i}.{"mp4" if clip else "jpg"}'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / 'proxies/f1.mp4' if clip else source / 'media/pic.jpg', path)
+        media.append(library.LibraryAsset(id=f'explorer{i}', kind='video' if clip else 'image',
+            source_path=str(path), folder_id='explorerfolder', thumb_filename=asset['thumb_filename'],
+            title=f'Station reference {i+1}', tags=['Station', 'Morning' if i%2 else 'Evening'],
+            width=320, height=180, duration=4 if clip else 0, added_at=1000+i, size=path.stat().st_size))
+    library._save_both(media, folders)
     inserts = store.load('psnapkenburns')
     inserts.id, inserts.title = 'psnapinserts', 'Snapshot · main-track inserts'
     inserts.bin = [BinItem(id='editphoto', kind='image', title='Station photo',
@@ -425,6 +440,28 @@ def capture(base, out, theme="dark"):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route == '#/library':
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
+                for phase in ('empty', 'grid', 'details', 'multi'):
+                    _evaluate(cdp, session, """(() => {
+                      window.__libraryItems ||= state.library.items;
+                      window.__libraryFolders ||= state.library.folders;
+                      const phase=""" + json.dumps(phase) + """;
+                      state.library.items=phase==='empty'?[]:window.__libraryItems;
+                      state.library.folders=phase==='empty'?[]:window.__libraryFolders;
+                      state.library.q='';state.library.kind='';LX.node='all';LX.selected.clear();
+                      LX.mode=phase==='details'?'list':'grid';libTree();libPaint();
+                      if(phase==='multi'){libSelect(0,{});libSelect(3,{shiftKey:true});
+                        if(LX.selected.size!==4)throw Error('Library range selection failed');}
+                      return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+                    })()""")
+                    png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                    path = out / f'library--{phase}--1280.png'
+                    path.write_bytes(base64.b64decode(png['data']))
+                    rows.append({'path':str(path),'t':0,'why':f'Library {phase} at 1280×720'})
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route == '#/settings':
                 _evaluate(cdp, session, """(async () => {
                   const host = document.querySelector('#stt-engines');
