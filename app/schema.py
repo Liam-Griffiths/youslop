@@ -862,6 +862,14 @@ class BinItem:
     width: int = 0
     height: int = 0
     added_at: float = field(default_factory=time.time)
+    # What the writer knows about it, shown on Home > Materials and used for
+    # credits: what it shows, where it came from, its licence and date, and
+    # the credit line the description should carry.
+    shows: str = ""
+    origin: str = ""
+    licence: str = ""
+    made: str = ""
+    credit: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)  # used_in is derived only in bin listings.

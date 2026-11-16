@@ -103,11 +103,11 @@ def listing(p):
 
 
 def patch(item, payload, p):
-    for key in ('title', 'note'):
+    for key in ('title', 'note', 'shows', 'origin', 'licence', 'made', 'credit'):
         if key in payload:
-            if not isinstance(payload[key], str):
+            if not isinstance(payload[key], str) or len(payload[key]) > 4000:
                 raise HTTPException(400, f'{key} must be text')
-            setattr(item, key, payload[key])
+            setattr(item, key, payload[key].strip() if key != 'note' else payload[key])
     if 'labels' in payload:
         labels = payload['labels']
         if not isinstance(labels, list) or any(not isinstance(x, str) or not x.strip() for x in labels):

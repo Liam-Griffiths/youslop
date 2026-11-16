@@ -165,7 +165,7 @@ def stages(project: Project, check_result: dict) -> list[dict]:
                       else 'Render again' if rendered.get('output') else 'Not rendered',
                       'Fix earlier stages' if fresh else 'Render the cut', 'Publish the episode'))
     todo = sum(r['status'] != 'ready' for r in result)
-    result.insert(0, row('dashboard', 'Dashboard', 'ready' if not todo else 'todo',
+    result.insert(0, row('dashboard', 'Home', 'ready' if not todo else 'todo',
                          f'{todo} to do', 'Open script', 'Open script'))
     return result
 

@@ -1,6 +1,6 @@
 /* Studio shell; stage contents remain the existing tab implementations. */
 const STAGES = [
-  ['dashboard', 'Dashboard'], ['script', 'Script'], ['voice', 'Voice'],
+  ['dashboard', 'Home'], ['script', 'Script'], ['voice', 'Voice'],
   ['edit', 'Edit'], ['publish', 'Publish'],
 ];
 const projectStages = p => p?.kind === 'clip' ? [['clip','Clip'],['edit','Edit'],['publish','Publish']] : STAGES;

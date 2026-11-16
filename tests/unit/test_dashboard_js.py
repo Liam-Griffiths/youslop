@@ -6,47 +6,49 @@ import subprocess
 import pytest
 
 
-def test_dashboard_content_and_actions(tmp_path):
+def test_home_content_and_needs(tmp_path):
     gjs = shutil.which('gjs')
     if not gjs:
         pytest.skip('GJS unavailable')
-    source = Path('static/js/tabs/dashboard.js').read_text()
+    source = '\n'.join(Path(f).read_text() for f in ('static/js/tabs/bin.js', 'static/js/tabs/dashboard.js'))
     setup = r'''
-const STAGES = [['dashboard','Dashboard'],['script','Script'],['voice','Voice'],['edit','Edit'],['publish','Publish']];
-const state = {project:{id:'p',idea:'A fixture',style:{format:'essay'},slides:[]}};
-const body = {}, $ = () => body, FORMAT_INFO = [], fmtTime = s => s+'s';
+const STAGES = [['dashboard','Home'],['script','Script'],['voice','Voice'],['edit','Edit'],['publish','Publish']];
+const state = {project:{id:'p',idea:'A fixture',style:{format:'kenburns'},target_minutes:8,slides:[],picture_runs:[]}};
+const body = {}, $ = s => s === '#tabbody' ? body : null, FORMAT_INFO = [], fmtTime = s => s+'s';
+const document = {addEventListener(){}};
 const esc = s => String(s).replaceAll('<','&lt;').replaceAll('>','&gt;');
+const pictureKind = () => 'kenburns';
+function scriptRuns(p) { return p.slides.map(s => [s]); }
 function check(ok, message) { if (!ok) throw Error(message); }
 function paintBin() {}
 '''
     checks = r'''
 paintDashboard();
-check(!body.innerHTML.includes('Recent activity'),'hide empty activity');
-check((body.innerHTML.match(/class="dashboard-card"/g) || []).length === 4,'four work stages');
-check(!body.innerHTML.includes('View progress'),'no dashboard self card');
-check(body.innerHTML.includes('id="project-bin"'),'bin region');
+check(body.innerHTML.includes('id="project-bin"') && body.innerHTML.includes('>Materials</h2>'),'materials region');
+check(!body.innerHTML.includes('dashboard-card') && !body.innerHTML.includes('>Bin<'),'no stage cards, no bin wording');
+check(body.innerHTML.includes('Nothing outstanding'),'nothing needed yet');
 const p = state.project;
-p.slides = [{narration:'<first>',take:{path:'take.wav'}},{narration:'Second'}];
-p.outline = {hook:{first_line:'The hook'}};
-p.log = Array.from({length:10}, (_, i)=>'Activity '+i);
-state.stageStates = {pid:'p',items:[{id:'edit',reason:'1 of 3 pictures',pictures_done:1,pictures_total:3}]};
+p.slides = [{id:'a',narration:'<first>',take:{path:'take.wav',narration:'Older words'},candidates:[]},
+            {id:'b',narration:'Second',candidates:[{id:'c1'}],chosen_id:'c1'}];
+p.picture_runs = [['a'],['b']];
+p.research = {facts:[{claim:'x'}], sources:[], open_questions:['When did it close?']};
+state.stageStates = {pid:'p',items:[{id:'dashboard',label:'Home',status:'todo',reason:'2 to do'},
+  {id:'voice',label:'Voice',status:'in_progress',reason:'1 of 2 read'}]};
 paintDashboard();
-for (const [label, route] of [['Open script','script'],['Record 1 paragraph','voice'],['Fill 2 pictures','edit/pictures'],['Render','publish']]) {
- check(body.innerHTML.includes(`href="#/p/p/${route}">${label}</a>`),'action '+label);
-}
-check(body.innerHTML.includes('The hook') && body.innerHTML.includes('&lt;first&gt;'),'hook and escaped paragraph');
-check(!body.innerHTML.includes('Activity 1</li>') && body.innerHTML.includes('Activity 2</li>'),'last eight activities');
-p.outline.hook.first_line = '  <first>  ';
-paintDashboard();
-check(!body.innerHTML.includes('<h3>'),'omit repeated hook heading');
-check((body.innerHTML.match(/&lt;first&gt;/g) || []).length === 1,'first paragraph appears once');
+check(body.innerHTML.includes('href="#/p/p/voice"><span class="home-dot"') && !body.innerHTML.includes('>Home <'),'status line links stages, not Home itself');
+check(body.innerHTML.includes('1 visual has no picture') && body.innerHTML.includes('1 recording is out of date') && body.innerHTML.includes('1 paragraph not recorded'),'still needed from every stage');
+check(body.innerHTML.includes('When did it close?'),'open questions listed');
+binView = {...binInitial('p'), items:[{id:'m',kind:'image',title:'Map',labels:[],used_in:['b'],licence:''}]};
+check(homeNeeds(p).includes('1 material in the video with no licence noted'),'rights gap from materials');
+binView.items[0].licence = 'Public domain';
+check(!homeNeeds(p).includes('no licence'),'licensed material is fine');
 state.channels = [{id:'channel', name:'Under the Street'}];
 p.channel_id = 'channel';
 paintDashboard();
 check(body.innerHTML.includes('Under the Street'),'channel name');
 state.stageStates.pid = 'other';
 paintDashboard();
-check(!body.innerHTML.includes('Fill 2 pictures'),'ignore previous project readiness');
+check(!body.innerHTML.includes('1 of 2 read'),'ignore previous project readiness');
 '''
     path = tmp_path / 'dashboard.js'
     path.write_text(setup + source + checks)

@@ -1,51 +1,91 @@
-/* Project overview; all state comes from the cheap stages API. */
+/* Project Home: what you have gathered (materials and research), what the video
+   still needs, and the brief. Production status is one line, not the page;
+   the stage bar already carries the stages. All state comes from cheap APIs. */
 function paintDashboard() {
   const p = state.project;
-  const rows = state.stageStates?.pid === p.id ? state.stageStates.items : [];
-  const paragraphs = p.slides.filter(s => !s.insert);
-  const voiced = paragraphs.filter(s => s.take?.path).length;
-  const edit = rows.find(r => r.id === 'edit');
-  const missing = Math.max(0, (edit?.pictures_total || 0) - (edit?.pictures_done || 0));
+  const rows = state.stageStates?.pid === p.id ? state.stageStates.items.filter(r => r.id !== 'dashboard') : [];
   const research = p.research?.facts?.length || p.research?.sources?.length ? p.research : p.draft?.research || {};
-  const outline = Object.keys(p.outline || {}).length ? p.outline : p.draft?.outline || {};
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
-  const hook = outline.hook?.first_line?.trim();
-  const firstParagraph = paragraphs[0]?.narration || '';
-  const activity = (p.log || []).slice(-8);
-  const actions = {script: ['Open script', 'script'],
-    voice: [voiced < paragraphs.length ? `Record ${paragraphs.length - voiced} paragraph${paragraphs.length - voiced === 1 ? '' : 's'}` : 'Open voice', 'voice'],
-    edit: [missing ? `Fill ${missing} pictures` : 'Open timeline', missing ? 'edit/pictures' : 'edit'],
-    publish: [p.render?.output ? 'Open publish' : 'Render', 'publish']};
-  $('#tabbody').innerHTML = `<h1>Dashboard</h1><div class="dashboard-layout">
-    <section aria-label="Stage progress" class="dashboard-stages">${STAGES.filter(([id]) => id !== 'dashboard').map(([id, name]) => {
-      const row = rows.find(r => r.id === id), [label, target] = actions[id];
-      const value = id === 'script' ? paragraphs.filter(s => s.narration?.trim()).length
-        : id === 'voice' ? voiced : id === 'edit' ? edit?.pictures_done || 0 : row?.status === 'ready' ? 1 : 0;
-      const max = ['script', 'voice'].includes(id) ? paragraphs.length : id === 'edit' ? edit?.pictures_total : 1;
-      return `<article class="dashboard-card"><h2>${esc(row?.label || name)}</h2>
-        <p class="mono">${esc(row?.reason || 'Loading progress…')}</p>
-        <progress value="${value}" max="${max || 1}" aria-label="${esc(name)} progress"></progress>
-        <a class="btn sm" href="#/p/${p.id}/${target}">${esc(label)}</a></article>`;
-    }).join('')}</section>
-    <section class="dashboard-bin" aria-labelledby="dashboard-bin-title"><div class="bin-heading"><h2 id="dashboard-bin-title">Bin</h2>
-      <div class="bin-actions"><button class="btn sm dashboard-drop" id="bin-add">Add files</button><button class="btn sm" id="bin-new">New note</button></div></div>
-      <div id="project-bin"><p class="sub">Loading project bin…</p></div>
-      <a class="dashboard-snippet" href="#/p/${p.id}/script"><span class="kicker">Script</span>
-        ${hook && hook !== firstParagraph.trim() ? `<h3>${esc(hook)}</h3>` : ''}
-        <p>${esc(firstParagraph || 'Write the first paragraph in Script.')}</p></a>
+  const seconds = p.est_seconds || 0, target = (p.target_minutes || 0) * 60;
+  const questions = research.open_questions || [];
+  $('#tabbody').innerHTML = `<div class="home-layout">
+    <section class="home-status" aria-label="Production status">
+      <span class="home-length mono">${fmtTime(seconds)} of ${fmtTime(target)}</span>
+      ${target ? `<span class="home-meter" role="img" aria-label="${fmtTime(seconds)} of a ${fmtTime(target)} target"><span style="width:${Math.min(100, seconds / target * 100).toFixed(1)}%"></span></span>` : ''}
+      ${rows.map(r => `<a class="home-stage ${esc(r.status)}" href="#/p/${p.id}/${r.id}"><span class="home-dot" aria-hidden="true"></span>${esc(r.label)} <span class="mono">${esc(r.reason)}</span></a>`).join('')
+        || '<span class="sub">Loading status…</span>'}
     </section>
-    <aside class="dashboard-facts"><h2>Project facts</h2>
-      <label class="kicker" for="dashboard-idea">Idea</label>
-      <textarea id="dashboard-idea" rows="3" onchange="dashboardSaveIdea(this)">${esc(p.idea)}</textarea>
-      <dl><dt>Channel</dt><dd>${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))}</dd>
-        <dt>Format</dt><dd>${esc(FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format)}</dd>
-        <dt>Aspect</dt><dd class="mono">${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</dd>
-        <dt>Length</dt><dd class="mono">${fmtTime(p.est_seconds || 0)} current / ${p.target_minutes} min target</dd></dl>
-      <h2>Research</h2><p class="mono">${research.facts?.length || 0} facts · ${research.sources?.length || 0} sources · ${research.open_questions?.length || 0} open questions</p>
-      <a href="#/p/${p.id}/script/outline">Open research in Script</a>
-      ${activity.length ? `<h2>Recent activity</h2><ol class="dashboard-activity mono">${activity.map(line => `<li>${esc(line)}</li>`).join('')}</ol>` : ''}
-    </aside></div>`;
+    <div class="home-body">
+      <div class="home-main">
+        <section class="home-card" aria-labelledby="home-materials">
+          <div class="home-card-head"><h2 id="home-materials">Materials</h2>
+            <span class="mono sub" id="home-materials-count"></span><span class="spacer"></span>
+            <button class="btn sm" id="bin-add">Add files</button><button class="btn sm" id="bin-new">New note</button></div>
+          <div id="project-bin"><p class="sub">Loading materials…</p></div>
+        </section>
+        <section class="home-card" aria-labelledby="home-research">
+          <div class="home-card-head"><h2 id="home-research">Research</h2>
+            <span class="mono sub">${research.facts?.length || 0} facts · ${research.sources?.length || 0} sources · ${questions.length} open questions</span>
+            <span class="spacer"></span><a class="btn sm" href="#/p/${p.id}/script">Facts beside the script</a></div>
+          ${questions.length ? `<h3 class="kicker home-q-head">Open questions</h3><ul class="home-questions">${questions.slice(0, 8).map(q => `<li>${esc(typeof q === 'string' ? q : q.question || q.text || '')}</li>`).join('')}</ul>` : ''}
+        </section>
+        <section class="home-card" aria-labelledby="home-needed">
+          <div class="home-card-head"><h2 id="home-needed">Still needed</h2></div>
+          <div id="home-needs">${homeNeeds(p)}</div>
+        </section>
+      </div>
+      <aside class="home-side" aria-label="Brief">
+        <section class="home-card" aria-labelledby="home-brief"><h2 id="home-brief">Brief</h2>
+          <label class="kicker" for="dashboard-idea">Idea</label>
+          <textarea id="dashboard-idea" rows="4" onchange="dashboardSaveIdea(this)">${esc(p.idea)}</textarea>
+          <dl class="home-facts"><dt>Channel</dt><dd>${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))}</dd>
+            <dt>Format</dt><dd>${esc(FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format)}</dd>
+            <dt>Aspect</dt><dd class="mono">${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</dd>
+            <dt>Target</dt><dd class="mono">${p.target_minutes} min</dd></dl>
+        </section>
+      </aside>
+    </div></div>`;
   paintBin();
+}
+
+// What the video still needs, from every stage, each with a way there.
+// Material rights come in once the materials listing has loaded.
+function homeNeeds(p) {
+  const runs = scriptRuns(p), shotOf = sid => runs.findIndex(run => run.some(s => s.id === sid));
+  const spoken = p.slides.filter(s => !s.insert?.kind);
+  const leads = (p.picture_runs || []).map(r => p.slides.find(s => s.id === r[0])).filter(Boolean);
+  const bare = leads.filter(s => !s.insert?.kind && !s.on_camera && ['kenburns', 'essay'].includes(pictureKind(s, p))
+    && !s.candidates?.some(c => c.id === s.chosen_id));
+  const stale = spoken.filter(s => s.take?.path && s.take.narration != null && s.take.narration !== s.narration);
+  const unread = spoken.filter(s => !s.take?.path && s.narration?.trim());
+  const shotList = ids => [...new Set(ids.map(shotOf).filter(n => n >= 0))].sort((a, b) => a - b).slice(0, 8).map(n => n + 1).join(', ');
+  const items = [];
+  if (bare.length) items.push(['EDIT', `${bare.length} visual${bare.length === 1 ? ' has' : 's have'} no picture`, `Shots ${shotList(bare.map(s => s.id))}`,
+    `<a class="btn sm" href="#/p/${p.id}/script/shots" onclick="scriptOpenShot('${runs[shotOf(bare[0].id)]?.[0].id}')">Design the first</a>`]);
+  if (stale.length) items.push(['VOICE', `${stale.length} recording${stale.length === 1 ? ' is' : 's are'} out of date`, `The words changed after recording, in shots ${shotList(stale.map(s => s.id))}`,
+    `<a class="btn sm" href="#/p/${p.id}/voice">Re-record</a>`]);
+  if (unread.length) items.push(['VOICE', `${unread.length} paragraph${unread.length === 1 ? '' : 's'} not recorded`, '',
+    `<a class="btn sm" href="#/p/${p.id}/voice">Record</a>`]);
+  const rights = (binView.pid === p.id ? binView.items : []).filter(binRightsUnknown);
+  if (rights.length) items.push(['RIGHTS', `${rights.length} material${rights.length === 1 ? '' : 's'} in the video with no licence noted`, rights.slice(0, 3).map(i => i.title).join(' · '),
+    `<button class="btn sm" onclick="homeShowMaterials(${JSON.stringify(rights.map(i => i.id)).replaceAll('"', '&quot;')})">Show them</button>`]);
+  return items.map(([stage, title, detail, action]) => `<div class="home-need"><span class="mono home-need-stage">${stage}</span>
+      <div><strong>${esc(title)}</strong>${detail ? `<span class="sub">${esc(detail)}</span>` : ''}</div>${action}</div>`).join('')
+    || '<p class="sub">Nothing outstanding that Home can see.</p>';
+}
+function homeNeedsPaint() {
+  const host = $('#home-needs'), count = $('#home-materials-count');
+  if (host && state.project) host.innerHTML = homeNeeds(state.project);
+  if (count && binView.pid === state.project?.id) {
+    const unused = binView.items.filter(i => ['image', 'clip', 'audio'].includes(i.kind) && !i.used_in.length).length;
+    count.textContent = `${binView.items.length} item${binView.items.length === 1 ? '' : 's'}${unused ? ` · ${unused} unused` : ''}`;
+  }
+}
+function homeShowMaterials(ids) {
+  binView.selected = ids;
+  binView.kind = '';
+  binShell();
+  $('#project-bin')?.scrollIntoView({block: 'start'});
 }
 
 async function dashboardSaveIdea(input) {

@@ -1,4 +1,15 @@
-/* Reusable project bin; files and references stay separate from the edit. */
+/* Home > Materials (the project bin): files, notes and links with what each
+   shows, where it came from and its licence. Kept separate from the edit. */
+const BIN_KINDS = [['', 'All'], ['image', 'Pictures'], ['clip', 'Clips'], ['audio', 'Audio'], ['note', 'Notes'], ['link', 'Links']];
+const BIN_DETAILS = [['shows', 'What it shows'], ['origin', 'Where it came from'], ['licence', 'Licence'], ['made', 'Date'], ['credit', 'Credit line (goes in the description)']];
+// Used in the video but nothing says it may be: worth a look before publishing.
+function binRightsUnknown(i) { return i.used_in.length && ['image', 'clip', 'audio'].includes(i.kind) && !i.licence?.trim(); }
+function binUsedIn(i) {
+  if (!i.used_in.length) return '';
+  const shots = [...new Set(i.used_in.map(sid => scriptShotOf(sid).index).filter(n => n >= 0))].sort((a, b) => a - b);
+  const runs = scriptRuns(state.project);
+  return shots.map(n => `<a href="#/p/${binView.pid}/script/shots" onclick="scriptOpenShot('${runs[n][0].id}')">shot ${n + 1}</a>`).join(', ');
+}
 function binInitial(pid) { return {pid, items:[], labels:[], selected:[], anchor:null, drafts:{}, labelText:'', compose:null, query:'', kind:'', label:'', list:false}; }
 let binView = binInitial(null), binWrites = Promise.resolve();
 async function paintBin() {
@@ -18,12 +29,12 @@ function binShell() {
   const caret = focused?.selectionStart;
   host.innerHTML = `<input id="bin-files" type="file" multiple hidden accept="image/*,video/*,audio/*">
     <form id="bin-compose" ${binView.compose ? '' : 'hidden'}><label for="bin-new-title">Title</label><input type="text" id="bin-new-title" value="${esc(binView.compose?.title || '')}"><label for="bin-new-note">Note</label><textarea id="bin-new-note" rows="4">${esc(binView.compose?.note || '')}</textarea><button class="btn">Save note</button><button class="btn" type="button" id="bin-cancel">Cancel</button></form>
-    <div class="bin-toolbar"><label class="bin-sr-only" for="bin-search">Search the bin</label><input id="bin-search" type="search" placeholder="Search the bin" value="${esc(binView.query)}">
-    <label class="bin-sr-only" for="bin-kind">Kind</label><select id="bin-kind"><option value="">All kinds</option>${['note','image','clip','audio','link'].map(k=>`<option ${binView.kind===k?'selected':''}>${k}</option>`).join('')}</select>
+    <div class="bin-toolbar"><label class="bin-sr-only" for="bin-search">Search materials</label><input id="bin-search" type="search" placeholder="Search materials" value="${esc(binView.query)}">
+    <div class="bin-kinds" role="group" aria-label="Show">${BIN_KINDS.map(([k,label])=>`<button type="button" class="btn sm" data-kind="${k}" aria-pressed="${binView.kind===k}">${label}</button>`).join('')}</div>
     <label class="bin-sr-only" for="bin-label">Label</label><select id="bin-label"><option value="">All labels</option>${binView.labels.map(l=>`<option ${binView.label===l?'selected':''}>${esc(l)}</option>`).join('')}</select>
-    <div class="bin-views" role="group" aria-label="Bin view"><button class="btn sm" id="bin-view-grid" aria-pressed="${!binView.list}">Grid</button><button class="btn sm" id="bin-view-list" aria-pressed="${binView.list}">List</button></div><button type="button" class="btn sm" id="bin-edit-labels">Labels</button></div>
+    <div class="bin-views" role="group" aria-label="Materials view"><button class="btn sm" id="bin-view-grid" aria-pressed="${!binView.list}">Grid</button><button class="btn sm" id="bin-view-list" aria-pressed="${binView.list}">List</button></div><button type="button" class="btn sm" id="bin-edit-labels">Labels</button></div>
     <p class="bin-hint">Drop files · paste text or a link · Shift selects a range · Ctrl/⌘ toggles items</p>
-    <div class="bin-work"><div id="bin-grid"></div><aside id="bin-panel" aria-label="Selected bin item"></aside></div>`;
+    <div class="bin-work"><div id="bin-grid"></div><aside id="bin-panel" aria-label="Selected material"></aside></div>`;
   $('#bin-add').onclick = () => $('#bin-files').click();
   $('#bin-files').onchange = e => binUpload(e.target.files);
   $('#bin-edit-labels').onclick = () => openLabelsEditor({getLabels:()=>binView.labels, change:payload=>binSend('/labels', 'PATCH', payload)});
@@ -37,8 +48,14 @@ function binShell() {
     $('#bin-view-list').setAttribute('aria-pressed', binView.list);
     binGrid();
   };
-  for (const [id,key] of [['search','query'],['kind','kind'],['label','label']]) $('#bin-'+id).oninput = e => { binView[key] = e.target.value; binGrid(); };
+  for (const [id,key] of [['search','query'],['label','label']]) $('#bin-'+id).oninput = e => { binView[key] = e.target.value; binGrid(); };
+  host.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => {
+    binView.kind = b.dataset.kind;
+    host.querySelectorAll('[data-kind]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    binGrid();
+  });
   binGrid(); binPanel();
+  if (typeof homeNeedsPaint === 'function') homeNeedsPaint();
   if (focusId) {
     const target = document.getElementById(focusId);
     target?.focus();
@@ -51,8 +68,8 @@ function binGrid() {
   const items = binView.items.filter(i=>(!binView.kind || i.kind===binView.kind) && (!binView.label || i.labels.includes(binView.label)) && `${i.title} ${i.note}`.toLowerCase().includes(q));
   host.innerHTML = items.map(i=>`<button type="button" class="bin-tile" id="bin-tile-${esc(i.id)}" data-item="${esc(i.id)}" aria-pressed="${binView.selected.includes(i.id)}">
     ${i.thumb?`<img loading="lazy" src="${esc(i.thumb)}" alt="">`:`<span class="bin-excerpt">${esc(i.note.slice(0,160) || i.url)}</span>`}
-    <span class="kicker">${esc(i.kind)}</span><strong class="bin-title" title="${esc(i.title)}">${esc(i.title)}</strong><span class="bin-labels">${i.labels.map(l=>`<span class="chip">${esc(l)}</span>`).join(' ')}</span>
-    <span class="bin-meta mono">${i.duration?fmtTime(i.duration):''} ${i.width?`${i.width}×${i.height}`:''} ${i.size?`${(i.size/1048576).toFixed(2)} MB`:''}</span></button>`).join('') || '<p class="sub">No items match. Add files or a note to this bin.</p>';
+    <span class="kicker">${esc(BIN_KINDS.find(k=>k[0]===i.kind)?.[1]?.replace(/s$/,'') || i.kind)}${i.used_in.length?' · in use':''}${binRightsUnknown(i)?' · no licence':''}</span><strong class="bin-title" title="${esc(i.title)}">${esc(i.title)}</strong><span class="bin-labels">${i.labels.map(l=>`<span class="chip">${esc(l)}</span>`).join(' ')}</span>
+    <span class="bin-meta mono">${i.duration?fmtTime(i.duration):''} ${i.width?`${i.width}×${i.height}`:''} ${i.size?`${(i.size/1048576).toFixed(2)} MB`:''}</span></button>`).join('') || '<p class="sub">Nothing here yet. Drop pictures, clips or audio, or paste a note or link.</p>';
   host.querySelectorAll('[data-item]').forEach(button=>button.onclick=e=>binSelect(button.dataset.item, e, items.map(i=>i.id)));
 }
 function binSelect(id, e, visible) {
@@ -72,9 +89,13 @@ function binSelect(id, e, visible) {
 }
 function binPanel() {
   const items = binView.items.filter(i=>binView.selected.includes(i.id)), item = items.length===1 ? items[0] : null, panel = $('#bin-panel');
-  if (!items.length) { panel.innerHTML = '<p class="sub">Select an item to edit its title, labels and note.</p>'; return; }
+  if (!items.length) { panel.innerHTML = '<p class="sub">Select something to see what it shows, where it came from and its licence.</p>'; return; }
   const draft = item ? (binView.drafts[item.id] ||= {}) : {};
-  panel.innerHTML = `<p class="sub">${items.length} selected (including any hidden by filters)</p>` + (item ? `<label for="bin-title">Title</label><input type="text" id="bin-title" value="${esc(draft.title ?? item.title)}">` : '') + `
+  panel.innerHTML = (item ? `${item.thumb ? `<img class="bin-preview" src="${esc(item.thumb)}" alt="">` : ''}
+    <label for="bin-title">Title</label><input type="text" id="bin-title" value="${esc(draft.title ?? item.title)}">
+    ${['image','clip','audio','link'].includes(item.kind) ? BIN_DETAILS.map(([key,label]) => `<label for="bin-${key}">${label}</label><input type="text" id="bin-${key}" value="${esc(draft[key] ?? item[key] ?? '')}">`).join('') : ''}
+    ${binRightsUnknown(item) ? '<p class="bin-rights">In the video with no licence noted. Check it before publishing.</p>' : ''}`
+    : `<p class="sub">${items.length} selected (including any hidden by filters)</p>`) + `
     <label for="bin-item-label">Label selected items</label><input type="text" id="bin-item-label" value="${esc(binView.labelText)}" list="bin-label-options" placeholder="Type a label"><datalist id="bin-label-options">${binView.labels.map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist>
     <button type="button" class="btn sm" id="bin-label-add">Add label</button><button type="button" class="btn sm" id="bin-label-remove">Remove label</button>
     <div id="bin-label-buttons">${binView.labels.map((l,n)=>{
@@ -82,10 +103,10 @@ function binPanel() {
       return `<button type="button" class="btn sm" data-label="${n}" aria-pressed="${count===items.length ? 'true' : count ? 'mixed' : 'false'}">${n<9?n+1+' ':''}${esc(l)}${count && count<items.length ? ' (some)' : ''}</button>`;
     }).join('')}</div>` + (item ? `
     <label for="bin-note">Note</label><textarea id="bin-note" rows="5">${esc(draft.note ?? item.note)}</textarea><button class="btn" id="bin-save">Save changes</button>
-    <p class="sub">Source: ${esc(item.source)}</p><p>Used in: ${item.used_in.map(id=>`<a href="#/p/${binView.pid}/edit">${esc(id)}</a>`).join(', ') || 'No paragraphs'}</p>
-    ${item.kind==='link'?`<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">Open link</a>`:''}<button class="btn sm" id="bin-delete">Remove item</button>` : '');
+    <p>Used in: ${binUsedIn(item) || 'not used yet'}</p>
+    ${item.kind==='link'?`<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">Open link</a>`:''}<button class="btn sm" id="bin-delete">Remove from materials</button>` : '');
   if (item) {
-    for (const key of ['title','note']) $('#bin-'+key).oninput = e => { draft[key] = e.target.value; };
+    for (const key of ['title','note',...BIN_DETAILS.map(d=>d[0])]) { const el = $('#bin-'+key); if (el) el.oninput = e => { draft[key] = e.target.value; }; }
     $('#bin-save').onclick = () => binSave(item.id);
     $('#bin-delete').onclick = () => binSend('/'+item.id, 'DELETE');
   }
@@ -114,7 +135,7 @@ function binSend(path, method, payload) {
   // Serialize writes so a slow response cannot replace a newer vocabulary or selection.
   const request = async () => {
     try {
-      const data = await api(`/api/projects/${view.pid}/bin${path}`, {method, body:payload instanceof FormData?payload:payload?JSON.stringify(payload):undefined, editLabel:'Edit project bin', editGesture:crypto.randomUUID()});
+      const data = await api(`/api/projects/${view.pid}/bin${path}`, {method, body:payload instanceof FormData?payload:payload?JSON.stringify(payload):undefined, editLabel:'Edit materials', editGesture:crypto.randomUUID()});
       if (view !== binView || state.project?.id!==view.pid) return true;
       if (path==='/labels' && payload.old===view.label) view.label = payload.action==='delete' ? '' : payload.new;
       Object.assign(view, data);
@@ -145,7 +166,7 @@ document.addEventListener('paste', e=>{
   binSend(link?'/link':'/note', 'POST', link?{url:text}:{title:text.split('\n')[0].slice(0,100),note:text});
 });
 for (const type of ['dragenter','dragover','dragleave','drop']) document.addEventListener(type, e=>{
-  const dashboard = e.target.closest('.dashboard-layout');
+  const dashboard = e.target.closest('.home-layout');
   if (!dashboard || !e.dataTransfer?.types.includes('Files')) return;
   e.preventDefault();
   dashboard.classList.toggle('bin-dragging', type==='dragenter' || type==='dragover');
