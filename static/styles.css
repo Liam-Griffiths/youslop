@@ -233,7 +233,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: 22px;
-  padding: 0 20px; min-height: 52px; flex-wrap: wrap;
+  padding: 0 20px; min-height: 52px; flex-wrap: nowrap;
   background: var(--bg);
   border-bottom: 1px solid var(--line-soft);
 }
@@ -249,9 +249,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
 /* --------------------------------------------------------------- studio shell */
 [hidden] { display: none !important; }
 .brand { text-decoration: none; color: var(--ink); flex: none; }
-#app-nav { display: flex; gap: 4px; flex-wrap: wrap; }
-#app-nav a, .shell-more a { color: var(--dim); text-decoration: none; padding: 8px 12px; }
-#app-nav a[aria-current], #app-nav a:hover, .shell-more a:hover { background: var(--raised); color: var(--ink); }
+#app-nav, .app-tools { display: flex; align-items: stretch; gap: 2px; align-self: stretch; }
+#app-nav { flex: 1; min-width: 0; }
+#app-nav a, .app-tools a { display: flex; align-items: center; padding: 0 12px; color: var(--dim); text-decoration: none;
+  font-size: 14px; border-bottom: 2px solid transparent; border-top: 2px solid transparent; white-space: nowrap; }
+#app-nav a:hover, .app-tools a:hover { color: var(--ink); }
+#app-nav a[aria-current], .app-tools a[aria-current] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.app-tools a { font-size: 13px; padding: 0 8px; }
+.nav-sep { width: 1px; margin: 16px 10px; background: var(--line); flex: none; }
+.shell-more a { color: var(--dim); text-decoration: none; padding: 8px 12px; }
+.shell-more a:hover { background: var(--raised); color: var(--ink); }
+.topbar-search { display: inline-flex; align-items: center; gap: 10px; color: var(--dim); }
+.topbar-search kbd { font: 10.5px var(--mono); color: var(--ink-faint); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; background: none; }
+.topbar-right a.pill { text-decoration: none; }
+@media (max-width: 1100px) { .topbar-search span { display: none; } .app-tools a[href="#/guide"] { display: none; } }
 .shell-more { position: relative; color: var(--dim); }
 .topbar:has(.project-bar:not([hidden])) { flex-wrap: nowrap; }
 .topbar-right:empty { display: none; }
@@ -318,7 +329,7 @@ body:has(.jobs-live-status) .app-shell { padding-bottom: 48px; }
   .shell-inspector { flex: 1 1 100%; width: auto; border-left: 0; border-top: 1px solid var(--line); }
 }
 /* Status is configuration only (Settings has it); drop it before the nav wraps. */
-@media (max-width: 1399px) { .topbar-right { display: none; } }
+
 @media (max-width: 800px) { #app-nav { order: 3; width: 100%; } }
 
 /* ------------------------------------------------------------------- type */
@@ -1165,10 +1176,10 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 
 /* Home: Start above a searchable project table and the shoots column. */
 .home { max-width: 1280px; margin: 0 auto; }
-.home-start { padding: 28px; margin-bottom: 28px; }
-.home-start h1 { margin: 0; flex: 1; font-size: 44px; }
+.home-start { padding: 22px 24px; margin-bottom: 24px; }
+.home-start h1 { margin: 0; font-size: 28px; }
 .home-start .micro, .home h2 { font: 500 11px var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
-.home-start-modes { flex-wrap: wrap; margin: 18px 0 8px; }
+.home-start-modes { flex-wrap: wrap; margin: 14px 0 14px; }
 .home [aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .home-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .home-controls .field { margin-bottom: 0; flex: 1 1 130px; }

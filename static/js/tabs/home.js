@@ -10,18 +10,15 @@ async function renderHome() {
   try { homeQuery = localStorage.getItem('corkbored.homeQuery') || ''; } catch (_) {}
   view.innerHTML = `<div class="home">
     <section class="panel home-start" aria-labelledby="start-heading">
-      <div class="row"><h1 id="start-heading">Idea in. Episode out.</h1><span class="micro">New video</span></div>
+      <h1 id="start-heading">Start a video</h1>
       <div class="row home-start-modes" role="group" aria-label="Start from">
         <button class="btn" data-start="idea" onclick="homeStart('idea')">An idea</button>
         <button class="btn" data-start="script" onclick="homeStart('script')">My own script</button>
-        <button class="btn" disabled aria-describedby="footage-start-note">A footage shoot</button>
         <button class="btn" data-start="format" onclick="homeStart('format')">A saved style</button>
         <button class="btn ghost" onclick="$('#projfile').click()">Open a .corkbored file</button>
         <input type="file" id="projfile" accept=".corkbored,.youslop" hidden
           onchange="openProjectFile(this.files[0]);this.value=''">
       </div>
-      <p class="sub" id="footage-start-note">To use a footage shoot, start a video with an idea or script, then add its clips in Edit.</p>
-      <p class="sub"><a href="#/guide">See how it works</a></p>
       <label class="field" id="idea-field"><span>What is the video about?</span>
         <textarea id="idea" rows="2" placeholder="Describe the story you want to tell."></textarea></label>
       <div id="script-fields" hidden>

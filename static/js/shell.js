@@ -26,13 +26,16 @@ function stageTab(stage, subtab) {
     publish: 'render'}[stage] || 'dashboard';
 }
 
+// Two groups: where videos live, then what they are made from. Help and
+// Settings sit on the right, out of the way of the work.
+const APP_NAV = [[['', 'Projects'], ['channels', 'Channels']], [['library', 'Library'], ['footage', 'Footage'], ['blocks', 'Blocks'], ['packs', 'Packs']]];
 function paintAppNav() {
   const hash = location.hash || '#/';
-  $('#app-nav').innerHTML = [['', 'Projects'], ['footage', 'Footage'], ['library', 'Library'],
-    ['blocks', 'Blocks'], ['channels', 'Channels'], ['packs', 'Packs'], ['settings', 'Settings']].map(([id, name]) => {
-      const active = id ? hash.startsWith(`#/${id}`) : hash === '#/' || hash === '#/projects';
-      return `<a href="#/${id}" ${active ? 'aria-current="page"' : ''}>${name}</a>`;
-    }).join('');
+  const on = id => id === '' ? hash === '#/' || hash === '#/projects'
+    : id === 'channels' ? /^#\/(channels|c\/)/.test(hash) : hash.startsWith(`#/${id}`);
+  const link = ([id, name]) => `<a href="#/${id}" ${on(id) ? 'aria-current="page"' : ''}>${name}</a>`;
+  $('#app-nav').innerHTML = APP_NAV.map(group => group.map(link).join('')).join('<span class="nav-sep" aria-hidden="true"></span>');
+  $('#app-tools').innerHTML = [['guide', 'How it works'], ['settings', 'Settings']].map(link).join('');
 }
 
 // Edit borrows the shell slot inside its player row so the lanes below can
@@ -50,6 +53,8 @@ function resetShell() {
   state.editToolsRoute = '';
   restoreShellInspector();
   $('#app-nav').hidden = false;
+  $('#app-tools').hidden = false;
+  $('.shell-more').hidden = true;
   $('#project-bar').hidden = true;
   $('#stage-bar').hidden = true;
   $('.shell-more').open = false;
@@ -67,15 +72,17 @@ async function loadShellStatus() {
   ]);
   const [llm, voice, settings] = await state.shellStatus;
   if (state.project) return;
-  const backend = llm ? `Writing · ${llm.label || llm.resolved}${llm.local ? ' (local)' : ''}${llm.resolved === 'cli' && !llm.cli_found ? ' unavailable' : ''}` : 'Writing · unknown';
-  $('#topbar-right').textContent = [backend,
-    voice ? `Voice · ${voice.ready ? 'ready' : 'not ready'}` : 'Voice · unknown',
-    settings ? `Scenes · ${settings.card_engine}` : 'Scenes · unknown'].join(' · ');
+  // Say nothing while things work; point at Settings only when writing cannot run.
+  const broken = llm && llm.resolved === 'cli' && !llm.cli_found;
+  $('#topbar-right').innerHTML = broken
+    ? '<a class="pill warn" href="#/settings/writing">Writing model not set up</a>' : '';
 }
 
 function paintProjectShell() {
   const p = state.project;
   $('#app-nav').hidden = true;
+  $('#app-tools').hidden = true;
+  $('.shell-more').hidden = false;
   const bar = $('#project-bar');
   bar.hidden = false;
   const stages = projectStages(p);

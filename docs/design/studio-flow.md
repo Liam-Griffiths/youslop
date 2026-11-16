@@ -500,3 +500,13 @@ themes are saved in the data folder's `themes/`, appear in the strip for
 every channel with an **Edit** button, and apply like any other theme. The
 graphics settings land on the channel's block theme, where they can still be
 changed one by one.
+
+### Top menu (2026-11-16)
+
+The app menu is two groups: where videos live (Projects, Channels), then what
+they are made from (Library, Footage, Blocks, Packs). The current page is
+bold with an accent underline. How it works, Settings, the theme switch and
+Search sit on the right. There is no backend status text; a warning pill
+appears only when the writing model cannot run, and links to Settings. Inside
+a project the menu gives way to the project bar and everything is under More.
+Home's start panel is headed "Start a video" and offers only choices that work.
