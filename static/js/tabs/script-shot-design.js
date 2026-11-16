@@ -74,7 +74,7 @@ function shotStrip(p, row, beats, picked) {
 function shotDesign(p, beat) {
   const s = beat.lead, view = shotKindView.get(s.id) || beat.kind;
   if (beat.continues) return `<p>This paragraph still shows the picture from the shot before. Give it a visual of its own to design it here.</p>
-    <button class="btn sm primary" onclick="shotBreak('${s.id}',true)">Start a visual here</button>`;
+    <button class="btn sm" onclick="shotBreak('${s.id}',true)">Start a visual here</button>`;
   if (s.on_camera) return `<p>The camera take supplies this visual. Change its layout in Edit.</p>
     <button class="btn sm" onclick="openVisualEdit('${s.id}')">Open in Edit</button>`;
   const tabs = SHOT_KINDS.map(([id, label, sub]) => `<button role="radio" aria-checked="${id === view}" class="shots-kind"
@@ -124,18 +124,18 @@ function shotKindPanel(p, s, view) {
   if (view === 'map') return `<div class="shots-design-preview">${shotPreview(s, c?.provider === 'maps' ? c : null, 'No map made yet')}</div>
     <div class="shots-design-controls"><p><strong>${esc(s.map_place || 'No place chosen')}</strong></p>
       <p class="sub">${s.map_kind === 'street' ? 'Street map' : 'Satellite'} · ${s.map_style === 'establishing' ? 'establishing move' : 'still'}</p>
-      <button class="btn sm primary" onclick="openMapPicker('${s.id}')">${s.map_place ? 'Change the place' : 'Choose the place'}</button></div>`;
+      <button class="btn sm" onclick="openMapPicker('${s.id}')">${s.map_place ? 'Change the place' : 'Choose the place'}</button></div>`;
   if (view === '3d') return `<div class="shots-design-preview">${shotPreview(s, c, '3D shot')}</div>
     <div class="shots-design-controls"><p class="sub">Models in this project: ${esc((p.cast || []).map(x => x.subject).filter(Boolean).join(', ') || 'none yet')}</p>
-      ${s.shot?.intent ? `<button class="btn sm primary" onclick="openShot('${s.id}')">Open the 3D shot</button>` : ''}
+      ${s.shot?.intent ? `<button class="btn sm" onclick="openShot('${s.id}')">Open the 3D shot</button>` : ''}
       <div class="shots-row-actions"><a class="btn sm" href="#/p/${p.id}/edit/cast">Models and parts</a>
       <a class="btn sm" href="#/p/${p.id}/edit/stage">Shots and solver checks</a></div></div>`;
   if (view === 'diagram') return `<div class="shots-design-preview">${shotPreview(s, c?.provider === 'diagram' ? c : null, 'No diagram drawn yet')}</div>
     <div class="shots-design-controls"><p class="sub">A drawn diagram: boxes, arrows, labels and numbers, built from your description.</p>
-      <button class="btn sm primary" onclick="openDiagramEditor('${s.id}')">${s.diagram && Object.keys(s.diagram).length ? 'Edit the diagram' : 'Draw a diagram'}</button></div>`;
+      <button class="btn sm" onclick="openDiagramEditor('${s.id}')">${s.diagram && Object.keys(s.diagram).length ? 'Edit the diagram' : 'Draw a diagram'}</button></div>`;
   return `<div class="shots-design-preview">${s.cues?.blocks?.length ? visualBlockStill(p, s) : shotPreview(s, c?.provider === 'custom' ? c : null, 'No scene designed yet')}</div>
     <div class="shots-design-controls"><p class="sub">A designed frame: a title card, a number landing, a comparison or a timeline. Make it with the agent in Create, or design it by hand.</p>
-      <div class="shots-row-actions"><button class="btn sm primary" onclick="createFromShot('${s.id}')">Make it in Create</button>
+      <div class="shots-row-actions"><button class="btn sm" onclick="createFromShot('${s.id}')">Make it in Create</button>
       <button class="btn sm" onclick="openCustomEditor('${s.id}')">Design a slide</button>
       <button class="btn sm" onclick="openBlockPicker('${state.project.id}','${s.id}')">Choose a block</button></div></div>`;
 }
@@ -226,18 +226,18 @@ function shotAgentPanel(row) {
       <div class="script-agent-input"><label class="sr-only" for="shot-agent-input">Message the shot agent</label>
         <textarea id="shot-agent-input" rows="2" placeholder="Describe what you want this shot to show…"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();shotAgentSend();}"></textarea>
-        <button class="btn sm primary" id="shot-agent-send" onclick="shotAgentSend()">Send</button></div>
+        <button class="btn sm" id="shot-agent-send" onclick="shotAgentSend()">Send</button></div>
     </div>`;
 }
 function shotAgentMessage(m, i) {
   if (m.role === 'user') return `<div class="agent-msg user">${esc(m.text)}</div>`;
   const desc = m.description ? `<div class="agent-card edit"><span class="kicker">Description</span><p>${esc(m.description)}</p>
     <div class="agent-card-actions">${m.descState === 'used' ? '<span class="agent-note">Used.</span>'
-      : `<button class="btn sm primary" onclick="shotAgentUseDescription(${i})">Use this description</button>`}</div></div>` : '';
+      : `<button class="btn sm" onclick="shotAgentUseDescription(${i})">Use this description</button>`}</div></div>` : '';
   const plan = m.visuals?.length ? `<div class="agent-card edit"><span class="kicker">Visuals · ${m.visuals.length}</span>
     <ol class="shots-plan">${m.visuals.map(v => `<li><span class="mono">¶${v.paragraph} · ${esc(shotKindLabel(v.kind))}</span> ${esc(v.query)}${v.why ? `<span class="agent-note"> ${esc(v.why)}</span>` : ''}</li>`).join('')}</ol>
     <div class="agent-card-actions">${m.planState === 'applied' ? '<span class="agent-note">Set up. Undo in the top bar reverses it.</span>'
-      : `<button class="btn sm primary" onclick="shotAgentApply(${i})">Set up these visuals</button>`}</div></div>` : '';
+      : `<button class="btn sm" onclick="shotAgentApply(${i})">Set up these visuals</button>`}</div></div>` : '';
   return `<div class="agent-msg${m.error ? ' error' : ''}">${esc(m.text)}</div>${desc}${plan}`;
 }
 function shotAgentPaint() {

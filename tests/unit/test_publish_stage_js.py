@@ -55,6 +55,10 @@ async function run(){
  check(stageTab('publish','thumb')==='render' && stageTab('publish','render')==='render','old subroutes use merged screen');
  await paintRender();
  check(posts.length===0,'page load never renders, uploads or calls model');
+ const accents=html=>(html.match(/class="[^"]*\bprimary\b/g)||[]).length;
+ check(accents(body.innerHTML)===1 && accents(thumb.innerHTML)===0,'only finish-list Next is accent');
+ check(body.innerHTML.includes('class="btn" onclick="doRender(false)"'),'render stays available as secondary');
+ check(thumb.innerHTML.includes('>Download</a>') && !thumb.innerHTML.includes('>download</a>'),'thumbnail Download capitalization');
  for(const label of ['Check','Review by Claude','Render','Thumbnail','Description & chapters','Upload'])
    check(body.innerHTML.includes(label),'missing finish step '+label);
  check(body.innerHTML.includes('Music bed') && body.innerHTML.includes('Pause between paragraphs'),'sound controls kept');
@@ -73,6 +77,7 @@ async function run(){
  ready=true;
  await paintRender();
  check(!upload.disabled && body.innerHTML.includes('Finished video'),'verified current render enables upload and output');
+ check(accents(body.innerHTML)===1 && accents(thumb.innerHTML)===0,'finished output keeps one accent');
  check(body.innerHTML.includes('Verified after render') && body.innerHTML.includes('Show in folder'),'output controls present');
  ready=false; await doYoutubeUpload();
  check(posts.length===0,'upload rechecks readiness after project edits');

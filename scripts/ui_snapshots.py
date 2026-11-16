@@ -20,10 +20,45 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[1]
 FORMATS = ('kenburns', 'essay', 'loudmouth', 'stage')
-PROJECT_STAGES = ('dashboard', 'script', 'voice', 'edit', 'publish')
+PROJECT_STAGES = ('dashboard', 'script', 'create', 'voice', 'edit', 'publish')
 DASHBOARD_PROJECTS = ('psnapnew', 'psnaphalf', 'psnapdone')
 DASHBOARD_SIZES = ((1280, 720), (1920, 1080))
 PROJECT_TABS = ('script', 'media', 'record', 'thumb', 'render')
+
+# Run before route-specific dialogs/interactions. Closed details and dialogs
+# have no visible boxes; actions below the fold still count as page actions.
+PROJECT_CHROME_CHECK = r'''(() => {
+  const visible = el => el.checkVisibility({visibilityProperty: true});
+  const accents = [...document.querySelectorAll('.btn.primary')].filter(visible);
+  if (accents.length > 1) throw Error('Multiple accent actions: ' + accents.map(el => el.textContent.trim()).join(', '));
+  const bar = document.querySelector('#project-bar'), bounds = bar.getBoundingClientRect();
+  const top = document.querySelector('.topbar').getBoundingClientRect();
+  if (top.height > 54 || bounds.left < 0 || bounds.right > innerWidth)
+    throw Error('Project bar wraps or overflows');
+  for (const el of [...bar.children].filter(visible)) {
+    const r = el.getBoundingClientRect();
+    if (Math.abs((r.top + r.bottom) / 2 - (bounds.top + bounds.bottom) / 2) > 2 ||
+        r.left < bounds.left - 1 || r.right > bounds.right + 1)
+      throw Error('Project control wraps or overflows: ' + el.textContent.trim());
+  }
+  const title = bar.querySelector('.project-title');
+  if (!title.title || getComputedStyle(title).whiteSpace !== 'nowrap' ||
+      getComputedStyle(title).textOverflow !== 'ellipsis') throw Error('Project title cannot truncate with a tooltip');
+  if (state.stage === 'voice' && bar.textContent.includes('Microphone setup'))
+    throw Error('Duplicate Voice controls in project bar');
+  if (state.tab === 'edit') {
+    const compact = innerWidth < 1400;
+    const button = bar.querySelector('.project-secondary');
+    if (!button || !!visible(button) === compact) throw Error('Preview is in the wrong bar at this width');
+    const more = document.querySelector('.shell-more');
+    more.open = true;
+    const action = document.querySelector('#project-more-actions button');
+    const available = action && !!visible(action);
+    more.open = false;
+    if (available !== compact) throw Error('Preview missing or duplicated in More');
+  }
+  return true;
+})()'''
 
 
 def routes():
@@ -440,6 +475,8 @@ def capture(base, out, theme="dark"):
                     raise StageError(f'{route}: network did not become idle')
                 time.sleep(.02)
             _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+            if route.startswith('#/p/') and route.split('/')[-1] in PROJECT_STAGES:
+                _evaluate(cdp, session, PROJECT_CHROME_CHECK)
             if route == '#/library':
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
@@ -678,6 +715,30 @@ def capture(base, out, theme="dark"):
             path.write_bytes(base64.b64decode(png['data']))
             rows.append({'path': str(path), 't': 0, 'why': route})
             print(f'{route} -> {path.name}')
+            if route in [f'#/p/psnapkenburns/{stage}' for stage in PROJECT_STAGES]:
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)
+                # Stress the title and channel metadata without changing fixture files.
+                _evaluate(cdp, session, '''(() => {
+                  window.__projectTitle = state.project.title;
+                  window.__channelName = state.channels.find(c => c.id === state.project.channel_id).name;
+                  state.project.title = 'A very long project title that must stay on one row '.repeat(6);
+                  state.channels.find(c => c.id === state.project.channel_id).name = 'A very long channel name '.repeat(6);
+                  paintProjectShell(); return true;
+                })()''')
+                _evaluate(cdp, session, 'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+                _evaluate(cdp, session, PROJECT_CHROME_CHECK)
+                png = cdp.send('Page.captureScreenshot', {'format':'png', 'fromSurface':True}, session)
+                extra = path.with_stem(f'{path.stem}--1280x720')
+                extra.write_bytes(base64.b64decode(png['data']))
+                rows.append({'path':str(extra), 't':0, 'why':f'{route} at 1280×720 with long title and channel'})
+                _evaluate(cdp, session, '''(() => {
+                  state.project.title = window.__projectTitle;
+                  state.channels.find(c => c.id === state.project.channel_id).name = window.__channelName;
+                  paintProjectShell(); return true;
+                })()''')
+                cdp.send('Emulation.setDeviceMetricsOverride', {
+                    'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
             if route in ('#/p/psnapoutline/script/outline', '#/p/psnapbeatonly/script/outline'):
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1280, 'height':720, 'deviceScaleFactor':1, 'mobile':False}, session)

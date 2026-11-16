@@ -42,11 +42,11 @@ function homeDocsShell(error = '') {
       ${add === 'text' ? `<form class="home-doc-form" onsubmit="event.preventDefault(); homeDocPaste()">
         <label for="home-doc-title">Title</label><input id="home-doc-title" type="text" placeholder="Notes from the museum visit">
         <label for="home-doc-text">Text</label><textarea id="home-doc-text" rows="6" placeholder="Paste what you copied"></textarea>
-        <div class="home-doc-add"><button class="btn sm primary">Add document</button><button class="btn sm ghost" type="button" onclick="homeDocAdding('')">Cancel</button></div></form>` : ''}
+        <div class="home-doc-add"><button class="btn sm">Add document</button><button class="btn sm ghost" type="button" onclick="homeDocAdding('')">Cancel</button></div></form>` : ''}
       ${add === 'link' ? `<form class="home-doc-form" onsubmit="event.preventDefault(); homeDocLink()">
         <label for="home-doc-url">Web page or PDF link</label><input id="home-doc-url" type="url" placeholder="https://">
         <p class="sub">A copy is saved, so the page can change or vanish without losing your source.</p>
-        <div class="home-doc-add"><button class="btn sm primary">Save it</button><button class="btn sm ghost" type="button" onclick="homeDocAdding('')">Cancel</button></div></form>` : ''}
+        <div class="home-doc-add"><button class="btn sm">Save it</button><button class="btn sm ghost" type="button" onclick="homeDocAdding('')">Cancel</button></div></form>` : ''}
       <p class="sub" id="home-doc-status" role="status">${esc(error)}</p>
       ${homeDocs.docs.map(x => `<button class="home-doc-row" aria-current="${x.id === homeDocs.picked}" onclick="homeDocPick('${x.id}')">
           <span class="home-doc-icon kind-${esc(x.kind)}" aria-hidden="true">${HOME_DOC_KIND[x.kind] || 'DOC'}</span>
@@ -68,7 +68,7 @@ function homeDocView(d) {
       <span class="mono sub">${HOME_DOC_KIND[d.kind] || 'DOC'}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source link</a>` : ''}</span>
       <span class="spacer"></span>
       ${d.file ? `<a class="btn sm" href="/api/projects/${homeDocs.pid}/documents/${d.id}/file" target="_blank" rel="noopener">Open original</a>` : ''}
-      <button class="btn sm ${d.read_at ? '' : 'primary'}" onclick="homeDocRead('${d.id}')">${d.read_at ? 'Read again for facts' : 'Read for facts'}</button>
+      <button class="btn sm" onclick="homeDocRead('${d.id}')">${d.read_at ? 'Read again for facts' : 'Read for facts'}</button>
       <button class="btn sm ghost" onclick="homeDocRemove('${d.id}')">Remove</button></div>
     <div class="home-doc-page">
       <div class="home-doc-pager"><button class="btn xs ghost" ${n <= 1 ? 'disabled' : ''} onclick="homeDocTurn(-1)" aria-label="Previous page">‹</button>

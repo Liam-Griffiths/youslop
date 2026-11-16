@@ -253,10 +253,21 @@ button, input, textarea, select { font: inherit; color: inherit; }
 #app-nav a, .shell-more a { color: var(--dim); text-decoration: none; padding: 8px 12px; }
 #app-nav a[aria-current], #app-nav a:hover, .shell-more a:hover { background: var(--raised); color: var(--ink); }
 .shell-more { position: relative; color: var(--dim); }
+.topbar:has(.project-bar:not([hidden])) { flex-wrap: nowrap; }
+.topbar-right:empty { display: none; }
+.shell-more, .topbar > button { flex-shrink: 0; }
 .shell-more summary { cursor: pointer; min-height: 34px; display: flex; align-items: center; }
 .shell-more nav { position: absolute; top: 100%; right: 0; width: 200px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; }
-.project-bar { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; flex-wrap: wrap; }
-.project-title { font-weight: 500; overflow-wrap: anywhere; }
+.project-bar { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+.project-title { font-weight: 500; flex: 1 1 120px; min-width: 0; max-width: 360px; }
+.project-title, .project-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-meta { flex: 0 1 auto; min-width: 0; max-width: 280px; }
+.project-bar > .btn { flex-shrink: 0; white-space: nowrap; }
+#project-more-actions { display: none; }
+@media (width < 1400px) {
+  .project-bar .project-secondary { display: none; }
+  #project-more-actions:not(:empty) { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); padding: 8px; }
+}
 .topbar-right, .project-meta, .stage-state, .jobs-strip { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dim); }
 .project-bar .primary { margin-left: auto; min-height: 34px; text-decoration: none; display: flex; align-items: center; }
 .stage-bar { display: flex; overflow-x: auto; padding: 0 20px; border-bottom: 1px solid var(--line); }

@@ -29,7 +29,7 @@ function homeAgentPanel() {
       <div class="script-agent-input"><label class="sr-only" for="home-agent-input">Message the agent</label>
         <textarea id="home-agent-input" rows="2" placeholder="Ask, research or plan…"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();homeAgentSend();}"></textarea>
-        <button class="btn sm primary" id="home-agent-send" onclick="homeAgentSend()">Send</button></div>
+        <button class="btn sm" id="home-agent-send" onclick="homeAgentSend()">Send</button></div>
       <button class="btn xs ghost script-agent-clear" onclick="homeAgentClear()">Clear conversation</button>
     </div>`;
 }
@@ -40,7 +40,7 @@ function homeAgentMessage(m, i) {
       <p>${esc(a.text)}</p>${a.why ? `<p class="agent-note">${esc(a.why)}</p>` : ''}
       <div class="agent-card-actions">${a.state === 'done' ? `<span class="agent-note">${a.type === 'search' ? 'Searching; pages arrive in Research documents.' : 'Done.'}</span>`
         : a.type === 'search' && m.can_search === false ? '<span class="agent-note">Set up a web search in Settings to run this.</span>'
-        : `<button class="btn sm primary" onclick="homeAgentApply(${i},${j})">${HOME_ACTION[a.type][1]}</button>`}</div></div>`).join('');
+        : `<button class="btn sm" onclick="homeAgentApply(${i},${j})">${HOME_ACTION[a.type][1]}</button>`}</div></div>`).join('');
   return `<div class="agent-msg${m.error ? ' error' : ''}">${m.error ? errorMarkup(m.text, {project_id: state.project?.id}) : esc(m.text)}</div>${actions}`;
 }
 function homeAgentPaint() {

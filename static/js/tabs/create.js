@@ -34,7 +34,7 @@ function createShell() {
       <form class="create-new" onsubmit="event.preventDefault(); createNew()">
         <label class="kicker" for="create-brief">New graphic</label>
         <textarea id="create-brief" rows="3" placeholder="Describe it: a number landing, a comparison, a title card, a timeline…">${esc(pending?.brief || '')}</textarea>
-        <button class="btn sm primary">Make it with the agent</button></form>
+        <button class="btn sm">Make it with the agent</button></form>
       <h2 class="kicker create-list-head">This project · ${createView.graphics.length}</h2>
       ${createView.graphics.map(x => `<button class="create-row" aria-current="${x.id === createView.picked}" onclick="createPick('${x.id}')">
         <span class="create-row-title">${esc(x.title)}</span>
@@ -80,7 +80,7 @@ function createStage(g) {
         <label class="kicker" for="create-slide">Paragraph it plays over</label>
         <select id="create-slide">${options}</select>
         <p class="sub">It starts with the paragraph and holds on its last frame.${placed.length ? ` In shot${placed.length === 1 ? '' : 's'} ${placed.join(', ')}.` : ''}</p>
-        <button class="btn sm primary" ${made ? '' : 'disabled'} onclick="createPlace()">Place in shot</button></section>
+        <button class="btn sm" ${made ? '' : 'disabled'} onclick="createPlace()">Place in shot</button></section>
       <section class="create-card" aria-labelledby="create-details"><h2 id="create-details">Details</h2>
         <label class="kicker" for="create-brief-edit">Brief</label>
         <textarea id="create-brief-edit" rows="3" onchange="createPatch({brief:this.value})">${esc(g.brief || '')}</textarea>
@@ -177,7 +177,7 @@ function createAgentPanel(g) {
       <div class="script-agent-input"><label class="sr-only" for="create-agent-input">Message the graphics agent</label>
         <textarea id="create-agent-input" rows="2" placeholder="Describe a change…"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();createAgentSend();}"></textarea>
-        <button class="btn sm primary" id="create-agent-send" onclick="createAgentSend()">Send</button></div>
+        <button class="btn sm" id="create-agent-send" onclick="createAgentSend()">Send</button></div>
     </div>`;
 }
 function createAgentPaint() {

@@ -69,7 +69,7 @@ planOutline={sections:[{id:'x',heading:'Only beat',chapter:'Start',words:100}]};
 state.project.slides=[];planDraw();
 check(body.innerHTML.includes('Only beat')&&!body.innerHTML.includes('outline-shot"'),'outline-only beats');
 check(body.innerHTML.includes('class="plan-premise" open>'),'outline-only premise open');
-check(body.innerHTML.includes('class="btn primary" onclick="planWrite()" >Write the script</button>'),'first write accent');
+check(body.innerHTML.includes('class="btn" onclick="planWrite()" >Write the script</button>'),'first write secondary beside shell Next');
 print('corkboard passed');
 '''
     script = tmp_path / 'outline.js'

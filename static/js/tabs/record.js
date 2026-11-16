@@ -228,7 +228,7 @@ function cloudVoicePanel(p, e) {
       <strong>${esc(e.label)} isn't set up yet.</strong>
       <div class="mono" style="margin-top:6px;color:var(--ink-dim)">${esc(e.blurb || '')}</div>
       <div class="row" style="margin-top:10px">
-        <a class="btn sm primary" href="#/settings">add your ${esc(e.label)} API key in Settings</a>
+        <a class="btn sm" href="#/settings">add your ${esc(e.label)} API key in Settings</a>
         <span class="mono" style="color:var(--ink-faint)">it works as soon as it's saved — no restart</span>
       </div>
     </div>`;

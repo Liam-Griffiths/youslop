@@ -36,7 +36,7 @@ function scriptAgentPanel(p, castNote = '') {
         <div class="script-agent-input">
           <label class="sr-only" for="script-agent-input">Message the script agent</label>
           <textarea id="script-agent-input" rows="2" placeholder="Ask about the script…" onkeydown="scriptAgentKey(event)"></textarea>
-          <button class="btn sm primary" id="script-agent-send" onclick="scriptAgentSend()">Send</button>
+          <button class="btn sm" id="script-agent-send" onclick="scriptAgentSend()">Send</button>
         </div>
         <button class="btn xs ghost script-agent-clear" onclick="scriptAgentClear()">Clear conversation</button>
       </div>
@@ -77,7 +77,7 @@ function scriptAgentMessage(m, i) {
       <button class="btn sm ghost" onclick="scriptAgentUndo(${i},${j})">Undo</button></div>`;
     return `<div class="agent-card edit"><span class="kicker">Edit · ¶${e.paragraph}</span>
       <del>${esc(e.before)}</del><ins>${esc(e.after)}</ins>${e.why ? `<p class="agent-note">${esc(e.why)}</p>` : ''}
-      <div class="agent-card-actions"><button class="btn sm primary" onclick="scriptAgentApply(${i},${j})">Apply</button>
+      <div class="agent-card-actions"><button class="btn sm" onclick="scriptAgentApply(${i},${j})">Apply</button>
       <button class="btn sm" onclick="scriptAgentShow('${esc(e.id)}')">Show in page</button>
       <button class="btn sm ghost" onclick="scriptAgentDismiss(${i},${j})">Dismiss</button></div></div>`;
   }).join('');

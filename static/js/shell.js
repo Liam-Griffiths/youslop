@@ -53,6 +53,8 @@ function resetShell() {
   $('#project-bar').hidden = true;
   $('#stage-bar').hidden = true;
   $('.shell-more').open = false;
+  const more = $('#project-more-actions');
+  if (more) more.innerHTML = '';
   $('#topbar-right').innerHTML = '';
   paintAppNav();
 }
@@ -84,13 +86,17 @@ function paintProjectShell() {
     : stages.slice(i + 1).find(([id]) => id !== 'create');
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
   const format = p.kind === 'clip' ? 'Clip' : FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
-  bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
-    <span class="project-meta">${esc(channel?.name || (p.channel_id ? 'Channel' : 'Standalone'))} · ${esc(format)} · ${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}</span>
+  const title = p.title || p.idea;
+  const meta = `${channel?.name || (p.channel_id ? 'Channel' : 'Standalone')} · ${format} · ${p.aspect === 'portrait' ? '9:16' : p.aspect === 'square' ? '1:1' : '16:9'}`;
+  const secondary = state.tab === 'edit'
+    ? `<button type="button" class="btn sm project-secondary" onclick="tlPreviewBit()">Preview this bit</button>` : '';
+  const more = $('#project-more-actions');
+  if (more) more.innerHTML = secondary;
+  bar.innerHTML = `<span class="project-title" title="${esc(title)}">/ ${esc(title)}</span>
+    <span class="project-meta" title="${esc(meta)}">${esc(meta)}</span>
     <button type="button" class="btn sm" onclick="restoreProjectEdit('undo')" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl+Z)">Undo</button>
     <button type="button" class="btn sm" onclick="restoreProjectEdit('redo')" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title="Redo (Ctrl+Shift+Z)">Redo</button>
-    ${state.tab === 'edit' ? `<button type="button" class="btn sm" onclick="tlPreviewBit()">Preview this bit</button>` : ''}
-    ${state.stage === 'voice' ? `<button type="button" class="btn sm" onclick="openMicPanel()">Microphone setup</button>
-      <button type="button" class="btn sm" onclick="setNarrator({mode:'ai'})">Draft voice settings</button>` : ''}
+    ${secondary}
     ${next ? `<a class="btn primary" href="#/p/${p.id}/${next[0]}">Next: ${esc(next[1])}</a>` : ''}`;
   $('#topbar-right').innerHTML = '';
   paintStageBar();

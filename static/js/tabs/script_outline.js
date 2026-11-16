@@ -92,7 +92,7 @@ function planDraw(focusId) {
         </article>${scripted && outlineBeatMatched(b) ? '</details>' : ''}`).join('')}
         <button class="btn sm outline-add" onclick="${scripted ? 'outlineAdd' : 'planAddBeat'}(${ci})">${scripted ? 'Add shot' : 'Add beat'}</button>
       </section>`).join('') || '<p class="sub">No outline yet. Add a chapter and a beat to start planning.</p>'}</div>
-      <div class="row"><button class="btn${scripted ? '' : ' primary'}" onclick="planWrite()" ${beats.length ? '' : 'disabled'}>${scripted ? 'Rewrite changed beats' : 'Write the script'}</button>${beats.length ? '' : '<span class="sub">Add at least one beat first.</span>'}
+      <div class="row"><button class="btn" onclick="planWrite()" ${beats.length ? '' : 'disabled'}>${scripted ? 'Rewrite changed beats' : 'Write the script'}</button>${beats.length ? '' : '<span class="sub">Add at least one beat first.</span>'}
         <button class="btn sm" onclick="planPersist()">Save / retry</button><span id="plan-save-status" role="status" aria-live="polite">Saved</span></div>
     </section></div>`;
   $('#tabbody').onpointerdown = planPointer;

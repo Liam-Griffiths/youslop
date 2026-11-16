@@ -81,7 +81,7 @@ async function paintRender() {
 
     <div class="panel" style="margin-top:18px">
       <div class="row">
-        <button class="btn primary" onclick="doRender(false)"
+        <button class="btn" onclick="doRender(false)"
           ${missingTakes === p.slides.length ? 'disabled' : ''}>Render the video</button>
         <button class="btn" onclick="doRender(true)">Preview cut (no voice)</button>
         <div class="spacer"></div>

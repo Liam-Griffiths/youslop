@@ -133,8 +133,8 @@ async function paintThumb() {
           <div class="spacer"></div>
           ${t.image ? `<button class="btn sm ghost" onclick="thumbFocal()">
             ${(t.focal || []).length === 2 ? '✛ focus set' : 'set focus point'}</button>` : ''}
-          <a class="btn sm primary" download="thumbnail.jpg"
-             href="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at || 0}">download</a>
+          <a class="btn sm" download="thumbnail.jpg"
+             href="/api/projects/${p.id}/file/thumb/thumb.jpg?v=${t.rendered_at || 0}">Download</a>
         </div>
         <div class="mono thumb-credit">
           ${t.image

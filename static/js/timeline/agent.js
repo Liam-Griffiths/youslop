@@ -37,7 +37,7 @@ function tlSideHtml() {
         <div class="script-agent-input"><label class="sr-only" for="edit-agent-input">Message the agent</label>
           <textarea id="edit-agent-input" rows="1" placeholder="Find a part, add a title…"
             onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();editAgentSend();}"></textarea>
-          <button type="button" class="btn sm primary" id="edit-agent-send" onclick="editAgentSend()">Send</button></div>
+          <button type="button" class="btn sm" id="edit-agent-send" onclick="editAgentSend()">Send</button></div>
       </div>
     </div>`;
 }
@@ -73,7 +73,7 @@ function editAgentMessage(m, i) {
     return `<div class="agent-card edit"><span class="kicker">${EDIT_ACTION[a.type][0]} · ${editAgentWhere(a)}</span>
       ${body}${a.why ? `<p class="agent-note">${esc(a.why)}</p>` : ''}
       <div class="agent-card-actions">${a.state === 'done' ? '<span class="agent-note">Done. Undo takes it back.</span>'
-        : `<button type="button" class="btn sm primary" onclick="editAgentApply(${i},${j})">${EDIT_ACTION[a.type][1]}</button>`}
+        : `<button type="button" class="btn sm" onclick="editAgentApply(${i},${j})">${EDIT_ACTION[a.type][1]}</button>`}
         <button type="button" class="btn sm ghost" onclick="editAgentGo('${esc(a.sid)}')">Go there</button></div></div>`;
   }).join('');
   const went = m.goto ? `<p class="agent-note"><button type="button" class="btn xs ghost" onclick="editAgentGo('${esc(m.goto)}')">Playhead → ¶${m.goto_paragraph}</button></p>` : '';
