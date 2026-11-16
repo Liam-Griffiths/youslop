@@ -2,7 +2,7 @@
 import json
 
 from .. import scene_builder, scenes
-from . import groupchat as g, kit, source_for, cues_for
+from . import cue_hidden, groupchat as g, kit, source_for, cues_for
 
 TEMPLATE = 'cuts/groupchat.html'
 
@@ -33,7 +33,7 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
                 break
             if slide.chapter.strip():
                 history = []
-            history += [(c, slide) for c in cues_for(g, slide) if c['kind'] != 'image']
+            history += [(c, slide) for c in cues_for(g, slide) if c['kind'] != 'image' and not cue_hidden(hide, c)]
         history = [] if beat.slide.chapter.strip() else history[-12:]
         items, previous = [], None
         for cue, slide in history:
@@ -42,9 +42,9 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
             start = offset+(a if i else 0)
             end = min(offset+b, card_at if card_at is not None else float('inf'))
             typing = min(.7, (b-a)*.3) if cue['kind'] in ('msg','photo') and cue['from'] != 'me' else 0
-            adds = cue['kind'] != 'image'
+            adds = cue['kind'] != 'image' and not cue_hidden(hide, cue)
             incoming = _item(ctx, cue, beat.slide, previous) if adds else None
-            cutaway = 'cues' in hide or bool(source) and cue['kind'] == 'image'
+            cutaway = cue_hidden(hide, cue) or bool(source) and cue['kind'] == 'image'
             arrival = offset+a+typing
             bounds = sorted({start, end, *[v for v in (arrival,arrival+.28) if start < v < end]}) if adds and not cutaway else [start,end]
             if end <= start:
@@ -61,10 +61,10 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
                     return dict(t=t,x=960+(fx-.5)*2*push*240,y=540,zoom=z)
                 data['screens'].append(dict(id=f'cue{len(data["screens"])}', start=left, duration=right-left,
                     cue=cue, items=shown, phase=phase, typing=typing and phase=='typing',
-                    arrival=arrival-left, elapsed=left-offset-a, cutaway=cutaway, hidden='cues' in hide,
+                    arrival=arrival-left, elapsed=left-offset-a, cutaway=cutaway, hidden=cue_hidden(hide, cue),
                     source=str(source) if source else '', video=bool(beat.motion), media_time=left-offset,
                     stamp=[source.stat().st_mtime_ns,source.stat().st_size] if source else None,
-                    camera=[camera(left),camera(right)] if cutaway and 'cues' not in hide else [dict(t=left,x=960,y=540,zoom=1)]))
+                    camera=[camera(left),camera(right)] if cutaway and not cue_hidden(hide, cue) else [dict(t=left,x=960,y=540,zoom=1)]))
             if incoming:
                 items.append(incoming); previous=cue.get('from')
         offset += beat.length

@@ -2,7 +2,7 @@
 import json
 
 from .. import scene_builder, scenes
-from . import kit, ticker as t
+from . import cue_hidden, kit, ticker as t
 
 TEMPLATE = 'cuts/ticker.html'
 
@@ -73,7 +73,7 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
                 cue=_panel(cue,max(.2,b-a),ctx.accent,data['palette']), delay=a-(start-offset),
                 source=str(source) if source else '',video=bool(beat.motion),media_time=start-offset,
                 stamp=[source.stat().st_mtime_ns,source.stat().st_size] if source else None,
-                hidden='cues' in hide,media=bool(source) and ('cues' in hide or cue['kind']=='headline')))
+                hidden=cue_hidden(hide, cue),media=bool(source) and (cue_hidden(hide, cue) or cue['kind']=='headline')))
         offset+=beat.length
     return data
 

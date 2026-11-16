@@ -516,7 +516,7 @@ def slide_durations(project: Project) -> list[tuple[str, float]]:
 
 
 def build_narration(project: Project, out_path: Path, lead_in: float,
-                    fill: dict[str, float] | None = None) -> float:
+                    fill: dict[str, float] | None = None, *, hide=frozenset()) -> float:
     """Concatenate every take into one continuous narration bed.
 
     `lead_in` is silence before the first word, which lets the opening image and
@@ -527,11 +527,11 @@ def build_narration(project: Project, out_path: Path, lead_in: float,
     from . import render, sponsors
     pads = sponsors.pads(render._sponsor_placements(project, render._slide_durations(project, True)))
     return _concat_takes(project, project.slides, out_path,
-                         head=lead_in + HEAD_PAD, tail=TAIL_PAD, fill=fill, extra_gaps=pads)
+                         head=lead_in + HEAD_PAD, tail=TAIL_PAD, fill=fill, extra_gaps=pads, hide=hide)
 
 
 def build_slice(project: Project, slides: list, out_path: Path,
-                head: float) -> float:
+                head: float, *, hide=frozenset()) -> float:
     """The takes for `slides` alone, as one bed starting `head` seconds in.
 
     What the in-app segment preview plays under one picture. `head` is the
@@ -539,12 +539,12 @@ def build_slice(project: Project, slides: list, out_path: Path,
     `HEAD_PAD`: a slice lands wherever in the cut its segment starts, which is
     not the top of the video and so carries none of the opening padding.
     """
-    return _concat_takes(project, slides, out_path, head=head, tail=0.0)
+    return _concat_takes(project, slides, out_path, head=head, tail=0.0, hide=hide)
 
 
 def _concat_takes(project: Project, slides: list, out_path: Path,
                   head: float, tail: float,
-                  fill: dict[str, float] | None = None, extra_gaps=None) -> float:
+                  fill: dict[str, float] | None = None, extra_gaps=None, hide=frozenset()) -> float:
     from .store import project_dir
 
     root = project_dir(project.id)
@@ -598,7 +598,10 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         )
         labels.append(f"[a{i}]")
 
+    from .layers import visibility
     graph = ";".join(filters) + ";" + "".join(labels) + f"concat=n={len(labels)}:v=0:a=1[out]"
+    if 'voice' in visibility(project, hide, final=True):
+        graph = graph.replace('a=1[out]', 'a=1[voiced];[voiced]volume=0[out]')
     ffutil.run([*inputs, "-filter_complex", graph, "-map", "[out]",
                 "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", str(out_path)])
     return ffutil.duration(out_path)

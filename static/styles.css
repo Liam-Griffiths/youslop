@@ -1053,7 +1053,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; display: bl
 .tl-layer-item.P1 { border-color: var(--accent); }
 .tl-layer-item.P2 { border-color: var(--cool); }
 .tl-layer-item:focus-visible, .tl-layer-label button:focus-visible { outline: 2px solid var(--cool); }
-.tl-layer.hidden [data-layer="notes"] { visibility: hidden; }
 .tl-layer-item[data-layer="titles"], .tl-layer-item[data-layer="sponsors"] { background: var(--accent-tint, var(--panel-2)); }
 .tl-track { padding-left: 104px; box-sizing: content-box; }
 .tl-layer-label { left: 104px; transform: translateX(-104px); }

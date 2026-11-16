@@ -1,6 +1,6 @@
 """Loudmouth's scene context; timing remains owned by cuts/kit."""
 from .. import scenes, scene_builder
-from . import loudmouth
+from . import cue_hidden, loudmouth
 
 TEMPLATE = 'cuts/loudmouth.html'
 
@@ -16,7 +16,7 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
             voice_end=beat.lead+beat.spoken, source=str(source) if source else '',
             source_stamp=[source.stat().st_mtime_ns, source.stat().st_size] if source else None,
             video=bool(beat.motion), cues=[dict(cue, start=a, end=b,
-                words=loudmouth._words(cue['text'])) for cue, (a,b) in zip(beat.cues, beat.times)]))
+                words=loudmouth._words(cue['text'])) for cue, (a,b) in zip(beat.cues, beat.times) if not cue_hidden(hide, cue)]))
         offset += beat.length
     return data
 

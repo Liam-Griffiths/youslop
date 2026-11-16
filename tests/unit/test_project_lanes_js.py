@@ -67,6 +67,9 @@ check(tlCanEdit([a]),'same id on an unlocked paragraph stays editable');
 check(!tlCanEdit([a,b])&&message.includes('Unlock'),'mixed selection rejected');
 check(tlCanEdit([],['voice']),'locked graphics allow upstream voice ripple');
 check(!tlCanEdit([],['pictures','graphics']),'only changed roles block a multi-role edit');
+TL.data.project_layers[0].hidden=true;
+html=tlLayerRows();check(html.includes('data-eye="names"')&&html.includes('Show names in preview'), 'persistent per-id eye');
+check(html.includes('data-eye="maps"'), 'other track retains independent eye');
 TL.data.project_layers.push({...row('notes','notes'),locked:true});
 check(tlCanEdit([],['pictures','voice']),'locked Notes allow camera edits');
 html=tlLayerRows();check(html.includes('data-lock="names" aria-pressed="true"')&&

@@ -240,7 +240,8 @@ def test_graphics_order_invalidates_only_pixel_dependencies(project, monkeypatch
     project.layers[0].name = 'Other name'
     project.layers[0].color = 'warn'
     project.layers[0].locked = project.layers[0].hidden = True
-    assert keys() == plain  # Visibility remains preview-only until the next split.
+    assert keys()[0] != plain[0]  # Saved eyes now affect preview only.
+    assert keys()[1:] == plain[1:]
     project.layers[0].order = 2
     reordered = keys()
     assert all(a != b for a, b in zip(plain, reordered))

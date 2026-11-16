@@ -136,7 +136,8 @@ def test_metadata_flags_preserve_default_render_signatures(locked_project):
     before = render._proxy_key(p, groups, 0, None), stages.render_signature(p)
     for track in p.layers:
         track.hidden, track.locked = True, not track.locked
-    assert (render._proxy_key(p, groups, 0, None), stages.render_signature(p)) == before
+    assert render._proxy_key(p, groups, 0, None) != before[0]
+    assert stages.render_signature(p) == before[1]
 
 
 def test_materialized_fallback_ids_and_order_survive_reload(locked_project):

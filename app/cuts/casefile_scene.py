@@ -6,7 +6,7 @@ import random
 from PIL import Image, ImageFilter, ImageOps
 
 from .. import scene_builder, scenes
-from . import casefile as c, cues_for, kit, source_for
+from . import cue_hidden, casefile as c, cues_for, kit, source_for
 
 TEMPLATE = 'cuts/casefile.html'
 SIZES = dict(photo=(600,700), card=(680,420), clipping=(600,640),
@@ -123,16 +123,18 @@ def context(project,ctx,beats,sources,chapter='',card_at=None,hide=frozenset()):
             if boards[slide.id][0]==board:
                 src=source_for(ctx,slide)
                 for cue in cues_for(c,slide):
-                    items.append(_item(cue,src,board,len(items),seen))
+                    if not cue_hidden(hide, cue):
+                        items.append(_item(cue,src,board,len(items),seen))
         for i,(cue,(a,b)) in enumerate(zip(beat.cues,beat.times)):
             item=_item(cue,source,board,first+i,seen)
             start=offset+(a if i else 0); end=min(offset+b,card_at if card_at is not None else float('inf'))
             if end>start:
                 data['screens'].append(dict(id=f'cue{len(data["screens"])}',start=start,duration=end-start,
-                    cue=cue,items=[*items,item],delay=offset+a-start,span=max(.6,(b-a)*.5),
+                    cue=cue,items=items + ([] if cue_hidden(hide, cue) else [item]),delay=offset+a-start,span=max(.6,(b-a)*.5),
                     camera=_camera(beat,items[-1] if items else None,item,a,offset,start,end),
-                    hidden='cues' in hide,source=str(source) if source else '',video=bool(beat.motion),media_time=start-offset))
-            items.append(item)
+                    hidden=cue_hidden(hide, cue),source=str(source) if source else '',video=bool(beat.motion),media_time=start-offset))
+            if not cue_hidden(hide, cue):
+                items.append(item)
         offset+=beat.length
     return data
 

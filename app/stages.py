@@ -27,6 +27,10 @@ def render_signature(project: Project) -> str:
     graphics_order = graphics_cache_order(project, [(s, 0) for s in project.slides])
     if graphics_order:
         data['graphics_order'] = graphics_order
+    from .layers import visibility
+    hidden = visibility(project, final=True)
+    if hidden:
+        data['visibility'] = sorted(hidden)
     if project.kind == 'clip':
         data['clip'] = project.clip
     data['slides'] = [{k: getattr(s, k) for k in s.__dataclass_fields__

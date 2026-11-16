@@ -119,7 +119,9 @@ def clip(project, item, size, fps, channel=None, *, prepare_only=False):
     return out
 
 
-def compose(project, group, inputs, graph, last, size, fps, channel=None, *, prepare_only=False):
+def compose(project, group, inputs, graph, last, size, fps, channel=None, *, prepare_only=False, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide, final=True)
     lead = cuts.transition_for(project.style)/2 + cuts.head_pad_for(project, group[0][0])
     from .layers import graphics_order
     # Resolve word anchors before sorting: repeated phrases follow stored order.
@@ -134,6 +136,8 @@ def compose(project, group, inputs, graph, last, size, fps, channel=None, *, pre
         if entry is None:
             continue
         item, offset = entry
+        if hide.item('graphics', item.get('layer', '')):
+            continue
         path = clip(project, item, size, fps, channel, prepare_only=prepare_only)
         index, tag = inputs.count('-i'), f'bo{count}'
         count += 1

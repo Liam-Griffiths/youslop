@@ -3,7 +3,7 @@ import json
 import re
 
 from .. import scene_builder, scenes
-from . import flameboat as f, kit
+from . import cue_hidden, flameboat as f, kit
 
 TEMPLATE = 'cuts/flameboat.html'
 
@@ -67,7 +67,7 @@ def context(project, ctx, beats, sources, chapter='', card_at=None, hide=frozens
                 words = cue['text'].split()
                 hot_a, hot_b = f._hot_range(words, cue.get('hot',''))
                 cue['words'] = [dict(text=w, hot=hot_a<=j<hot_b) for j,w in enumerate(words)]
-            hidden = 'cues' in hide
+            hidden = cue_hidden(hide, cue)
             data['screens'].append(dict(id=f'cue{len(data["screens"])}', start=start, duration=end-start,
                 cue=cue, source=str(source) if source else '', video=bool(beat.motion),
                 stamp=[source.stat().st_mtime_ns, source.stat().st_size] if source else None,

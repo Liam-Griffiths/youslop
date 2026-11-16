@@ -208,7 +208,8 @@ def _history(ctx, beat) -> list[tuple[dict, object]]:
             break
         if (getattr(s, "chapter", "") or "").strip():
             out = []
-        cues = cues_for(BY_KEY[KEY], s)
+        from . import cue_hidden
+        cues = [c for c in cues_for(BY_KEY[KEY], s) if not cue_hidden(ctx.cache.get('visibility', ()), c)]
         pic = load_picture(ctx, s, None) if any(c["kind"] == "photo" for c in cues) else None
         out += [(c, pic) for c in cues if c["kind"] != "image"]
     if (getattr(beat.slide, "chapter", "") or "").strip():

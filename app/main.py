@@ -1412,6 +1412,10 @@ def patch_project(pid: str, payload: dict = Body(...)) -> dict:
         for key in ("title", "subtitle", "tone", "music", "idea", "channel_id"):
             if key in payload:
                 setattr(p, key, payload[key])
+        if 'hide_in_render' in payload:
+            if type(payload['hide_in_render']) is not bool:
+                raise HTTPException(400, 'Hide in render must be a boolean.')
+            p.hide_in_render = payload['hide_in_render']
         if "description" in payload:
             p.description = str(payload["description"])[:5000]
         if isinstance(payload.get("yt_tags"), list):
@@ -3761,10 +3765,16 @@ def get_check(pid: str) -> dict:
     return ops.check(pid, {}, lambda msg: None)
 
 
-def _preview_hide(value: str) -> frozenset:
+def _preview_hide(value: str, project=None) -> frozenset:
     hidden = frozenset(filter(None, value.split(',')))
-    if hidden - render.PREVIEW_LAYERS:
-        raise HTTPException(400, 'Unknown preview layer')
+    try:
+        if project is not None:
+            from .layers import visibility
+            visibility(project, hidden)
+        elif hidden - render.PREVIEW_LAYERS:
+            raise ValueError('Unknown preview layer')
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return hidden
 
 
@@ -3773,7 +3783,7 @@ def get_timeline(pid: str, hide: str = "") -> dict:
     """The cut laid out in time, and which pictures already have a proxy to
     play. Renders nothing."""
     p = _load(pid)
-    tl = render.timeline(p, _preview_hide(hide))
+    tl = render.timeline(p, _preview_hide(hide, p))
     result = check.run(p)
     decisions = review.read_notes(pid).get('notes', [])
     for finding in result['findings']:
@@ -3802,7 +3812,7 @@ def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
     the playhead and the next, never the whole cut.
     """
     project = _load(pid)
-    hidden = _preview_hide(hide)
+    hidden = _preview_hide(hide, project)
     sponsor_refs = {f"sponsor:{s.id}" for s in project.sponsors if s.enabled}
     refs = [str(r) for r in (payload.get("refs") or [])][:16]
     if not refs or any(r not in ("intro", "outro") and not r.isdigit()
@@ -3836,9 +3846,9 @@ def timeline_proxy(pid: str, payload: dict = Body(...), hide: str = "") -> dict:
 def timeline_mix(pid: str, hide: str = "") -> dict:
     """Mix the whole cut's sound (narration, slate sting, ducked music bed) into
     one file for the timeline to play. Audio only, so it is quick."""
-    _load(pid)
+    project = _load(pid)
 
-    hidden = _preview_hide(hide)
+    hidden = _preview_hide(hide, project)
 
     def work(progress):
         import threading

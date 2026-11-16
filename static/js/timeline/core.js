@@ -19,7 +19,6 @@
 // `render()` repaints the whole page whenever a job ends, so this state and
 // its media elements live out here and are re-attached on every mount.
 const TL = {
-  hidden: {titles: false, cues: false, chapters: false, music: false, stings: false, notes: false},
   pid: '', data: null, host: null, selection: null, selections: [], section: null, collapsed: {}, zoomReady: false,
   inspectorTemplates: [], inspectorEndTemplates: [], inspectorMusic: [], inspectorChannel: null,
   cur: 0, playing: false, speed: 1, loop: false, zoom: 10,
@@ -70,7 +69,7 @@ async function tlMount() {
   if (!TL.audio) { TL.audio = new Audio(); TL.audio.preload = 'auto'; }
   if (TL.pid !== p.id) {
     tlPause();
-    Object.assign(TL, { pid: p.id, hidden: {}, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
+    Object.assign(TL, { pid: p.id, data: null, selection: null, inspectorChannel: null, cur: 0, seg: -1, queue: [], failed: new Set(),
                         pending: new Set(), selections: [], section: null, sectionAnchor: null, sectionMarks: null,
                         collapsed: {}, zoomReady: false, wait: '', lastPara: '', mixStamp: 0, mixFailed: false });
     TL.vids.forEach((v) => { v.removeAttribute('src'); v.dataset.seg = ''; v.load(); });
@@ -95,6 +94,9 @@ async function tlMount() {
       <button type="button" class="btn sm ghost" id="tl-add-sponsor">Add sponsor</button>
       <button type="button" class="btn sm ghost" id="tl-add-graphic" ${p.kind === 'clip' ? 'disabled' : ''}
         title="Add at the playhead, or drop an overlay block here">Add graphic</button>
+      <label class="row" title="Apply hidden layers to exported video">
+        <input type="checkbox" id="tl-hide-render" ${p.hide_in_render ? 'checked' : ''}>
+        Hide in render</label>
       <button type="button" class="btn sm ghost" id="tl-all"
         title="draw every picture's proxy now instead of as you reach it">draw all</button>
       <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>
@@ -152,6 +154,12 @@ async function tlMount() {
   TL.vids.forEach((v) => { v.onerror = () => tlVideoFailed(v); });
 
   if (!TL.data) $('#tl-note').textContent = 'laying out the cut…';
+  $('#tl-hide-render').onchange = async e => {
+    try {
+      state.project = await api(`/api/projects/${TL.pid}`, {method:'PATCH',
+        body:JSON.stringify({hide_in_render:e.target.checked}), editLabel:'hide in render'});
+    } catch (error) { e.target.checked = !!state.project.hide_in_render; tlMsg(error.message); }
+  };
   await tlRefresh();
   if (state.graphicFocus?.pid === TL.pid) {
     const graphic = tlItems('overlay').find(g => g.sid === state.graphicFocus.sid && g.id === state.graphicFocus.id);

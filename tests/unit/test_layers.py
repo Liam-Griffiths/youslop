@@ -78,7 +78,7 @@ def test_proxy_variants_reuse_and_hide_threading(project, monkeypatch):
     plain = render.proxy_segment(project, 0, download=False)
     hidden = render.proxy_segment(project, 0, download=False, hide=frozenset({'cues'}))
     again = render.proxy_segment(project, 0, download=False)
-    assert calls == [frozenset(), frozenset({'cues'})]
+    assert len(calls) == 2 and not calls[0] and 'cues' in calls[1]
     assert plain['path'] == again['path'] != hidden['path']
     assert plain['key'] != hidden['key']
     assert render.timeline(project, frozenset({'cues'}))['segments'][0]['ready']

@@ -13,6 +13,8 @@ def spans(project, slide=None):
 
 
 def graph(project, slide=None, *, size=None, fps=None, sound_only=False, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     if any(s.overlays for s in project.slides):
         raise ValueError('Remove graphics from this clip before rendering.')
     file, path = clips.source(project)
@@ -27,14 +29,14 @@ def graph(project, slide=None, *, size=None, fps=None, sound_only=False, hide=fr
         # Bound fades for tiny kept spans; pad only a handle that reaches EOF.
         fade = min(2/render.FPS, b-a, kept[i+1][2]-kept[i+1][1]) if i+1 < len(kept) else 0
         if not sound_only:
-            if file.kind == 'video':
+            if file.kind == 'video' and 'pictures' not in hide:
                 point = clips.PRESETS[project.clip['reframes'].get(s.id, 'centre')]
                 crop, _ = render._cover_crop(path, w, h, [point, .5])
                 parts.append(f'[0:v]trim=start={a:.6f}:end={b:.6f},setpts=PTS-STARTPTS,'
                              f'{crop},fps={fps},format=yuv420p[v{i}]')
             else:
                 parts.append(f'color=c=black:s={w}x{h}:r={fps}:d={b-a:.6f}[v{i}]')
-        if file.audio or file.kind == 'audio':
+        if (file.audio or file.kind == 'audio') and 'voice' not in hide:
             parts.append(f'[0:a]atrim=start={a:.6f}:end={min(file.duration,b+fade):.6f},'
                          f'asetpts=PTS-STARTPTS,aresample=48000,'
                          f'aformat=channel_layouts=stereo,apad=whole_dur={b-a+fade:.6f},'
@@ -49,7 +51,7 @@ def graph(project, slide=None, *, size=None, fps=None, sound_only=False, hide=fr
         parts.append(f'{last}[a{i}]acrossfade=d={fade:.6f}:c1=tri:c2=tri[ac{i}]')
         last = f'[ac{i}]'
     seconds = sum(b-a for _, a, b in kept)
-    music = None if 'music' in hide else render.pick_music(project)
+    music = None if hide.item('music', project.music_layer) else render.pick_music(project)
     if music:
         inputs += ['-stream_loop', '-1', '-i', str(music)]
     voice = f'loudnorm=I={project.voice.target_lufs}:TP=-1.5:LRA=11' if music else 'anull'
@@ -59,19 +61,23 @@ def graph(project, slide=None, *, size=None, fps=None, sound_only=False, hide=fr
 
 
 def key(project, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     file, path = clips.source(project)
     from .scenes import context_base
     music = render.pick_music(project)
     data = [3, project.clip, [(s.id, s.candidates) for s in project.slides],
             str(path), render._stat(path), file.kind, file.audio, render.frame_size(project),
             context_base(project), project.style.music_db, project.voice.target_lufs,
-            project.frame.voice_lufs, str(music), render._stat(music), sorted(hide)]
+            project.frame.voice_lufs, str(music), render._stat(music), sorted(hide) + ([str(hide.item('music', project.music_layer))] if hide else [])]
     return hashlib.sha256(json.dumps(data, default=str, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def state(project, name, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     root = store.project_dir(project.id)/'cache'
-    out = root/f'clip-{name}.mp4'
+    out = root/f'clip-{name}{render._hidden_suffix(hide)}.mp4'
     saved = out.with_suffix('.key')
     have = out.exists() and out.stat().st_size > 0
     ready = have and saved.exists() and saved.read_text() == key(project, hide)
@@ -80,12 +86,14 @@ def state(project, name, hide=frozenset()):
 
 
 def encode(project, name, progress, *, slide=None, full=False, sound_only=False, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     from .block_overlays import run_graph
     inputs, filters, seconds = graph(project, slide, size=render.frame_size(project) if full else None,
                                      fps=render.FPS if full else None, sound_only=sound_only, hide=hide)
     root = store.project_dir(project.id)/('out' if full else 'cache')
     root.mkdir(exist_ok=True)
-    out = root/f'clip-{name}.mp4'
+    out = root/f'clip-{name}{render._hidden_suffix(hide)}.mp4'
     pending = root/f'clip-{name}-{uuid.uuid4().hex[:8]}.part.mp4'
     script = pending.with_suffix('.ffgraph')
     cache_key = key(project, hide)
@@ -107,6 +115,8 @@ def encode(project, name, progress, *, slide=None, full=False, sound_only=False,
 
 
 def proxy(project, index, progress, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     if not 0 <= index < len(project.slides):
         raise ValueError('That picture is not in the cut')
     slide = project.slides[index]
@@ -118,10 +128,12 @@ def proxy(project, index, progress, hide=frozenset()):
 
 
 def mix(project, progress=None, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     cached = state(project, 'mix', hide)
     file, _ = clips.source(project)
-    music = None if 'music' in hide else render.pick_music(project)
-    cached.update(audible=bool(file.audio or file.kind == 'audio' or music), music=music.name if music else '', sting=False, stings=[])
+    music = None if hide.item('music', project.music_layer) else render.pick_music(project)
+    cached.update(audible=bool(('voice' not in hide and (file.audio or file.kind == 'audio')) or music), music=music.name if music else '', sting=False, stings=[])
     if progress is not None and cached['audible'] and not cached['ready']:
         encode(project, 'mix', progress, sound_only=True, hide=hide)
         return mix(project, hide=hide)
@@ -129,6 +141,8 @@ def mix(project, progress=None, hide=frozenset()):
 
 
 def timeline(project, hide=frozenset()):
+    from .layers import visibility
+    hide = visibility(project, hide)
     doc = transcripts.load(project.clip['shoot_id'], project.clip['source_id'])
     segments, t = [], 0.
     for i, slide in enumerate(project.slides):
@@ -157,7 +171,9 @@ def timeline(project, hide=frozenset()):
 
 
 def full_render(project, progress, preview):
-    result = encode(project, 'preview' if preview else 'final', progress, full=not preview)
+    from .layers import visibility
+    result = encode(project, 'preview' if preview else 'final', progress, full=not preview,
+                    hide=visibility(project, final=True))
     out = store.project_dir(project.id)/result['path']
     from .stages import render_signature
     project.render = dict(output=result['path'], duration=result['seconds'], size_mb=round(out.stat().st_size/1e6, 1),

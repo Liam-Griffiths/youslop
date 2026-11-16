@@ -195,6 +195,10 @@ def uses_scene(style) -> bool:
     return style.cut_engine != "pillow" and scenes.handles_cut(style.format)
 
 
+def cue_hidden(hide, cue):
+    return hide.item('cues', cue.get('layer', '')) if hasattr(hide, 'item') else 'cues' in hide
+
+
 def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
                    image_for=None, size=None, fps: int = FPS, crf: int = 18,
                    lead_in: float = 0.0, cache_dir: Path | None = None,
@@ -210,11 +214,14 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
     the last `hold` seconds of the segment — the silence the narration leaves
     for it — drawn by the cut's own `chapter()` so it looks like it belongs.
     """
+    from ..layers import visibility
+    hide = visibility(project, hide, final=True)
     module = BY_KEY[kinds.kind_for(project, group[0][0])]
     project = kinds.run_project(project, group[0][0])
     size = size or (WIDTH, round(WIDTH * 9 / 16))
     ctx = make_ctx(project, size, fps, channel, image_for)
     ctx.cache["dir"] = cache_dir
+    ctx.cache["visibility"] = hide
     scene = project.style.cut_engine != "pillow" and scenes.handles_cut(module.KEY)
     beats: list[kit.Beat] = []
     for slide, dur, _start, length, lead in _beat_spans(group, seg_len, lead_in):
@@ -247,6 +254,7 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
         starts.append(t0)
         t0 += beat.length
 
+    filtered = {}
     def stream():
         k = 0
         for i in range(first, min(stop, total)):
@@ -254,12 +262,22 @@ def render_segment(project, group, seg_len: float, out: Path, *, channel=None,
             while k + 1 < len(beats) and t >= starts[k + 1] - 1e-9:
                 k += 1
             beat = beats[k]
-            if 'cues' in hide:
+            if cue_hidden(hide, beat.cues[beat.at(t - starts[k])]):
                 from PIL import Image
                 frame = (kit.cover(beat.picture, *ctx.size).convert('RGB') if beat.picture
                          else Image.new('RGB', ctx.size, '#12131a'))
             else:
-                frame = module.frame(beat, ctx, min(t - starts[k], max(0.0, beat.length - 1e-3)))
+                shown = beat
+                if hide:
+                    if k not in filtered:
+                        from copy import copy
+                        shown = copy(beat)
+                        visible = [(c, span) for c, span in zip(beat.cues, beat.times) if not cue_hidden(hide, c)]
+                        shown.cues, shown.times = map(list, zip(*visible))
+                        shown.extra = {}
+                        filtered[k] = shown
+                    shown = filtered[k]
+                frame = module.frame(shown, ctx, min(t - starts[k], max(0.0, beat.length - 1e-3)))
             if card_at is not None and t >= card_at:
                 frame = draw_card(ctx, title, frame, t - card_at)
             yield frame

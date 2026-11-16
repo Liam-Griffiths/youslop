@@ -880,6 +880,7 @@ class Project:
     style_kit: dict = field(default_factory=dict)
     block_presets: list[dict] = field(default_factory=list)
     bin: list[BinItem] = field(default_factory=list)
+    hide_in_render: bool = False     # preview eyes affect export only when opted in
     layers: list[Layer] = field(default_factory=list)  # empty -> derive, never auto-persist
     labels: list[str] = field(default_factory=list)
     channel_id: str = ""
@@ -1000,6 +1001,7 @@ class Project:
             "block_presets": deepcopy(self.block_presets),
             "bin": [item.to_dict() for item in self.bin],
             "layers": [layer.to_dict() for layer in self.layers],
+            "hide_in_render": self.hide_in_render,
             "labels": list(self.labels),
             "id": self.id,
             "idea": self.idea,

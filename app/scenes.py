@@ -409,10 +409,13 @@ def render_segment(project, group, seg_len, out, *, size=(WIDTH, HEIGHT),
                chapter=chapter, lead_in=lead_in, hold=hold)
     if 'cues' in hide:
         ctx['cues'] = []
-    if 'titles' in hide:
-        ctx['titles'] = []
-        for slide in ctx['slides']:
+    from .layers import visibility
+    hidden = visibility(project, hide, final=True)
+    for slide in ctx['slides']:
+        if hidden.item('titles', slide.get('title_layer', '')):
             slide['title'] = ''
+    ctx['titles'] = [slide['title'] for slide in ctx['slides']
+                     if not hidden.item('titles', slide.get('title_layer', ''))]
     clip = ensure_clip(project, f"{kinds.kind_for(project, group[0][0])}/segment.html", ctx,
                        seconds=seg_len, size=(ctx['width'], ctx['height']), fps=fps)
     _encode(clip, out, seg_len, size, fps, crf)

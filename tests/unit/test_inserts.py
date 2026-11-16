@@ -369,7 +369,8 @@ def test_insert_proxy_mux_hides_and_reuse(cut, monkeypatch, tmp_path):
     hide = frozenset({'graphics', 'chapters'})
     result = render._build_proxy(cut, groups, 1, lambda m: None, reuse=True, hide=hide)
     assert result['width'] == 480 and result['height'] == 270
-    assert encoded == [hide] and heads == [render._lead_overlap(cut, row)/2]
+    assert len(encoded) == 1 and all(role in encoded[0] for role in hide)
+    assert heads == [render._lead_overlap(cut, row)/2]
     assert render._proxy_ready(cut, groups, 1, None, hide)
     assert render._build_proxy(cut, groups, 1, lambda m: None, reuse=True, hide=hide) == result
     assert len(encoded) == 1

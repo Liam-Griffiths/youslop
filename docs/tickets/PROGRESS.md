@@ -354,7 +354,7 @@ layered editing in Edit, project-defined layers, Library like Bridge, no
 | T21.5 | Project layers: model, derivation, timeline lanes | L | T21.1 | done | 2026-11-15 Codex + review; split at ~600 lines: schema.Layer, Project.layers, layers.effective/rows, additive project_layers in /timeline, layer refs on titles/cues/overlays/music/stings; cache keys and goldens unchanged; no UI change yet | split: UI and behaviour in T21.5c |
 | T21.5c | Project layers: timeline drawing, compositing, hide and lock | L | T21.5 | done | 2026-11-15 Codex + review; lanes named from project layers with token swatches, only used lanes drawn, graphics stack by layer order, cache keys follow layer order; checked light and dark on Tube Mail | split: hide/lock in T21.5d |
 | T21.5d | Layer hide and lock: controls and enforcement | M | T21.5c | done | 2026-11-15 Codex + review (one follow-up); per-layer lock saved in the project, enforced at store.save for the layer's own items; endpoints check only the roles they touch; Script writing still allowed with other layers locked; checked on Tube Mail | split: hide-in-render in T21.5e |
-| T21.5e | Layer hide in preview and render | M | T21.5d | todo | | split from T21.5d |
+| T21.5e | Layer hide in preview and render | M | T21.5d | done | 2026-11-15 Codex + review; hidden flag saved per layer, preview/render/audio skip hidden layers, goldens byte-identical with nothing hidden; checked hide on Tube Mail light and dark | split from T21.5d |
 | T21.5b | Layer manager and agent-proposed layers | M | T21.5 | todo | |
 | T21.6 | Edit becomes the composing stage: sources panel, Visuals folds in | L | T21.5, T21.2 | todo | supersedes T20.13, folds in T20.4 |
 | T21.4 | Library as an explorer: tree, grid, preview pane | L | — | todo | |

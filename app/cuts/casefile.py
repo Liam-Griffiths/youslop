@@ -425,7 +425,8 @@ def _history(ctx, beat) -> list[tuple[dict, object]]:
         if boards.get(s.id, (-1, 0))[0] != board:
             continue
         pic = load_picture(ctx, s, None)
-        out += [(c, pic) for c in cues_for(module, s)]
+        from . import cue_hidden
+        out += [(c, pic) for c in cues_for(module, s) if not cue_hidden(ctx.cache.get('visibility', ()), c)]
     return out
 
 

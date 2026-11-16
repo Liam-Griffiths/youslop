@@ -143,6 +143,74 @@ def graphics_cache_order(project, group):
     return order if order != original else []
 
 
+class Visibility(frozenset):
+    """Resolved preview tracks. Bare ids win over legacy role aliases.
+
+    `role:<name>` explicitly addresses a role when an id shadows its name.
+    Cache tokens include resolution order; default renders keep an empty set.
+    """
+    def __new__(cls, project, requested=(), *, final=False):
+        if isinstance(requested, cls):
+            return requested
+        tracks = list(effective(project, items={}))
+        used = {t.id for t in tracks}
+        for role in LAYER_ROLES:
+            if any(t.role == role for t in tracks):
+                continue
+            ident = role
+            while ident in used:
+                ident = 'derived:' + ident
+            used.add(ident)
+            tracks.append(Layer(id=ident, role=role))
+        ids = {t.id for t in tracks if t.hidden and (not final or project.hide_in_render)}
+        for token in requested:
+            if token in {t.id for t in project.layers} or token not in LAYER_ROLES and token in used:
+                ids.add(token)
+            else:
+                role = token.removeprefix('role:')
+                if role not in LAYER_ROLES:
+                    raise ValueError('Unknown preview layer')
+                roles = {role, 'captions'} if role == 'titles' else {role}
+                ids.update(t.id for t in tracks if t.role in roles)
+        tokens = {'id:' + ident for ident in ids}
+        if ids:
+            import hashlib, json
+            tokens.add('resolve:' + hashlib.sha1(json.dumps(
+                [(t.id, t.role) for t in tracks] + [project.music_layer]).encode()).hexdigest()[:12])
+        obj = super().__new__(cls, tokens)
+        obj.tracks, obj.ids = tracks, ids
+        return obj
+
+    def __reduce__(self):
+        return (_restore_visibility, (tuple(self), self.tracks, self.ids))
+
+    def item(self, role, ident=''):
+        track = resolve(self.tracks, role, ident)
+        return bool(track and track.id in self.ids)
+
+    def __contains__(self, role):
+        if role in {'cues', 'graphics'}:
+            return all(t.id in self.ids for t in self.tracks if t.role == role)
+        return self.item(role)
+
+
+def _restore_visibility(tokens, tracks, ids):
+    obj = frozenset.__new__(Visibility, tokens)
+    obj.tracks, obj.ids = tracks, ids
+    return obj
+
+
+def visibility(project, requested=(), *, final=False):
+    return Visibility(project, requested, final=final)
+
+
+def visible_stings(project, stings, hide):
+    hide = visibility(project, hide)
+    return {role: entry for role, entry in stings.items() if not hide.item('stings',
+        getattr(getattr(entry[1], '_spec', entry[1]),
+                'music_layer' if role == 'intro' else 'sting_layer', ''))}
+
+
 def patch_flags(project, ident, patch):
     """Materialize the drawing view only on an explicit layer edit."""
     from .edits import EditError

@@ -329,7 +329,7 @@ def _draw_segment(job: tuple) -> tuple[int, int, Path, bool]:
 
 
 def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: Path,
-                   channel, free_mb, progress: Progress, *, targets=None) -> list[Path]:
+                   channel, free_mb, progress: Progress, *, targets=None, hide=frozenset()) -> list[Path]:
     """Every picture's segment in a drawn cut, drawn across worker processes."""
     import multiprocessing as mp
 
@@ -356,7 +356,7 @@ def _draw_segments(project: Project, groups, seg_lens, slide_at: int, seg_dir: P
             a, b = total * c // n, total * (c + 1) // n
             out = scratch / (f"{name}.mp4" if n == 1 else f"{name}.part{c:02d}.mp4")
             jobs.append((project, group, seg_len, i + slide_at, out, channel, chapter,
-                         0, i, c, (a, b), dict(op=ops[i], camera_index=i,
+                         0, i, c, (a, b), dict(op=ops[i], camera_index=i, **({"hide": hide} if hide else {}),
                             last_line=i == len(groups) - 1, dip_out=_dips_into(groups, i + 1))))
     if not jobs:
         scratch.rmdir()
@@ -834,6 +834,8 @@ def _segment_graph(
     Retains title PNG drawing and stage clip generation as side effects;
     photographic formats never run ffmpeg here.
     """
+    from .layers import visibility
+    hide = visibility(project, hide, final=True)
     fmt = kinds.kind_for(project, group[0][0])
     style = project.style
     frame = project.frame
@@ -845,14 +847,17 @@ def _segment_graph(
     # A full portrait/square graph must still read the original footage.
     source_preview = size not in {frame_size(project), (WIDTH, HEIGHT)} if preview is None else preview
     src, kind, focal = _chosen(project, slide, preview=source_preview)
-    if slide.insert.get('kind') == 'picture' and src is None:
+    picture_hidden = 'pictures' in hide
+    if picture_hidden:
+        src = None
+    if slide.insert.get('kind') == 'picture' and src is None and not picture_hidden:
         raise ValueError('Insert Library picture is unavailable')
     source_slide = _picture_source(project, slide)
     candidate = next((c for c in source_slide.candidates if c['id'] == source_slide.chosen_id), {})
     span = ((candidate['in_s'], candidate['out_s'])
             if src and candidate.get('provider') == 'footage' else None)
     dip_in = False
-    if not slide.on_camera and fmt == "stage" and shots_mod.is_3d(slide):
+    if not picture_hidden and not slide.on_camera and fmt == "stage" and shots_mod.is_3d(slide):
         # The shot, drawn by the stage at exactly this segment's length and
         # frame size; a paragraph with no solved shot gets the slate.
         clip = shots_mod.ensure_clips(project, [(slide, seg_len)], size, fps).get(slide.id)
@@ -871,7 +876,7 @@ def _segment_graph(
     if native:
         card_fit = "" if size == canvas else f",scale={w}:{h}"
 
-    if slide.insert.get('kind') == 'card':
+    if slide.insert.get('kind') == 'card' and not picture_hidden:
         src = project_dir(project.id) / 'titles' / f'{slide.id}_insert{suffix}.png'
         titles.render_chapter(slide.insert['text'], accent=style.accent, out_path=src, **card_args)
         grade = vig = ''
@@ -880,7 +885,11 @@ def _segment_graph(
     chain: list[str] = []
     pre_graph = ""            # set by sources that need more than one input
 
-    if slide.insert.get('kind') == 'clip':
+    if picture_hidden:
+        inputs += ['-f', 'lavfi', '-i', f'color=c=black:s={w}x{h}:r={fps}:d={seg_len:.6f}']
+        chain.append('null')
+        grade = vig = ''
+    elif slide.insert.get('kind') == 'clip':
         # Hold the range's endpoints in transition/head/tail handles. Playback
         # inside the explicit insert stays at source speed, aligned to sound.
         src = inserts.source(slide.insert, preview=source_preview)
@@ -956,7 +965,7 @@ def _segment_graph(
     n_inputs = inputs.count("-i")      # sources may take several inputs each
     last = base_label
 
-    if slide.on_camera:
+    if slide.on_camera and not picture_hidden:
         from .camera_overlays import compose
         inputs, graph, last = compose(project, slide, inputs, graph, last, size, fps,
                                       prepare_only=prepare_only, preview=(size != frame_size(project) if preview is None else preview))
@@ -965,13 +974,13 @@ def _segment_graph(
     if 'graphics' not in hide and not slide.on_camera and any(s.overlays for s, _ in group):
         from .block_overlays import compose
         inputs, graph, last = compose(project, group, inputs, graph, last, size, fps,
-                                      channel, prepare_only=prepare_only)
+                                      channel, prepare_only=prepare_only, hide=hide)
         n_inputs = inputs.count('-i')
 
     # The host, if this channel has one: a still, pinned in a corner for the
     # whole segment. Under the captions in the stack, so it can never cover a
     # word if the two ever meet.
-    av = getattr(channel, "avatar", None) if essay else None
+    av = getattr(channel, "avatar", None) if essay and not picture_hidden else None
     if av and av.enabled and av.path:
         from .channels import channel_dir
         av_src = channel_dir(channel.id) / av.path
@@ -989,7 +998,7 @@ def _segment_graph(
 
     # Type over the picture. The documentary cut announces a chapter once per
     # paragraph; the essay cut sets the narration itself, a phrase at a time.
-    if (essay or camera_captions) and not native and style.captions_engine != 'pillow' and 'titles' not in hide:
+    if (essay or camera_captions) and not native and style.captions_engine != 'pillow' and 'captions' not in hide:
         plan, offset = [], 0.0
         lead = _lead_overlap(project, group[0][0]) / 2 + cuts.head_pad_for(project, group[0][0])
         for n, (member, dur) in enumerate(group):
@@ -1012,7 +1021,7 @@ def _segment_graph(
 
     offset = 0.0
     for n, (member, dur) in enumerate(group):
-        if member.insert or "titles" in hide or ((essay or camera_captions) and not native and style.captions_engine != "pillow"):
+        if member.insert or hide.item("captions" if essay or camera_captions else "titles", member.title_layer if not (essay or camera_captions) else "") or ((essay or camera_captions) and not native and style.captions_engine != "pillow"):
             offset += dur
             continue
         if essay or (camera_captions and native):
@@ -1175,6 +1184,8 @@ def _render_segment(
     essay card, the blur, the type cards — scales with `size`, so a preview is
     the same picture seen smaller rather than a differently composed one.
     """
+    from .layers import visibility
+    hide = visibility(project, hide, final=True)
     size = size if size is not None else frame_size(project)
     preview = size != frame_size(project) if preview is None else preview
     slide = group[0][0]
@@ -1203,6 +1214,13 @@ def _render_segment(
                     '-map', '[v]', '-t', f'{seg_len:.6f}', '-r', str(fps),
                     *ffutil.video_args(out, crf=crf, preset=preset), '-pix_fmt', 'yuv420p', '-an', str(out)], threads=threads)
             return out
+    if 'pictures' in hide and not cuts.is_cut(kinds.kind_for(project, slide)):
+        inputs, graph, last = _segment_graph(project, group, seg_len, op, channel,
+            chapter, size, fps, dip_out, camera_index, last_line, hide, preview=preview)
+        ffutil.run([*inputs, '-filter_complex', graph, '-map', last, '-t', f'{seg_len:.6f}',
+            '-r', str(fps), *ffutil.video_args(out, crf=crf, preset=preset),
+            '-pix_fmt', 'yuv420p', '-an', str(out)], threads=threads)
+        return out
     fmt = kinds.kind_for(project, group[0][0])
     if "chapters" in hide:
         chapter = None
@@ -1233,7 +1251,7 @@ def _render_segment(
                 None, threads, size, fps, crf, preset, dip_out=dip_out, op=op,
                 camera_index=camera_index, last_line=last_line, hide=hide, preview=preview)
             inputs, graph, last = compose(project, group, ['-i', str(base)],
-                '[0:v]null[base]', '[base]', size, fps, channel)
+                '[0:v]null[base]', '[base]', size, fps, channel, hide=hide)
             script = Path(work) / 'graph.ffgraph'
             script.write_text(graph)
             run_graph([*inputs, '-filter_complex_script', str(script), '-map', last,
@@ -1293,7 +1311,7 @@ def _render_segment(
         # silence on the video's first paragraph.
         return cuts.render_segment(
             project, group, seg_len, out, channel=channel,
-            image_for=lambda s: _chosen(project, s, preview=preview)[0], size=size, fps=fps,
+            image_for=lambda s: None if "pictures" in hide else _chosen(project, s, preview=preview)[0], size=size, fps=fps,
             crf=crf, lead_in=lead_in, cache_dir=project_dir(project.id) / "cuts",
             chapter=chapter, frames=frames,
             hold=hold, hide=hide)
@@ -1920,6 +1938,8 @@ SEGMENT_VERSION = 1
 
 def _cache_layer_defaults(value):
     """Keep pre-layer cache signatures when new references are defaulted."""
+    if isinstance(value, frozenset):
+        return sorted(value)
     if isinstance(value, dict):
         return {k: _cache_layer_defaults(v) for k, v in value.items()
                 if not (k in ('title_layer', 'music_layer', 'sting_layer') and v == '')}
@@ -1997,7 +2017,7 @@ def _segment_key(project, group, settings) -> str:
         graph = _segment_graph(project, group, settings["seg_len"], prepare_only=True,
                                **{k: settings[k] for k in (
                                    "op", "channel", "chapter", "size", "fps", "dip_out",
-                                   "camera_index", "last_line")})
+                                   "camera_index", "last_line")}, **({"hide": settings["hide"]} if settings.get("hide") else {}))
     from .camera import target
     if group[0][0].on_camera:
         rows[0].append(target(project))
@@ -2049,6 +2069,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     if project.kind == 'clip':
         from .clip_render import full_render
         return full_render(project, progress, preview)
+    from .layers import visibility
+    hide = visibility(project, final=True)
     from .learning import resolve_choices
     resolve_choices(project)
     _memory_check(progress)
@@ -2175,7 +2197,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     else:
         fill = ({s.id: d - audio_mod.gap_map(project)[s.id] for s, d in plan if not s.take}
                 if preview and any(s.insert for s in project.slides) else None)
-        audio_mod.build_narration(project, narration, lead_in=lead_in, fill=fill)
+        audio_mod.build_narration(project, narration, lead_in=lead_in, fill=fill, **({"hide": hide} if hide else {}))
         progress(f"Narration bed built ({ffutil.duration(narration) / 60:.1f} min)")
 
     # ------------------------------------------------------------- segments
@@ -2212,7 +2234,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
                     chapter=chapter, threads=seg_threads, size=frame_size(project), fps=FPS,
                     crf=18, preset="veryfast", dip_out=_dips_into(groups, i + 1),
                     op=ops[i], camera_index=i, last_line=i == len(groups) - 1,
-                    index=i + slide_at,
+                    index=i + slide_at, **({"hide": hide} if hide else {}),
                     **({"chunk_seconds": CHUNK_SECONDS} if cuts.is_cut(kinds.kind_for(project, group[0][0])) else {}))
         settings.append(opts)
         paths.append(seg_dir / f"{_segment_key(project, group, opts)}.mp4")
@@ -2241,7 +2263,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # memory set the count; one core is left for the encoders and the app.
     if kinds.kinds_in(project) & kinds.CUTS:
         seg_paths = _draw_segments(project, groups, seg_lens, slide_at, seg_dir,
-                                   seg_channel, free_mb, progress, targets=paths)
+                                   seg_channel, free_mb, progress, targets=paths, hide=hide)
     else:
         with cf.ThreadPoolExecutor(max_workers=workers) as pool:
             for i, path in pool.map(work, missing):
@@ -2254,6 +2276,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         # The slate is already the right length; pad it to seg_len so its tail
         # has something to crossfade out of, exactly like every other segment.
         held = seg_dir / "intro_held.mp4"
+        if 'pictures' in hide:
+            intro_path = _blank_video(seg_dir / 'intro_hidden.mp4', intro_len, frame_size(project), FPS, 18)
         ffutil.run(["-i", str(intro_path),
                     "-vf", f"tpad=stop_mode=clone:stop_duration={T + 0.5:.3f}",
                     "-t", f"{seg_lens[0]:.3f}", "-r", str(FPS),
@@ -2262,13 +2286,16 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         seg_paths.insert(0, held)
 
     if pres_src:
-        clip = _render_presenter(project, pres_seg_len, seg_dir / "presenter.mp4")
+        clip = (_blank_video(seg_dir / "presenter.mp4", pres_seg_len, frame_size(project), FPS, 18)
+                if "pictures" in hide else _render_presenter(project, pres_seg_len, seg_dir / "presenter.mp4"))
         seg_paths.insert(pres_index, clip)
 
     if outro_path:
         # Like the slate, the card is already the right length; it is padded on
         # its last frame so the dissolve into it has somewhere to land.
         held = seg_dir / "outro_held.mp4"
+        if "pictures" in hide:
+            outro_path = _blank_video(seg_dir / "outro_hidden.mp4", outro_len, frame_size(project), FPS, 18)
         ffutil.run(["-i", str(outro_path),
                     "-vf", f"tpad=stop_mode=clone:stop_duration={T + 0.5:.3f}",
                     "-t", f"{seg_lens[-1]:.3f}", "-r", str(FPS),
@@ -2301,9 +2328,11 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
             ctx.update(script=slot.script, variant=slot.variant, take=slot.take, word_offset=sponsor_T / 2)
             if frame_size(project) != (WIDTH, HEIGHT):
                 ctx = scenes._template_context(slot.template, ctx)
-            clip = scenes.ensure_clip(project, slot.template, ctx,
-                                      seconds=seconds + sponsor_T, size=(ctx["width"], ctx["height"]), fps=FPS)
-            if frame_size(project) != (WIDTH, HEIGHT):
+            clip = (_blank_video(seg_dir / f"sponsor_{slot.id}_hidden.mp4", seconds + sponsor_T,
+                                  frame_size(project), FPS, 18) if "sponsors" in hide else
+                    scenes.ensure_clip(project, slot.template, ctx,
+                        seconds=seconds + sponsor_T, size=(ctx["width"], ctx["height"]), fps=FPS))
+            if frame_size(project) != (WIDTH, HEIGHT) and "sponsors" not in hide:
                 fitted = seg_dir / f'sponsor_{slot.id}_{project.aspect}.mp4'
                 _fit_clip(clip, fitted, frame_size(project))
                 clip = fitted
@@ -2319,7 +2348,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # ------------------------------------------------------ final assembly
     # Input order is load-bearing: the filtergraph refers to inputs by index, so
     # they are appended in one place and the index is tracked as we go.
-    music = pick_music(project, progress)
+    music = None if hide.item("music", project.music_layer) else pick_music(project, progress)
     inputs: list[str] = []
     for p in seg_paths:
         inputs += ["-i", str(p)]
@@ -2331,7 +2360,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
     # The camera clip is re-opened here purely for its audio, trimmed the same
     # way as its picture so the two stay locked together.
     presenter_audio = None
-    if pres_src and project.presenter.has_audio:
+    if pres_src and project.presenter.has_audio and "voice" not in hide:
         presenter_audio = (next_idx, pres_offset,
                            max(0.0, project.presenter.trim_start), pres_seg_len)
         inputs += ["-i", str(pres_src)]
@@ -2340,7 +2369,8 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
 
     # The slate's and the end card's own stings, if they have them.
     sting_audio: list = []
-    stings = _stings_for(project, bool(intro_path), bool(outro_path))
+    from .layers import visible_stings
+    stings = visible_stings(project, _stings_for(project, bool(intro_path), bool(outro_path)), hide)
     if "intro" in stings:
         sting_file, spec = stings["intro"]
         # The slate is the first segment unless a camera clip was put ahead
@@ -2362,7 +2392,7 @@ def _render(project: Project, progress: Progress, preview: bool) -> dict:
         progress(f"End card sting: {spec._spec.sting_filename or sting_file.name}"
                  f" (starting at {outro_offset:.1f}s)")
 
-    sponsor_audio, next_idx = _sponsor_audio(project, sponsor_entries, inputs, next_idx, T / 2)
+    sponsor_audio, next_idx = _sponsor_audio(project, [] if "sponsors" in hide else sponsor_entries, inputs, next_idx, T / 2)
     if music:
         # -stream_loop -1 runs the bed round for as long as the video needs; the
         # graph then trims it to length. A five minute track under a twenty-five
@@ -2697,6 +2727,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
     import json
     from .block_theme import cache_owner
 
+    from .layers import visibility
+    hide = visibility(project, hide)
     root = project_dir(project.id)
     group = groups[index]
     lead = group[0][0]
@@ -2759,7 +2791,8 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
 
 def _proxy_paths(project: Project, lead: Slide, hide: frozenset = frozenset()) -> tuple[Path, Path]:
     cache = project_dir(project.id) / "cache"
-    suffix = _hidden_suffix(hide)
+    from .layers import visibility
+    suffix = _hidden_suffix(visibility(project, hide))
     return cache / f"seg_{lead.id}{suffix}.webm", cache / f"seg_{lead.id}{suffix}.key"
 
 
@@ -2820,6 +2853,8 @@ def _segment_timing(project: Project, groups, index: int) -> tuple[float, float,
 
 def _build_proxy(project: Project, groups, index: int, progress: Progress,
                  *, reuse: bool, download: bool = True, hide: frozenset = frozenset()) -> dict:
+    from .layers import visibility
+    hide = visibility(project, hide)
     from . import channels as channels_mod
     group = groups[index]
     lead = group[0][0]
@@ -2870,7 +2905,7 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
     voice = out.with_suffix(".wav")
     try:
         audio_mod.build_slice(project, [s for s, _d in group], voice,
-                              T / 2 + (HEAD_PAD if index == 0 else 0.0))
+                              T / 2 + (HEAD_PAD if index == 0 else 0.0), **({"hide": hide} if "voice" in hide else {}))
     except (ValueError, ffutil.FFError):
         if lead.insert:
             raise
@@ -2923,6 +2958,8 @@ def proxy_segment(project: Project, index: int,
     """The same small render, kept: the timeline plays these back to back, so
     one that is still right for the current script is reused rather than drawn
     again."""
+    from .layers import visibility
+    hide = visibility(project, hide)
     if project.kind == 'clip':
         from .clip_render import proxy
         return proxy(project, index, progress, hide)
@@ -3059,6 +3096,10 @@ def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
     slot = next((s for s in project.sponsors if s.id == slot_id), None)
     if slot is None:
         raise ValueError('Sponsor slot not found')
+    from .layers import visibility
+    hide = visibility(project)
+    if "sponsors" in hide:
+        return _blank_proxy(project, f"sponsor:{slot_id}", sponsors.duration(slot), hide, progress)
     template, ctx, out = _sponsor_preview(project, slot)
     seconds = sponsors.duration(slot)
     if not out.exists() or not out.stat().st_size:
@@ -3085,9 +3126,39 @@ def sponsor_proxy(project, slot_id, progress=lambda m: None, *, audible=False):
                 rendered_at=round(out.stat().st_mtime))
 
 
+def _blank_video(out, seconds, size, fps, crf=PREVIEW_CRF):
+    ffutil.run(['-f', 'lavfi', '-i',
+        f'color=c=black:s={size[0]}x{size[1]}:r={fps}:d={seconds:.6f}',
+        *ffutil.video_args(out, crf=crf), '-pix_fmt', 'yuv420p', '-an', str(out)])
+    return out
+
+
+def _blank_proxy(project, ref, seconds, hide, progress=None):
+    out = project_dir(project.id) / 'cache' / (
+        f'tl_blank_{ref.replace(":", "_")}_{preview_size(project)}_{seconds:.6f}{_hidden_suffix(hide)}.webm')
+    have = out.exists() and out.stat().st_size > 0
+    if progress is not None and not have:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        _blank_video(out, seconds, preview_size(project), PREVIEW_FPS)
+        have = True
+    return dict(ref=ref, path=f'cache/{out.name}', have=have, ready=have,
+                stamp=round(out.stat().st_mtime) if have else 0,
+                rendered_at=round(out.stat().st_mtime) if have else 0)
+
+
 def proxy_ref(project: Project, ref: str, progress: Progress = lambda m: None,
               *, download: bool = True, hide: frozenset = frozenset()) -> dict:
     """Draw one timeline entry: a slate, sponsor:<id>, or picture number."""
+    from .layers import visibility
+    hide = visibility(project, hide)
+    if ref.startswith('sponsor:') and 'sponsors' in hide:
+        from .sponsors import duration
+        slot = next(s for s in project.sponsors if s.id == ref.removeprefix('sponsor:'))
+        return _blank_proxy(project, ref, duration(slot), hide, progress)
+    if ref in ('intro', 'outro') and 'pictures' in hide:
+        state = _slate_state(project, ref)
+        if state:
+            return _blank_proxy(project, ref, state['length'], hide, progress)
     if ref.startswith("sponsor:"):
         return sponsor_proxy(project, ref.removeprefix("sponsor:"), progress)
     if ref in ("intro", "outro"):
@@ -3176,6 +3247,8 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     import hashlib
     import json
 
+    from .layers import visibility, visible_stings
+    hide = visibility(project, hide)
     root = project_dir(project.id)
     takes = [[s.id, (s.take or {}).get('cuts', []),
               _stat(root / s.take["path"]) if (s.take or {}).get("path") else None]
@@ -3189,7 +3262,8 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
     card = _slate_channel(project) if lay["outro"] else None
     blob = json.dumps(_cache_layer_defaults(
         [PROXY_VERSION, "linear-master-v1", project.frame.voice_lufs,
-         sorted(hide), takes, lay["body"], lay["pre"], lay["total"],
+         sorted(hide) + (["music:" + str(hide.item("music", project.music_layer)),
+             "stings:" + ",".join(sorted(visible_stings(project, stings, hide)))] if hide else []), takes, lay["body"], lay["pre"], lay["total"],
          lay["intro"] and lay["intro"]["length"], lay["outro"] and lay["outro"]["length"],
          audio_mod.paragraph_gaps(project),
          str(music), _stat(music),
@@ -3203,10 +3277,12 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
 
 
 def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> dict:
-    music = None if "music" in hide else pick_music(project)
-    sting = {} if "stings" in hide else _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
-    audible = bool(music or sting or any(s.take or s.insert.get('source_audio') for s in project.slides)
-                   or any(slot.take for slot, _ in lay["sponsors"]))
+    from .layers import visibility, visible_stings
+    hide = visibility(project, hide)
+    music = None if hide.item("music", project.music_layer) else pick_music(project)
+    sting = visible_stings(project, _stings_for(project, bool(lay["intro"]), bool(lay["outro"])), hide)
+    audible = bool(music or sting or ("voice" not in hide and any(s.take or s.insert.get('source_audio') for s in project.slides))
+                   or ("sponsors" not in hide and any(slot.take for slot, _ in lay["sponsors"])))
     out, keyfile = _mix_paths(project, hide)
     key = _mix_key(project, lay, hide) if audible else ""
     have = out.exists() and out.stat().st_size > 0
@@ -3214,7 +3290,7 @@ def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> di
         fresh = have and keyfile.read_text() == key
     except OSError:
         fresh = False
-    return {"audible": audible, "ready": bool(audible and fresh), "have": bool(audible and have),
+    return {"audible": audible, "ready": bool(audible and fresh), "have": bool(audible and have and (fresh or not hide)),
             "stamp": round(out.stat().st_mtime) if have else 0,
             "path": f"cache/{out.name}", "music": music.name if music else "",
             "sting": bool(sting), "stings": sorted(sting)}
@@ -3230,6 +3306,8 @@ def build_mix(project: Project, progress: Progress = lambda m: None, *,
     however long the video is; the player uses it as the clock and plays the
     picture proxies silently against it.
     """
+    from .layers import visibility
+    hide = visibility(project, hide)
     if project.kind == 'clip':
         from .clip_render import mix
         return mix(project, progress, hide)
@@ -3251,12 +3329,13 @@ def build_mix(project: Project, progress: Progress = lambda m: None, *,
     narration = out.with_name("timeline_narration.wav")
     # No T/2 on the lead-in, unlike the finished cut: this track is laid against
     # picture time, where a picture's window starts at its boundary.
-    audio_mod.build_narration(project, narration, lead_in=pre, fill=fill)
+    audio_mod.build_narration(project, narration, lead_in=pre, fill=fill, **({"hide": hide} if hide else {}))
 
     inputs = ["-i", str(narration)]
     n = 1
     sting_audio = []
-    stings = {} if "stings" in hide else _stings_for(project, bool(lay["intro"]), bool(lay["outro"]))
+    from .layers import visible_stings
+    stings = visible_stings(project, _stings_for(project, bool(lay["intro"]), bool(lay["outro"])), hide)
     if "intro" in stings:
         sting_audio.append((n, 0.0, lay["intro"]["length"], stings["intro"][1], "intro"))
         inputs += ["-i", str(stings["intro"][0])]
@@ -3266,8 +3345,8 @@ def build_mix(project: Project, progress: Progress = lambda m: None, *,
                             lay["outro"]["length"], stings["outro"][1], "outro"))
         inputs += ["-i", str(stings["outro"][0])]
         n += 1
-    sponsor_audio, n = _sponsor_audio(project, lay["sponsors"], inputs, n)
-    music = None if "music" in hide else pick_music(project, progress)
+    sponsor_audio, n = _sponsor_audio(project, [] if "sponsors" in hide else lay["sponsors"], inputs, n)
+    music = None if hide.item("music", project.music_layer) else pick_music(project, progress)
     if music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
     music_fade = 5.0
@@ -3298,6 +3377,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
     recording use their estimated length and say so; a slate or end card not
     yet drawn uses the length it was asked for.
     """
+    from .layers import visibility
+    hide = visibility(project, hide)
     if project.kind == 'clip':
         from .clip_render import timeline as clip_timeline
         return clip_timeline(project, hide)
@@ -3312,7 +3393,7 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
 
     def slate_row(kind: str, st: dict, start: float) -> dict:
         out, _meta = _slate_paths(project, kind)
-        return {
+        row = {
             "ref": kind, "type": kind, "n": 0, "group": -1, "lead": "",
             "start": round(start, 3), "duration": round(st["length"], 3), "skip": 0.0,
             "kind": "", "problems": [], "paragraphs": [],
@@ -3320,6 +3401,10 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
             "estimated": not st["known"], "stamp": st["stamp"],
             "path": f"cache/{out.name}",
         }
+
+        if 'pictures' in hide:
+            row.update(_blank_proxy(project, kind, st['length'], hide))
+        return row
 
     if lay["intro"]:
         segments.append(slate_row("intro", lay["intro"], t))
@@ -3440,6 +3525,8 @@ def timeline(project: Project, hide: frozenset = frozenset()) -> dict:
                              "ready": ready, "have": ready, "estimated": not bool(slot.take),
                              "stamp": round(out.stat().st_mtime) if ready else 0,
                              "path": f"cache/{out.name}"})
+            if 'sponsors' in hide:
+                segments[-1].update(_blank_proxy(project, f'sponsor:{slot.id}', seconds, hide))
             t += seconds
     if lay["outro"]:
         segments.append(slate_row("outro", lay["outro"], t))

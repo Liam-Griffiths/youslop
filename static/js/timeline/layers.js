@@ -1,7 +1,8 @@
 // Layer times come from the server. All items use T4.3's selection model.
 const TL_LAYER_KINDS = {graphics: 'overlay', sponsors: 'sponsor', titles: 'title', cues: 'cue',
   chapters: 'chapter', music: 'music', stings: 'sting', notes: 'note'};
-const tlHideQuery = () => '?hide=' + Object.keys(TL.hidden).filter((k) => TL.hidden[k]).sort().join(',');
+const tlHideQuery = () => '?hide=' + (state.project.layers || [])
+  .filter(row => row.hidden).map(row => encodeURIComponent(row.id)).sort().join(',');
 
 // Keep role selectors and item indexes for the existing inspectors/gestures.
 // Project ids identify lanes and collapse preferences, never drop compatibility.
@@ -11,11 +12,11 @@ function tlLayerRows(pictures = '', voice = '') {
   return rows.filter(row => row.items.length ||
     (['pictures', 'voice'].includes(row.role) && row === first(row.role))).map(row => {
     const role = row.role === 'captions' ? 'titles' : row.role;
-    const hidden = !!TL.hidden[role];
+    const hidden = !!row.hidden;
     const label = `<span class="tl-layer-label" title="${esc(row.name)}">
       <i class="tl-layer-swatch" aria-hidden="true"></i>
-      ${['pictures', 'voice', 'sponsors'].includes(role) ? '' : `<button type="button" class="btn sm ghost" data-eye="${role}"
-        aria-label="${hidden ? 'Show' : 'Hide'} ${role} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>`}
+      <button type="button" class="btn sm ghost" data-eye="${esc(row.id)}"
+        aria-label="${hidden ? 'Show' : 'Hide'} ${esc(row.name)} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>
       <span class="tl-layer-name">${esc(row.name)}</span>
       <button type="button" class="btn sm ghost" data-lock="${esc(row.id)}" aria-pressed="${!!row.locked}"
         title="${row.locked ? 'Unlock' : 'Lock'} ${esc(row.name)}" aria-label="${row.locked ? 'Unlock' : 'Lock'} ${esc(row.name)}">
@@ -91,12 +92,16 @@ async function tlLockLayer(ident) {
   } catch (error) { tlMsg(error.message); }
 }
 
-async function tlHideLayer(row) {
-  tlPause();
-  TL.hidden[row] = !TL.hidden[row];
-  TL.queue = []; TL.pending.clear(); TL.failed.clear();
-  TL.vids.forEach((v) => { v.dataset.seg = ''; v.removeAttribute('src'); v.load(); });
-  TL.audio.removeAttribute('src'); TL.audio.load(); TL.mixStamp = 0;
-  TL.mixFailed = false;
-  await tlRefresh(true);
+async function tlHideLayer(ident) {
+  const row = TL.data.project_layers.find(row => row.id === ident);
+  try {
+    state.project = await api(`/api/projects/${TL.pid}/layers/${encodeURIComponent(ident)}`, {
+      method:'PATCH', body:JSON.stringify({hidden:!row.hidden}),
+      editLabel:`${row.hidden ? 'show' : 'hide'} ${row.name}`});
+    tlPause();
+    TL.queue = []; TL.pending.clear(); TL.failed.clear();
+    TL.vids.forEach(v => { v.dataset.seg = ''; v.removeAttribute('src'); v.load(); });
+    TL.audio.removeAttribute('src'); TL.audio.load(); TL.mixStamp = 0; TL.mixFailed = false;
+    await tlRefresh(true);
+  } catch (error) { tlMsg(error.message); }
 }
