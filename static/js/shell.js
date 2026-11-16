@@ -1,6 +1,6 @@
 /* Studio shell; stage contents remain the existing tab implementations. */
 const STAGES = [
-  ['dashboard', 'Home'], ['script', 'Script'], ['voice', 'Voice'],
+  ['dashboard', 'Home'], ['script', 'Script'], ['create', 'Create'], ['voice', 'Voice'],
   ['edit', 'Edit'], ['publish', 'Publish'],
 ];
 const projectStages = p => p?.kind === 'clip' ? [['clip','Clip'],['edit','Edit'],['publish','Publish']] : STAGES;
@@ -20,7 +20,7 @@ function canonicalHash(hash) {
 }
 
 function stageTab(stage, subtab) {
-  return {clip: 'clip', dashboard: 'dashboard', script: subtab === 'outline' ? 'plan' : subtab === 'shots' ? 'shots' : 'script',
+  return {clip: 'clip', dashboard: 'dashboard', create: 'create', script: subtab === 'outline' ? 'plan' : subtab === 'shots' ? 'shots' : 'script',
     voice: 'record', edit: {pictures: 'media', cast: 'cast', stage: 'stage'}[subtab] || 'edit',
     publish: 'render'}[stage] || 'dashboard';
 }
@@ -77,7 +77,7 @@ function paintProjectShell() {
   const rows = state.stageStates?.pid === p.id ? state.stageStates.items : [];
   const next = state.stage === 'dashboard'
     ? stages.find(([id]) => id !== 'dashboard' && rows.some(r => r.id === id && r.status !== 'ready'))
-    : stages[i + 1];
+    : stages.slice(i + 1).find(([id]) => id !== 'create');
   const channel = (state.channels || []).find(c => c.id === p.channel_id);
   const format = p.kind === 'clip' ? 'Clip' : FORMAT_INFO.find(f => f.key === p.style.format)?.label || p.style.format;
   bar.innerHTML = `<span class="project-title">/ ${esc(p.title || p.idea.slice(0, 60))}</span>
@@ -124,6 +124,11 @@ document.addEventListener('keydown', e => {
   restoreProjectEdit(e.shiftKey ? 'redo' : 'undo');
 });
 
+// Create is optional and has no server readiness row: say what is there.
+function createStageInfo(p) {
+  const made = (p.graphics || []).filter(g => g.versions?.length), placed = made.filter(g => g.used_in?.length).length;
+  return {status: '', reason: made.length ? `${made.length} graphic${made.length === 1 ? '' : 's'}${placed ? ` · ${placed} placed` : ''}` : 'Optional'};
+}
 function paintStageBar() {
   const p = state.project;
   if (!p) return;
@@ -131,7 +136,7 @@ function paintStageBar() {
   bar.hidden = false;
   const stages = state.stageStates?.pid === p.id ? state.stageStates.items : [];
   bar.innerHTML = projectStages(p).map(([id, label], i) => {
-    const info = stages.find(s => (s.id || s.stage || s.key) === id);
+    const info = id === 'create' ? createStageInfo(p) : stages.find(s => (s.id || s.stage || s.key) === id);
     const active = id === state.stage;
     return `<a class="stage-link ${active ? 'active' : ''} ${info?.status === 'ready' ? 'done' : info?.status === 'warn' ? 'warn' : ''}"
       href="#/p/${p.id}/${id}" ${active ? 'aria-current="step"' : ''}>

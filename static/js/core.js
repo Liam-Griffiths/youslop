@@ -487,7 +487,7 @@ async function render() {
     </nav>` : ''}
     ${state.stage === 'script' ? `${state.tab === 'script' && p.slides.length ? '<div id="script-toolbar" onkeydown="scriptWorkspaceKey(event)"></div>' : ''}</div>` : ''}
     ${jobPanel()}<div id="tabbody"></div>`;
-  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, shots: paintScriptShots, media: paintMedia, cast: paintCast, stage: paintStage,
+  await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, shots: paintScriptShots, create: paintCreate, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
   paintJob();
   if (state.tab !== 'edit' && typeof tlPause === 'function') tlPause();

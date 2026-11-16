@@ -30,7 +30,7 @@ for(const [id, hash] of [['home','#/'],['library','#/library'],['channels','#/ch
  commands.get('route-'+id).run(); check(route===hash,'screen route '+id);
 }
 state.project={id:'p-test'};
-check(visible().filter(c=>c.group==='Project stages').length===5,'all five stages');
+check(visible().filter(c=>c.group==='Project stages').length===6,'all six stages, Create included');
 for(const [id] of STAGES) {commands.get('stage-'+id).run(); check(route==='#/p/p-test/'+id,'stage '+id);}
 for (const [old, target] of Object.entries({plan:'script/outline', visuals:'edit/pictures', media:'edit/pictures', cast:'edit/cast', stage:'edit/stage', record:'voice', render:'edit', thumb:'publish/thumb', 'visuals/media':'edit/pictures', 'visuals/cast':'edit/cast', 'visuals/stage':'edit/stage', '':'dashboard', dashboard:'dashboard'})) {
  check(canonicalHash('#/p/p-test'+(old?'/'+old:''))==='#/p/p-test/'+target,'legacy route '+old);

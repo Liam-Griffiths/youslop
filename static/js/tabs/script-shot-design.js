@@ -134,8 +134,9 @@ function shotKindPanel(p, s, view) {
     <div class="shots-design-controls"><p class="sub">A drawn diagram: boxes, arrows, labels and numbers, built from your description.</p>
       <button class="btn sm primary" onclick="openDiagramEditor('${s.id}')">${s.diagram && Object.keys(s.diagram).length ? 'Edit the diagram' : 'Draw a diagram'}</button></div>`;
   return `<div class="shots-design-preview">${s.cues?.blocks?.length ? visualBlockStill(p, s) : shotPreview(s, c?.provider === 'custom' ? c : null, 'No scene designed yet')}</div>
-    <div class="shots-design-controls"><p class="sub">A designed frame: a title card, a chart, a number landing, or a reusable block.</p>
-      <div class="shots-row-actions"><button class="btn sm primary" onclick="openCustomEditor('${s.id}')">Design a slide</button>
+    <div class="shots-design-controls"><p class="sub">A designed frame: a title card, a number landing, a comparison or a timeline. Make it with the agent in Create, or design it by hand.</p>
+      <div class="shots-row-actions"><button class="btn sm primary" onclick="createFromShot('${s.id}')">Make it in Create</button>
+      <button class="btn sm" onclick="openCustomEditor('${s.id}')">Design a slide</button>
       <button class="btn sm" onclick="openBlockPicker('${state.project.id}','${s.id}')">Choose a block</button></div></div>`;
 }
 
