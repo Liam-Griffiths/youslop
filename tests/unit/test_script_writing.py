@@ -164,7 +164,7 @@ const state={project:{id:'p',style:{format:'kenburns'},target_minutes:8,
 const body={}, tools={}, toolbar={children:[],replaceChildren(el){this.children=[el];}};
 const layout={classList:{toggle(){}},style:{setProperty(){}}};
 const stub={checked:false,hidden:true,setAttribute(){},classList:{toggle(){}},style:{setProperty(){}}};
-const $=s=>s==='#tabbody'?body:s==='#script-toolbar'?toolbar:s==='.script-tools'?tools:s==='.script-layout'?layout:stub;
+const $=s=>s==='#tabbody'?body:s==='#script-toolbar'?toolbar:s==='#tabbody .script-tools'?tools:s==='.script-layout'?layout:stub;
 scriptCurrent=sid=>{scriptActive=sid;};scriptLoadCheck=()=>{};
 paintScript();paintScript();
 check(toolbar.children.length===1&&toolbar.children[0]===tools,'repaint replaces shared toolbar controls');

@@ -1293,6 +1293,11 @@ main:has(.script-layout) .project-tools { padding: 0 20px; margin: 0; }
 @keyframes script-flash { from { background: var(--warn-tint); } to { background: transparent; } }
 .script-gutter { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 6px; }
 .script-para-number { font-size: 10px; color: var(--dim); }
+.script-para-number[draggable] { cursor: grab; padding: 0 3px; border-radius: 3px; }
+.script-para-number[draggable]:hover { background: var(--accent-tint); color: var(--ink); }
+.script-card.dragging { opacity: .4; }
+.script-card.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.script-card.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .script-card.has-finding .script-para-number::before { content: '● '; color: var(--warn); }
 .script-para-menu { position: relative; }
 .script-para-menu summary { list-style: none; cursor: pointer; padding: 0 6px; border-radius: 4px; color: var(--dim); opacity: 0; line-height: 1.4; }

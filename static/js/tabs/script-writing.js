@@ -152,6 +152,76 @@ function scriptNewShot(sid) {
   if (scriptShotOf(sid).run[0]?.id === sid) return toast('This paragraph already starts a shot.');
   return scriptShotPatch([[sid, {picture_mode: 'new'}]], sid, 'desc:' + sid);
 }
+// Moving a paragraph between shots: one server edit, so Undo restores it.
+async function scriptMovePara(sid, shot, before = '') {
+  if (!(await scriptFlush())) return;
+  const pid = state.project.id;
+  try {
+    const p = await scriptPauseEditor(() => api(`/api/projects/${pid}/script/move`, {method: 'POST',
+      body: JSON.stringify({id: sid, shot, before, version: state.project.updated_at})}));
+    if (state.project?.id !== pid) return;
+    state.project = p; paintScript(); scriptAgentShow(sid);
+  } catch (e) { toast(e.message, true); }
+}
+function scriptNeighbourShot(sid, step) {
+  const runs = scriptRuns(state.project);
+  let j = scriptShotOf(sid).index + step;
+  while (runs[j]?.[0].insert?.kind) j += step;
+  return runs[j] || null;
+}
+function scriptMoveToShot(sid, step) {
+  const run = scriptNeighbourShot(sid, step);
+  if (!run) return toast(step < 0 ? 'This is already the first shot.' : 'This is already the last shot.');
+  // Up lands at the end of the shot above; down at the start of the shot below.
+  return scriptMovePara(sid, run[0].id, step < 0 ? '' : run[0].id);
+}
+// Alt+Up/Down: one place at a time, crossing into the next shot at an edge.
+function scriptNudge(sid, step) {
+  const {run} = scriptShotOf(sid), k = run.findIndex(s => s.id === sid);
+  if (step < 0 && k > 0) return scriptMovePara(sid, run[0].id, run[k - 1].id);
+  if (step > 0 && k < run.length - 1) return scriptMovePara(sid, run[0].id, run[k + 2]?.id || '');
+  return scriptMoveToShot(sid, step);
+}
+let scriptDragging = '';
+const SCRIPT_DRAG_TYPE = 'application/x-script-paragraph';
+function scriptDragStart(e, sid) {
+  scriptDragging = sid;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData(SCRIPT_DRAG_TYPE, sid);
+  e.currentTarget.closest('.script-card')?.classList.add('dragging');
+}
+function scriptDropMarks() {
+  document.querySelectorAll('.drop-before,.drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+}
+function scriptDragEnd() {
+  scriptDragging = '';
+  scriptDropMarks();
+  document.querySelectorAll('.script-card.dragging').forEach(el => el.classList.remove('dragging'));
+}
+function scriptDropSpot(e) {
+  const section = e.currentTarget, cards = [...section.querySelectorAll('.script-card')];
+  const mark = cards.find(card => { const r = card.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+  return {shot: section.dataset.scriptShot, before: mark?.dataset.sid || '', mark: mark || cards.at(-1), after: !mark};
+}
+function scriptDragOver(e) {
+  const lead = scriptDragging && state.project.slides.find(s => s.id === e.currentTarget.dataset.scriptShot);
+  if (!lead || lead.insert?.kind) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const spot = scriptDropSpot(e);
+  scriptDropMarks();
+  spot.mark?.classList.add(spot.after ? 'drop-after' : 'drop-before');
+}
+function scriptDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) scriptDropMarks();
+}
+function scriptDrop(e) {
+  if (!scriptDragging) return;
+  e.preventDefault();
+  const sid = scriptDragging, spot = scriptDropSpot(e);
+  scriptDragEnd();
+  scriptMovePara(sid, spot.shot, spot.before);
+}
 // One description per shot: write it to every paragraph so they stay together.
 async function scriptSaveShotNote(lead, value) {
   const patches = scriptShotOf(lead).run.filter(s => (s.visual_note || '') !== value).map(s => [s.id, {visual_note: value}]);
@@ -251,6 +321,9 @@ function scriptWorkspaceKey(e) {
 async function scriptEditorKey(e, sid) {
   if (!e.isComposing && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault(); return scriptNewShot(sid);
+  }
+  if (!e.isComposing && e.altKey && !e.ctrlKey && !e.metaKey && ['ArrowUp','ArrowDown'].includes(e.key)) {
+    e.preventDefault(); return scriptNudge(sid, e.key === 'ArrowUp' ? -1 : 1);
   }
   if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
   const selection = window.getSelection();
