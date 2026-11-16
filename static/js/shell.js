@@ -207,9 +207,24 @@ for (const [id, label] of STAGES) {
     when: () => !!state.project, run: () => go(`#/p/${state.project.id}/${id}`)});
 }
 
-function paintChannelsIndex() {
-  view.innerHTML = `<div class="row"><h1>Channels</h1><div class="spacer"></div>
-    <button class="btn" onclick="newChannel()">New channel</button></div>
-    ${(state.channels || []).map(c => `<p><a href="#/channels/${c.id}">${esc(c.name)}</a></p>`).join('')
-      || '<p class="sub">No channels yet. Create a channel to keep videos together.</p>'}`;
+async function paintChannelsIndex() {
+  if (!state.themes) { try { state.themes = await api('/api/themes'); } catch { state.themes = []; } }
+  const list = state.channels || [];
+  const theme = c => (state.themes || []).find(t => t.key === c.theme)?.label || '';
+  const format = c => FORMAT_INFO.find(f => f.key === c.format)?.label || '';
+  view.innerHTML = `<div class="channels-head"><div><h1>Channels</h1>
+      <p class="sub">A channel keeps a series together: its look, voice, opening slate and end screen.</p></div>
+      ${list.length ? '<button class="btn primary" onclick="newChannel()">New channel</button>' : ''}</div>
+    ${list.length ? `<div class="channel-grid">${list.map(c => `
+      <a class="channel-card" href="#/c/${c.id}">
+        <div class="channel-card-art">${channelArt(c)}</div>
+        <div class="channel-card-body">
+          <h2>${esc(c.name)}</h2>
+          <p class="sub">${esc(c.tagline || c.concept || 'No description yet.')}</p>
+          <p class="channel-meta">${c.videos} video${c.videos === 1 ? '' : 's'}${theme(c) ? ` · ${esc(theme(c))}` : ''}${format(c) ? ` · ${esc(format(c))}` : ''}</p>
+          ${c.intro_ready ? '' : '<span class="pill warn">Opening slate needs portraits</span>'}
+        </div></a>`).join('')}</div>`
+    : `<div class="channel-empty"><h2>No channels yet</h2>
+        <p class="sub">Make one when you plan more than one video with the same look. Single videos work without a channel.</p>
+        <button class="btn primary" onclick="newChannel()">New channel</button></div>`}`;
 }

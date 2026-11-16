@@ -437,6 +437,37 @@ label.field > span, div.field > span { display: block; font-size: 11px; color: v
   width: 100%; height: 74px; display: block; border-radius: 5px;
   background: var(--well); border: 1px solid var(--line-soft);
 }
+/* Channels: an index of cards, and one page per channel with a header and tabs. */
+.channels-head, .channel-head { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px; }
+.channels-head > div, .channel-head-text { flex: 1; min-width: 0; }
+.channels-head h1, .channel-head h1 { margin: 0 0 6px; }
+.channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.channel-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); color: var(--ink); text-decoration: none; overflow: hidden; }
+.channel-card:hover { border-color: var(--card-hover-line); }
+.channel-card-art .tpl-art, .channel-head-art .tpl-art { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.channel-card-art { height: 132px; border-bottom: 1px solid var(--line); }
+.channel-card-body { padding: 14px 16px 16px; }
+.channel-card h2 { margin: 0 0 4px; font: 600 17px var(--ui); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.channel-card .sub { margin: 0 0 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.channel-meta { margin: 0; font: 11px var(--mono); color: var(--dim); }
+.channel-meta a { color: var(--warn); }
+.channel-card .pill { margin-top: 10px; display: inline-block; }
+.channel-head-art { width: 148px; height: 84px; flex: none; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.channel-head .sub { margin: 0 0 6px; }
+.channel-crumb { font: 500 11px var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--dim); text-decoration: none; }
+.channel-crumb:hover { color: var(--ink); }
+.channel-tabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+.channel-tabs a { padding: 10px 14px; color: var(--dim); text-decoration: none; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.channel-tabs a:hover { color: var(--ink); }
+.channel-tabs a[aria-current] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.channel-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.channel-columns > div > .panel { margin-bottom: 18px; }
+.channel-empty { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 40px 24px; text-align: center; }
+.channel-empty h2 { margin: 0 0 6px; }
+.channel-empty .sub { margin: 0 auto 16px; max-width: 460px; }
+.channel-danger h3 { margin-top: 0; }
+@media (max-width: 900px) { .channel-columns { grid-template-columns: 1fr; } .channel-head { flex-wrap: wrap; } }
 .tpl { position: relative; }
 .tpl-edit { position: absolute; bottom: 8px; right: 8px; }
 .tpl-new { border-style: dashed; }

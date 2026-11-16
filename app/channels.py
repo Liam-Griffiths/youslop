@@ -93,6 +93,8 @@ def list_channels() -> list[dict]:
             "tagline": raw.get("tagline", ""),
             "concept": raw.get("concept", ""),
             "accent": (raw.get("style") or {}).get("accent", "#E8C36A"),
+            "accent2": (raw.get("style") or {}).get("accent2", ""),
+            "theme": (raw.get("style") or {}).get("theme", "archive"),
             "format": (raw.get("style") or {}).get("format", "kenburns"),
             "picture_every": (raw.get("style") or {}).get("picture_every", 1),
             "videos": counts.get(raw.get("id", d.name), 0),

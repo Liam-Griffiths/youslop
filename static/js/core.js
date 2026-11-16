@@ -345,7 +345,7 @@ async function routeView() {
   } else if (hash === '#/channels') {
     state.project = null; state.channel = null;
     await ensureChannelsLoaded();
-    paintChannelsIndex();
+    await paintChannelsIndex();
   } else if (hash === '#/packs') {
     state.project = null; state.channel = null;
     view.innerHTML = '<h1>Packs</h1><div id="packs-screen"></div>';
@@ -406,7 +406,8 @@ async function routeView() {
     await render();
   } else if (chan) {
     state.project = null;
-    state.channelTab = chan[2] === 'setup' ? 'setup' : 'videos';
+    // Old links to the one long setup page land on its first part.
+    state.channelTab = chan[2] === 'setup' ? 'look' : CHANNEL_TABS.some(([id]) => id === chan[2]) ? chan[2] : 'videos';
     if (!state.templates) {
       try { state.templates = await api('/api/intro/templates'); }
       catch { state.templates = []; }

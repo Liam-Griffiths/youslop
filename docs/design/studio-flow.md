@@ -510,3 +510,13 @@ Search sit on the right. There is no backend status text; a warning pill
 appears only when the writing model cannot run, and links to Settings. Inside
 a project the menu gives way to the project bar and everything is under More.
 Home's start panel is headed "Start a video" and offers only choices that work.
+
+### Channels (2026-11-16)
+
+`#/channels` is a grid of cards: the channel's theme swatch in its own
+colours, name, description, video count, theme and format, and a warning if
+the opening slate still needs portraits. A channel is one page with a header
+(swatch, name, description, New video) and tabs: Videos, Look, Opening slate,
+End screen, Blocks and sponsors, Settings. Each tab has its own address
+(`#/c/<id>/look`); the old `/setup` address opens Look. New video is the
+page's one accent button.

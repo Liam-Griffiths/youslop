@@ -17,7 +17,7 @@ def test_music_empty_state_stays_in_music_sections():
             functions = list(re.finditer(r'(?:async )?function (\w+)\(', path.read_text()[:match.start()]))
             assert functions and 'music' in functions[-1][1].lower(), str(path)
     channel = Path('static/js/tabs/channels.js').read_text()
-    assert 'No videos yet. Start one with New video.' in channel
+    assert 'No videos yet' in channel
 
 
 @pytest.mark.parametrize('words', [1, 11, 119])

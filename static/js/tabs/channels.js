@@ -617,41 +617,58 @@ async function disconnectYoutube() {
 function paintChannel() {
   const c = state.channel;
   if (!c) return;
-  if (state.channelTab === 'setup') paintChannelSetup();
-  else return paintChannelOverview();
+  if (state.channelTab === 'videos') return paintChannelVideos();
+  if (state.channelTab === 'blocks') return paintChannelExtras();
+  paintChannelSetup();
 }
 
-// The landing page for a channel — what it's hard to find today, buried
-// under the whole setup form. Just the videos, front and centre; setup is
-// one click away rather than something you scroll past every time.
-function paintChannelOverview() {
-  const c = state.channel;
-  const st = c.style;
-  $('#topbar-right').innerHTML =
-    `<span class="swatch" style="background:${esc(st.accent)}"></span>`;
+// One page per channel: a header that says what it is, then tabs. Videos come
+// first; everything that used to be one long setup form is split by subject.
+const CHANNEL_TABS = [['videos', 'Videos'], ['look', 'Look'], ['opening', 'Opening slate'],
+  ['ending', 'End screen'], ['blocks', 'Blocks and sponsors'], ['settings', 'Settings']];
 
-  view.innerHTML = `
-    <div class="row" style="align-items:flex-start">
-      <div style="flex:1;min-width:0">
+// The theme's swatch, drawn in the colours this channel actually uses.
+function channelArt(c) {
+  const key = c.style?.theme || c.theme || 'archive';
+  const t = (state.themes || []).find(x => x.key === key) || (state.themes || [])[0] || {ground: '#0A0B0E', ink: '#FFFFFF'};
+  return themeArt({...t, accent: c.style?.accent || c.accent || t.accent, accent2: c.style?.accent2 || c.accent2 || t.accent2});
+}
+
+function channelHead(c, note = '') {
+  const tab = state.channelTab;
+  const theme = (state.themes || []).find(x => x.key === c.style.theme);
+  const count = (c.videos || []).length;
+  return `<div class="channel-head">
+      <div class="channel-head-art">${channelArt(c)}</div>
+      <div class="channel-head-text">
+        <a class="channel-crumb" href="#/channels">Channels</a>
         <h1>${esc(c.name)}</h1>
-        <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
+        <p class="sub">${esc(c.tagline || c.concept || 'A series of videos that share a look.')}</p>
+        <p class="channel-meta">${count} video${count === 1 ? '' : 's'}${theme ? ` · ${esc(theme.label)} theme` : ''}${note}</p>
       </div>
-      <button class="btn ghost sm" onclick="go('#/c/${c.id}/setup')">Channel setup</button>
-      <button class="btn ghost sm" onclick="go('#/')">All channels</button>
+      <button class="btn primary" onclick="newVideoInChannel('${c.id}')">New video</button>
     </div>
-    ${jobPanel()}
-    <section class="panel" id="channel-sponsors" aria-label="Sponsors"></section>
-    <section class="channel-blocks card" aria-label="Channel blocks" id="channel-blocks"></section>
+    <nav class="channel-tabs" aria-label="Channel sections">${CHANNEL_TABS.map(([id, label]) =>
+      `<a href="#/c/${c.id}${id === 'videos' ? '' : '/' + id}" ${id === tab ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
+    ${jobPanel()}`;
+}
 
-    <div class="row" style="margin:20px 0 14px;align-items:baseline">
-      <h2 style="margin:0">Videos in this channel</h2>
-      <div class="spacer"></div>
-      <button class="btn sm primary" onclick="newVideoInChannel('${c.id}')">New video</button>
-    </div>
+function paintChannelVideos() {
+  const c = state.channel;
+  view.innerHTML = `${channelHead(c)}
     ${(c.videos || []).length === 0
-      ? '<div class="empty-note">No videos yet. Start one with New video.</div>'
-      : c.videos.map(projRow).join('')}
-  `;
+      ? `<div class="channel-empty"><h2>No videos yet</h2>
+          <p class="sub">Videos made here start with this channel's look, voice and opening slate.</p>
+          <button class="btn" onclick="newVideoInChannel('${c.id}')">Start the first video</button></div>`
+      : `<div class="channel-videos">${c.videos.map(projRow).join('')}</div>`}`;
+  paintJob();
+}
+
+function paintChannelExtras() {
+  const c = state.channel;
+  view.innerHTML = `${channelHead(c)}
+    <section class="channel-blocks card" aria-label="Channel blocks" id="channel-blocks"></section>
+    <section class="panel" id="channel-sponsors" aria-label="Sponsors"></section>`;
   paintJob();
   paintChannelSponsors(c);
   return paintChannelBlocks(c);
@@ -671,22 +688,9 @@ function paintChannelSetup() {
   // Only the cast-led slates wait on portraits; the type-led ones are ready now.
   const castLed = !!tpl.needs_images;
   const ready = !castLed || (intro.images || []).length >= 2;
-  $('#topbar-right').innerHTML =
-    `<span class="swatch" style="background:${esc(st.accent)}"></span>
-     <span class="pill ${ready ? 'on' : 'warn'}">${ready ? 'slate ready' : 'slate incomplete'}</span>`;
-
-  view.innerHTML = `
-    <div class="row" style="align-items:flex-start">
-      <div style="flex:1;min-width:0">
-        <h1>${esc(c.name)} <span class="sub">— setup</span></h1>
-        <p class="sub">${esc(c.tagline || c.concept || 'A series.')}</p>
-      </div>
-      <button class="btn ghost sm" onclick="go('#/c/${c.id}')">Videos</button>
-    </div>
-    ${jobPanel()}
-    ${themePanel(c)}
-
-    <div class="grid-2">
+  const tab = state.channelTab;
+  const note = ready ? '' : ` · <a href="#/c/${c.id}/opening">the opening slate needs portraits</a>`;
+  const identity = `
       <div class="panel">
         <h3>Identity</h3>
         <label class="field"><span>Channel name — appears on every slate</span>
@@ -708,7 +712,11 @@ function paintChannelSetup() {
           <input type="range" min="7" max="22" value="${c.default_minutes}"
             onchange="saveChannel({default_minutes:+this.value})"></label>
       </div>
+  `;
+  const look = `
+    ${themePanel(c)}
 
+    <div class="channel-columns">
       <div><div class="panel">
         <h3>House style</h3>
         <p class="mono" style="color:var(--ink-faint);margin-top:-4px">
@@ -721,11 +729,10 @@ function paintChannelSetup() {
           <input type="range" min="-40" max="-10" step="1" value="${st.music_db}"
             onchange="saveChannelStyle({music_db:+this.value})"></label>
       </div>
-      ${blockThemePanel()}
       </div>
-    </div>
-
-    <h2>Opening slate</h2>
+      <div>${blockThemePanel()}</div>
+    </div>`;
+  const opening = `
     <div class="panel">
       <div class="row" style="margin-bottom:16px">
         <span class="mono" style="color:var(--ink-faint);flex:1;min-width:220px">
@@ -858,22 +865,17 @@ function paintChannelSetup() {
       </div>`}
 
       ${previewStage(c, 'intro preview', 'cache/intro_preview.webm', c.preview_at)}
-    </div>
-
-    ${endScreenPanel(c)}
-
-    ${avatarPanel(c)}
-
-    ${youtubePanel(c)}
-
-    <div class="row" style="margin-top:30px">
-      <div class="spacer"></div>
-      <button class="btn sm ghost danger" onclick="delChannel()">Delete channel</button>
-    </div>
-  `;
+    </div>`;
+  const settings = `<div class="channel-columns"><div>${identity}</div><div>
+      ${youtubePanel(c)}
+      <div class="panel channel-danger"><h3>Delete this channel</h3>
+        <p class="sub">Its videos are kept and become standalone.</p>
+        <button class="btn sm ghost danger" onclick="delChannel()">Delete channel</button></div>
+    </div></div>`;
+  const body = {opening, settings, ending: endScreenPanel(c)}[tab] ?? look + avatarPanel(c);
+  view.innerHTML = channelHead(c, note) + body;
   paintJob();
-  mountBlockTheme('channel', c.id);
-  mountStylePreviews(view);
+  if (!['opening', 'settings', 'ending'].includes(tab)) { mountBlockTheme('channel', c.id); mountStylePreviews(view); }
 }
 
 // A channel response carries no video list and no preview flags — those are
