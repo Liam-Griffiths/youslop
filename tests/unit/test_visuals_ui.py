@@ -20,9 +20,11 @@ def test_visual_picker_js(tmp_path):
       const isStage = f => f === 'stage', isCut = f => f === 'loudmouth';
       const fmtTime = s => s+'s', thumbUrl = c => '/thumb/'+c.id;
       const document = {querySelectorAll: () => []};
+      const tlInspector=()=>{}, tlRefresh=async()=>{};
+      let shotsPainted=0; const paintScriptShots=()=>shotsPainted++;
       const loadBlockPresets = async () => [], blockPriority = () => 0;
       const blockPoster = b => `<img src="/poster/${b.ref}" alt="${b.name}">`;
-      const location = {}, state = {tab:'media', project:{id:'p1',aspect:'landscape',style:{format:'kenburns'},
+      const location = {}, state = {tab:'edit', project:{id:'p1',aspect:'landscape',style:{format:'kenburns'},
         slides:Array.from({length:40},(_,i)=>({id:'s'+i,title:'Picture <'+i+'>',narration:'Paragraph '+i,
           visual_note:'A map',prefer_kind:'image',take:{duration: i+1},candidates:[
             {id:'c'+i,provider:'library',title:'Map '+i,kind:'image',focal:[.2,.3]}],chosen_id:'c'+i}))}};
@@ -54,16 +56,16 @@ def test_visual_picker_js(tmp_path):
     checks = r'''
       const p = state.project;
       paintMedia();
-      let html = $('#tabbody').innerHTML;
-      assert(html.includes('visual-grid') && html.includes('visual-sequence'), 'shared shell');
-      assert((html.match(/class="btn ghost visual-group"/g)||[]).length === 40, 'all groups');
+      let html = $('#edit-picture-tools').innerHTML;
+      assert(html.includes('visual-source-body') && !html.includes('visual-grid'), 'tools live in Edit dialog');
+      assert((html.match(/<option /g)||[]).length === 40, 'all groups');
       assert(html.includes('Search footage') && !html.includes('cut/'), 'footage picker, no render URL');
       assert(html.includes('Picture &lt;0>'), 'escape narration');
       await Promise.resolve();
       assert(calls.length === 1 && calls[0][0] === '/api/footage/shoots', 'metadata only on paint');
       selectVisualSource('Library');
-      html = $('#tabbody').innerHTML;
-      assert((html.match(/<img /g)||[]).length === 42, 'only group thumbnails, selected preview and selected candidates');
+      html = $('#edit-picture-tools').innerHTML;
+      assert((html.match(/<img /g)||[]).length === 2, 'only selected preview and candidates');
       assert((html.match(/<img /g)||[]).length === (html.match(/loading="lazy"/g)||[]).length, 'every image lazy');
       await choose('s0','c0');
       assert(calls.at(-1)[1].chosen_id === 'c0', 'shared choose/save path');
@@ -83,34 +85,35 @@ def test_visual_picker_js(tmp_path):
       await suggestVisualFootage(p, p.slides[0]);
       assert(p.slides[0].chosen_id === 'c0', 'suggestions preserve selection');
       selectVisualSource('Footage');
-      html = $('#tabbody').innerHTML;
+      html = $('#edit-picture-tools').innerHTML;
       assert(visualSources(p)[0] === 'Footage', 'footage first with a shoot');
       assert(html.includes('2.000–10.000 s') && html.includes('harbour'), 'range and label chips');
-      assert(html.includes('Fill the rest from footage'), 'fill available');
+      assert(editPictureToolbar().includes('Fill the rest from footage'), 'fill available');
       await choose('s0','ft1');
       assert(calls.at(-1)[1].chosen_id === 'ft1', 'choose footage via existing save');
       await fillVisualFootage();
-      assert(calls.at(-1)[0].endsWith('/footage/fill'), 'explicit fill route');
+      assert(calls.some(([url])=>url.endsWith('/footage/fill')), 'explicit fill route');
+      state.project = p;
       state.visualHasFootage = false;
       selectVisual('s39');
-      assert($('#tabbody').innerHTML.includes('Picture 40'), 'last group selectable');
+      assert($('#edit-picture-tools').innerHTML.includes('Picture 40'), 'last group selectable');
       p.picture_runs = [['s0','s1'],...p.slides.slice(2).map(s=>[s.id])];
       selectVisual('s1');
-      assert($('#tabbody').innerHTML.includes('Give this one its own picture'), 'held controls');
-      assert($('#tabbody').innerHTML.includes('3s from the takes'), 'run duration from takes');
+      assert($('#edit-picture-tools').innerHTML.includes('Give this one its own picture'), 'held controls');
+      assert($('#edit-picture-tools').innerHTML.includes('3s from the takes'), 'run duration from takes');
       delete p.picture_runs;
       for(const [format,delivery,aspect,tab] of [['stage','voice_over','landscape','3D'],
         ['essay','on_camera','landscape','Layout'],['loudmouth','voice_over','portrait','Blocks']]) {
         p.style.format=format;p.delivery=delivery;p.aspect=aspect;delete state.visualSource;
-        paintMedia(); assert($('#tabbody').innerHTML.includes(`selectVisualSource('${tab}')`), 'format source '+tab);
+        paintMedia(); assert($('#edit-picture-tools').innerHTML.includes(`selectVisualSource('${tab}')`), 'format source '+tab);
       }
-      assert(!$('#tabbody').innerHTML.includes('/cut/'), 'no generated cut thumbnail');
+      assert(!$('#edit-picture-tools').innerHTML.includes('/cut/'), 'no generated cut thumbnail');
       for(const s of p.slides) s.take={};
-      paintMedia(); assert($('#tabbody').innerHTML.includes('by group count (unvoiced)'), 'honest unvoiced mix');
+      paintMedia(); assert(editPictureToolbar().includes('by group count (unvoiced)'), 'honest unvoiced mix');
       p.style.format='kenburns';p.delivery='voice_over';p.aspect='landscape';
       selectVisualSource('Scenes');
       for (let i=0;i<6;i++) await Promise.resolve();
-      html = $('#tabbody').innerHTML;
+      html = $('#edit-picture-tools').innerHTML;
       assert(html.includes('More blocks…') && html.includes('/poster/number_slam'), 'compact local suggestion posters');
       assert(calls.some(([url]) => url.endsWith('/block-suggestions')), 'offline suggestions endpoint');
       assert(!calls.some(([url]) => url.endsWith('/preview')), 'suggestions do not render');
@@ -118,27 +121,31 @@ def test_visual_picker_js(tmp_path):
       selected.cues = {blocks:[{block:'number_slam',vars:{value:42}}]};
       selectVisual(selected.id);
       for (let i=0;i<6;i++) await Promise.resolve();
-      html = $('#tabbody').innerHTML;
+      html = $('#edit-picture-tools').innerHTML;
       assert(html.includes('>Edit</button>') && html.includes('>Remove</button>'), 'saved block controls');
+      assert(!calls.some(([url]) => url.endsWith('/preview') || url.endsWith('/posters')), 'opening never renders');
+      await loadVisualBlocks(p,selected,true);
+      for(let i=0;i<6;i++) await Promise.resolve();
+      html = $('#edit-picture-tools').innerHTML;
       assert(html.includes('Block preview disabled for snapshots.'), 'honest disabled trial state');
       const preview = calls.find(([url]) => url.endsWith('/preview'));
       assert(preview[1].kind === 'trial' && preview[1].values.value === 42, 'saved vars trial');
       visualBlockData(p).trials.set(visualTrialKey(p,selected), {url:'/trial-still.png'});
       paintMedia();
-      assert($('#tabbody').innerHTML.includes('/trial-still.png'), 'trial replaces preview placeholder');
+      assert($('#edit-picture-tools').innerHTML.includes('/trial-still.png'), 'trial replaces preview placeholder');
       selected.cues = {};
       const board = p.slides[1];
       board.kind = 'board'; board.board_lead = 'Keep this board';
       delete state.visualSource;
       selectVisual(board.id);
-      html = $('#tabbody').innerHTML;
-      assert(html.includes('Edit the board') && html.includes('Write the boards'), 'board controls in photo project');
-      assert(html.includes('Board 1 ·') && html.includes('Documentary photo 39 ·'), 'resolved counts');
+      html = $('#edit-picture-tools').innerHTML;
+      assert(html.includes('Edit the board') && editPictureToolbar().includes('Write the boards'), 'board controls in photo project');
+      assert(editPictureToolbar().includes('Board 1 ·') && editPictureToolbar().includes('Documentary photo 39 ·'), 'resolved counts');
       assert(visualFormatSources(p, selected)[0] === 'Footage', 'photo sources stay available');
       assert(visualFormatSources(p, board)[0] === 'Board', 'board sources');
       board.kind = 'loudmouth';
       paintMedia();
-      assert($('#tabbody').innerHTML.includes('Edit the cues') && $('#tabbody').innerHTML.includes('P1 · No cues'), 'cut editor and finding');
+      assert($('#edit-picture-tools').innerHTML.includes('Edit the cues') && $('#edit-picture-tools').innerHTML.includes('P1 · No cues'), 'cut editor and finding');
       selectVisual('s3',{shiftKey:true});
       assert(state.visualRange.ids.join(',') === 's1,s2,s3', 'range selection');
       p.picture_runs = [['s0','s1'],['s2'],['s3']];
@@ -147,7 +154,7 @@ def test_visual_picker_js(tmp_path):
       delete p.picture_runs;
       state.visualRange = null;
       const ensureSlideStyles = async () => [];
-      const render = async () => paintMedia();
+      const render = async () => paintMedia(), tlRefreshProject=async()=>paintMedia();
       let dialog;
       document.body = {appendChild: el => {dialog=el;}};
       document.createElement = () => ({
@@ -169,6 +176,7 @@ def test_visual_picker_js(tmp_path):
       await chooseKind('essay');
       assert(pictureKind(state.project.slides[1]) === 'essay', 'switch leaves active block');
       assert(state.project.slides[1].cues.inactive_blocks[0].vars.title === 'Keep', 'switch retains block variables');
+      state.tab='shots'; paintMedia(); assert(shotsPainted===1,'Shots redirect preserved');
       state.visualRange = {pid:'p1',ids:['s1','s2']};
       await chooseKind('board');
       assert(state.project.slides[1].kind === 'board' && state.project.slides[2].kind === 'board', 'range menu applies both');
@@ -176,7 +184,7 @@ def test_visual_picker_js(tmp_path):
     '''
     script = tmp_path / 'visuals.mjs'
     media = (ROOT / 'static/js/tabs/media.js').read_text()
-    script.write_text(bootstrap + (ROOT / 'static/js/tabs/style_picker.js').read_text() + media + (ROOT / 'static/js/tabs/visuals.js').read_text() + checks)
+    script.write_text(bootstrap + (ROOT / 'static/js/tabs/style_picker.js').read_text() + media + (ROOT / 'static/js/tabs/picture_tools.js').read_text() + checks)
     result = subprocess.run([runtime, '-m', str(script)], capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stdout + result.stderr
     print(result.stdout.strip())

@@ -442,7 +442,7 @@ async function importSlideStyle(file) {
 }
 
 async function deleteSlideStyle(id) {
-  if (!confirm('Delete this slide style? Videos already using it keep their look '
+  if (!await pictureDialog('Delete this slide style? Videos already using it keep their look '
     + 'until you pick another.')) return;
   try {
     await api(`/api/slide-styles/${id}`, { method: 'DELETE' });
@@ -467,8 +467,7 @@ async function render() {
   state.tab = stageTab(state.stage, state.subtab);
   const tabs = p.kind === 'clip' ? [] : state.stage === 'script'
     ? [['script', 'Write'], ['outline', 'Outline'], ...(p.slides.length ? [['shots', `Shots · ${scriptRuns(p).length}`]] : [])]
-    : state.stage === 'edit' ? [['pictures', 'Pictures'], ['timeline', 'Timeline'],
-      ...(p.slides.some(s => pictureKind(s,p) === 'stage') || isStage(p.style.format) ? [['cast', 'Cast'], ['stage', 'Stage']] : [])] : [];
+    : [];
   // Stage contents are replaced below; give back any slot the last stage borrowed.
   restoreShellInspector();
   paintProjectShell();
@@ -489,6 +488,7 @@ async function render() {
     ${jobPanel()}<div id="tabbody"></div>`;
   await ({ dashboard: paintDashboard, clip: paintClip, plan: paintScriptOutline, script: paintScript, shots: paintScriptShots, create: paintCreate, media: paintMedia, cast: paintCast, stage: paintStage,
     record: paintRecord, thumb: paintThumb, render: p.kind === 'clip' ? paintClipPublish : paintRender, edit: paintEdit }[state.tab] || paintScript)();
+  await editToolsRoute();
   paintJob();
   if (state.tab !== 'edit' && typeof tlPause === 'function') tlPause();
   focusPendingSlide();

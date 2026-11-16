@@ -1,9 +1,17 @@
 // The former Add panel lives here; opening it only reads local indexes.
 const TL_SOURCE_TABS = ['Materials','Library','Search','Blocks','3D','Graphics'];
 let tlSourceView = {pid:'', tab:'Materials', items:[], query:'', choice:null};
+function tlSourcesRoute() {
+  const routeTab = ['pictures','search'].includes(state.subtab) ? 'Search' : ['cast','stage','3d'].includes(state.subtab) ? '3D' : '';
+  if (routeTab && tlSourceView.route !== state.subtab) {
+    tlSourceView.tab = routeTab; tlSourceView.choice = null; TL.sourcesCollapsed = false;
+  }
+  tlSourceView.route = state.subtab;
+}
 async function tlSourcesMount() {
   const pid = TL.pid, panel = document.createElement('aside');
   if (tlSourceView.pid !== pid) tlSourceView = {pid, tab:'Materials', items:[], query:'', choice:null};
+  tlSourcesRoute();
   panel.id = 'tl-sources'; panel.setAttribute('aria-label','Sources');
   panel.innerHTML = `<div class="row"><strong>Sources</strong><button type="button" class="btn sm ghost" data-close aria-label="Collapse sources">Close</button></div>
     <div class="tl-source-tabs" role="group" aria-label="Source type">${TL_SOURCE_TABS.map(t => `<button type="button" class="btn sm ghost" data-tab="${t}">${t}</button>`).join('')}</div>
@@ -67,7 +75,7 @@ function tlSourcesPaint() {
         `<option value="${k}" ${(v.searchKind || 'image') === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
       <button type="button" class="btn sm" data-search ${v.searching ? 'disabled' : ''}>Search archives</button>`
     : tab === 'Graphics' ? `<a class="btn sm ghost" href="#/p/${TL.pid}/create">Open Create</a>`
-    : tab === '3D' ? `<button type="button" class="btn sm ghost" data-intake>Model intake…</button><a class="btn sm ghost" href="#/p/${TL.pid}/edit/cast">Cast and models</a><a class="btn sm ghost" href="#/p/${TL.pid}/edit/stage">Shot planning</a>`
+    : tab === '3D' ? `<button type="button" class="btn sm ghost" data-intake>Model intake…</button><button type="button" class="btn sm ghost" onclick="openEditStageTools('cast')">Cast and models</button><button type="button" class="btn sm ghost" onclick="openEditStageTools('stage')">Shot planning</button>`
     : tab === 'Blocks' ? '<button type="button" class="btn sm ghost" data-browse>Browse blocks…</button>' : '';
   if (tools.querySelector('[data-search]')) {
     tools.querySelector('[data-search]').onclick = tlSourceSearch;

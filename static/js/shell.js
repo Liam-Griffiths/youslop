@@ -11,9 +11,10 @@ const LEGACY_STAGES = {plan: 'script/outline', visuals: 'edit/pictures',
 function canonicalHash(hash) {
   if (hash === '#/projects') return '#/';
   if (hash.startsWith('#/c/')) return hash.replace('#/c/', '#/channels/');
-  const p = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(\w+))?$/);
+  const p = hash.match(/^#\/p\/([^/]+)(?:\/(\w+))?(?:\/(.*))?$/);
   if (!p) return hash;
-  const stage = p[2] === 'visuals' && ['cast', 'stage'].includes(p[3]) ? `edit/${p[3]}`
+  const nested = (p[3] || '').split('/').find(s => ['cast','stage'].includes(s));
+  const stage = ['visuals','media'].includes(p[2]) && nested ? `edit/${nested}`
     : LEGACY_STAGES[p[2]] || ([...STAGES, ['clip']].some(([id]) => id === p[2])
       ? [p[2], p[3]].filter(Boolean).join('/') : 'dashboard');
   return `#/p/${p[1]}/${stage}`;
@@ -21,7 +22,7 @@ function canonicalHash(hash) {
 
 function stageTab(stage, subtab) {
   return {clip: 'clip', dashboard: 'dashboard', create: 'create', script: subtab === 'outline' ? 'plan' : subtab === 'shots' ? 'shots' : 'script',
-    voice: 'record', edit: {pictures: 'media', cast: 'cast', stage: 'stage'}[subtab] || 'edit',
+    voice: 'record', edit: 'edit',
     publish: 'render'}[stage] || 'dashboard';
 }
 
@@ -44,6 +45,9 @@ function restoreShellInspector() {
 }
 
 function resetShell() {
+  $('#edit-picture-tools')?.closest('.modal').remove();
+  $('#edit-stage-tools')?.closest('.modal').remove();
+  state.editToolsRoute = '';
   restoreShellInspector();
   $('#app-nav').hidden = false;
   $('#project-bar').hidden = true;

@@ -244,8 +244,9 @@ async function setSlideFocal(sid, cid) {
   if (!cand) return;
   openFocal(thumbUrl(cand), cand.focal, async (focal) => {
     cand.focal = focal;
-    paintMedia();
     await saveSlide(sid, { focal, focal_id: cid });
+    if (state.tab === 'edit') await tlRefresh();
+    paintMedia();
   });
 }
 
@@ -260,6 +261,7 @@ async function setPictureMode(sid, mode) {
   if (s.picture_mode === mode) mode = 'auto';
   await saveSlide(sid, { picture_mode: mode });
   state.project = await api(`/api/projects/${state.project.id}`);
+  if (state.tab === 'edit') await tlRefresh();
   paintMedia();
 }
 
@@ -267,8 +269,9 @@ async function choose(sid, cid) {
   const s = state.project.slides.find((x) => x.id === sid);
   s.chosen_id = cid;
   s.locked_media = true;
+  await saveSlide(sid, { chosen_id: cid, locked_media:true });
+  if (state.tab === 'edit') await tlRefresh();
   paintMedia();
-  await saveSlide(sid, { chosen_id: cid });
 }
 
 async function toggleKind(sid) {
@@ -394,6 +397,7 @@ async function uploadMedia(sid, file) {
     const r = await api(`/api/projects/${state.project.id}/slides/${sid}/upload`,
       { method: 'POST', body: fd });
     Object.assign(state.project.slides.find((x) => x.id === sid), r.slide);
+    if (state.tab === 'edit') await tlRefresh();
     paintMedia();
     toast('added');
   } catch (e) { toast(e.message, true); }
@@ -561,7 +565,7 @@ function cutUrl(sid, t = 0.5) {
 }
 
 async function planCues(redo) {
-  if (redo && !confirm('Rewrite every paragraph\'s cues for this cut, including the ones you edited?')) return;
+  if (redo && !await pictureDialog('Rewrite every paragraph\'s cues for this cut, including the ones you edited?')) return;
   const r = await api(`/api/projects/${state.project.id}/cues/plan`,
     { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
   watchJob(r.job, 'media');
@@ -654,7 +658,7 @@ function bumpBoards() {
 }
 
 async function planBoards(redo) {
-  if (redo && !confirm('Rewrite every board, including the ones you wrote yourself?')) return;
+  if (redo && !await pictureDialog('Rewrite every board, including the ones you wrote yourself?')) return;
   const r = await api(`/api/projects/${state.project.id}/board/plan`,
     { method: 'POST', body: JSON.stringify({ redo: !!redo }) });
   watchJob(r.job, 'media');
@@ -1269,7 +1273,7 @@ function openCustomDesigner(opts) {
 
   q('#csave').onclick = async () => {
     if (!spec.elements.length) return (q('#cstate').textContent = 'nothing to save yet');
-    const name = prompt('Name this style\n(it joins Documentary, Video essay and '
+    const name = await pictureDialog('Name this style\n(it joins Documentary, Video essay and '
       + 'Handwritten board in the Video style picker)', 'My slide style');
     if (!name) return;
     q('#cstate').textContent = 'saving…';
@@ -1328,9 +1332,9 @@ function openCustomDesigner(opts) {
   redraw();
 }
 
-async function gatherMedia() {
+async function gatherMedia(slideIds = null) {
   const r = await api(`/api/projects/${state.project.id}/media`,
-    { method: 'POST', body: JSON.stringify({}) });
+    { method: 'POST', body: JSON.stringify(slideIds === null ? {} : {slide_ids:slideIds}) });
   watchJob(r.job, 'media');
   render();
 }

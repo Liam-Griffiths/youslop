@@ -14,7 +14,7 @@ function tlPictureFields({lead:s, members, shot}) {
   const modes = [['auto','Auto · automatic grouping'], ['hold','Hold · previous picture'],
     ['cut','Cut · new picture, same Script shot'], ['new','New · new picture and Script shot']];
   return `<section class="tl-picture-tools" aria-label="Picture tools">
-    <h3>Picture · ¶${state.project.slides.indexOf(s)+1}</h3>
+    <h3>Picture · ¶${state.project.slides.indexOf(s)+1}</h3><button type="button" class="btn sm" onclick="openEditPictureTools('${s.id}')">More picture tools…</button>
     <div class="tl-picture-preview">${kind === 'block' ? visualBlockStill(state.project,s)
       : c && !drawn ? `<img src="${esc(thumbUrl(c))}" alt="${esc(c.title || 'Selected picture')}"
         style="object-position:${(c.focal?.[0] ?? .5)*100}% ${(c.focal?.[1] ?? .5)*100}%">`

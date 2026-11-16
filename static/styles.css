@@ -2136,3 +2136,17 @@ main:has(.create-layout) .project-tools { padding:0 20px; margin:0; }
 #create-html { font-size:12px; }
 @media (max-width:1279px) { .create-layout { grid-template-columns:minmax(220px, 260px) minmax(0, 1fr); } .create-agent { grid-column:1 / -1; max-height:none; position:static; border-left:0; border-top:1px solid var(--line); } }
 @media (max-width:899px) { .create-layout { grid-template-columns:1fr; } .create-list { border-right:0; border-bottom:1px solid var(--line); } }
+
+/* Migrated picture tools stay inside Edit without taking lane height. */
+.edit-workspace .tl-more > div { max-height: min(65dvh, 540px); overflow: auto; }
+#edit-picture-toolbar .tl-more > div { left: 0; right: auto; }
+#edit-picture-toolbar { display: contents; }
+#edit-picture-tools, #edit-stage-tools { min-height: 0; overflow: auto; }
+#edit-picture-tools .visual-frame { max-height: 240px; }
+#edit-picture-tools .visual-source-tabs { flex-wrap: wrap; }
+.tl-head .visual-mix-bar { min-width: 60px; width: 60px; height: 8px; display: inline-flex; }
+
+/* Edit's picture and 3D tool dialogs: title left, Close right. */
+.edit-tool-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex:none; }
+.edit-tool-head h2 { margin:0; font-size:1.05rem; }
+#edit-picture-tools, #edit-stage-tools { overflow:auto; min-height:0; }

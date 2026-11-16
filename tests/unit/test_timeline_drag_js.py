@@ -11,7 +11,7 @@ def test_drag_runtime(tmp_path):
     if not gjs:
         pytest.skip('GJS is unavailable')
     source = Path('static/js/timeline/edit.js').read_text()
-    source = Path('static/js/tabs/visuals.js').read_text().split('function pictureKindLabel')[0] + source
+    source = Path('static/js/tabs/picture_tools.js').read_text().split('function pictureKindLabel')[0] + source
     harness = r'''
 const structuredClone = (v) => JSON.parse(JSON.stringify(v)); // GJS lacks this browser global
 function check(ok, msg) { if (!ok) throw new Error(msg); }

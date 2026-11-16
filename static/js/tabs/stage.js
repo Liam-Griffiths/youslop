@@ -94,7 +94,7 @@ async function deleteModel(mid) {
 
 async function refreshModelViews() {
   if ($('#models3d')) paintModelLibrary();
-  if (state.project && state.tab === 'cast') {
+  if (state.project && (state.tab === 'cast' || $('#edit-stage-tools'))) {
     // a model just confirmed changes the cast's "ready" count: fetch it fresh
     try { state.project = await api(`/api/projects/${state.project.id}`); } catch { /* keep what we have */ }
     render();
@@ -108,7 +108,7 @@ async function refreshModelViews() {
 // in their own time; then writes the script, which is told what the models
 // can show.
 async function paintCast() {
-  const p = state.project, body = $('#tabbody');
+  const p = state.project, body = $('#edit-stage-tools') || $('#tabbody');
   let models = [];
   try { models = await api('/api/models'); } catch (e) { toast(e.message, true); }
   state.models = models;
@@ -233,7 +233,7 @@ async function uploadForSubject(sid, file) {
 // photo-and-card beats. It says so first.
 async function castWrite() {
   const sum = state.project.cast_summary || { needing: [] };
-  if (sum.needing.length && !confirm(`${sum.needing.join(', ')} ${sum.needing.length === 1 ? 'has' : 'have'} no model yet, `
+  if (sum.needing.length && !await pictureDialog(`${sum.needing.join(', ')} ${sum.needing.length === 1 ? 'has' : 'have'} no model yet, `
       + 'so the script will show them with photos and cards. Write it anyway?')) return;
   try {
     const r = await api(`/api/projects/${state.project.id}/script`, { method: 'POST', body: '{}' });
@@ -613,7 +613,7 @@ async function openModelIntake(mid) {
 }
 
 async function paintStage() {
-  const p = state.project, body = $('#tabbody');
+  const p = state.project, body = $('#edit-stage-tools') || $('#tabbody');
   const st = p.stage || { shots: {}, counts: {}, total: 0 };
   if (!state.models) { try { state.models = await api('/api/models'); } catch (e) { state.models = []; } }
   const byModel = Object.fromEntries((state.models || []).map((m) => [m.id, m]));
@@ -634,7 +634,7 @@ async function paintStage() {
       ...(m.regions || []).map((r) => r.label)].filter(Boolean))];
   };
   const thumb = (s, j, at) => `<img loading="lazy" src="/api/projects/${p.id}/file/stage/thumbs/${s.id}_${j}.jpg?v=${Math.round(at || 0)}"
-      style="width:128px;height:72px;object-fit:cover;border-radius:4px;background:#111" onerror="this.style.visibility='hidden'">`;
+      style="width:128px;height:72px;object-fit:cover;border-radius:4px;background:var(--bg)" onerror="this.style.visibility='hidden'">`;
   body.innerHTML = `
     <div class="card" style="margin-bottom:18px">
       <div class="row">
@@ -705,9 +705,8 @@ async function stageSolve(slides) {
 async function stageEdit(sid, patch) {
   try {
     state.project = await api(`/api/projects/${state.project.id}/stage/${sid}`, { method: 'PATCH', body: JSON.stringify(patch) });
-    render();
-    // A changed intent is solved straight away, on its own.
-    if (patch.intent) stageSolve([sid]);
+    await render();
+    // Intent edits stay unsolved until Solve shot is explicitly chosen.
   } catch (e) { toast(e.message, true); }
 }
 
@@ -728,7 +727,7 @@ async function openShot(sid) {
         <div class="spacer"></div>
         <button class="btn sm ghost" id="sh-close">close</button>
       </div>
-      <div id="sh-view" style="width:100%;background:#111;border-radius:6px;overflow:hidden">
+      <div id="sh-view" style="width:100%;background:var(--bg);border-radius:6px;overflow:hidden">
         <div class="empty-note" style="padding:60px">loading the scene…</div></div>
       <div class="row" style="margin-top:10px;gap:8px">
         <button class="btn sm" id="sh-play">play</button>

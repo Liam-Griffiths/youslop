@@ -50,6 +50,13 @@ const api=async(url,opts)=>{
   return structuredClone(state.project);
 };
 async function run(){
+  for(const subtab of ['pictures','cast','stage']) {
+    state.subtab=subtab; TL.sourcesCollapsed=true; tlSourcesRoute();
+    check(tlSourceView.tab===(subtab==='pictures'?'Search':'3D') && !TL.sourcesCollapsed,'legacy source route '+subtab);
+    tlSourceView.tab='Materials'; tlSourcesRoute();check(tlSourceView.tab==='Materials','repaint preserves chosen source');
+  }
+  state.subtab='';
+
   tlSourceView={pid:'p',tab:'Search',items:[],query:'station',choice:null};
   tlSourcesPaint();
   check(calls.length===0 && grid.buttons.length===1,'paint reads stored candidates without search');

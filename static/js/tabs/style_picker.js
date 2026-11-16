@@ -24,7 +24,7 @@ function stylePicker({current, onPick, context}) {
         <button type="button" class="btn xs ghost" data-id="${esc(k.id.slice(7))}" data-name="${esc(k.name)}" onclick="exportSlideStyle(this.dataset.id,this.dataset.name)">Export</button>
         <button type="button" class="btn xs ghost" data-id="${esc(k.id.slice(7))}" onclick="deleteSlideStyle(this.dataset.id)">Delete</button></div>` : ''}</div>`).join('')}</div>` : '';
   }).join('')}<div class="row style-actions">
-    <button type="button" class="btn ghost" onclick="saveCurrentStyle('${context}')" ${context === 'home' ? 'disabled title="Start a video first, then save its style in Visuals"' : ''}>Save current as a style…</button>
+    <button type="button" class="btn ghost" onclick="saveCurrentStyle('${context}')" ${context === 'home' ? 'disabled title="Start a video first, then save its style in Edit"' : ''}>Save current as a style…</button>
     <button type="button" class="btn ghost" onclick="this.nextElementSibling.click()">Import a style…</button><input type="file" accept=".json,application/json" hidden onchange="importStyleKit(this.files[0],'${context}');this.value=''" >
     <button type="button" class="btn ghost" onclick="designStyleBlock()">Design a block…</button></div></div>`;
 }
@@ -66,7 +66,7 @@ async function chooseStyleKit(id) {
 }
 async function pickHouseStyle(id) { state.stylePickerContext = 'channel'; await openStylePicker('channel'); if (document.querySelector('dialog.style-dialog')) await chooseStyleKit(id); }
 async function saveCurrentStyle(context) {
-  const name = prompt('Name this style'); if (!name) return;
+  const name = await pictureDialog('Name this style', 'My style'); if (!name) return;
   const owner = context === 'project' ? 'projects' : 'channels';
   const id = context === 'project' ? state.project.id : state.channel?.id || $('#chan')?.value;
   try { await api('/api/style-kits',{method:'POST',body:JSON.stringify({name,owner,id})}); document.querySelector('dialog.style-dialog')?.close(); await openStylePicker(context); }

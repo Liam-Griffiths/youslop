@@ -32,10 +32,10 @@ for(const [id, hash] of [['home','#/'],['library','#/library'],['channels','#/ch
 state.project={id:'p-test'};
 check(visible().filter(c=>c.group==='Project stages').length===6,'all six stages, Create included');
 for(const [id] of STAGES) {commands.get('stage-'+id).run(); check(route==='#/p/p-test/'+id,'stage '+id);}
-for (const [old, target] of Object.entries({plan:'script/outline', visuals:'edit/pictures', media:'edit/pictures', cast:'edit/cast', stage:'edit/stage', record:'voice', render:'edit', thumb:'publish/thumb', 'visuals/media':'edit/pictures', 'visuals/cast':'edit/cast', 'visuals/stage':'edit/stage', '':'dashboard', dashboard:'dashboard'})) {
+for (const [old, target] of Object.entries({plan:'script/outline', visuals:'edit/pictures', media:'edit/pictures', cast:'edit/cast', stage:'edit/stage', record:'voice', render:'edit', thumb:'publish/thumb', 'visuals/media':'edit/pictures', 'visuals/cast':'edit/cast', 'visuals/stage':'edit/stage', 'visuals/media/old':'edit/pictures', 'media/cast/old':'edit/cast', 'cast/old':'edit/cast', 'stage/old':'edit/stage', '':'dashboard', dashboard:'dashboard'})) {
  check(canonicalHash('#/p/p-test'+(old?'/'+old:''))==='#/p/p-test/'+target,'legacy route '+old);
 }
-for (const [stage, subtab, tab] of [['dashboard','','dashboard'],['script','outline','plan'],['script','','script'],['edit','pictures','media'],['edit','cast','cast'],['edit','stage','stage'],['edit','','edit'],['clip','','clip']]) {
+for (const [stage, subtab, tab] of [['dashboard','','dashboard'],['script','outline','plan'],['script','','script'],['edit','pictures','edit'],['edit','cast','edit'],['edit','stage','edit'],['edit','','edit'],['clip','','clip']]) {
  check(stageTab(stage,subtab)===tab,'content reachable '+tab);
 }
 check(!visible().some(c=>c.id==='preview-section'),'preview hidden outside Edit');

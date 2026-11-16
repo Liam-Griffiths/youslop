@@ -14,7 +14,7 @@ def test_graphics_runtime(tmp_path):
         'static/js/timeline/edit.js', 'static/js/timeline/graphics.js',
         'static/js/timeline/graphic_actions.js', 'static/js/timeline/graphic_gestures.js',
         'static/js/timeline/sections.js'])
-    source = Path('static/js/tabs/visuals.js').read_text().split('function pictureKindLabel')[0] + source
+    source = Path('static/js/tabs/picture_tools.js').read_text().split('function pictureKindLabel')[0] + source
     harness = r'''
 const assert = (v,m) => {if (!v) throw Error(m);};
 const near = (a,b) => Math.abs(a-b) < .00001;

@@ -567,6 +567,10 @@ def capture(base, out, theme="dark"):
                   }
                   return true;
                 })()""")
+            if route.split('/')[-1] in ('visuals', 'media', 'cast', 'stage'):
+                _evaluate(cdp, session, "if (state.tab !== 'edit' || !document.querySelector('#tl-sources')) throw Error('Legacy route lost Edit'); true")
+                expected = '3D' if route.split('/')[-1] in ('cast', 'stage') else 'Search'
+                _evaluate(cdp, session, "if (tlSourceView.tab !== " + json.dumps(expected) + ") throw Error('Legacy route lost source tab'); true")
             if route == '#/p/psnapkenburns/visuals':
                 _evaluate(cdp, session, """(async () => {
                   const before = JSON.stringify(await api('/api/projects/psnapkenburns'));
@@ -614,13 +618,14 @@ def capture(base, out, theme="dark"):
                   await choose('board');
                   state.project = await api('/api/projects/psnapmixed');
                   if (state.project.slides[1].kind !== 'board') throw Error('Kind did not persist');
-                  selectVisual('s1');
+                  openEditPictureTools('s1');
                   if (!document.querySelector('.visual-source-body').textContent.includes('Search footage'))
                     throw Error('Photo picker missing');
                   selectVisual('s2');
                   if (!document.querySelector('.visual-source-body').textContent.includes('Edit the board') ||
-                      !document.querySelector('.visual-mix').textContent.includes('Board 1'))
+                      !document.querySelector('#edit-picture-toolbar').textContent.includes('Board 1'))
                     throw Error('Board editor or mix count missing');
+                  document.querySelector('#edit-picture-tools').closest('.modal').remove();
                   return true;
                 })()""")
             if route == '#/p/psnapmixed/edit':
@@ -734,7 +739,7 @@ def capture(base, out, theme="dark"):
                     rows.append({'path':str(extra), 't':0, 'why':phase})
                 _evaluate(cdp, session, "document.querySelector('dialog[open]').close(); true")
             if route == '#/p/psnapinspector/edit':
-                for width, height in ((1280, 720), (1920, 1080)):
+                for width, height in ((1280, 720), (1440, 900), (1920, 1080)):
                     cdp.send('Emulation.setDeviceMetricsOverride', {
                         'width':width, 'height':height, 'deviceScaleFactor':1, 'mobile':False}, session)
                     _evaluate(cdp, session, "tlSelect(tlItems('picture')[0]); true")
@@ -803,6 +808,15 @@ def capture(base, out, theme="dark"):
                         extra = out / f'p--psnapinserts--sources-{tab.lower()}--{width}.png'
                         extra.write_bytes(base64.b64decode(png['data']))
                         rows.append({'path':str(extra), 't':0, 'why':f'{tab} at {width}×{height}'})
+                    for tool in ('picture', 'cast', 'stage'):
+                        expression = "openEditPictureTools(); true" if tool == 'picture' else "openEditStageTools(" + json.dumps(tool) + ")"
+                        _evaluate(cdp, session, expression)
+                        _evaluate(cdp, session, "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                        png = cdp.send('Page.captureScreenshot', {'format':'png','fromSurface':True}, session)
+                        extra = out / f'p--psnapinserts--tools-{tool}--{width}.png'
+                        extra.write_bytes(base64.b64decode(png['data']))
+                        rows.append({'path':str(extra), 't':0, 'why':f'{tool} tools at {width}×{height}'})
+                        _evaluate(cdp, session, "document.querySelector('#edit-picture-tools, #edit-stage-tools').closest('.modal').querySelector('[data-close]').click(); true")
                 cdp.send('Emulation.setDeviceMetricsOverride', {
                     'width':1600, 'height':1000, 'deviceScaleFactor':1, 'mobile':False}, session)
                 for phase, expression in [
