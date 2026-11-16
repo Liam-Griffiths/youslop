@@ -1,6 +1,6 @@
 // Layer times come from the server. All items use T4.3's selection model.
 const TL_LAYER_KINDS = {graphics: 'overlay', sponsors: 'sponsor', titles: 'title', cues: 'cue',
-  chapters: 'chapter', music: 'music', stings: 'sting', notes: 'note'};
+  chapters: 'chapter', music: 'music', stings: 'sting', notes: 'note', media: 'media'};
 const tlHideQuery = () => '?hide=' + (state.project.layers || [])
   .filter(row => row.hidden).map(row => encodeURIComponent(row.id)).sort().join(',');
 

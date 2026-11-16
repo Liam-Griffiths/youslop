@@ -679,7 +679,7 @@ def run(project, measure=False) -> dict:
             aspect = blocks.aspect_for(render.frame_size(project))
             library = blocks.discover() if slide.overlays else {}
             for overlay in slide.overlays:
-                meta = library.get(overlay['block_id'], {}).get('meta', {})
+                meta = library.get(overlay.get('block_id'), {}).get('meta', {})
                 if meta.get('aspects') and aspect not in meta['aspects']:
                     findings.append(_finding('aspect_overlay', 'P2', para['start'], slide.id,
                         f"{overlay['block_id']} has no {aspect} layout; only this graphic is fitted from {blocks.nearest_aspect(meta, aspect)} at its own edge."))

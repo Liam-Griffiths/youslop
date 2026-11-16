@@ -4,11 +4,12 @@ Derived tracks and resolved item references are views, never migrations. The
 legacy role dictionary remains available to check and inspector consumers.
 """
 from .schema import Layer, LAYER_ROLES, Slide
+from .media_overlays import role as overlay_role
 
 
 _COLORS = dict(zip(LAYER_ROLES, (
     'ink-2', 'cool', 'cool', 'accent', 'accent', 'ink',
-    'good', 'warn', 'good', 'warn', 'dim')))
+    'good', 'warn', 'good', 'warn', 'dim', 'cool')))
 
 
 class LockedLayerError(RuntimeError):
@@ -123,16 +124,16 @@ def graphics_order(project, group):
     """Stable item permutation, bottom to top; later project tracks win.
 
     Preserve paragraph/list order within a track, including anchor resolution.
-    Unknown references use the first graphics track without changing storage.
+    Unknown references use the first track of the item's role without changing storage.
     This is also the cache dependency: names, colours and locks aren't pixels.
     """
-    tracks = [layer for layer in effective(project, items={}) if layer.role == 'graphics']
+    tracks = [layer for layer in effective(project, items={}) if layer.role in {'graphics', 'media'}]
     ranks = {layer.id: i for i, layer in enumerate(tracks)}
     items = [(i, j) for i, (slide, _) in enumerate(group) for j in range(len(slide.overlays))]
     def rank(pair):
         item = group[pair[0]][0].overlays[pair[1]]
-        track = resolve(tracks, 'graphics', item.get('layer', ''))
-        return ranks[track.id] if track else 0
+        track = resolve(tracks, overlay_role(item), item.get('layer', ''))
+        return ranks[track.id] if track else len(tracks) + (overlay_role(item) == 'media')
     return sorted(items, key=rank)
 
 
@@ -189,7 +190,7 @@ class Visibility(frozenset):
         return bool(track and track.id in self.ids)
 
     def __contains__(self, role):
-        if role in {'cues', 'graphics'}:
+        if role in {'cues', 'graphics', 'media'}:
             return all(t.id in self.ids for t in self.tracks if t.role == role)
         return self.item(role)
 
@@ -245,7 +246,7 @@ def _bindings(project):
             yield 'stings', project.layer_defaults, 'stings:' + role
     for slide in project.slides:
         for item in slide.overlays:
-            yield 'graphics', item, 'layer'
+            yield overlay_role(item), item, 'layer'
         for kind, cues in slide.cues.items():
             if kind not in {'blocks', 'inactive_blocks'}:
                 for cue in cues:
@@ -303,7 +304,7 @@ def manage(project, payload):
         require_unlocked(project, role, current['id'])
         require_unlocked(project, role, target.id)
         slide = next((s for s in project.slides if s.id == payload.get('sid')), None)
-        if role == 'graphics':
+        if role in {'graphics', 'media'}:
             next(o for o in slide.overlays if o.get('id') == payload['item'])['layer'] = target.id
         elif role == 'titles':
             slide.title_layer = target.id
@@ -404,8 +405,8 @@ def assert_unlocked(before, after):
             return track and track.id == layer.id
         for slide in raw['slides']:
             sid = slide['id']
-            if role == 'graphics':
-                result += [(sid, item) for item in slide['overlays'] if belongs(item.get('layer', ''))]
+            if role in {'graphics', 'media'}:
+                result += [(sid, item) for item in slide['overlays'] if overlay_role(item) == role and belongs(item.get('layer', ''))]
             elif role == 'cues':
                 for kind, cues in slide['cues'].items():
                     if kind not in {'blocks', 'inactive_blocks'}:

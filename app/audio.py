@@ -598,9 +598,11 @@ def _concat_takes(project: Project, slides: list, out_path: Path,
         )
         labels.append(f"[a{i}]")
 
+    from .media_overlays import mix_audio
+    media_mixed = mix_audio(project, takes, inputs, filters, gaps, head, hide, fill)
     from .layers import visibility
     graph = ";".join(filters) + ";" + "".join(labels) + f"concat=n={len(labels)}:v=0:a=1[out]"
-    if 'voice' in visibility(project, hide, final=True):
+    if not media_mixed and 'voice' in visibility(project, hide, final=True):
         graph = graph.replace('a=1[out]', 'a=1[voiced];[voiced]volume=0[out]')
     ffutil.run([*inputs, "-filter_complex", graph, "-map", "[out]",
                 "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", str(out_path)])

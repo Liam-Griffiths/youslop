@@ -17,7 +17,7 @@ AUTO_MUSIC = "__auto__"
 # Track colours name existing theme tokens; never store a dark-only hex value.
 LAYER_COLORS = ('accent', 'cool', 'good', 'warn', 'bad', 'ink', 'ink-2', 'dim')
 LAYER_ROLES = ('pictures', 'voice', 'graphics', 'sponsors', 'titles', 'captions',
-               'cues', 'chapters', 'music', 'stings', 'notes')
+               'cues', 'chapters', 'music', 'stings', 'notes', 'media')
 
 
 def _uid(prefix: str) -> str:

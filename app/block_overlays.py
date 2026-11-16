@@ -26,6 +26,12 @@ def validate(take, overlays):
         if not isinstance(ident, str) or not ident or ident in ids:
             raise ValueError('Overlay ids must be nonempty and unique')
         ids.add(ident)
+        if item.get('type') == 'media':
+            from .media_overlays import validate as validate_media
+            if item['at'] < 0 or any(k in item and not isinstance(item[k], str) for k in ('layer', 'on')):
+                raise ValueError('Media needs nonnegative at and text layer/on')
+            clean.append(validate_media(item))
+            continue
         block = library.get(ref) if isinstance(ref, str) else None
         spec = block['meta'].get('overlay') if block else None
         if not spec:
@@ -136,7 +142,13 @@ def compose(project, group, inputs, graph, last, size, fps, channel=None, *, pre
         if entry is None:
             continue
         item, offset = entry
-        if hide.item('graphics', item.get('layer', '')):
+        from .media_overlays import role, compose as compose_media
+        if hide.item(role(item), item.get('layer', '')):
+            continue
+        if role(item) == 'media':
+            inputs, graph, last = compose_media(project, item, inputs, graph, last, size, fps,
+                lead + offset + item['at'], f'mo{count}')
+            count += 1
             continue
         path = clip(project, item, size, fps, channel, prepare_only=prepare_only)
         index, tag = inputs.count('-i'), f'bo{count}'

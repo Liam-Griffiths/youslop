@@ -46,7 +46,7 @@ def apply(project, slide):
     hand = [o for o in slide.overlays if o.get('by', 'hand') == 'hand']
     library = blocks.discover()
     used = {o['id'] for o in hand}
-    lower = any(o['block_id'].startswith('lower_third_') for o in hand)
+    lower = any(o.get('block_id', '').startswith('lower_third_') for o in hand)
     auto = []
     for proposal in proposals:
         if len(hand) + len(auto) >= 2:

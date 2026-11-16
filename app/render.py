@@ -23,6 +23,7 @@ from .config import (
 from .schema import AUTO_MUSIC, Project, Slide, chapter_title, group_slides
 from .store import project_dir
 from .take_edits import take_duration, take_words, kept_ranges
+from .media_overlays import role as overlay_role
 
 Progress = Callable[[str], None]
 
@@ -972,7 +973,8 @@ def _segment_graph(
                                       prepare_only=prepare_only, preview=(size != frame_size(project) if preview is None else preview))
         n_inputs = inputs.count('-i')
 
-    if 'graphics' not in hide and not slide.on_camera and any(s.overlays for s, _ in group):
+    if (not slide.on_camera and any(not hide.item(overlay_role(o), o.get('layer', ''))
+                                   for s, _ in group for o in s.overlays)):
         from .block_overlays import compose
         inputs, graph, last = compose(project, group, inputs, graph, last, size, fps,
                                       channel, prepare_only=prepare_only, hide=hide)
@@ -1237,7 +1239,8 @@ def _render_segment(
         return _camera_segment(project, group, seg_len, out, size, fps,
                                channel=channel, chapter=chapter, threads=threads,
                                crf=crf, preset=preset, last_line=last_line, hide=hide, preview=preview)
-    if ('graphics' not in hide and any(s.overlays for s, _ in group) and not cuts.is_cut(fmt)
+    if (not cuts.is_cut(fmt) and any(not hide.item(overlay_role(o), o.get('layer', ''))
+                                   for s, _ in group for o in s.overlays)
             and ((group[0][0].cues or {}).get('blocks') or scenes.handles(fmt)
                  or fmt.startswith('custom:'))):
         from copy import deepcopy
@@ -1952,7 +1955,7 @@ def _cache_layer_defaults(value):
 def _block_versions(slide):
     from . import block_library
     cues = (slide.cues or {}).get('blocks', [])
-    refs = [cue['block'] for cue in cues] + [o['block_id'] for o in slide.overlays]
+    refs = [cue['block'] for cue in cues] + [o['block_id'] for o in slide.overlays if o.get('type') != 'media']
     if slide.insert.get('kind') == 'block':
         refs.append(slide.insert['block'])
     library = block_library.registry()
@@ -1992,6 +1995,9 @@ def _segment_key(project, group, settings) -> str:
         row["candidates"] = [c for c in slide.candidates if c["id"] == slide.chosen_id or c['id'] in overlay_ids]
         if overlay_ids:
             row['overlay_files'] = [_stat(root / c['local_path']) for c in row['candidates'] if c.get('local_path')]
+        if any(o.get('type') == 'media' for o in slide.overlays):
+            from .media_overlays import cache_state
+            row['media_sources'] = cache_state(project, slide)
         take = slide.take or {}
         files = []
         for field in (("path", "video", "raw_path") if slide.on_camera else ("path", "video")):
@@ -2609,7 +2615,7 @@ def preview_opening(project: Project, kind: str,
 PROXY_VERSION = 2
 
 
-PREVIEW_LAYERS = frozenset({'titles', 'cues', 'chapters', 'music', 'stings', 'notes', 'graphics'})
+PREVIEW_LAYERS = frozenset({'titles', 'cues', 'chapters', 'music', 'stings', 'notes', 'graphics', 'media'})
 
 
 def _hidden_suffix(hide):
@@ -2655,6 +2661,10 @@ def _layers(project, segs):
                 library = blocks.discover()
                 for item in block_overlays.resolved(slide.take, slide.overlays, q.get('duration')):
                     a = q['start'] + item['at']
+                    if item.get('type') == 'media':
+                        add('media', item['id'], slide.id, a, a + item['dur'],
+                            'Media', 'media', item['src'], layer=item.get('layer', ''))
+                        continue
                     add('graphics', item['id'], slide.id, a, a + item['dur'],
                         library[item['block_id']]['meta']['name'], 'overlay', item['src'],
                         layer=item.get('layer', ''))
@@ -2756,6 +2766,9 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
         row["candidates"] = [c for c in s.candidates if c["id"] == s.chosen_id or c['id'] in overlay_ids]
         if overlay_ids:
             row['overlay_files'] = [_stat(root / c['local_path']) for c in row['candidates'] if c.get('local_path')]
+        if any(o.get('type') == 'media' for o in s.overlays):
+            from .media_overlays import cache_state
+            row['media_sources'] = cache_state(project, s)
         take = (s.take or {}).get("path")
         slides.append([row, d, _stat(root / take) if take else None])
         if s.on_camera:
@@ -2915,9 +2928,11 @@ def _build_proxy(project: Project, groups, index: int, progress: Progress,
     # opening silence if this is the top of the video. The same arithmetic the
     # full render's narration bed uses, for one group of paragraphs.
     voice = out.with_suffix(".wav")
+    audio_hide = hide if 'voice' in hide or any(
+        o.get('type') == 'media' for s, _d in group for o in s.overlays) else frozenset()
     try:
         audio_mod.build_slice(project, [s for s, _d in group], voice,
-                              T / 2 + (HEAD_PAD if index == 0 else 0.0), **({"hide": hide} if "voice" in hide else {}))
+                              T / 2 + (HEAD_PAD if index == 0 else 0.0), **({"hide": audio_hide} if audio_hide else {}))
     except (ValueError, ffutil.FFError):
         if lead.insert:
             raise
@@ -3266,6 +3281,9 @@ def _mix_key(project: Project, lay: dict, hide: frozenset = frozenset()) -> str:
               _stat(root / s.take["path"]) if (s.take or {}).get("path") else None]
              for s in project.slides]
     for row, slide in zip(takes, project.slides):
+        if any(o.get('type') == 'media' and o.get('volume') for o in slide.overlays):
+            from .media_overlays import cache_state
+            row.append(cache_state(project, slide))
         if slide.insert:
             row.append([slide.insert, inserts.source_state(slide.insert)
                         if slide.insert['kind'] == 'clip' else None])
@@ -3293,7 +3311,8 @@ def _mix_state(project: Project, lay: dict, hide: frozenset = frozenset()) -> di
     hide = visibility(project, hide)
     music = None if hide.item("music", project.music_layer) else pick_music(project)
     sting = visible_stings(project, _stings_for(project, bool(lay["intro"]), bool(lay["outro"])), hide)
-    audible = bool(music or sting or ("voice" not in hide and any(s.take or s.insert.get('source_audio') for s in project.slides))
+    audible = bool(any(o.get('type') == 'media' and o.get('volume') and not hide.item('media', o.get('layer', ''))
+                              for s in project.slides for o in s.overlays) or music or sting or ("voice" not in hide and any(s.take or s.insert.get('source_audio') for s in project.slides))
                    or ("sponsors" not in hide and any(slot.take for slot, _ in lay["sponsors"])))
     out, keyfile = _mix_paths(project, hide)
     key = _mix_key(project, lay, hide) if audible else ""
