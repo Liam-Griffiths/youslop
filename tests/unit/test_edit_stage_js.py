@@ -53,13 +53,20 @@ const tlParas=()=>[];
     checks = r'''
 state.project.style={format:'essay'};
 TL.hidden={}; TL.zoom=10;
-TL.data.layers={titles:[{t0:1,t1:3,text:'Essay words',kind:'title'}]};
+const caption={id:'s:cap0',sid:'s',t0:1,t1:3,text:'Essay words',kind:'title'};
+const sponsor={id:'ad',sid:'',t0:0,t1:1,text:'Sponsor',kind:'sponsor'};
+TL.data.layers={titles:[caption],sponsors:[sponsor]};
+TL.data.project_layers=[{id:'ads',name:'Sponsors',role:'sponsors',color:'accent',items:[sponsor]},
+ {id:'words',name:'Captions',role:'captions',color:'ink',items:[caption]}];
 let lanes=tlLayerRows();
-check(lanes.indexOf('>sponsors') < lanes.indexOf('</button>titles'),'sponsor lane before titles');
-check(lanes.indexOf('Essay words') > lanes.indexOf('</button>captions'),'essay spans in captions lane');
+check(lanes.includes('tl-sponsors'),'sponsor lane keeps existing sizing and theme styles');
+check(lanes.indexOf('data-track="ads"') < lanes.indexOf('data-track="words"'),'sponsor lane before captions');
+check(lanes.indexOf('Essay words') > lanes.indexOf('>Captions'),'essay spans in captions lane');
 check((lanes.match(/data-layer="titles"/g)||[]).length===1,'caption span is not duplicated');
-state.project.style.format='kenburns'; lanes=tlLayerRows();
-check(lanes.indexOf('Essay words') < lanes.indexOf('</button>captions'),'ordinary titles stay in titles lane');
+state.project.style.format='kenburns';
+TL.data.project_layers[1]={...TL.data.project_layers[1],role:'titles',name:'Titles'};
+lanes=tlLayerRows();
+check(lanes.includes('>Titles')&&!lanes.includes('>Captions'),'ordinary titles stay in titles lane');
 restoreShellInspector();
 check(inspector.parent===shell && inspector.empty,'shell slot survives repaint');
 tlPreviewBit();

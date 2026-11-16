@@ -87,13 +87,14 @@ function tlGraphicCommand(action, items = tlGraphicSelection(), value = null) {
     });
   });
 }
-function tlGraphicDrop(payload, t) {
+function tlGraphicDrop(payload, t, layer = '') {
   return tlGraphicBatch('add graphic', (list, ids) => {
     const b = tlGraphicBlocks?.find(b => b.ref === payload.block);
     if (!b?.overlay) throw Error('Choose an overlay block to drop on Graphics.');
     const target = tlGraphicTarget(t), id = 'graphic-'+crypto.randomUUID();
     list(target.sid).push({id, block_id:b.ref, vars:payload.vars, at:target.at,
-      dur:Math.min(payload.seconds || 4,b.overlay.max_dur), position:b.overlay.position[0], by:'hand'});
+      dur:Math.min(payload.seconds || 4,b.overlay.max_dur), position:b.overlay.position[0], by:'hand',
+      ...(layer ? {layer} : {})});
     ids.push({sid:target.sid, id});
   });
 }

@@ -1,29 +1,36 @@
 // Separate from paragraph timing drags: graphics may cross paragraph boundaries.
 function tlWireGraphics() {
-  const track = $('#tl-track'), lane = track.querySelector('[data-eye="graphics"]')?.closest('.tl-lane');
-  if (!lane) return;
-  lane.ondragover = e => {
-    if (TL.insertDrag?.pid !== TL.pid || TL.insertDrag.payload.kind !== 'block') return;
-    e.preventDefault(); e.stopPropagation(); tlInsertClearGhost();
-    const t = (e.clientX-track.getBoundingClientRect().left-104)/TL.zoom;
-    try {
-      tlGraphicTarget(t);
-      const b = tlGraphicBlocks?.find(b => b.ref === TL.insertDrag.payload.block);
-      if (!b?.overlay) throw Error();
-      e.dataTransfer.dropEffect = 'copy'; TL.graphicDrop = t;
-      const ghost = document.createElement('div'); ghost.className = 'tl-insert-ghost';
-      ghost.style.left = `${t*TL.zoom}px`; ghost.style.width = `${Math.min(4,b.overlay.max_dur)*TL.zoom}px`;
-      ghost.textContent = 'Graphic'; lane.append(ghost);
-    } catch { TL.graphicDrop = null; e.dataTransfer.dropEffect = 'none'; }
-  };
-  lane.ondragleave = e => { if (!lane.contains(e.relatedTarget)) { TL.graphicDrop = null; tlInsertClearGhost(); } };
-  lane.ondrop = e => {
-    if (TL.insertDrag?.pid !== TL.pid || TL.graphicDrop == null) return;
-    e.preventDefault(); e.stopPropagation();
-    const {payload} = TL.insertDrag, t = TL.graphicDrop;
-    TL.insertDrag = null; TL.graphicDrop = null; tlInsertClearGhost(); tlGraphicDrop(payload,t);
-  };
-  lane.querySelectorAll('[data-layer="graphics"]').forEach(node => {
+  const track = $('#tl-track');
+  const lanes = [...track.querySelectorAll('[data-role="graphics"]')];
+  // An empty project has no Graphics lane. The Add graphic button stays a
+  // drop target; main-track drops still insert full-frame blocks as before.
+  const add = $('#tl-add-graphic');
+  if (add && state.project.kind !== 'clip') lanes.push(add);
+  lanes.forEach(lane => {
+    lane.ondragover = e => {
+      if (TL.insertDrag?.pid !== TL.pid || TL.insertDrag.payload.kind !== 'block') return;
+      e.preventDefault(); e.stopPropagation(); tlInsertClearGhost();
+      const t = lane === add ? TL.cur : (e.clientX-track.getBoundingClientRect().left-104)/TL.zoom;
+      try {
+        tlGraphicTarget(t);
+        const b = tlGraphicBlocks?.find(b => b.ref === TL.insertDrag.payload.block);
+        if (!b?.overlay) throw Error();
+        e.dataTransfer.dropEffect = 'copy'; TL.graphicDrop = t;
+        const ghost = document.createElement('div'); ghost.className = 'tl-insert-ghost';
+        ghost.style.left = `${t*TL.zoom}px`; ghost.style.width = `${Math.min(4,b.overlay.max_dur)*TL.zoom}px`;
+        ghost.textContent = 'Graphic';
+        (lane === add ? track.querySelector('.tl-pictures') : lane).append(ghost);
+      } catch { TL.graphicDrop = null; e.dataTransfer.dropEffect = 'none'; }
+    };
+    lane.ondragleave = e => { if (!lane.contains(e.relatedTarget)) { TL.graphicDrop = null; tlInsertClearGhost(); } };
+    lane.ondrop = e => {
+      if (TL.insertDrag?.pid !== TL.pid || TL.graphicDrop == null) return;
+      e.preventDefault(); e.stopPropagation();
+      const {payload} = TL.insertDrag, t = TL.graphicDrop;
+      TL.insertDrag = null; TL.graphicDrop = null; tlInsertClearGhost(); tlGraphicDrop(payload,t,lane.dataset.track || '');
+    };
+  });
+  track.querySelectorAll('[data-layer="graphics"]').forEach(node => {
     node.classList.add('editable');
     const sel = tlItemForNode(node), click = node.onclick;
     for (const edge of ['start','end']) {
@@ -100,7 +107,9 @@ function tlGraphicTools() {
     button.disabled = [0,3].includes(i) && items.length !== 1;
     button.onclick = () => i === 3 ? tlGraphicReplace(sel) : tlGraphicCommand(['split','duplicate','delete'][i],items,TL.playing ? tlNow() : TL.cur);
   });
-  const sc = $('#tl-scroll'), lane = track.querySelector('[data-eye="graphics"]')?.closest('.tl-lane');
+  const sc = $('#tl-scroll');
+  const lane = [...track.querySelectorAll('[data-role="graphics"]')].find(lane =>
+    [...lane.querySelectorAll('[data-layer]')].some(node => tlSameItem(sel, tlItemForNode(node))));
   if (!lane || lane.classList.contains('collapsed')) {tools.remove(); return;}
   tools.style.maxWidth = `${sc.clientWidth-112}px`;
   tools.style.left = `${Math.max(sc.scrollLeft+108,Math.min(104+sel.t0*TL.zoom,sc.scrollLeft+sc.clientWidth-tools.offsetWidth-4))}px`;

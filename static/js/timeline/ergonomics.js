@@ -58,14 +58,15 @@ function tlWireLaneCollapse() {
   $('#tl-track').querySelectorAll('.tl-lane').forEach(lane => {
     const label = lane.querySelector('.tl-layer-label, em');
     if (!label) return;
-    const key = label.textContent;
+    const key = lane.dataset.track || label.textContent;
+    const name = lane.querySelector('.tl-layer-name')?.textContent || label.textContent;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'tl-collapse';
     const apply = () => {
       const collapsed = !!TL.collapsed[key];
       lane.classList.toggle('collapsed', collapsed);
       button.textContent = collapsed ? '▸' : '▾';
-      button.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${key}`);
+      button.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${name}`);
       button.setAttribute('aria-expanded', String(!collapsed));
     };
     button.onpointerdown = e => e.stopPropagation();

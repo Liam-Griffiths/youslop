@@ -67,6 +67,8 @@ let picker, renders=0;
 const tlInsertAspect=()=> '16:9', renderBlocks=async(path,options)=>{picker=options;};
 const blocksBrowser={items:[]},render=async()=>{renders++;};
 let messages=[],calls=[],tlInspectorQueue=Promise.resolve();
+const tlSameItem=(a,b)=>a?.id===b?.id&&a?.sid===b?.sid;
+const tlItemForNode=()=>TL.selection;
 const tlSelect=(s,add=false)=>{TL.selection=s;TL.selections=s?(add?[...TL.selections,s]:[s]):[];};
 const api=async(url,opts)=>{calls.push({url,...opts});const next=structuredClone(state.project);
  for(const {sid,patch} of JSON.parse(opts.body).edits){if(patch.overlays.length>8)throw Error('At most 8 overlays');next.slides.find(s=>s.id===sid).overlays=patch.overlays;}return next;};
@@ -84,7 +86,8 @@ const hint=()=>track.children.find(n=>n.className==='tl-track-hint');
 const event=x=>({clientX:x,button:0,pointerId:1,altKey:true,preventDefault(){},stopPropagation(){}});
 const key=(k,extra={})=>({key:k,ctrlKey:true,target:{closest:()=>null},...extra});
 async function run(){
- await tlGraphicDrop({block:'lower',vars:{title:'Ada'}},6.5);
+ await tlGraphicDrop({block:'lower',vars:{title:'Ada'}},6.5,'names');
+ check(state.project.slides[1].overlays[0].layer==='names','drop assigns destination project track');
  check(state.project.slides[1].overlays[0].at===1.5 && TL.selection.sid==='b','panel drop paragraph 2 +1.5 seconds');
  const g=TL.selection;await tlGraphicCommand('move',[g],{time:1});
  check(TL.selection.sid==='a' && state.project.slides[1].overlays.length===0,'cross paragraph reattachment');
@@ -140,6 +143,8 @@ async function run(){
  let refused=false;try{await picker.onUse({block:'replacement',vars:{title:'Edited'}});}catch{refused=true;}
  check(refused&&calls.length===saved,'replacement never shortens timing silently');
  const lane=new El();lane.offsetTop=180;
+ lane.querySelectorAll=()=>[{}];
+ track.querySelectorAll=s=>s.includes('data-role')?[lane]:[];
  track.querySelector=s=>s==='.tl-graphic-tools'?track.children.find(n=>n.className==='tl-graphic-tools')
   :s.includes('data-eye')?{closest:()=>lane}:pic;
  for(const scroll of [0,800]){

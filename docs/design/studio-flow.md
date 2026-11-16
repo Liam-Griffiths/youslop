@@ -317,6 +317,13 @@ Each entry: purpose · layout · data · states · ticket. Mockup names in brack
 - Selecting a sponsor shows: sponsor, Short/Long, placement with the suggested
   spot, voice, music dip, disclosure, description effect; Preview read, Edit
   copy, Turn off.
+- Project layers provide lane names, token swatches and order; unused lanes
+  are omitted. Pictures and Voice stay available. The role dictionary remains
+  the inspector/check contract. Add sponsor and Add graphic stay in the toolbar
+  when their lanes are absent; overlay blocks can be dropped on Add graphic.
+- Graphics composite bottom to top in increasing layer order: a later lane
+  (lower in the timeline) paints over an earlier one. Within a layer, existing
+  paragraph/list order is retained. Word anchors resolve before this ordering.
 - Tickets T9.10, Phase 4 (T4.3–T4.8), T10.6.
 
 ### 08 Review & publish [Publish]

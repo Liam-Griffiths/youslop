@@ -57,10 +57,7 @@ function tlDraw() {
       </button>`).join('');
   track.innerHTML = `
     <div class="tl-ruler" title="Drag to scrub · Shift+drag to select a section">${ticks}</div>
-    <div class="tl-lane tl-pictures"><em>pictures</em>${pics}${tlInsertButtons()}</div>
-    <div class="tl-lane para"><em>voice</em>${paras}${tlGapItems()}</div>
-    ${tlCameraRows()}
-    ${tlLayerRows()}
+    ${tlLayerRows(pics, paras)}
     <div class="tl-head-line" id="tl-line"><button type="button" class="tl-playhead-handle"
       aria-label="Playhead" title="Drag to scrub · Arrow keys to seek"></button></div>`;
   tlWireLaneCollapse();

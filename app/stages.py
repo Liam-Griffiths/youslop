@@ -23,6 +23,10 @@ def render_signature(project: Project) -> str:
         elif isinstance(value, list):
             value = [asdict(v) if hasattr(v, '__dataclass_fields__') else v for v in value]
         data[name] = value
+    from .layers import graphics_cache_order
+    graphics_order = graphics_cache_order(project, [(s, 0) for s in project.slides])
+    if graphics_order:
+        data['graphics_order'] = graphics_order
     if project.kind == 'clip':
         data['clip'] = project.clip
     data['slides'] = [{k: getattr(s, k) for k in s.__dataclass_fields__

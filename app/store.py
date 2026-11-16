@@ -43,6 +43,8 @@ def atomic_write(path: Path, payload: str | bytes) -> None:
 
 def save(project: Project) -> Project:
     from . import undo
+    from .layers import effective
+    effective(project, items={})  # Reject mutated duplicate ids before any write.
     with lock_for(project.id):
         d = project_dir(project.id)
         path = d / 'project.json'

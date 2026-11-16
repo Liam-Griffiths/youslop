@@ -92,6 +92,9 @@ async function tlMount() {
         <span class="mono tl-note">loop picture</span></label>
       <button type="button" class="btn sm ghost" onclick="tlCameraAuto()">Auto-edit · all camera paragraphs</button>
       <button type="button" class="btn sm ghost" onclick="tlCameraAuto('',true)">Undo auto-edit</button>
+      <button type="button" class="btn sm ghost" id="tl-add-sponsor">Add sponsor</button>
+      <button type="button" class="btn sm ghost" id="tl-add-graphic" ${p.kind === 'clip' ? 'disabled' : ''}
+        title="Add at the playhead, or drop an overlay block here">Add graphic</button>
       <button type="button" class="btn sm ghost" id="tl-all"
         title="draw every picture's proxy now instead of as you reach it">draw all</button>
       <button type="button" class="btn sm ghost" id="tl-shortcuts" aria-keyshortcuts="?">Shortcuts (?)</button>

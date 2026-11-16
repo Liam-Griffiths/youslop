@@ -190,3 +190,21 @@ def test_cache_dispatch_and_clip_check_without_encoding(clip_project, monkeypatc
     # Restore the fixture's recorded timestamp after the deliberate cache test.
     import os
     os.utime(source, ns=(source.stat().st_atime_ns, stamp))
+
+
+def test_project_lanes_include_source_ranges_and_music(clip_project, monkeypatch, tmp_path):
+    from app import layers
+    from app.schema import Layer
+    project, _ = clip_project
+    monkeypatch.setattr(render, 'pick_music', lambda *a: tmp_path / 'bed.wav')
+    project.layers = [Layer(id='dialogue', name='Source sound', role='voice', order=0),
+                      Layer(id='source', name='Source picture', role='pictures', order=1),
+                      Layer(id='bed', name='Bed', role='music', order=2)]
+    project.music_layer = 'bed'
+    timeline = render.timeline(project)
+    rows = layers.rows(project, timeline)
+    assert [row['id'] for row in rows] == ['dialogue', 'source', 'bed']
+    assert [item['sid'] for item in rows[0]['items']] == [s.id for s in project.slides]
+    assert len(rows[1]['items']) == len(project.slides)
+    assert rows[2]['items'][0]['t1'] == timeline['total']
+    assert rows[2]['items'][0]['layer'] == 'bed'

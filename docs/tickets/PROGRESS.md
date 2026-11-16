@@ -351,7 +351,8 @@ layered editing in Edit, project-defined layers, Library like Bridge, no
 | T21.8 | Light mode for the whole app, with a toggle | M | — | done | 2026-11-15 Codex + review; System/Light/Dark in Settings, palette and top bar, stored in settings (first paint from localStorage); checked Dashboard, Script, Voice, Edit incl. lanes, Library, Settings in light; dark unchanged | owner 2026-11-15; queued right after T21.3 so later UI tickets are built in both themes |
 | T21.3b | Corkboard view: the outline as cards inside Script | M | T21.3 | done | 2026-11-15 Codex + review (one follow-up); shot cards in chapter columns (chapter, else beat), thesis & hook folded, card size slider, drag/Alt+arrows; Plan tab removed; checked on Tube Mail | supersedes T20.10 |
 | T21.5 | Project layers: model, derivation, timeline lanes | L | T21.1 | done | 2026-11-15 Codex + review; split at ~600 lines: schema.Layer, Project.layers, layers.effective/rows, additive project_layers in /timeline, layer refs on titles/cues/overlays/music/stings; cache keys and goldens unchanged; no UI change yet | split: UI and behaviour in T21.5c |
-| T21.5c | Project layers: timeline drawing, compositing, hide and lock | L | T21.5 | todo | | split from T21.5 |
+| T21.5c | Project layers: timeline drawing, compositing, hide and lock | L | T21.5 | done | 2026-11-15 Codex + review; lanes named from project layers with token swatches, only used lanes drawn, graphics stack by layer order, cache keys follow layer order; checked light and dark on Tube Mail | split: hide/lock in T21.5d |
+| T21.5d | Layer hide and lock: controls and enforcement | M | T21.5c | todo | | split from T21.5c |
 | T21.5b | Layer manager and agent-proposed layers | M | T21.5 | todo | |
 | T21.6 | Edit becomes the composing stage: sources panel, Visuals folds in | L | T21.5, T21.2 | todo | supersedes T20.13, folds in T20.4 |
 | T21.4 | Library as an explorer: tree, grid, preview pane | L | — | todo | |

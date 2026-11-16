@@ -988,6 +988,10 @@ class Project:
         from .take_edits import take_duration
         return sum(take_duration(s.take) for s in self.slides)
 
+    def __post_init__(self):
+        if len({layer.id for layer in self.layers}) != len(self.layers):
+            raise ValueError('Layer ids must be unique')
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "kind": self.kind,

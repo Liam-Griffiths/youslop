@@ -163,3 +163,93 @@ def test_fallback_tracks_do_not_collide_with_saved_ids(project):
     assert next(row for row in rows if row['role'] == 'pictures')['id'] == 'derived:pictures'
     assert next(row for row in rows if row['role'] == 'titles')['items']
     assert project.to_dict() == original
+
+
+@pytest.mark.parametrize('factory', [lambda raw: Project.from_dict(raw),
+                                     lambda raw: layers.effective(SimpleNamespace(
+                                         layers=[Layer.from_dict(r) for r in raw['layers']]))])
+def test_duplicate_saved_layer_ids_rejected(factory):
+    with pytest.raises(ValueError, match='unique'):
+        factory(dict(id='duplicate', idea='', layers=[dict(id='same'), dict(id='same')]))
+
+
+def test_nested_derived_id_collisions_preserve_unknown_assignments(project):
+    project.layers = [Layer(id='pictures'), Layer(id='derived:pictures')]
+    project.slides[0].title_layer = 'missing-track'
+    before = deepcopy(project.to_dict())
+    rows = layers.rows(project, render.timeline(project))
+    pictures = next(row for row in rows if row['role'] == 'pictures')
+    assert pictures['id'] == 'derived:derived:pictures'
+    assert len({row['id'] for row in rows}) == len(rows)
+    assert project.to_dict() == before
+
+
+def test_graphics_composition_order_preserves_anchors_and_offsets(project, monkeypatch, tmp_path):
+    first, second = project.slides[:2]
+    first.take = dict(duration=4, words=[dict(w='name', start=1, end=1.5, src='tts'),
+                                      dict(w='name', start=2, end=2.5, src='tts')])
+    first.overlays = [dict(id='top', block_id='lower_third_panel', vars={}, at=0, dur=1,
+                          on='name', layer='upper'),
+                      dict(id='bottom', block_id='lower_third_panel', vars={}, at=0, dur=1,
+                           on='name', layer='lower')]
+    second.overlays = [dict(id='next', block_id='lower_third_panel', vars={}, at=0, dur=1,
+                           layer='missing')]
+    project.layers = [Layer(id='upper', order=9), Layer(id='lower', order=1)]
+    before = deepcopy(project.to_dict())
+    calls = []
+    def plate(p, item, *args, **kwargs):
+        calls.append((item['id'], item['at']))
+        return tmp_path / (item['id'] + '.mov')
+    monkeypatch.setattr(block_overlays, 'clip', plate)
+    group = [(first, 4), (second, 4)]
+    inputs, graph, last = block_overlays.compose(project, group, ['-i', 'base'], '[0:v]null[base]',
+                                               '[base]', (480, 270), 15, prepare_only=True)
+    assert calls == [('bottom', 2), ('next', 0), ('top', 1)]
+    assert [Path(p).stem for p in inputs[3::2]] == ['bottom', 'next', 'top']
+    assert last == '[bo2]'
+    lead = cuts.transition_for(project.style)/2 + cuts.head_pad_for(project, first)
+    for i, at in enumerate([2, 4, 1]):
+        assert f'setpts=PTS-STARTPTS+{lead+at:.6f}/TB[bo{i}s]' in graph
+    assert project.to_dict() == before
+    # With one effective track, reproduce the old complete graph verbatim.
+    project.layers = []
+    calls.clear()
+    plain = block_overlays.compose(project, group, ['-i', 'base'], '[0:v]null[base]',
+                                   '[base]', (480, 270), 15, prepare_only=True)
+    project.layers = [Layer(id='only', name='Renamed track', color='warn')]
+    assert plain == block_overlays.compose(project, group, ['-i', 'base'], '[0:v]null[base]',
+                                           '[base]', (480, 270), 15, prepare_only=True)
+
+
+def test_graphics_order_invalidates_only_pixel_dependencies(project, monkeypatch):
+    from app import stages
+    first = project.slides[0]
+    first.overlays = [dict(id='a', block_id='lower_third_panel', vars={}, at=0, dur=1, layer='a'),
+                      dict(id='b', block_id='lower_third_panel', vars={}, at=0, dur=1, layer='b')]
+    groups = render._groups_for_preview(project)
+    monkeypatch.setattr(render, '_segment_graph', lambda *a, **k: ('inputs', 'graph', 'last'))
+    settings = dict(seg_len=8, channel=None, op='set', chapter=None, size=(480, 270),
+                    fps=15, dip_out=False, camera_index=0, last_line=False, crf=26, preset='fast')
+    def keys():
+        return (render._proxy_key(project, groups, 0, None),
+                render._segment_key(project, groups[0], settings), stages.render_signature(project))
+    plain = keys()
+    project.layers = [Layer(id='a', order=0), Layer(id='b', order=1)]
+    assert keys() == plain
+    project.layers[0].name = 'Other name'
+    project.layers[0].color = 'warn'
+    project.layers[0].locked = project.layers[0].hidden = True
+    assert keys() == plain  # Visibility remains preview-only until the next split.
+    project.layers[0].order = 2
+    reordered = keys()
+    assert all(a != b for a, b in zip(plain, reordered))
+    assert layers.graphics_cache_order(project, groups[0]) == [(0, 1), (0, 0)]
+
+
+def test_duplicate_mutated_ids_cannot_corrupt_saved_project(project):
+    store.save(project)
+    before = store.load(project.id).to_dict()
+    project.layers = [Layer(id='same'), Layer(id='same')]
+    with pytest.raises(ValueError, match='unique'):
+        store.save(project)
+    assert store.load(project.id).to_dict() == before

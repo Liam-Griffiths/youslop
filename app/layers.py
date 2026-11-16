@@ -1,7 +1,7 @@
 """Project track metadata derived from the existing, render-free timeline.
 
 Derived tracks and resolved item references are views, never migrations. The
-legacy role dictionary remains the rendering contract until T21.5c.
+legacy role dictionary remains available to check and inspector consumers.
 """
 from .schema import Layer, LAYER_ROLES
 
@@ -76,6 +76,8 @@ def effective(project, *, items=None):
     which already planned the timeline do not repeat that work.
     """
     if project.layers:
+        if len({layer.id for layer in project.layers}) != len(project.layers):
+            raise ValueError('Layer ids must be unique')
         return sorted(project.layers, key=lambda layer: layer.order)
     return _derived(role_items(project) if items is None else items)
 
@@ -110,3 +112,27 @@ def rows(project, timeline):
             layer = resolve(layers, role, item.get('layer', ''))
             by_id[layer.id]['items'].append(dict(item, layer=layer.id))
     return result
+
+
+def graphics_order(project, group):
+    """Stable item permutation, bottom to top; later project tracks win.
+
+    Preserve paragraph/list order within a track, including anchor resolution.
+    Unknown references use the first graphics track without changing storage.
+    This is also the cache dependency: names, colours and locks aren't pixels.
+    """
+    tracks = [layer for layer in effective(project, items={}) if layer.role == 'graphics']
+    ranks = {layer.id: i for i, layer in enumerate(tracks)}
+    items = [(i, j) for i, (slide, _) in enumerate(group) for j in range(len(slide.overlays))]
+    def rank(pair):
+        item = group[pair[0]][0].overlays[pair[1]]
+        track = resolve(tracks, 'graphics', item.get('layer', ''))
+        return ranks[track.id] if track else 0
+    return sorted(items, key=rank)
+
+
+def graphics_cache_order(project, group):
+    """No extra cache data when composition still matches the legacy order."""
+    order = graphics_order(project, group)
+    original = [(i, j) for i, (slide, _) in enumerate(group) for j in range(len(slide.overlays))]
+    return order if order != original else []

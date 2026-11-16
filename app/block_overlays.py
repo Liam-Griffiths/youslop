@@ -121,22 +121,31 @@ def clip(project, item, size, fps, channel=None, *, prepare_only=False):
 
 def compose(project, group, inputs, graph, last, size, fps, channel=None, *, prepare_only=False):
     lead = cuts.transition_for(project.style)/2 + cuts.head_pad_for(project, group[0][0])
-    offset, count = 0., 0
-    for slide, duration in group:
-        for item in resolved(slide.take, slide.overlays, duration):
-            path = clip(project, item, size, fps, channel, prepare_only=prepare_only)
-            index, tag = inputs.count('-i'), f'bo{count}'
-            count += 1
-            inputs += ['-i', str(path)]
-            a, d = lead + offset + item['at'], item['dur']
-            fade = min(.14, d/2)
-            graph += (f';[{index}:v]format=rgba,fade=t=in:st=0:d={fade:.6f}:alpha=1,'
-                      f'fade=t=out:st={d-fade:.6f}:d={fade:.6f}:alpha=1,'
-                      f'setpts=PTS-STARTPTS+{a:.6f}/TB[{tag}s]'
-                      f';{last}[{tag}s]overlay=0:0:enable=\'between(t,{a:.6f},{a+d:.6f})\':'
-                      f'eof_action=pass:repeatlast=0:format=auto[{tag}]')
-            last = f'[{tag}]'
+    from .layers import graphics_order
+    # Resolve word anchors before sorting: repeated phrases follow stored order.
+    planned, offset = {}, 0.
+    for i, (slide, duration) in enumerate(group):
+        planned.update({(i, item['id']): (item, offset)
+                        for item in resolved(slide.take, slide.overlays, duration)})
         offset += duration
+    count = 0
+    for i, j in graphics_order(project, group):
+        entry = planned.get((i, group[i][0].overlays[j]['id']))
+        if entry is None:
+            continue
+        item, offset = entry
+        path = clip(project, item, size, fps, channel, prepare_only=prepare_only)
+        index, tag = inputs.count('-i'), f'bo{count}'
+        count += 1
+        inputs += ['-i', str(path)]
+        a, d = lead + offset + item['at'], item['dur']
+        fade = min(.14, d/2)
+        graph += (f';[{index}:v]format=rgba,fade=t=in:st=0:d={fade:.6f}:alpha=1,'
+                  f'fade=t=out:st={d-fade:.6f}:d={fade:.6f}:alpha=1,'
+                  f'setpts=PTS-STARTPTS+{a:.6f}/TB[{tag}s]'
+                  f';{last}[{tag}s]overlay=0:0:enable=\'between(t,{a:.6f},{a+d:.6f})\':'
+                  f'eof_action=pass:repeatlast=0:format=auto[{tag}]')
+        last = f'[{tag}]'
     return inputs, graph, last
 
 

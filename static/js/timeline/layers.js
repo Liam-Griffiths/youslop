@@ -3,30 +3,43 @@ const TL_LAYER_KINDS = {graphics: 'overlay', sponsors: 'sponsor', titles: 'title
   chapters: 'chapter', music: 'music', stings: 'sting', notes: 'note'};
 const tlHideQuery = () => '?hide=' + Object.keys(TL.hidden).filter((k) => TL.hidden[k]).sort().join(',');
 
-function tlLayerRows() {
-  // Essay caption spans already arrive in the titles layer. Display them in
-  // their own lane while retaining the title inspector and visibility contract.
-  const rows = Object.entries(TL_LAYER_KINDS).flatMap(([row, kind]) => row === 'titles'
-    ? [[row, kind, 'titles'], [row, kind, 'captions']] : [[row, kind, row]]);
-  return rows.map(([row, kind, label]) => {
-    const captions = state.project.style.format === 'essay';
-    const items = row === 'titles' && (label === 'captions') !== captions
-      ? [] : TL.data.layers?.[row] || [];
-    const hidden = !!TL.hidden[row];
-    return `<div class="tl-lane tl-layer ${row === 'sponsors' ? 'tl-sponsors' : ''} ${hidden ? 'hidden' : ''}">
-      <span class="tl-layer-label">${row === 'sponsors' ? '<button type="button" class="btn sm ghost" id="tl-add-sponsor" aria-label="Add a sponsor">+</button>sponsors' : `<button type="button" class="btn sm ghost" data-eye="${row}"
-        aria-label="${hidden ? 'Show' : 'Hide'} ${label} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>${label}`}</span>
-      ${items.map((s, i) => `<button type="button" class="btn tl-layer-item ${esc(s.severity || '')} ${s.src === 'user' ? 'user' : ''}" data-layer="${row}" data-item="${i}"
-        style="left:${s.t0 * TL.zoom}px;width:${Math.max(2, (s.t1 - s.t0) * TL.zoom - 2)}px"
-        title="${esc(`${s.severity ? s.severity + ' · ' : ''}${tlClock(s.t0)}–${tlClock(s.t1)} · ${s.text}`)}">${esc((s.severity ? s.severity + ' · ' : '') + (s.text || s.cue_kind || kind))}</button>`).join('')}
-    </div>`;
+// Keep role selectors and item indexes for the existing inspectors/gestures.
+// Project ids identify lanes and collapse preferences, never drop compatibility.
+function tlLayerRows(pictures = '', voice = '') {
+  const rows = TL.data.project_layers || [];
+  const first = role => rows.find(row => row.role === role);
+  return rows.filter(row => row.items.length ||
+    (['pictures', 'voice'].includes(row.role) && row === first(row.role))).map(row => {
+    const role = row.role === 'captions' ? 'titles' : row.role;
+    const hidden = !!TL.hidden[role];
+    const label = `<span class="tl-layer-label" title="${esc(row.name)}">
+      <i class="tl-layer-swatch" aria-hidden="true"></i>
+      ${['pictures', 'voice', 'sponsors'].includes(role) ? '' : `<button type="button" class="btn sm ghost" data-eye="${role}"
+        aria-label="${hidden ? 'Show' : 'Hide'} ${role} in preview" aria-pressed="${hidden}">${hidden ? '○' : '◉'}</button>`}
+      <span class="tl-layer-name">${esc(row.name)}</span></span>`;
+    const content = row.role === 'pictures' ? pictures + tlInsertButtons()
+      : row.role === 'voice' ? voice + tlGapItems()
+      : row.items.map(item => {
+        const i = (TL.data.layers?.[role] || []).findIndex(s => s.id === item.id && s.sid === item.sid);
+        return `<button type="button" class="btn tl-layer-item ${esc(item.severity || '')} ${item.src === 'user' ? 'user' : ''}" data-layer="${role}" data-item="${i}"
+          style="left:${item.t0 * TL.zoom}px;width:${Math.max(2, (item.t1 - item.t0) * TL.zoom - 2)}px"
+          title="${esc(`${item.severity ? item.severity + ' · ' : ''}${tlClock(item.t0)}–${tlClock(item.t1)} · ${item.text}`)}">${esc((item.severity ? item.severity + ' · ' : '') + (item.text || item.cue_kind || item.kind))}</button>`;
+      }).join('');
+    const classes = row.role === 'pictures' ? 'tl-pictures' : row.role === 'voice' ? 'para' : 'tl-layer';
+    return `<div class="tl-lane ${classes} ${row.role === 'sponsors' ? 'tl-sponsors' : ''} ${hidden ? 'hidden' : ''}" data-track="${esc(row.id)}" data-role="${row.role}"
+      style="--track-color:var(--${row.color})">${label}${content}</div>${row.role === 'voice' ? tlCameraRows() : ''}`;
   }).join('');
 }
 
 function tlWireLayers() {
   const track = $('#tl-track');
-  $('#tl-add-sponsor').onpointerdown = (e) => e.stopPropagation();
-  $('#tl-add-sponsor').onclick = (e) => { e.stopPropagation(); tlSponsorAdd(); };
+  const add = $('#tl-add-sponsor');
+  if (add) {
+    add.onpointerdown = e => e.stopPropagation();
+    add.onclick = e => { e.stopPropagation(); tlSponsorAdd(); };
+  }
+  const graphic = $('#tl-add-graphic');
+  if (graphic) graphic.onclick = tlGraphicAdd;
   track.querySelectorAll('[data-eye], [data-layer]').forEach((el) => {
     el.onpointerdown = (e) => e.stopPropagation();
     el.onclick = (e) => {

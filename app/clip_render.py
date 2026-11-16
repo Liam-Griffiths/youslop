@@ -145,9 +145,14 @@ def timeline(project, hide=frozenset()):
             start=start, duration=t-start, skip=0, kind='video', problems=[], paragraphs=[para],
             estimated=False, **state(project, f'section-{slide.id}', hide)))
     w, h = render.preview_size(project)
+    music = render.pick_music(project)
+    layers = {k: [] for k in ('graphics','sponsors','titles','cues','chapters','music','stings','notes')}
+    if music and t > 0:
+        layers['music'].append(dict(id='music', sid='', t0=0, t1=t, kind='music',
+                                    text=music.name, layer=project.music_layer))
     return dict(segments=segments, total=t, fps=render.PREVIEW_FPS, width=w, height=h,
         format='kenburns', title_exit=0, last_line_min_s=0, camera_clip=False, estimated=False,
-        layers={k: [] for k in ('graphics','sponsors','titles','cues','chapters','music','stings','notes')},
+        layers=layers,
         mix=mix(project, hide=hide), sponsor_suggestions=[])
 
 

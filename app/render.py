@@ -1984,6 +1984,10 @@ def _segment_key(project, group, settings) -> str:
         rows.append([row, duration, files, str(picture), _stat(picture)])
     if any(s.kind for s in project.slides):
         rows.append(_kind_context(project, group[0][0]))
+    from .layers import graphics_cache_order
+    graphics_order = graphics_cache_order(project, group)
+    if graphics_order:
+        rows.append(['graphics-order', graphics_order])
     source = _picture_source(project, group[0][0])
     picture = _chosen(project, group[0][0])[0]
     channel = settings.get("channel")
@@ -2727,6 +2731,10 @@ def _proxy_key(project: Project, groups: list[list[tuple[Slide, float]]],
                                for k in ("video", "raw_path")])
     if any(s.kind for s in project.slides):
         slides.append(_kind_context(project, lead))
+    from .layers import graphics_cache_order
+    graphics_order = graphics_cache_order(project, group)
+    if graphics_order:
+        slides.append(['graphics-order', graphics_order])
     pic = _chosen(project, lead, preview=True)[0]
     from .camera import target
     if lead.on_camera:
